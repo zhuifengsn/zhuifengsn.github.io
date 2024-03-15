@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【Web系列二十七】Vue实现dom元素拖拽并限制移动范围 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【Web系列二十七】Vue实现dom元素拖拽并限制移动范围" />
+<meta property="og:description" content="目录
+需求
+拖拽功能封装
+使用拖拽功能
+vite-env.d.ts
+main.ts
+test.vue
+需求 dom元素拖拽并限制在父组件范围内
+拖拽功能封装 export const initVDrag = (vue) =&gt; { vue.directive(&#39;drag&#39;, (el) =&gt; { const oDiv = el // 当前元素 oDiv.onmousedown = (e) =&gt; { let target = oDiv while ( window.getComputedStyle(target).position !== &#39;absolute&#39; &amp;&amp; target !== document.body ) { target = target.parentElement } let parent = target.parentNode document.onselectstart = () =&gt; { return false } if (!target.getAttribute(&#39;init_x&#39;)) { target.setAttribute(&#39;init_x&#39;, target.offsetLeft) target.setAttribute(&#39;init_y&#39;, target." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/78df8e4815f8b5af106d4a18a55a103e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-11-30T10:02:53+08:00" />
+<meta property="article:modified_time" content="2023-11-30T10:02:53+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【Web系列二十七】Vue实现dom元素拖拽并限制移动范围</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p id="%E9%9C%80%E6%B1%82-toc" style="margin-left:0px;"><a href="#%E9%9C%80%E6%B1%82" rel="nofollow">需求</a></p> 
+<p id="%E6%8B%96%E6%8B%BD%E5%8A%9F%E8%83%BD%E5%B0%81%E8%A3%85-toc" style="margin-left:0px;"><a href="#%E6%8B%96%E6%8B%BD%E5%8A%9F%E8%83%BD%E5%B0%81%E8%A3%85" rel="nofollow">拖拽功能封装</a></p> 
+<p id="%E4%BD%BF%E7%94%A8%E6%8B%96%E6%8B%BD%E5%8A%9F%E8%83%BD-toc" style="margin-left:0px;"><a href="#%E4%BD%BF%E7%94%A8%E6%8B%96%E6%8B%BD%E5%8A%9F%E8%83%BD" rel="nofollow">使用拖拽功能</a></p> 
+<p id="vite-env.d.ts-toc" style="margin-left:40px;"><a href="#vite-env.d.ts" rel="nofollow">vite-env.d.ts</a></p> 
+<p id="main.ts-toc" style="margin-left:40px;"><a href="#main.ts" rel="nofollow">main.ts</a></p> 
+<p id="test.vue-toc" style="margin-left:40px;"><a href="#test.vue" rel="nofollow">test.vue</a></p> 
+<hr id="hr-toc"> 
+<h2>需求</h2> 
+<p><strong>       </strong>dom元素拖拽并限制在父组件范围内</p> 
+<h2 id="%E6%8B%96%E6%8B%BD%E5%8A%9F%E8%83%BD%E5%B0%81%E8%A3%85">拖拽功能封装</h2> 
+<pre><code class="language-javascript">export const initVDrag = (vue) =&gt; {
+	vue.directive('drag', (el) =&gt; {
+		const oDiv = el // 当前元素
+		oDiv.onmousedown = (e) =&gt; {
+			let target = oDiv
+			while (
+				window.getComputedStyle(target).position !== 'absolute' &amp;&amp;
+				target !== document.body
+			) {
+				target = target.parentElement
+			}
+			let parent = target.parentNode
+			
+			document.onselectstart = () =&gt; {
+				return false
+			}
+			if (!target.getAttribute('init_x')) {
+				target.setAttribute('init_x', target.offsetLeft)
+				target.setAttribute('init_y', target.offsetTop)
+			}
+			
+			// e.clientX, e.clientY是鼠标点击的位置
+			// target.offsetLeft, target.offsetTop是当前元素左上角的位置
+			// 计算鼠标按下的位置距离当前元素左上角的距离
+			const disX = e.clientX - target.offsetLeft
+			const disY = e.clientY - target.offsetTop
+			// target.clientWidth, target.clientHeight是当前元素的尺寸
+			// parent.clientWidth, parent.clientHeight是父元素的尺寸
+			// parent.offsetLeft, parent.offsetTop是父元素左上角的位置
+			// 可移动范围的位置
+			const minX = parent.offsetLeft
+			const maxX = parent.offsetLeft + parent.clientWidth - target.clientWidth
+			const minY = parent.offsetTop
+			const maxY = parent.offsetTop + parent.clientHeight - target.clientHeight
+			
+			document.onmousemove = (e) =&gt; {
+				// 通过事件委托，计算移动的距离,e是最新的鼠标位置，disX、disY是鼠标刚点击时的位置
+				let l = e.clientX - disX
+				let t = e.clientY - disY
+				
+				// 约束移动范围在父元素区域内
+				if (l &lt; minX) {
+					l = minX
+				} else if (l &gt; maxX) {
+					l = maxX
+				}
+				if (t &lt; minY) {
+					t = minY
+				} else if (t &gt; maxY) {
+					t = maxY
+				}
+				
+				// 给当前元素样式中的left和top赋值
+				target.style.left = l + 'px'
+				target.style.top = t + 'px'
+			}
+			
+			document.onmouseup = (e) =&gt; {
+				document.onmousemove = null
+				document.onmouseup = null
+				document.onselectstart = null
+			}
+			
+			// 不return false的话，可能导致鼠标黏连，鼠标粘在dom上拿不下来，相当于onmouseup失效
+			return false
+		}
+	})
+}</code></pre> 
+<h2 id="%E4%BD%BF%E7%94%A8%E6%8B%96%E6%8B%BD%E5%8A%9F%E8%83%BD">使用拖拽功能</h2> 
+<p>        以vite为例：</p> 
+<h3 id="vite-env.d.ts">vite-env.d.ts</h3> 
+<pre><code class="language-TypeScript">...
+declare module '@utils/directive/vDrag.js'
+...</code></pre> 
+<h3 id="main.ts">main.ts</h3> 
+<pre><code class="language-TypeScript">...
+import { createApp } from 'vue'
+import { initVDrag } from '@/utils/directive/vDrag.js'
+...
+let instance: any = null
+instance = createApp(App)
+initVDrag(instance)
+...</code></pre> 
+<h3 id="test.vue">test.vue</h3> 
+<pre><code class="language-html">&lt;template&gt;
+    &lt;div v-drag /&gt;
+&lt;/template&gt;</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/b7ac5c9e3bf94057cfa3af86ce416554/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">回调报错----mongoose连接数据库</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b164d2d294206e8cbcd4143de4c7e271/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">python &#43; mongodb使用入门</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

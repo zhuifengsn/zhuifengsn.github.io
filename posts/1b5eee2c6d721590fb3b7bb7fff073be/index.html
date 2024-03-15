@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>C# 实现 Word 加盖骑缝章效果 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="C# 实现 Word 加盖骑缝章效果" />
+<meta property="og:description" content="目录
+实现效果
+范例运行环境
+Office DCOM 配置
+设计实现
+创建stamp图章类 电子章图片的计算与定位
+旋转图片方法
+总结 实现效果 在OA的自动化处理系统中，通过审批的最终节点，可能会对WORD文件加盖电子章，比如定位带有指定文字的Range周围加盖电子章，骑缝章，甚至水印图片。比如如下效果图：
+范例运行环境 操作系统： Windows Server 2019 DataCenter
+操作系统上安装 Office Word 2016 ，客户端使用的 Office Word 2019
+.net版本： .netFramework4.7.1 或以上
+开发工具：VS2019 C#
+Office DCOM 配置 请参考我的文章《C# 读取Word表格到DataSet》有对Office DCOM详细配置介绍，这里不再赘述。 设计实现 创建stamp图章类 导出WORD文件可以传入多个图章类（如果需要的话），图章类主要包括实现如下设置：
+1、可设置三种图片（标准的盖章图片、骑缝章图片、水印图片）
+2、标准的盖章图片是否显示，不显示则可以只显示骑缝章或水印图片，这个可以模拟多次盖骑缝章的效果
+3、定位盖章文字，可以设置一下 x、y的偏移量，以校准指定的模板文件，达到最佳重叠效果。
+4、可设置各种章的翻转角度（可随机选取）
+示例代码如下： public class stamp { public string stampImageFilename = &#34;&#34;; //盖章图片 public string stampImageFilename2 = &#34;&#34;; //骑缝章图片 public string stampImageFilename3 = &#34;&#34;; //水印章图片 public bool stampImageVisible = true; //主章是否可显示 public string findWord = &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/1b5eee2c6d721590fb3b7bb7fff073be/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-01-25T15:37:35+08:00" />
+<meta property="article:modified_time" content="2024-01-25T15:37:35+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">C# 实现 Word 加盖骑缝章效果</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong> </strong></p> 
+<p><strong>目录</strong></p> 
+<p style="margin-left:40px;"><a href="#main-toc" rel="nofollow">实现效果</a></p> 
+<p style="margin-left:40px;"><a href="#%E7%B3%BB%E7%BB%9F%E7%8E%AF%E5%A2%83" rel="nofollow">范例运行环境</a></p> 
+<p style="margin-left:40px;"><a href="#%E5%9F%BA%E7%A1%80%E9%85%8D%E7%BD%AE" rel="nofollow">Office DCOM 配置</a></p> 
+<p style="margin-left:40px;"><a href="#%E8%AE%BE%E8%AE%A1%E6%83%B3%E6%B3%95" rel="nofollow">设计实现</a></p> 
+<p style="margin-left:80px;"><a href="#%E7%BB%84%E4%BB%B6%E5%BA%93%E5%BC%95%E5%85%A5" rel="nofollow">创建stamp图章类 </a></p> 
+<p style="margin-left:80px;"><a href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81" rel="nofollow">电子章图片的计算与定位</a></p> 
+<p style="margin-left:80px;"><a href="#%E6%89%93%E5%BC%80%E6%95%B0%E6%8D%AE%E6%BA%90%E5%B9%B6%E8%AE%A1%E7%AE%97Sheets" rel="nofollow">旋转图片方法</a></p> 
+<p style="margin-left:40px;"><a href="#%E6%80%BB%E7%BB%93%C2%A0" rel="nofollow">总结 </a></p> 
+<hr> 
+<p></p> 
+<p></p> 
+<h3>实现效果</h3> 
+<p>在OA的自动化处理系统中，通过审批的最终节点，可能会对WORD文件加盖电子章，比如定位带有指定文字的Range周围加盖电子章，骑缝章，甚至水印图片。比如如下效果图：</p> 
+<p><img alt="54f76cb8e6914b3092a5e991c3a83ae1.png" src="https://images2.imgbox.com/05/9c/jWBIMVN3_o.png"></p> 
+<p> <img alt="cd92a2943a0d460dba329084920e7f9c.png" src="https://images2.imgbox.com/39/a2/3Lafd5ZX_o.png"></p> 
+<p></p> 
+<h3>范例运行环境</h3> 
+<p>操作系统： Windows Server 2019 DataCenter</p> 
+<p>操作系统上安装 Office Word 2016 ，客户端使用的 Office Word 2019</p> 
+<p>.net版本： .netFramework4.7.1 或以上</p> 
+<p>开发工具：VS2019  C#</p> 
+<h3>Office DCOM 配置</h3> 
+<p>请参考我的文章<a href="https://blog.csdn.net/michaelline/article/details/135179525" title="《C# 读取Word表格到DataSet》">《C# 读取Word表格到DataSet》</a>有对Office DCOM详细配置介绍，这里不再赘述。 </p> 
+<p></p> 
+<h3>设计实现</h3> 
+<h4>创建stamp图章类 </h4> 
+<p>导出WORD文件可以传入多个图章类（如果需要的话），图章类主要包括实现如下设置：</p> 
+<p>1、可设置三种图片（标准的盖章图片、骑缝章图片、水印图片）</p> 
+<p>2、标准的盖章图片是否显示，不显示则可以只显示骑缝章或水印图片，这个可以模拟多次盖骑缝章的效果</p> 
+<p>3、定位盖章文字，可以设置一下 x、y的偏移量，以校准指定的模板文件，达到最佳重叠效果。</p> 
+<p>4、可设置各种章的翻转角度（可随机选取）</p> 
+<h4></h4> 
+<p>示例代码如下： </p> 
+<pre><code class="language-cs">public class stamp
+        {
+            public string stampImageFilename = "";  //盖章图片
+            public string stampImageFilename2 = "";  //骑缝章图片
+            public string stampImageFilename3 = "";  //水印章图片
+            public bool stampImageVisible = true;  //主章是否可显示
+            public string findWord = "";   //查找盖章定位文字
+            public int findWordOffsetX = 0; //查找盖章文字后，章的定位偏移量
+            public int findWordOffsetY = 0; //查找盖章文字后，章的定位偏移量
+            public int stamp2X = 0; //骑缝章偏移量
+            public int stamp2Y = 0; //骑缝章偏移量
+            public int roteAngle = 0; //骑缝章翻转角度，12点方向为0度，顺时针计算角度
+            public bool roteReFix = false; //骑缝章翻转角度重新计算适应图片（多见于对角线）
+            public bool randomRoteAngle = false; //骑缝章是否按指定角度的最大随机值提取
+            public int stampImageWidth = 0; //章宽度
+            public int stampImageHeight = 0; //章高度
+            public string stamp2Direction = "right";  //骑缝章盖章方向 默认right ，包括 left/top/bottom
+
+            public int stampAngle = 0; //骑缝章翻转角度，12点方向为0度，顺时针计算角度
+            public bool randomStampAngle = false; //骑缝章是否按指定角度的最大随机值提取
+
+            public int stamp3X = 0; //水印章每页X
+            public int stamp3Y = 0; //水印章每页Y
+            public int stamp3Angle = 0; //水印章翻转角度，12点方向为0度，顺时针计算角度
+
+
+        }</code></pre> 
+<h4>电子章图片的计算与定位</h4> 
+<p>可以创建多个图章类添加 ArrayList 中进行方法传递， 初始值为public ArrayList Stamps = null;</p> 
+<p>创建方法  public string setWordStamps(string _filename,ArrayList Stamps)</p> 
+<p>实现的功能大致如下：</p> 
+<p>1、主章根据提供查找的关键字，如 “盖章处：”、“盖章：”，然后添加图片重叠在文字的上方周围</p> 
+<p>2、骑缝章根据页数进行分割计算，每页分隔宽度不小于 1 像素</p> 
+<p>3、骑缝章可选择“盖”在页面的上下左右位置，如果多个位置方向都需要“盖”，则传递多个 stamp 图章类</p> 
+<p>4、章可以随机和指定旋转角度</p> 
+<p>示例代码如下：</p> 
+<pre><code class="language-cs">public string setWordStamps(string _filename,ArrayList Stamps){
+            Object Nothing =System.Reflection.Missing.Value;
+			string _file="",_path=Path.GetDirectoryName(_filename)+"\\tempbfile\\",_ext="";
+
+			_file=Path.GetFileNameWithoutExtension(_filename);
+			_ext=Path.GetExtension(_filename);
+			string _validfilename=Guid.NewGuid().ToString()+_ext;
+			string _lastfile=_path+_validfilename;
+            string _pdfFile = _path + Guid.NewGuid().ToString() + ".pdf";
+
+            System.IO.File.Copy(_filename,_lastfile,true);
+			if(!File.Exists(_lastfile))
+			{
+				return "";
+			}
+
+
+            //取得Word文件保存路径
+            object filename=_lastfile;
+			//创建一个名为WordApp的组件对象
+			Word.Application WordApp=new Word.Application();
+            
+			//创建一个名为WordDoc的文档对象
+			WordApp.DisplayAlerts=Word.WdAlertLevel.wdAlertsNone;
+			Word.Document WordDoc=WordApp.Documents.Open(ref filename,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing,ref Nothing);
+            WordDoc.SpellingChecked = false;
+            WordDoc.ShowSpellingErrors = false;
+            WordDoc.ActiveWindow.View.Type = Word.WdViewType.wdNormalView;
+
+//遍历stamp图章类
+    foreach (stamp Stamp in Stamps)
+    {
+                    bool isfirst = true;
+                    int iii = 0;
+                    int selectStart = 0;
+                    ArrayList restoreRange = new ArrayList();
+                    while (true)
+                    {
+                        iii++;
+                        bool findstamptext = false;
+                        if (Stamp.findWord != "")
+                        {
+                            
+                            WordApp.Selection.Range.Start = selectStart;
+                            
+                            Word.Find fnd = WordApp.Selection.Find;
+                            
+                            Object findText = Stamp.findWord;
+                            Object matchCase = false;
+                            Object matchWholeWord = Type.Missing;
+                            Object matchWildcards = false;
+                            Object matchSoundsLike = false;
+                            Object matchAllWordForms = false;
+                            Object forward = true;
+                            Object wrap = Word.WdFindWrap.wdFindContinue;
+                            Object format = false;
+                            Object replaceWith = "";
+                            Object replace = Type.Missing; ;
+                            Object matchKashida = Type.Missing;
+                            Object matchDiacritics = Type.Missing;
+                            Object matchAlefHamza = Type.Missing;
+                            Object matchControl = Type.Missing;
+                            if (fnd.Execute(ref findText, ref matchCase, ref matchWholeWord, ref matchWildcards, ref matchSoundsLike, ref matchAllWordForms,
+                                ref forward, ref wrap, ref format, ref replaceWith, ref replace, ref matchKashida, ref matchDiacritics, ref matchAlefHamza, ref matchControl))
+                            {
+                                selectStart = WordApp.Selection.Range.Start;
+                                restoreRange.Add(WordApp.Selection.Range);
+                                findstamptext = true;
+                            }
+                            else
+                            {
+                                findstamptext = false;
+
+                            }
+                        }
+                        if (findstamptext == false)
+                        {
+                            break;
+                        }
+                        Word.InlineShape pic = WordApp.Selection.Range.InlineShapes.AddPicture(Stamp.stampImageFilename, false, true);
+                        Word.Shape picshape = pic.ConvertToShape();
+                       
+                        picshape.WrapFormat.Type = Word.WdWrapType.wdWrapNone;
+                        if (Stamp.stampImageWidth != 0)
+                        {
+                            picshape.Width = Stamp.stampImageWidth;
+                        }
+                        if (Stamp.stampImageHeight != 0)
+                        {
+                            picshape.Height = Stamp.stampImageHeight;
+                        }
+                        float pagewidth = 0;
+                        float pageheight = 0;
+                        if (findstamptext == true)
+                        {
+                            if (Stamp.stampAngle &gt; 0)
+                            {
+                                Random rnd = new Random();
+                                picshape.Rotation = Stamp.randomStampAngle == false ? Stamp.stampAngle : rnd.Next(Stamp.stampAngle);
+                            }
+                            pagewidth = WordApp.Selection.PageSetup.PageWidth;
+                            pageheight = WordApp.Selection.PageSetup.PageHeight;
+                            int ox = 0; int oy = 0; int ow = 0; int oh = 0;
+                            WordApp.Windows[1].GetPoint(out ox, out oy, out ow, out oh, WordApp.Selection.Range);
+
+                            WordApp.Selection.Range.Text = "";
+
+                            picshape.RelativeHorizontalPosition = Word.WdRelativeHorizontalPosition.wdRelativeHorizontalPositionPage;
+                            picshape.RelativeVerticalPosition = Word.WdRelativeVerticalPosition.wdRelativeVerticalPositionPage;
+
+
+                            picshape.Left = (float)(ox * 0.405402299) - (picshape.Width / 2);
+
+                            picshape.Top = WordApp.Selection.Range.Information[Word.WdInformation.wdVerticalPositionRelativeToPage] - (picshape.Height / 2);
+                            if ((bool)WordApp.Selection.Range.Information[Word.WdInformation.wdWithInTable] == true)
+                            {
+                                picshape.RelativeHorizontalPosition = Word.WdRelativeHorizontalPosition.wdRelativeHorizontalPositionCharacter;
+                                picshape.RelativeVerticalPosition = Word.WdRelativeVerticalPosition.wdRelativeVerticalPositionLine;
+                                picshape.Left = 0;
+                                picshape.Top = 0;
+                            }
+
+                        }
+                        picshape.Left = picshape.Left + Stamp.findWordOffsetX;
+                        picshape.Top = picshape.Top + Stamp.findWordOffsetY;
+                        if (Stamp.stampImageVisible == false)
+                        {
+                            picshape.Visible = Microsoft.Office.Core.MsoTriState.msoFalse;
+                        }
+                        if (Stamp.stampImageFilename2 != ""&amp;&amp;isfirst==true)
+                        {
+                            int ra = Stamp.roteAngle;
+                            if (ra &gt; 0)
+                            {
+                                Random rnd = new Random();
+                                ra = Stamp.randomRoteAngle == false ? ra : rnd.Next(ra);
+                            }
+
+                            Bitmap cc = (Bitmap)Image.FromFile(Stamp.stampImageFilename2);
+                            Bitmap bb = Rotate(cc, -ra, Stamp.roteReFix);
+WordDoc.Windows[1].Panes[1].Pages;
+                            int pages2 = WordDoc.ComputeStatistics(Word.WdStatistic.wdStatisticPages, ref Nothing);
+                            
+                            
+                            if (pages2 == 1)
+                            {
+                                pages2 = 0; //如果一页就不盖骑缝章
+                            }
+                            for (int pi = 1; pi &lt;= pages2; pi++)
+                            {
+
+                                Word.Range pagerange = WordDoc.GoTo(Word.WdGoToItem.wdGoToPage, Word.WdGoToDirection.wdGoToAbsolute, pi.ToString());
+                                int rx = (pi - 1) * bb.Width / pages2;
+                                int ry = 0;
+                                int rw = bb.Width / pages2;
+                                int rh = bb.Height;
+                                if (Stamp.stamp2Direction == "bottom")
+                                {
+                                    rx = 0;
+                                    ry = (pi - 1) * bb.Height / pages2;
+                                    rw = bb.Width;
+                                    rh = bb.Height / pages2;
+
+                                }
+                                else if (Stamp.stamp2Direction == "left")
+                                {
+                                    rx = (pages2 - pi) * bb.Width / pages2;
+                                    ry = 0;
+                                    rw = bb.Width / pages2;
+                                    rh = bb.Height;
+
+                                }
+                                else if (Stamp.stamp2Direction == "top")
+                                {
+                                    rx = 0;
+                                    ry = (pages2 - pi) * bb.Height / pages2;
+                                    rw = bb.Width;
+                                    rh = bb.Height / pages2;
+                                }
+                                if (rw &lt; 1 || rh &lt; 1)
+                                {
+                                    continue;
+                                }
+
+                                Bitmap sepbitmap1 = bb.Clone(new System.Drawing.Rectangle(rx, ry, rw, rh), System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                                string temppng = "d:\\" + System.Guid.NewGuid().ToString() + ".png";
+                                sepbitmap1.Save(temppng);
+
+                                Word.InlineShape pic2 = pagerange.InlineShapes.AddPicture(temppng, false, true);
+                                Word.Shape picshape2 = pic2.ConvertToShape();
+                                picshape2.WrapFormat.Type = Word.WdWrapType.wdWrapNone;
+
+                                picshape2.Width = picshape.Width / pages2;
+                                picshape2.Height = picshape.Height;
+                                if (Stamp.stamp2Direction == "bottom" || Stamp.stamp2Direction == "top")
+                                {
+                                    picshape2.Width = picshape.Width;
+                                    picshape2.Height = picshape.Height / pages2;
+
+                                }
+                                picshape2.RelativeHorizontalPosition = Word.WdRelativeHorizontalPosition.wdRelativeHorizontalPositionPage;
+                                picshape2.RelativeVerticalPosition = Word.WdRelativeVerticalPosition.wdRelativeVerticalPositionPage;
+
+                                picshape2.Left = pagewidth - picshape2.Width;
+                                picshape2.Top = Stamp.stamp2Y;
+                                if (Stamp.stamp2Direction == "bottom")
+                                {
+                                    picshape2.Left = Stamp.stamp2X;
+                                    picshape2.Top = pageheight - picshape2.Height;
+
+                                }
+                                else if (Stamp.stamp2Direction == "left")
+                                {
+                                    picshape2.Left = 0;
+                                    picshape2.Top = Stamp.stamp2Y;
+
+                                }
+                                else if (Stamp.stamp2Direction == "top")
+                                {
+                                    picshape2.Left = Stamp.stamp2X;
+                                    picshape2.Top = 0;
+
+                                }
+                                resultReport += string.Format("stamp2 {2} left: {0} top:{1} width:{3} height:{4}&lt;br&gt;", picshape2.Left, picshape2.Top,pi,picshape2.Width,picshape2.Height);
+
+                                File.Delete(temppng);
+                            }
+                        }//stamp2
+                        if (Stamp.stampImageFilename3 != ""&amp;&amp;isfirst==true)
+                        {
+                            int ra = Stamp.stamp3Angle;
+
+                            if (ra &gt; 0)
+                            {
+                                Random rnd = new Random();
+                                ra = Stamp.randomRoteAngle == false ? ra : rnd.Next(ra);
+                            }
+
+                            Bitmap cc = (Bitmap)Image.FromFile(Stamp.stampImageFilename3);
+                            Bitmap bb = Rotate(cc, -ra, true);
+                            int pages2 = WordDoc.ComputeStatistics(Word.WdStatistic.wdStatisticPages, ref Nothing);
+                            resultReport += string.Format(" PageCount3:{0}&lt;br&gt;", pages2);
+                            for (int pi = 1; pi &lt;= pages2; pi++)
+                            {
+
+                                Word.Range pagerange = WordDoc.GoTo(Word.WdGoToItem.wdGoToPage, Word.WdGoToDirection.wdGoToAbsolute, pi.ToString());
+                                int rx = (pi - 1) * bb.Width / pages2;
+                                rx = 0;
+                                int ry = 0;
+                                int rw = bb.Width;
+                                int rh = bb.Height;
+
+                                Bitmap sepbitmap1 = bb.Clone(new System.Drawing.Rectangle(rx, ry, rw, rh), System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                                string temppng = "d:\\" + System.Guid.NewGuid().ToString() + ".png";
+
+                                Word.InlineShape pic2 = pagerange.InlineShapes.AddPicture(temppng, false, true);
+                                Word.Shape picshape2 = pic2.ConvertToShape();
+                                picshape2.WrapFormat.Type = Word.WdWrapType.wdWrapNone;
+
+                                picshape2.Width = picshape.Width;
+                                picshape2.Height = picshape.Height;
+
+                                picshape2.RelativeHorizontalPosition = Word.WdRelativeHorizontalPosition.wdRelativeHorizontalPositionPage;
+                                picshape2.RelativeVerticalPosition = Word.WdRelativeVerticalPosition.wdRelativeVerticalPositionPage;
+
+                                picshape2.Left = Stamp.stamp3X;
+                                //                       picshape2.Left = Stamp.stamp2X;
+                                picshape2.Top = Stamp.stamp2Y;
+
+                                File.Delete(temppng);
+                            }
+                        }//stamp3
+                        isfirst = false;
+                    }// while
+                    foreach (Word.Range range in restoreRange)
+                    {
+                        range.Text = Stamp.findWord;
+                    }
+
+
+    }//foreach
+
+	WordDoc.Save();
+
+    WordDoc.Close(ref Nothing, ref Nothing, ref Nothing);
+	//关闭WordApp组件对象
+	WordApp.Quit(ref Nothing, ref Nothing, ref Nothing);
+	return _lastfile;
+
+}</code></pre> 
+<p></p> 
+<h4>旋转图片方法</h4> 
+<pre><code class="language-cs">        public Bitmap Rotate(Bitmap b, int angle,bool fix=false)
+        {
+            angle = angle % 360;
+
+            //弧度转换
+            double radian = angle * Math.PI / 180.0;
+            double cos = Math.Cos(radian);
+            double sin = Math.Sin(radian);
+
+            //原图的宽和高
+            int w = b.Width;
+            int h = b.Height;
+            int ow = w;
+            int oh = h;
+            int d = ((int)Math.Sqrt(Math.Pow(w - 0, 2) + Math.Pow(h- 0, 2))+1);
+            if (fix == true)
+            {
+                w = d;
+                h = d;
+            }
+
+            int W = (int)(Math.Max(Math.Abs(w * cos - h * sin), Math.Abs(w * cos + h * sin)));
+            int H = (int)(Math.Max(Math.Abs(w * sin - h * cos), Math.Abs(w * sin + h * cos)));
+
+            //目标位图
+            Bitmap dsImage = new Bitmap(w, h);
+            System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(dsImage);
+
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Bilinear;
+
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+
+            //计算偏移量
+            System.Drawing.Point Offset = new System.Drawing.Point((W - w) / 2, (H - h) / 2);
+
+            //构造图像显示区域：让图像的中心与窗口的中心点一致
+            System.Drawing.Rectangle rect = new System.Drawing.Rectangle(fix==false?0:(d-ow)/2, fix == false ? 0 : (d-oh)/2, ow, oh);
+//            System.Drawing.Rectangle rect = new System.Drawing.Rectangle(Offset.X, Offset.Y, w, h);
+ //           System.Drawing.Point center = new System.Drawing.Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+            System.Drawing.Point center = new System.Drawing.Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+            
+            g.TranslateTransform(center.X, center.Y);
+            g.RotateTransform(360 - angle);
+
+            //恢复图像在水平和垂直方向的平移
+            g.TranslateTransform(-center.X, -center.Y);
+            g.DrawImage(b, rect);
+
+            //重至绘图的所有变换
+            g.ResetTransform();
+
+            g.Save();
+            g.Dispose();
+            //dsImage.Save("yuancd.jpg", System.Drawing.Imaging.ImageFormat.Jpeg);
+            return dsImage;
+        }</code></pre> 
+<h3>总结 </h3> 
+<p>以上是实现设计的一些参考代码，在实际的使用中，可能还会遇到如下问题：</p> 
+<p>1、定位关键字的叠加效果不好，因此针对每一个模板文件均需要调整图片的x、y偏移量，以达到最佳效果</p> 
+<p>2、对于超多页面的文件(如几万页)，骑缝的效果可能不佳，可以采取调整图片像素宽度，或拆分模板文件进行处理</p> 
+<p>示例代码仅作参考，欢迎大家评论指教！</p> 
+<p></p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2adf885166dc33208153e050333ebadc/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">解决pycharm缓存文件过大问题</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/4e15f3aa38630c20c1961ce6570c62d8/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Vue基知识四</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

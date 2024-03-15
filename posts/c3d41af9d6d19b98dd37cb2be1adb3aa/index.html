@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>HashMap源码详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="HashMap源码详解" />
+<meta property="og:description" content="HashMap简介 HashMap是Java语言中的一种集合类，它实现了Map接口，用于存储Key-Value对。它基于哈希表数据结构，通过计算Key的哈希值来快速定位Value的位置，从而实现高效的插入、删除和查找操作。下面我们对照着JAVA1.8中的HashMap源码来分析一下它的内部实现逻辑
+基本的结构 在开始分析HashMap的实现逻辑之前，我们需要先了解一下基础的组成和内部的成员变量都有哪些，分别代表什么意思。
+1、Node&lt;K,V&gt; 首先我们看一下HashMap其中一个子类:Node&lt;K,V&gt;，这个子类用于存储基本的元素，即Key-Value对、Key的Hash值以及指向下一个节点的Node&lt;K,V&gt;变量。在HashMap内部，由Node&lt;K,V&gt;类型组成的数组用来存储所有的元素。 Node&lt;K,V&gt;实现自Map.Entry&lt;K,V&gt;接口，并且实现了接口中规定的多个基本方法:
+interface Entry&lt;K,V&gt; { K getKey(); V getValue(); V setValue(V value); boolean equals(Object o); int hashCode(); ... } 同时，在Node&lt;K,V&gt;类中，定义了4个成员变量：
+public class HashMap&lt;K,V&gt; extends AbstractMap&lt;K,V&gt; implements Map&lt;K,V&gt;,Cloneable,Serializable { .... static class Node&lt;K,V&gt; implements Map.Entry&lt;K,V&gt; { final int hash; final K key; V value; Node&lt;K,V&gt; next; Node(int hash, K key, V value, Node&lt;K,V&gt; next) { this.hash = hash; this.key = key; this.value = value; this.next = next; } ." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/c3d41af9d6d19b98dd37cb2be1adb3aa/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-11-03T19:23:43+08:00" />
+<meta property="article:modified_time" content="2023-11-03T19:23:43+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">HashMap源码详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>HashMap简介</h2> 
+<p>HashMap是Java语言中的一种集合类，它实现了Map接口，用于存储Key-Value对。它基于哈希表数据结构，通过计算Key的哈希值来快速定位Value的位置，从而实现高效的插入、删除和查找操作。下面我们对照着<code>JAVA1.8</code>中的HashMap源码来分析一下它的内部实现逻辑</p> 
+<h2>基本的结构</h2> 
+<p>在开始分析HashMap的实现逻辑之前，我们需要先了解一下基础的组成和内部的成员变量都有哪些，分别代表什么意思。</p> 
+<h3>1、Node&lt;K,V&gt;</h3> 
+<p>首先我们看一下HashMap其中一个子类:<code>Node&lt;K,V&gt;</code>，这个子类用于存储基本的元素，即Key-Value对、Key的Hash值以及指向下一个节点的<code>Node&lt;K,V&gt;</code>变量。在HashMap内部，由<code>Node&lt;K,V&gt;</code>类型组成的数组用来存储所有的元素。 <code>Node&lt;K,V&gt;</code>实现自<code>Map.Entry&lt;K,V&gt;</code>接口，并且实现了接口中规定的多个基本方法:</p> 
+<pre><code class="language-java">    interface Entry&lt;K,V&gt; {
+        K getKey();
+        V getValue();
+        V setValue(V value);
+        boolean equals(Object o);
+        int hashCode();
+        ...
+    }
+</code></pre> 
+<p>同时，在<code>Node&lt;K,V&gt;</code>类中，定义了4个成员变量：</p> 
+<pre><code class="language-java">public class HashMap&lt;K,V&gt; extends AbstractMap&lt;K,V&gt; implements Map&lt;K,V&gt;,Cloneable,Serializable {
+    ....
+    static class Node&lt;K,V&gt; implements Map.Entry&lt;K,V&gt; {
+            final int hash;
+            final K key;
+            V value;
+            Node&lt;K,V&gt; next;
+
+            Node(int hash, K key, V value, Node&lt;K,V&gt; next) {
+                this.hash = hash;
+                this.key = key;
+                this.value = value;
+                this.next = next;
+            }
+            ...
+    }
+    ...
+}
+</code></pre> 
+<p>其中<code>hash</code>是<code>key</code>的hash值，<code>key</code>和<code>value</code>存储键和值，<code>next</code>变量指向链表中的下一个元素。</p> 
+<h3>2、HashMap的成员变量</h3> 
+<pre><code class="language-java">    transient Node&lt;K,V&gt;[] table;
+    transient Set&lt;Map.Entry&lt;K,V&gt;&gt; entrySet;
+    transient int size;
+    transient int modCount;
+    int threshold;
+    final float loadFactor;
+</code></pre> 
+<p><code>table</code>：保存所有元素的数组。<br><code>entrySet</code>：一个用于遍历所有数据节点的集合。<br><code>size</code>：记录<code>HashMap</code>中元素的总数量。<br><code>modCount</code>：用来判断在对HashMap数据项进行遍历时，其中的数据项是否有修改过，如删除或者新增一项。 <code>threshold</code>：控制扩容时机，当数据项数量大于threshold时进行扩容，新的容量大小是老的两倍。<br><code>loadFactor</code>：默认值0.75，加载因子决定threshold大小，计算公式是<code>threshold=table.length*loadFactor</code>。<br> 我们先大致了解一下HashMap成员变量及基础的Key-Value承载的结构，之后随着介绍的进度我们再介绍新的类型。下面我们开始正式分析HashMap的逻辑。</p> 
+<h2>初始化方法</h2> 
+<p><code>HashMap</code>有4个初始化方法，分别是：</p> 
+<pre><code class="language-java">    public HashMap(int initialCapacity, float loadFactor) {
+        if (initialCapacity &lt; 0)
+            throw new IllegalArgumentException("Illegal initial capacity: " +
+                                               initialCapacity);
+        // MAXIMUM_CAPACITY = 1 &lt;&lt; 30
+        if (initialCapacity &gt; MAXIMUM_CAPACITY)
+            initialCapacity = MAXIMUM_CAPACITY;
+        if (loadFactor &lt;= 0 || Float.isNaN(loadFactor))
+            throw new IllegalArgumentException("Illegal load factor: " +
+                                               loadFactor);
+        this.loadFactor = loadFactor;
+        this.threshold = tableSizeFor(initialCapacity);
+    }
+    
+    public HashMap(int initialCapacity) {
+        this(initialCapacity, DEFAULT_LOAD_FACTOR);
+    }
+   
+    public HashMap() {
+        this.loadFactor = DEFAULT_LOAD_FACTOR; // all other fields defaulted
+    }
+
+    public HashMap(Map&lt;? extends K, ? extends V&gt; m) {
+        this.loadFactor = DEFAULT_LOAD_FACTOR;
+        putMapEntries(m, false);
+    }
+</code></pre> 
+<p>第一个初始化方法有两个参数:<code>initialCapacity</code>和<code>loadFactor</code>，看参数名<code>initialCapacity</code>好像是控制初始化时HashMap容量大小的，实际上它不直接控制大小，而是通过<code>tableSizeFor</code>方法计算出<code>threshold</code>的值，此时<code>threshold</code>为大于等于传入的<code>initialCapacity</code>的2的次幂最小值。比如传入3，那么threshold=222^222=4，如果传入9，则threshold=242^424=16。<code>loadFactor</code>初始化HashMap的成员变量loadFactor。</p> 
+<pre><code class="language-java">    /**
+     * Returns a power of two size for the given target capacity.
+     */
+    static final int tableSizeFor(int cap) {
+        int n = cap - 1;
+        n |= n &gt;&gt;&gt; 1;
+        n |= n &gt;&gt;&gt; 2;
+        n |= n &gt;&gt;&gt; 4;
+        n |= n &gt;&gt;&gt; 8;
+        n |= n &gt;&gt;&gt; 16;
+        return (n &lt; 0) ? 1 : (n &gt;= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
+    }
+</code></pre> 
+<p>而实际控制容量大小的逻辑在添加第一个元素时确定，现在先放一边不管，等到介绍添加逻辑时再分析。<br> 第二个构造函数很简单，直接调用了第一个构造函数，传入<code>initialCapacity</code>和默认的加载因子<code>DEFAULT_LOAD_FACTOR</code>，默认加载因子是0.75。<br> 第三个是无参的构造函数，没有设置<code>threshold</code>，只设置了默认的加载因子0.75。<br> 第四个构造函数则是使用一个现有的<code>Map</code>对象进行初始化操作，首先设置好默认的加载因子，然后利用<code>putMapEntries</code>方法初始化数据项。</p> 
+<pre><code class="language-java">final void putMapEntries(Map&lt;? extends K, ? extends V&gt; m, boolean evict) {
+        int s = m.size();
+        //若传入的Map为空，则不进行初始化操作
+        if (s &gt; 0) {
+            //初始化时，HashMap中还没有任何元素，所以table为null，此时根据传入的map大小计算出threshold。
+            if (table == null) { // pre-size
+                float ft = ((float)s / loadFactor) + 1.0F;
+                int t = ((ft &lt; (float)MAXIMUM_CAPACITY) ?
+                         (int)ft : MAXIMUM_CAPACITY);
+                if (t &gt; threshold)
+                    threshold = tableSizeFor(t);
+            }
+            //非初始化（例如调用putAll方法）时，如果传入的map大小大于threshold，则进行resize扩容操作。
+            else if (s &gt; threshold)
+                resize();
+            //遍历传入的map,依次调用putVal方法将所有数据加到当前HashMap对象中
+            for (Map.Entry&lt;? extends K, ? extends V&gt; e : m.entrySet()) {
+                K key = e.getKey();
+                V value = e.getValue();
+                putVal(hash(key), key, value, false, evict);
+            }
+        }
+    }
+</code></pre> 
+<p>这个方法中所调用的<code>resize</code>和<code>putVal</code>方法在其他地方也有调用，我们在<code>put</code>方法的实现中再详细分析，此处只需要知道这个构造函数是通过其他<code>Map</code>对象构造<code>HashMap</code>对象的。<br> 现在已经了解了它的基本结构和所有的构造函数，我们用一张图先直观的看一下<code>HashMap</code>是什么样的。</p> 
+<p><img alt="" height="233" src="https://images2.imgbox.com/7a/d1/aR91vsw6_o.png" width="500"></p> 
+<p>在这个HashMap对象中，变量<code>table</code>长度等于8，<code>size</code>等于3，<code>threshold</code>等于6。当元素个数大于6时，<code>table</code>将被扩容到16个，<code>threshold</code>也会变为12。</p> 
+<h2>操作</h2> 
+<h3>1、put操作</h3> 
+<p>put操作的实现逻辑是调用一个内部不可重写的方法<code>putVal</code>实现，这个方法有5个入参，分别是Key的Hash值、Key、Value、onlyIfAbsent、evict。onlyIfAbsent表示是否覆盖相同Key的Value值，为true时，只有原来的Value值为null时才会覆盖，否则不覆盖。为false时直接覆盖原值。下来我们直接看源码并逐行分析。</p> 
+<pre><code class="language-java">    public V put(K key, V value) {
+        return putVal(hash(key), key, value, false, true);
+    }
+    
+    @Override
+    public V putIfAbsent(K key, V value) {
+        return putVal(hash(key), key, value, true, true);
+    }
+
+    final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+                   boolean evict) {
+        Node&lt;K,V&gt;[] tab; Node&lt;K,V&gt; p; int n, i;
+        /**
+        *  将对象成员变量table赋值给局部变量tab并判断是否为null，如果为null，或者不为null则将长度赋给局部变量n，并判断长度是否0。
+        *  条件成立的话调用resize()方法对table进行初始化，并将初始化后的table长度重新赋值给n。
+        *  注意：除了调用第四个构造方法使用其他Map对象进行初始化，其余三个构造方法构造HashMap对象时，
+        *  table默认是null,所以在第一次往HashMap里添加数据时就需要初始化table对象。
+        *  resize()方法是HashMap内部的一个通用方法，初始化table、扩容缩容都要用到它，后续还会出现很多次，所以一定要眼熟他。
+        */
+        if ((tab = table) == null || (n = tab.length) == 0)
+            n = (tab = resize()).length;
+        /**
+        *  长度与key的hash值做按位与运算，得到的结果一定小于长度值。然后将得到的值赋给i，
+        *  并从tab中对应槽位取值并赋值给p。如果取到的是null，则表明当前位置没有存其他元素，
+        *  可以直接将新元素添加到tab中。若非null，表示key重复或者Key的hash值计算槽位冲突，则进行其他操作。
+        */
+        if ((p = tab[i = (n - 1) &amp; hash]) == null)
+            //直接创建新节点并赋值给tab[i]
+            tab[i] = newNode(hash, key, value, null);
+        else {
+            Node&lt;K,V&gt; e; K k;
+            /**
+            *  若新元素的hash值和刚才取到的p的hash值相同，并且p的key和新元素的key相同，
+            *  那就表示当前要保存的新key值是已存在的，不必新增，所以将p赋值给e以备后面操作。
+            */
+            if (p.hash == hash &amp;&amp;
+                ((k = p.key) == key || (key != null &amp;&amp; key.equals(k))))
+                e = p;
+            /**
+            *  否则就是Key的槽位冲突，HashMap中如果发生Hash值计算后的槽位冲突，有两种结构进行存储，第一个是链表，第二个是红黑树。
+            *  下面的代码会判断p节点是否为TreeNode类型，如果是则将p转为TreeNode，并调用它的putTreeVal方法，将新元素保存到树中。
+            */
+            else if (p instanceof TreeNode)
+                e = ((TreeNode&lt;K,V&gt;)p).putTreeVal(this, tab, hash, key, value);
+            /**
+            *  如果不是TreeNode类型就是上面刚开始介绍的普通Node，它里面的next变量可以指向一个Node对象，从而形成链表。
+            *  循环遍历p的next是否为null并且复制给e，如果为null，表示已经循环到了链表尾部，接下来创建一个Node节点并赋给p.next，
+            *  即链表尾部增加元素。如果不为null表示还没循环到链表尾部，判断是否存在重复元素，和上面判断逻辑相同。如果相同，
+            *  则在接下来处理e，如果不相同则进入下一轮循环判断，直到链表尾部。
+            *  要注意一点是每新增一个元素到链表尾部时，要判断一下当前链表长度是否大于等于TREEIFY_THRESHOLD，是的话会尝试将当前链表转换为红黑树。
+            *  TREEIFY_THRESHOLD是用来判断链表是否需要转换红黑树的阈值，它的值为8，即链表长度大于等于8时尝试转换为红黑树。
+            */
+            else {
+                for (int binCount = 0; ; ++binCount) {
+                    if ((e = p.next) == null) {
+                        p.next = newNode(hash, key, value, null);
+                        if (binCount &gt;= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                            treeifyBin(tab, hash);
+                        break;
+                    }
+                    if (e.hash == hash &amp;&amp;
+                        ((k = e.key) == key || (key != null &amp;&amp; key.equals(k))))
+                        break;
+                    p = e;
+                }
+            }
+            /**
+            *  经过上面的计算后，局部变量e如果不为null，则表示当前需要添加的key值以存在，此时就判断onlyIfAbsent值，
+            *  若为false，或者已存在的key值对应的value值是null，则直接覆盖旧值。
+            */
+            if (e != null) { // existing mapping for key
+                V oldValue = e.value;
+                if (!onlyIfAbsent || oldValue == null)
+                    e.value = value;
+                afterNodeAccess(e);
+                return oldValue;
+            }
+        }
+        /**
+        *  每进行一次操作（添加，删除等），modCount就加1。每新增一个元素size就加1，
+        *  然后判断当前tab中元素数量是否大于threshold，大于则调用resize函数进行扩容。
+        */
+        ++modCount;
+        if (++size &gt; threshold)
+            resize();
+        afterNodeInsertion(evict);
+        return null;
+    }
+</code></pre> 
+<p>上面<code>put</code>方法总体逻辑概括下来是，Key的hash值是否与数组中已有元素槽位冲突，若未冲突则直接在对应槽位添加元素。否则需要判断Key是否一致，不一致，则将新元素加到链表尾部或者红黑树中，若链表长度超过阈值还需要将链表转换为红黑树。若一致，则需要判断是否覆盖旧值。最后再判断是否要扩容。<br><code>reseize()</code>方法在HashMap内部承担着非常重要的任务，包括初始化<code>table</code>，控制<code>table</code>的大小，控制扩容阈值<code>threshold</code>和扩容操作等。接下来我们看看<code>resize()</code>的实现逻辑。</p> 
+<pre><code class="language-java">final Node&lt;K,V&gt;[] resize() {
+        /**
+        *  首先将当前table，capacity，threshold全部暂存到old开头的变量中。
+        *  定义新的capacity，threshold变量。定义newCap,newThr变量表示扩容后的table容量和扩容阈值。
+        */
+        Node&lt;K,V&gt;[] oldTab = table;
+        int oldCap = (oldTab == null) ? 0 : oldTab.length;
+        int oldThr = threshold;
+        int newCap, newThr = 0;
+        /**
+        *  1、当前容量如果大于0，新的容量将翻倍，并且当前容量如果大于默认的初始化容量（16），那么扩容阈值也翻倍，否则扩容阈值使用加载因子进行计算。
+        *  2、当前容量如果等于0，并且当前扩容阈值大于0，那么当前扩容阈值就作为新的容量大小，用于初始化table，并且重新计算扩容阈值。（无参构造函数初始化HashMap,并且第一次添加元素时的情况）
+        *  3、当前容量和扩容阈值都为0时，使用默认的初始化容量（16）并计算扩容阈值（12）
+        */
+        if (oldCap &gt; 0) {
+            if (oldCap &gt;= MAXIMUM_CAPACITY) {
+                threshold = Integer.MAX_VALUE;
+                return oldTab;
+            }
+            else if ((newCap = oldCap &lt;&lt; 1) &lt; MAXIMUM_CAPACITY &amp;&amp;
+                     oldCap &gt;= DEFAULT_INITIAL_CAPACITY)
+                newThr = oldThr &lt;&lt; 1; // double threshold
+        }
+        else if (oldThr &gt; 0) // initial capacity was placed in threshold
+            newCap = oldThr;
+        else {               // zero initial threshold signifies using defaults
+            newCap = DEFAULT_INITIAL_CAPACITY;
+            newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
+        }
+        if (newThr == 0) {
+            float ft = (float)newCap * loadFactor;
+            newThr = (newCap &lt; MAXIMUM_CAPACITY &amp;&amp; ft &lt; (float)MAXIMUM_CAPACITY ?
+                      (int)ft : Integer.MAX_VALUE);
+        }
+        threshold = newThr;
+        @SuppressWarnings({"rawtypes","unchecked"})
+        Node&lt;K,V&gt;[] newTab = (Node&lt;K,V&gt;[])new Node[newCap];
+        table = newTab;
+        //扩容完毕后，如果旧的table数组不为null，就将旧的数组元素迁移到扩容后新的table数组中。
+        if (oldTab != null) {
+            for (int j = 0; j &lt; oldCap; ++j) {
+                Node&lt;K,V&gt; e;
+                //不为null说明旧数组中的这个槽位有元素，将数据赋值给变量e,并开始迁移。
+                if ((e = oldTab[j]) != null) {
+                    //旧数组里这个槽位置为null，等待内存回收
+                    oldTab[j] = null;
+                    //next等于null说明当前槽位不存在hash冲突的元素，重新计算槽位后放到新数组中。
+                    if (e.next == null)
+                        newTab[e.hash &amp; (newCap - 1)] = e;
+                    //否则说明存在冲突，并判断当前槽位中的元素是否是TreeNode类型，如果是的话说明已经转为红黑树了，所以迁移逻辑由红黑树逻辑实现。
+                    else if (e instanceof TreeNode)
+                        ((TreeNode&lt;K,V&gt;)e).split(this, newTab, j, oldCap);
+                    /**
+                    *  不是TreeNode类型，那必然是Node类型了，也就是链表，此时就迁移链表。但也不是单纯的把链表原样迁移过去，而是会进行计算，
+                    *  因为存在这种情况，如果table的长度不长，但是有大量的key发生hash冲突，那么就会出现某个槽位的链表很长有很多数据，
+                    *  但其他槽位基本上没数据的情况，这时就需要将这个长链表拆分成两个长度相对较短的链表，存储在新table的不同槽位上，增加查找效率。
+                    */
+                    else { // preserve order
+                        Node&lt;K,V&gt; loHead = null, loTail = null;
+                        Node&lt;K,V&gt; hiHead = null, hiTail = null;
+                        Node&lt;K,V&gt; next;
+                        do {
+                            next = e.next;
+                            /**
+                            *  利用元素的hash值和旧链表长度做按位与运算，将长链表拆分成两个链表，一个链表放在和旧table相同位置的新table槽位中，
+                            *  另一个链表的槽位距离第一个槽位隔了一个旧table的长度。
+                            */
+                            if ((e.hash &amp; oldCap) == 0) {
+                                if (loTail == null)
+                                    loHead = e;
+                                else
+                                    loTail.next = e;
+                                loTail = e;
+                            }
+                            else {
+                                if (hiTail == null)
+                                    hiHead = e;
+                                else
+                                    hiTail.next = e;
+                                hiTail = e;
+                            }
+                        } while ((e = next) != null);
+                        if (loTail != null) {
+                            loTail.next = null;
+                            newTab[j] = loHead;
+                        }
+                        if (hiTail != null) {
+                            hiTail.next = null;
+                            newTab[j + oldCap] = hiHead;
+                        }
+                    }
+                }
+            }
+        }
+        return newTab;
+    }
+</code></pre> 
+<p>上面说过在添加元素的时候，如果某个槽位的链表长度超过8个就会将链表转换为红黑树，严格来说并非只看链表长度来决定是否进行转换，我们来分析一下<code>treeifyBin</code>方法。</p> 
+<pre><code class="language-java">final void treeifyBin(Node&lt;K,V&gt;[] tab, int hash) {
+        int n, index; Node&lt;K,V&gt; e;
+        //如果当前table数组长度小于转换数规定的最小容量即64时，不转红黑树，只进行扩容。
+        if (tab == null || (n = tab.length) &lt; MIN_TREEIFY_CAPACITY)
+            resize();
+        /**
+        *  进行转换红黑树前的准备工作，将当前槽位的链表元素由Node类型转换为TreeNode类型，然后使用TreeNode类型的prev和next属性将所有节点连接起来，
+        *  构成TreeNode类型链表。最后才调用链表头节点的treeify方法进行红黑树转换。
+        */
+        else if ((e = tab[index = (n - 1) &amp; hash]) != null) {
+            TreeNode&lt;K,V&gt; hd = null, tl = null;
+            do {
+                TreeNode&lt;K,V&gt; p = replacementTreeNode(e, null);
+                if (tl == null)
+                    hd = p;
+                else {
+                    p.prev = tl;
+                    tl.next = p;
+                }
+                tl = p;
+            } while ((e = e.next) != null);
+            if ((tab[index] = hd) != null)
+                hd.treeify(tab);
+        }
+    }
+</code></pre> 
+<p>通过上面的treeifyBin方法，我们知道如果数组长度如果小于64时，即使某个槽位的链表长度超过8也不会转红黑树，而是首先将数组长度扩容到超过64，同时<code>resize</code>方法也会在迁移数据时根据条件将链表长度超过原数组长度的链表拆分成两个链表保存到不同的槽位。同时我们也知道了不光是元素个数超过threshold才会扩容，当某个槽位的链表长度超过8并且数组长度小于64也会触发数组扩容。而红黑树的原理和具体操作本文不做详细介绍，有兴趣的可以看看网上<a href="https://link.juejin.cn?target=https%3A%2F%2Fzhuanlan.zhihu.com%2Fp%2F553917634" rel="nofollow" title="这篇文章">这篇文章</a>或者自行搜索。</p> 
+<p>现在我们已经分析了添加元素的源代码逻辑了，接下来我们结合几个例子和图来进一步加深理解。为了模拟Hash冲突的情况，我们先定义一个类Student，并且重写它的<code>hashCode</code>和<code>equals</code>方法，hashCode方法只计算name，equals方法计算name和age，确保Student类作为Key保存到HashMap中时发生Hash冲突，使程序按照我们预想的方向运行。</p> 
+<pre><code class="language-java">package com.xxx.demo;
+
+import java.util.Objects;
+
+public class Student {
+    private Integer age;
+    private String name;
+    public Student(Integer age, String name) {
+        this.age = age;
+        this.name = name;
+    }
+    public Integer getAge() {
+        return age;
+    }
+    public String getName() {
+        return name;
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (Objects.isNull(o)) {
+            return false;
+        }
+        if (!(o instanceof Student)) {
+            return false;
+        }
+        Student target = (Student) o;
+        return age.equals(target.getAge()) &amp;&amp; name.equals(target.getName());
+    }
+    @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
+}
+</code></pre> 
+<p>接下来我们创建一个HashMap，并往其中添加若干元素，然后分析一下这个HashMap内部是如何运行的。</p> 
+<pre></pre> 
+<pre><code class="language-java">public static void main(String[] args){
+  Map&lt;Student,String&gt; map = new HashMap&lt;&gt;(4);
+  map.put(new Student(18,"张三"),"value1");
+  map.put(new Student(18,"李四"),"value2");
+  map.put(new Student(19,"王五"),"value3");
+  map.put(new Student(18,"张三"),"value4");
+  map.put(new Student(19,"张三"),"value5");
+  map.put(new Student(20,"张三"),"value6");
+  map.put(new Student(21,"张三"),"value7");
+  map.put(new Student(22,"张三"),"value8");
+  map.put(new Student(23,"张三"),"value9");
+  map.put(new Student(24,"张三"),"value10");
+  map.put(new Student(25,"张三"),"value11");
+  map.put(new Student(16,"张麻子"),"value12");
+  map.put(new Student(26, "张三"), "value13");
+}
+</code></pre> 
+<p></p> 
+<p>首先初始化HashMap时传入了<code>initialCapacity=4</code>，根据我们上面分析的初始化逻辑，此时map对象中的<code>loadFactor=0.75</code>（默认），<code>threshold=4</code>（大于等于4的2的最小次幂值），<code>table=null，size=0，modCount=0</code>。<br> 然后添加第一个Key-Value对后，<code>size=1，modCount=1</code>，<code>table</code>初始化长度为4的<code>Node&lt;Student,String&gt;</code>数组，<code>threshold</code>变为3（4*0.75）</p> 
+<p class="img-center"><img alt="oT6MGo.png" height="192" src="https://images2.imgbox.com/ab/5b/3gZcj3AH_o.png" width="346"></p> 
+<p>添加第二个Key-Value对后，<code>size=2,modCount=2</code>。</p> 
+<p class="img-center"><img alt="oT6c9t.png" height="179" src="https://images2.imgbox.com/07/82/1Pvzau50_o.png" width="366"></p> 
+<p>添加第三个Key-Value对后，<code>size=3，modCount=3</code>。</p> 
+<p class="img-center"><img alt="oT6DjM.png" height="187" src="https://images2.imgbox.com/ce/23/ofiRjeL5_o.png" width="420"></p> 
+<p>添加第四个Key-Value对时，因为<code>Student</code>对象和第一次添加的相等，所以默认会覆盖掉第一次添加的value值，此时<code>size=3，modCount=3</code>。</p> 
+<p class="img-center"><img alt="oT6Kkn.png" height="184" src="https://images2.imgbox.com/f2/a7/qzFcVeXY_o.png" width="330"></p> 
+<p>从第五个开始到第11个Key-Value对，都会发生hash冲突但Key不相同，所以接下来第五个Key-Value元素会在<code>table[2]</code>的位置上搭建链表，<code>table[2]</code>上的Node对象的<code>next</code>会指向新的元素。但是当value5被添加进去后，<code>size=4</code>，大于扩容的数量阈值3，此时进行扩容，从<code>table[4]</code>变为<code>table[8]</code>，<code>threshold=6</code>，并对已有的元素重新计算hash值后迁移到新<code>table</code>中。此时元素的分布如下：</p> 
+<p class="img-center"><img alt="oT84L9.png" height="302" src="https://images2.imgbox.com/19/5f/RLBADJR7_o.png" width="1200"></p> 
+<p>然后陆续添加元素一直到第8个时，再次扩容，<code>table[8]</code>变为<code>table[16]</code>，<code>threshold=12</code>，再重计算hashcode并重排元素在数组中的位置。</p> 
+<p class="img-center"><img alt="oT8ncP.png" height="464" src="https://images2.imgbox.com/ee/83/MfYL1tzt_o.png" width="1200"></p> 
+<p>当添加完value13后，<code>table[2]</code>上的元素已经超过<code>TREEIFY_THRESHOLD</code>了，此时就会调用<code>treeifyBin</code>方法，尝试对槽位2上的链表进行红黑树的转换，不过现在数组的长度还不够64位，不进行转换，而是扩容并迁移各个槽位上的数据。当前<code>table</code>长度为32，<code>threshold</code>为24。</p> 
+<p class="img-center"><img alt="o9MbBK.png" height="788" src="https://images2.imgbox.com/3a/64/QvCTQT9C_o.png" width="1200"></p> 
+<p>value14添加到hashMap后，同样会再次扩容，<code>table</code>长度到64，<code>threshold</code>为48，并且各个元素重新计算槽位。等到value15被加入到HashMap后，槽位34(添加value14后槽位2的元素重新计算槽位到34)上才会真正转换为红黑树。</p> 
+<p class="img-center"><img alt="o9Wmf9.png" height="815" src="https://images2.imgbox.com/98/65/Nc3vnmvH_o.png" width="1200"></p> 
+<p>红黑树相较于链表，在查询方面的时间复杂度为<code>O(log n)</code>，是一种自平衡的二叉查找树。而链表的查找操作需要遍历整个链表，时间复杂度为<code>O(n)</code>。因此红黑树在查询方面具有明显的优势。<br> 除了put方法外，还有一个putAll方法，此方法实际上是调用putMapEntries方法，将一个Map类型参数循环添加到HashMap中，putMapEntries方法的逻辑上面我们已经介绍过了。</p> 
+<pre><code class="language-java">    public void putAll(Map&lt;? extends K, ? extends V&gt; m) {
+        putMapEntries(m, true);
+    }
+</code></pre> 
+<p> </p> 
+<h3>2、删除元素操作</h3> 
+<p>我们首先看一下删除方法源码</p> 
+<pre><code class="language-java">    public V remove(Object key) {
+        Node&lt;K,V&gt; e;
+        return (e = removeNode(hash(key), key, null, false, true)) == null ?
+            null : e.value;
+    }
+    
+    @Override
+    public boolean remove(Object key, Object value) {
+        return removeNode(hash(key), key, value, true, true) != null;
+    }
+</code></pre> 
+<p><code>remove</code>方法内部调用<code>removeNode</code>方法，将指定Key的元素删除，并在删除成功后返回对应Key的value值。下面是<code>removeNode</code>的源码。</p> 
+<pre><code class="language-java">    /**
+    *  hash:Key的hashcode
+    *  matchValue: 是否匹配value，true的话表示不光匹配Key，还需要匹配value才可以对元素进行移除操作
+    */
+    final Node&lt;K,V&gt; removeNode(int hash, Object key, Object value,
+                               boolean matchValue, boolean movable) {
+        Node&lt;K,V&gt;[] tab; Node&lt;K,V&gt; p; int n, index;
+        //数组不为空并且对应槽位有值，则将对应槽位元素赋值给p
+        if ((tab = table) != null &amp;&amp; (n = tab.length) &gt; 0 &amp;&amp;
+            (p = tab[index = (n - 1) &amp; hash]) != null) {
+            Node&lt;K,V&gt; node = null, e; K k; V v;
+            /**
+            *  p的hash值和要删除的hash值一样，并且Key本身相等，说明p就是要删除的值，则将p赋值给node；
+            *  否则说明存在hash相同，但值不相同的key，即hash冲突。此时判断p.next是否有值，
+            *  有值代表链表或红黑树存在，可以在链表或红黑树上进一步检索Key，如果找到了则赋值给node。
+            */
+            if (p.hash == hash &amp;&amp;
+                ((k = p.key) == key || (key != null &amp;&amp; key.equals(k))))
+                node = p;
+            else if ((e = p.next) != null) {
+                if (p instanceof TreeNode)
+                    node = ((TreeNode&lt;K,V&gt;)p).getTreeNode(hash, key);
+                else {
+                    do {
+                        if (e.hash == hash &amp;&amp;
+                            ((k = e.key) == key ||
+                             (key != null &amp;&amp; key.equals(k)))) {
+                            node = e;
+                            break;
+                        }
+                        p = e;
+                    } while ((e = e.next) != null);
+                }
+            }
+            /**
+            *  若node有值，并且不匹配value值，或者value值匹配成功，即开始删除操作。
+            *  如果node是TreeNode类型，则调用红黑树的移除操作对元素进行移除。否则是Node类型；
+            *  node==p说明直接在槽位上匹配到元素了，没有进行hash冲突判断，所以直接将node的next赋值给槽位，
+            *  node对象在当前方法执行完后就失去了引用，可以被GC。
+            *  若node不等于p，则说明进行了hash冲突判断，也是同样的道理，把node的next复制给p.next，
+            *  node失去引用等待被GC。最后返回匹配到的node即可。
+            */
+            if (node != null &amp;&amp; (!matchValue || (v = node.value) == value ||
+                                 (value != null &amp;&amp; value.equals(v)))) {
+                if (node instanceof TreeNode)
+                    ((TreeNode&lt;K,V&gt;)node).removeTreeNode(this, tab, movable);
+                else if (node == p)
+                    tab[index] = node.next;
+                else
+                    p.next = node.next;
+                ++modCount;
+                --size;
+                afterNodeRemoval(node);
+                return node;
+            }
+        }
+        return null;
+    }
+</code></pre> 
+<p>上面的删除方法我们分析了删除的相关逻辑，当然除了红黑树的删除方法，本文不具体介绍红黑树。不过HashMap中有个逻辑还得说一下。在添加元素的方法中，我们知道链表转红黑树的条件是：数组长度大于等于64，链表长度超过8，那么就会被转换成红黑树。如果删除红黑树里的元素，达到什么条件时，红黑树才退化成链表？这块的逻辑在<code>removeTreeNode</code>方法和<code>split</code>中</p> 
+<pre><code class="language-java">final void removeTreeNode(HashMap&lt;K,V&gt; map,Node&lt;K,V&gt;[] tab, boolean movable){
+          ......
+          //树根节点为null，或者不为null的情况下，跟节点的右节点是空的，或者左节点是空的，或者右节点的左节点是空的，此时执行退化操作
+          if (root == null
+                || (movable
+                    &amp;&amp; (root.right == null
+                        || (rl = root.left) == null
+                        || rl.left == null))) {
+                tab[index] = first.untreeify(map);  // too small
+                return;
+            }
+            ......
+}
+
+final void split(HashMap&lt;K,V&gt; map,Node&lt;K,V&gt;[] tab,int index, int bit){
+          ......
+          //lc\hc为树上的元素个数，如果元素个数少于等于UNTREEIFY_THRESHOLD时，则将树退化到链表，UNTREEIFY_THRESHOLD的值为6.
+          if (loHead != null) {
+                if (lc &lt;= UNTREEIFY_THRESHOLD)
+                    tab[index] = loHead.untreeify(map);
+                else {
+                    tab[index] = loHead;
+                    if (hiHead != null) // (else is already treeified)
+                        loHead.treeify(tab);
+                }
+            }
+            if (hiHead != null) {
+                if (hc &lt;= UNTREEIFY_THRESHOLD)
+                    tab[index + bit] = hiHead.untreeify(map);
+                else {
+                    tab[index + bit] = hiHead;
+                    if (loHead != null)
+                        hiHead.treeify(tab);
+                }
+            }
+  
+            ......
+}
+</code></pre> 
+<p>在我们分析完添加元素的逻辑和源码后，再看上面移除元素的逻辑就很简单了，其中匹配元素的逻辑在<code>putVal</code>方法中也出现过，老眼熟了。下面我们简单的图示一下移除的步骤。</p> 
+<p class="img-center"><img alt="oO5Mqu.png" height="748" src="https://images2.imgbox.com/2b/9c/947Y4YW8_o.png" width="800"></p> 
+<p>图1表示数组和链表的原始状态，图2表示删除指定槽位链表头元素后的情况，即<code>tab[index] = node.next</code>这行代码。图3表示hash计算槽位冲突后检索链表，删除链表中某个元素的情况，即<code>p.next = node.next</code>这行代码。<br> HashMap还提供了一个<code>clear</code>方法，用于清除数组中所有槽位元素，逻辑也非常简单，即循环数组将所有槽位设置为null，并将<code>size</code>设置为0。</p> 
+<pre><code class="language-java">    public void clear() {
+        Node&lt;K,V&gt;[] tab;
+        modCount++;
+        if ((tab = table) != null &amp;&amp; size &gt; 0) {
+            size = 0;
+            for (int i = 0; i &lt; tab.length; ++i)
+                tab[i] = null;
+        }
+    }
+</code></pre> 
+<h3>3、查找元素</h3> 
+<p>在介绍查找元素方法之前，我们先看一下HashMap中集合相关的源码和逻辑。HashMap中有三个获取集合的方法：<code>keySet(),values(),entrySet()</code>，分别返回Key的集合，value的集合及键值对集合，三个方法的实现都依赖内部类<code>KeySet,EntrySet,Values</code>。其中<code>KeySet</code>和<code>EntrySet</code>继承自<code>AbstractSet</code>抽象类，<code>Values</code>继承自<code>AbstractCollection</code>抽象类，下面我们只分析<code>EntrySet</code>集合的源码和逻辑，<code>KeySet</code>和<code>Values</code>集合逻辑类似，有兴趣的可以自行查看。</p> 
+<pre><code class="language-java">    public Set&lt;Map.Entry&lt;K,V&gt;&gt; entrySet() {
+        Set&lt;Map.Entry&lt;K,V&gt;&gt; es;
+        return (es = entrySet) == null ? (entrySet = new EntrySet()) : es;
+    }
+
+    final class EntrySet extends AbstractSet&lt;Map.Entry&lt;K,V&gt;&gt; {
+        //多数方法的核心实现逻辑都是依赖HashMap中的逻辑实现。
+        public final int size()                 { return size; }
+        public final void clear()               { HashMap.this.clear(); }
+        public final Iterator&lt;Map.Entry&lt;K,V&gt;&gt; iterator() {
+            return new EntryIterator();
+        }
+        public final boolean contains(Object o) {
+            if (!(o instanceof Map.Entry))
+                return false;
+            Map.Entry&lt;?,?&gt; e = (Map.Entry&lt;?,?&gt;) o;
+            Object key = e.getKey();
+            Node&lt;K,V&gt; candidate = getNode(hash(key), key);
+            return candidate != null &amp;&amp; candidate.equals(e);
+        }
+        public final boolean remove(Object o) {
+            if (o instanceof Map.Entry) {
+                Map.Entry&lt;?,?&gt; e = (Map.Entry&lt;?,?&gt;) o;
+                Object key = e.getKey();
+                Object value = e.getValue();
+                return removeNode(hash(key), key, value, true, true) != null;
+            }
+            return false;
+        }
+        public final Spliterator&lt;Map.Entry&lt;K,V&gt;&gt; spliterator() {
+            return new EntrySpliterator&lt;&gt;(HashMap.this, 0, -1, 0, 0);
+        }
+        /**
+        *  遍历方法对所有元素进行遍历时，会判断modCount是否有变化，如果有变，说明在遍历途中，有其他线程对元素进行了增加或者删除，
+        *  有线程安全问题所以抛出异常。或者在遍历方法内对集合元素进行了增加或删除操作。
+        */
+        public final void forEach(Consumer&lt;? super Map.Entry&lt;K,V&gt;&gt; action) {
+            Node&lt;K,V&gt;[] tab;
+            if (action == null)
+                throw new NullPointerException();
+            if (size &gt; 0 &amp;&amp; (tab = table) != null) {
+                int mc = modCount;
+                for (int i = 0; i &lt; tab.length; ++i) {
+                    for (Node&lt;K,V&gt; e = tab[i]; e != null; e = e.next)
+                        action.accept(e);
+                }
+                if (modCount != mc)
+                    throw new ConcurrentModificationException();
+            }
+        }
+    }
+</code></pre> 
+<p>通过上面的<code>forEach</code>方法，我们总算知道了<code>modCount</code>到底是干吗用的了，<code>modCount</code>就是为了保证，在任何时候遍历该键值对的集合时确保集合内的值不会变化，导致发生“明明我都遍历所有元素统一处理了，为什么还有好几个元素不生效”这种事情。<br> 接下来我们正式看看查询相关代码逻辑。</p> 
+<pre><code class="language-java">    public V get(Object key) {
+        Node&lt;K,V&gt; e;
+        return (e = getNode(hash(key), key)) == null ? null : e.value;
+    }
+    
+    final Node&lt;K,V&gt; getNode(int hash, Object key) {
+        Node&lt;K,V&gt;[] tab; Node&lt;K,V&gt; first, e; int n; K k;
+        /**
+        *  根据Key的hash值，计算出所在槽位。并去除对应槽位的值赋值给first变量。
+        *  first变量hash值和方法入参的hash值相等，并且first.key与入参key相等，表示找到节点数据，并返回。
+        *  hash值相等，但first.key与入参key不相等，说明有hash冲突。若first是TreeNode类型说明当前槽位已经是红黑树，则使用红黑树的方法进行元素查找。否则是链表，遍历链表的next属性进行查找
+        *  将找到的元素返回，未找到则返回null
+        */
+        if ((tab = table) != null &amp;&amp; (n = tab.length) &gt; 0 &amp;&amp;
+            (first = tab[(n - 1) &amp; hash]) != null) {
+            if (first.hash == hash &amp;&amp; // always check first node
+                ((k = first.key) == key || (key != null &amp;&amp; key.equals(k))))
+                return first;
+            if ((e = first.next) != null) {
+                if (first instanceof TreeNode)
+                    return ((TreeNode&lt;K,V&gt;)first).getTreeNode(hash, key);
+                do {
+                    if (e.hash == hash &amp;&amp;
+                        ((k = e.key) == key || (key != null &amp;&amp; key.equals(k))))
+                        return e;
+                } while ((e = e.next) != null);
+            }
+        }
+        return null;
+    }
+    
+    public boolean containsKey(Object key) {
+        return getNode(hash(key), key) != null;
+    }
+    
+    @Override
+    public V getOrDefault(Object key, V defaultValue) {
+        Node&lt;K,V&gt; e;
+        return (e = getNode(hash(key), key)) == null ? defaultValue : e.value;
+    }
+</code></pre> 
+<p>查找元素的方法逻辑非常清晰和容易理解，<code>getNode</code>方法作为内部的方法被许多方法调用，是一个公共的查找元素方法。</p> 
+<h3>其他方法</h3> 
+<p>除了基本添加元素、删除元素、查找元素等方法，还有其他的方法提供给我们，以支持更多的功能。</p> 
+<pre><code class="language-java">  /**
+  *  替换Value，查到对应Key的元素节点后，判断Value值是否等于给定的oldValue，相等则将newValue值替换至元素节点，不相等则不替换。
+  */
+  public boolean replace(K key, V oldValue, V newValue) {
+        Node&lt;K,V&gt; e; V v;
+        if ((e = getNode(hash(key), key)) != null &amp;&amp;
+            ((v = e.value) == oldValue || (v != null &amp;&amp; v.equals(oldValue)))) {
+            e.value = newValue;
+            afterNodeAccess(e);
+            return true;
+        }
+        return false;
+    }
+
+    
+    /**
+    *  查找到对应Key元素节点后，直接对Value值进行替换，不进行其他逻辑判断。
+    */
+    @Override
+    public V replace(K key, V value) {
+        Node&lt;K,V&gt; e;
+        if ((e = getNode(hash(key), key)) != null) {
+            V oldValue = e.value;
+            e.value = value;
+            afterNodeAccess(e);
+            return oldValue;
+        }
+        return null;
+    }
+    
+    /**
+    *  通过给定的Key查找元素，将查到的元素Key、Value值传入入参的回调函数，并通过回调函数接受一个返回值，
+    *  若返回值不为null，用返回值替换旧的value值，否则删除查到的元素。
+    */
+    public V computeIfPresent(K key,
+                              BiFunction&lt;? super K, ? super V, ? extends V&gt; remappingFunction) {
+        if (remappingFunction == null)
+            throw new NullPointerException();
+        Node&lt;K,V&gt; e; V oldValue;
+        int hash = hash(key);
+        if ((e = getNode(hash, key)) != null &amp;&amp;
+            (oldValue = e.value) != null) {
+            V v = remappingFunction.apply(key, oldValue);
+            if (v != null) {
+                e.value = v;
+                afterNodeAccess(e);
+                return v;
+            }
+            else
+                removeNode(hash, key, null, false, true);
+        }
+        return null;
+    }
+</code></pre> 
+<p>除了上面介绍的几类方法，还有逻辑相似或者作用相似的几个方法，包括合并方法，替换元素方法，遍历方法等等，就不一一介绍了，有兴趣的话各位可以自己看看。<br> 另外在我们上面分析的众多的源码逻辑中，可以看到出现了很多次的<code>afterNodeAccess,afterNodeInsertion,afterNodeRemoval</code>的方法调用，这些方法在<code>HashMap</code>内部没有实现是个空方法，实际上的实现是在<code>LinkedHashMap</code>类中，而<code>LinkedHashMap</code>则是继承自<code>HashMap</code>的，所以<code>LinkedHashMap</code>实例在调用父类方法，也就是<code>HashMap</code>中的相关逻辑时，这几个方法才有实质的作用。</p> 
+<h2>总结</h2> 
+<p>HashMap是建立在Hash算法和数组之上，拥有对数组进行随机访问能力的Key-Value结构，同时在处理Hash冲突时使用了不同的策略即链表和红黑树，得益于此，HashMap拥有比较高的性能，各类开源中间件中也有大量的应用，日常编程中也会非常频繁的使用到HashMap。但HashMap是非线程安全的，多个线程同时对它进行操作会出现线程安全问题，如果要在多线程环境中使用Key-Value结构的数据结构容器，可以使用ConcurrentHashMap。</p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/9ee9c5d85b227f0c6140bb8202fd807f/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【C语言】动态内存管理</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e1cac96b4f105c337cb1954659ecf250/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">重磅！程序员都在学的Spring实战（第6版），你竟然还没有掌握？</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

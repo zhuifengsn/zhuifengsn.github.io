@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>从CAS底层原理说到ABA问题 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="从CAS底层原理说到ABA问题" />
+<meta property="og:description" content="一、什么是CAS？
+CAS（Compare and sweep）：比较并交换（compareAndSet），是解决多线程并行情况下使用锁造成性能损耗的一种机制。比较当前工作内存中的值和主内存中的值，如果相同则执行规定操作，否则继续比较知道主内存和工作内存中的值一致为止。CAS有3个操作数，内存值为V，旧的预期值为A，要修改的更新值为B。当且仅当预期值A和内存值V相同时，将内存值V修改为B，否则什么都不做。java.util.concurrent.atomic包下的类大多是使用CAS操作来实现的。来看一段代码：
+package cassssss; import java.util.concurrent.atomic.AtomicInteger; public class CASDemo { public static void main(String[] args) { AtomicInteger atomicInteger = new AtomicInteger(5); atomicInteger.getAndIncrement(); boolean flag = atomicInteger.compareAndSet(4,9); System.out.println(flag &#43; &#34; &#34; &#43; atomicInteger.get()); } } 首先初始化一个变量5，指定了递增操纵，执行compareAndSet方法比较并交换，其中左参数是主内存中期望的值，update是主内存中想要更新的值，在更新之前看一下是否是当初取出的值（也即没有别的进程修改），再决定是否更新。
+public class AtomicInteger extends Number implements java.io.Serializable { private volatile int value; public AtomicInteger(int initialValue) { value = initialValue; } public final int getAndIncrement() { return unsafe.getAndAddInt(this, valueOffset, 1); } public final boolean compareAndSet(int expect, int update) { return unsafe." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/4446d881691ecdbf9c8b8d4c266ff71a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-07-30T23:03:57+08:00" />
+<meta property="article:modified_time" content="2019-07-30T23:03:57+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">从CAS底层原理说到ABA问题</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>一、什么是CAS？</strong></p> 
+<p>       CAS（Compare and sweep）：比较并交换（compareAndSet），是解决多线程并行情况下使用锁造成性能损耗的一种机制。比较当前工作内存中的值和主内存中的值，如果相同则执行规定操作，否则继续比较知道主内存和工作内存中的值一致为止。CAS有3个操作数，内存值为V，旧的预期值为A，要修改的更新值为B。当且仅当预期值A和内存值V相同时，将内存值V修改为B，否则什么都不做。<a href="https://www.baidu.com/s?wd=java.util.concurrent.atomic&amp;tn=24004469_oem_dg&amp;rsv_dl=gh_pl_sl_csd" rel="nofollow">java.util.concurrent.atomic</a>包下的类大多是使用CAS操作来实现的。来看一段代码：</p> 
+<pre class="has"><code class="language-java">package cassssss;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class CASDemo {
+
+    public static void main(String[] args) {
+        AtomicInteger atomicInteger = new AtomicInteger(5);
+
+        atomicInteger.getAndIncrement();
+
+        boolean flag = atomicInteger.compareAndSet(4,9);
+
+        System.out.println(flag + " " + atomicInteger.get());
+    }
+}
+</code></pre> 
+<p>首先初始化一个变量5，指定了递增操纵，执行compareAndSet方法比较并交换，其中左参数是主内存中期望的值，update是主内存中想要更新的值，在更新之前看一下是否是当初取出的值（也即没有别的进程修改），再决定是否更新。</p> 
+<pre class="has"><code class="language-java">public class AtomicInteger extends Number implements java.io.Serializable {
+    private volatile int value;
+
+    public AtomicInteger(int initialValue) {
+        value = initialValue;
+    }
+    
+    public final int getAndIncrement() {
+        return unsafe.getAndAddInt(this, valueOffset, 1);
+    }
+    
+    public final boolean compareAndSet(int expect, int update) {
+        return unsafe.compareAndSwapInt(this, valueOffset, expect, update);
+    }
+}</code></pre> 
+<p> </p> 
+<p><strong>二、CAS原理</strong></p> 
+<p><strong>2.1 Unsafe类</strong></p> 
+<p><strong>    </strong>    我们点进atomicInteger.getAndIncrement()这个方法里面可以看到有一个unsafe类，看一下AtomicInteger类里面的定义：</p> 
+<pre class="has"><code class="language-java">private static final Unsafe unsafe = Unsafe.getUnsafe();
+private static final long valueOffset;
+
+static {
+    try {
+        valueOffset = unsafe.objectFieldOffset
+            (AtomicInteger.class.getDeclaredField("value"));
+    } catch (Exception ex) { throw new Error(ex); }
+}
+
+private volatile int value;</code></pre> 
+<p><strong>a.valueOffset：</strong>表示该变量都是native修饰的，也就是Unsafe类中的方法都直接调OS底层资源执行相应任务。</p> 
+<p><strong>b.value：</strong>变量value用volatile修饰，保证了多线程之间的内存可见性。</p> 
+<p><strong>c.unsafe：</strong>CAS的核心类，由于Java方法无法直接访问底层系统，需要通过本地native方法来访问，Unsafe相当于一个后门，基于该类可以直接操作特定内存的数据，Unsafe类存在于sun.misc中，其内部方法操作可以像C的指针一样直接操作内存，因为Java中CAS操作的执行依赖于Unsafe类的方法。Unsafe类中的所有方法都是native方法，也就是说Unsafe类中的方法都直接调用操作系统底层资源执行相应任务。</p> 
+<p> </p> 
+<p><strong>2.2 CAS</strong></p> 
+<p>       它是一条CPU并发原语，功能是判断内存中某个位置的值是否为预期值，这个过程是原子的。CAS并发原语是体现在Java语言中就是sun.misc.Unsafe类中的各个方法。调用UnSafe类中的CAS方法，JVM会帮我们实现出CAS汇编指令，这是一种完全依赖于硬件的功能，通过它实现了原子操作。由于CAS是一种系统原语，原语属于操作系统用语范畴，是由若干条指令组成的，用于完成某个功能的一个过程，并且原语的执行必须是连续的，在执行过程中不允许被中断，也就是说CAS是一条CPU的原子指令，不会造成所谓的数据不一致问题，也就是所谓的<strong>线程安全</strong>。</p> 
+<p>      我们点进unsafe.getAndAddInt方法，</p> 
+<pre class="has"><code class="language-java">public final int getAndAddInt(Object var1, long var2, int var4) {
+    int var5;
+    do {
+        var5 = this.getIntVolatile(var1, var2);
+    } while(!this.compareAndSwapInt(var1, var2, var5, var5 + var4));
+
+    return var5;
+}</code></pre> 
+<p>解释一下这一段代码：</p> 
+<p>var1：AtomicInteger对象本身</p> 
+<p>var2：改对象值引用地址</p> 
+<p>var4：需要变动的数量</p> 
+<p>var5：通过var1 var2找出的主内存中真实的值</p> 
+<p>用改对象当前的值与var5比较，如果相同，更新var5+var4并且返回true。如果不同，继续取值然后再比较，知道更新完成。</p> 
+<p>compareAndSwapInt通过var1, var2获取内存中的当前值，跟之前获取的值var5进行比较。</p> 
+<p> </p> 
+<p><strong>2.3 CAS缺点</strong></p> 
+<p>a.循环时间长，对CPU带来比较大的开销，所谓的饥饿活锁问题，while一直在循环，无法跳出。</p> 
+<p>b.只能保证一个共享变量的原子性，多个变量需要加锁。</p> 
+<p>c.ABA问题。</p> 
+<p> </p> 
+<p><strong>三、ABA问题</strong></p> 
+<p><strong>3.1 什么是ABA问题</strong></p> 
+<p>        CAS会导致"ABA问题"，CAS算法实现一个重要前提需要取出内存中某时刻的数据并在当下时刻比较并替换，那么在这个时间差内会导致数据的变化。比如线程One从内存位置V中取出A，这时候另一个线程Two也从内存中取出A，并且线程Two进行了一些操作将值变成B，然后线程Two又将V位置的数据变成A，这时候线程One进行CAS操作发现内存中仍然是A，然后线程One操作成功，尽管线程One的CAS操作成功，但是并不代表这个过程就是没有问题的。下面看一段代码：</p> 
+<p> </p> 
+<p><strong>3.2 AtomicReference</strong></p> 
+<p>        我们先看一下原子引用类AtomicReference。</p> 
+<pre class="has"><code class="language-java">package cassssss;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+import java.util.concurrent.atomic.AtomicReference;
+
+@Data
+@AllArgsConstructor
+class User {
+    String name;
+
+    int age;
+    
+}
+
+public class AtomicReferenceDemo {
+
+    public static void main(String[] args) {
+        User u1 = new User("u1", 18);
+        User u2 = new User("u2", 18);
+
+        AtomicReference&lt;User&gt; atomicReference = new AtomicReference&lt;User&gt;();
+        atomicReference.set(u1);
+
+        System.out.println(atomicReference.compareAndSet(u1, u2) + "\t" + atomicReference.get().toString());
+        System.out.println(atomicReference.compareAndSet(u1, u2) + "\t" + atomicReference.get().toString());
+    }
+}
+</code></pre> 
+<p> 结果如下，可以看到在第一次用完compareAndSet之后，引用值变成u2，第二次运行时set失败，返回false。</p> 
+<pre class="has"><code class="language-bash">true	User(name=u2, age=18)
+false	User(name=u2, age=18)</code></pre> 
+<p> </p> 
+<p><strong>3.3 AtomicStampedReference</strong></p> 
+<p>         AtomicStampedReference中的compareAndSet方法跟之前的AtomiceReference相比，多了版本的参数，有四个参数</p> 
+<p>expectedReference：引用的期望值</p> 
+<p>newReference：引用的新的值 </p> 
+<p>expectedStamp：期望的版本值</p> 
+<p>newStamp：版本的期望值</p> 
+<p>下面看一下代码：应该可以很明显看到效果：</p> 
+<pre class="has"><code class="language-java">package cassssss;
+
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicStampedReference;
+
+public class ABADemo {
+
+    private static AtomicReference&lt;Integer&gt; atomicReference = new AtomicReference&lt;Integer&gt;(100);
+
+    private static AtomicStampedReference&lt;Integer&gt; atomicStampedReference = new AtomicStampedReference&lt;Integer&gt;(100, 1);
+
+    public static void main(final String[] args) {
+
+        System.out.println("===================ABA问题示例==================");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                atomicReference.compareAndSet(100, 101);
+                atomicReference.compareAndSet(101, 100);
+            }
+        }, "thread1").start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    TimeUnit.SECONDS.sleep(1);
+                    System.out.println(atomicReference.compareAndSet(100, 2019) + "\t" + atomicReference.get());
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }, "thread2").start();
+
+        try {
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("===================ABA问题解决==================");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int stamp = atomicStampedReference.getStamp();
+                System.out.println(Thread.currentThread().getName() + "\t第一次版本号：" + stamp);
+
+                try {
+                    TimeUnit.SECONDS.sleep(1);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                atomicStampedReference.compareAndSet(100, 101, atomicStampedReference.getStamp(), atomicStampedReference.getStamp() + 1);
+                System.out.println(Thread.currentThread().getName() + "\t第二次版本号：" + atomicStampedReference.getStamp());
+                atomicStampedReference.compareAndSet(101, 100, atomicStampedReference.getStamp(), atomicStampedReference.getStamp() + 1);
+                System.out.println(Thread.currentThread().getName() + "\t第三次版本号：" + atomicStampedReference.getStamp());
+            }
+        }, "thread3").start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int stamp = atomicStampedReference.getStamp();
+                System.out.println(Thread.currentThread().getName() + "\t第一次版本号：" + stamp);
+
+                try {
+                    /**
+                     * sleep 3 秒的目的是让thread4拿到老的版本号之后，等待thread3完成修改。
+                     */
+                    TimeUnit.SECONDS.sleep(3);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                boolean flag = atomicStampedReference.compareAndSet(100, 2019, stamp, stamp + 1);
+
+                System.out.println(Thread.currentThread().getName() + "\t修改成功否：" + flag);
+                System.out.println(Thread.currentThread().getName() + "\t最新值：" + atomicStampedReference.getReference());
+            }
+        }, "thread4").start();
+
+        while (Thread.activeCount() &gt; 2) {
+            Thread.yield();
+        }
+
+    }
+}
+</code></pre> 
+<p>看到结果：</p> 
+<pre class="has"><code>===================ABA问题示例==================
+true	2019
+===================ABA问题解决==================
+thread3	第一次版本号：1
+thread4	第一次版本号：1
+thread3	第二次版本号：2
+thread3	第三次版本号：3
+thread4	修改成功否：false
+thread4	最新值：100</code></pre> 
+<p> </p> 
+<p>Author：忆之独秀</p> 
+<p>Email：leaguenew@qq.com</p> 
+<p>注明出处：<a href="https://blog.csdn.net/lavorange/article/details/97661976">https://blog.csdn.net/lavorange/article/details/97661976</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/61a2a91dc4e833f7228056d16efb213b/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">概率算法（随机化算法）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/50ec6650af0c38d488ae8d6490c636ea/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">文件摆渡如何实现自动化传输？</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>STM32F4XX - CAN设置 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="STM32F4XX - CAN设置" />
+<meta property="og:description" content="can协议部分
+- 逻辑信号和电平信号
+先贴上CAN信号在物理信号线上的查分信号表示形式
+显性电平： 电压差范围为1.5-2.5v。 对应的逻辑电平是0
+隐性电平： 其他 对应的逻辑电平是1
+为什么显性电平对应的逻辑电平值为0，而隐性电平对应的逻辑电平是1？
+因为在总线上，需要令显性位具有“覆盖”隐性位的能力。
+在线与逻辑关系下，0才具有这种能力（1·1·1·……·1·1·0 = 0）。
+所以才会将0定义为dominant，而将1定义为recessive。例如总线上10个节点发隐性位而1个节点发显性位的时候，总线上呈现出的是显性位。
+电气连接图如下：（显性电平时逻辑电平为0，隐性电平时逻辑电平为1.具备线与的能力）
+- 报文协议
+CAN的协议报文由上面的逻辑电平组成；（如1111101111011101111101111）
+灰色为显性，白色为隐性，浅蓝色表示可以是显性也可以是隐性。
+起始帧（SOF） ： 起始的一个显性位
+仲裁段（Identify SRR IDE RTR）：
+canid填充位RTR 区分数据帧和远程帧 显性为数据帧，隐性为远程帧SRR 区分仲裁遥控帧的标准格式与扩展格式的优先级，比较标准格式的RTR位与扩展格式的SRR位，标准格式的RTR位恒为显性，扩展格式的SRR位恒为隐性。故前11位ID号相同时，标准数据帧优先级高于扩展数据帧。IDE 区分仲裁数据帧的标准格式与扩展格式的优先级，看IDE位，扩展格式的IDE位恒为隐性，标准格式的IDE位在控制段，恒为显性。故前11位ID号相同时，标准遥控帧优先级高于扩展遥控帧。
+控制段（r1 r0 DLC）：r1和r0保留，DLC控制数据段的长度。
+数据段（Data）: 数据段可包含0-8个字节的数据，从MSB（最高位）开始输出。遥控帧没有此段。
+CRC段：由15个位的CRC序列和1个位的CRC界定符（用于分隔位）构成。CRC界定符恒为隐性。
+ACK段： 由ACK槽（ACK Slot）和ACK界定符2个位构成。 发送端两个呈现隐性电平。 - 位时序设置
+举一个具体的寄存器说明：
+需要设置的值有四个：SJW TS2 TS1 BRP
+计算方式参考：
+SJW必须小于PBS1和PBS2的最小值。
+这个寄存器中这些值使用的单位为tq。
+brp ：波特率分频器
+tq=(brp)*tpclk1
+baud rate=Fpclk1/((tbs1&#43;tbs2&#43;1)*brp)
+=42M/((7&#43;6&#43;1)*3)
+=1Mbps
+上面对CAN协议相关进行说明，后面针对具体STM32F4XX的例子进行分析说明。 u8 CAN1_Mode_Init(u8 tsjw,u8 tbs2,u8 tbs1,u16 brp,u8 mode) { GPIO_InitTypeDef GPIO_InitStructure; NVIC_InitTypeDef NVIC_InitStructure; u16 i=0; if(tsjw==0||tbs2==0||tbs1==0||brp==0)return 1; tsjw-=1; //Subtract 1 before setting //先减去1." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f5a8ffd7d9cbeb29e736f5956ed79d96/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-26T10:36:15+08:00" />
+<meta property="article:modified_time" content="2024-02-26T10:36:15+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">STM32F4XX - CAN设置</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>can协议部分</p> 
+<p><strong>- 逻辑信号和电平信号</strong></p> 
+<p>先贴上CAN信号在物理信号线上的查分信号表示形式<br> <img src="https://images2.imgbox.com/a6/d0/jWzzOOl2_o.png" alt="在这里插入图片描述">显性电平： 电压差范围为1.5-2.5v。 对应的逻辑电平是0<br> 隐性电平： 其他 对应的逻辑电平是1</p> 
+<p>为什么显性电平对应的逻辑电平值为0，而隐性电平对应的逻辑电平是1？<br> <em>因为在总线上，需要令显性位具有“覆盖”隐性位的能力。<br> 在线与逻辑关系下，0才具有这种能力（1·1·1·……·1·1·0 = 0）。<br> 所以才会将0定义为dominant，而将1定义为recessive。例如总线上10个节点发隐性位而1个节点发显性位的时候，总线上呈现出的是显性位。</em><br> 电气连接图如下：（显性电平时逻辑电平为0，隐性电平时逻辑电平为1.具备线与的能力）<br> <img src="https://images2.imgbox.com/ec/33/h9AD2M2K_o.png" alt="在这里插入图片描述"><br> <strong>- 报文协议</strong><br> CAN的协议报文由上面的逻辑电平组成；（如1111101111011101111101111）<br> <img src="https://images2.imgbox.com/ab/96/g3aSVMX1_o.png" alt="在这里插入图片描述">灰色为显性，白色为隐性，浅蓝色表示可以是显性也可以是隐性。<br> 起始帧（SOF） ： 起始的一个显性位<br> 仲裁段（Identify SRR IDE RTR）：</p> 
+<ul><li>canid填充位</li><li>RTR 区分数据帧和远程帧 显性为数据帧，隐性为远程帧</li><li>SRR 区分仲裁遥控帧的标准格式与扩展格式的优先级，比较标准格式的RTR位与扩展格式的SRR位，标准格式的RTR位恒为显性，扩展格式的SRR位恒为隐性。故前11位ID号相同时，标准数据帧优先级高于扩展数据帧。</li><li>IDE 区分仲裁数据帧的标准格式与扩展格式的优先级，看IDE位，扩展格式的IDE位恒为隐性，标准格式的IDE位在控制段，恒为显性。故前11位ID号相同时，标准遥控帧优先级高于扩展遥控帧。<br> 控制段（r1 r0 DLC）：r1和r0保留，DLC控制数据段的长度。<br> 数据段（Data）: 数据段可包含0-8个字节的数据，从MSB（最高位）开始输出。遥控帧没有此段。<br> CRC段：由15个位的CRC序列和1个位的CRC界定符（用于分隔位）构成。CRC界定符恒为隐性。<br> ACK段： 由ACK槽（ACK Slot）和ACK界定符2个位构成。 发送端两个呈现隐性电平。</li></ul> 
+<p><strong>- 位时序设置</strong><br> <img src="https://images2.imgbox.com/b4/81/m8yAXrfW_o.png" alt="在这里插入图片描述">举一个具体的寄存器说明：<br> <img src="https://images2.imgbox.com/d8/63/V8XMZkMA_o.png" alt="在这里插入图片描述">需要设置的值有四个：SJW TS2 TS1 BRP</p> 
+<p>计算方式参考：<br> <img src="https://images2.imgbox.com/d7/0f/7HiI66dT_o.png" alt="在这里插入图片描述">SJW必须小于PBS1和PBS2的最小值。<br> 这个寄存器中这些值使用的单位为tq。<br> brp ：波特率分频器<br> tq=(brp)*tpclk1<br> baud rate=Fpclk1/((tbs1+tbs2+1)*brp)<br> =42M/((7+6+1)*3)<br> =1Mbps</p> 
+<h3><a id="CANSTM32F4XX_44"></a>上面对CAN协议相关进行说明，后面针对具体STM32F4XX的例子进行分析说明。</h3> 
+<pre><code class="prism language-bash">u8 CAN1_Mode_Init<span class="token punctuation">(</span>u8 tsjw,u8 tbs2,u8 tbs1,u16 brp,u8 mode<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+        GPIO_InitTypeDef GPIO_InitStructure<span class="token punctuation">;</span>
+        NVIC_InitTypeDef NVIC_InitStructure<span class="token punctuation">;</span>
+        u16 <span class="token assign-left variable">i</span><span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+        if<span class="token punctuation">(</span>tsjw<span class="token operator">==</span><span class="token number">0</span><span class="token operator">||</span><span class="token assign-left variable">tbs2</span><span class="token operator">==</span><span class="token number">0</span><span class="token operator">||</span><span class="token assign-left variable">tbs1</span><span class="token operator">==</span><span class="token number">0</span><span class="token operator">||</span><span class="token assign-left variable">brp</span><span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>return <span class="token number">1</span><span class="token punctuation">;</span>
+        tsjw-<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span> //Subtract <span class="token number">1</span> before setting //先减去1.再用于设置
+        tbs2-<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+        tbs1-<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+        brp-<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+
+        //使能相关时钟
+        RCC_AHB1PeriphClockCmd<span class="token punctuation">(</span>RCC_AHB1Periph_GPIOD, ENABLE<span class="token punctuation">)</span><span class="token punctuation">;</span>//使能PORTB时钟                                                                                                             
+        RCC_APB1PeriphClockCmd<span class="token punctuation">(</span>RCC_APB1Periph_CAN1, ENABLE<span class="token punctuation">)</span><span class="token punctuation">;</span>//使能CAN1时钟      
+        //初始化GPIO
+        GPIO_InitStructure.GPIO_Pin <span class="token operator">=</span> GPIO_Pin_0<span class="token operator">|</span> GPIO_Pin_1<span class="token punctuation">;</span>
+        GPIO_InitStructure.GPIO_Mode <span class="token operator">=</span> GPIO_Mode_AF<span class="token punctuation">;</span>//复用功能
+        GPIO_InitStructure.GPIO_OType <span class="token operator">=</span> GPIO_OType_PP<span class="token punctuation">;</span>//推挽输出
+        GPIO_InitStructure.GPIO_Speed <span class="token operator">=</span> GPIO_Speed_100MHz<span class="token punctuation">;</span>//100MHz
+        GPIO_InitStructure.GPIO_PuPd <span class="token operator">=</span> GPIO_PuPd_UP<span class="token punctuation">;</span>//上拉
+        GPIO_Init<span class="token punctuation">(</span>GPIOD, <span class="token operator">&amp;</span>GPIO_InitStructure<span class="token punctuation">)</span><span class="token punctuation">;</span>//初始化PB8 PB9
+//      //引脚复用映射配置
+        GPIO_PinAFConfig<span class="token punctuation">(</span>GPIOD,GPIO_PinSource0,GPIO_AF_CAN1<span class="token punctuation">)</span><span class="token punctuation">;</span> //GPIOB8复用为CAN1
+        GPIO_PinAFConfig<span class="token punctuation">(</span>GPIOD,GPIO_PinSource1,GPIO_AF_CAN1<span class="token punctuation">)</span><span class="token punctuation">;</span> //GPIOB9复用为CAN1
+
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">=</span>0x0000<span class="token punctuation">;</span>       //Exit <span class="token function">sleep</span> mode <span class="token punctuation">(</span>setting all bits to <span class="token number">0</span> at the same <span class="token function">time</span><span class="token punctuation">)</span> //退出睡眠模式<span class="token punctuation">(</span>同时设置所有位为0<span class="token punctuation">)</span>
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span>        //Request CAN1 to enter initialization mode //请求CAN1进入初始化模式
+        while<span class="token punctuation">((</span>CAN1-<span class="token operator">&gt;</span>MSR<span class="token operator">&amp;</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>      
+                     i++<span class="token punctuation">;</span>
+                if<span class="token punctuation">(</span>i<span class="token operator">&gt;</span><span class="token number">100</span><span class="token punctuation">)</span>return <span class="token number">2</span><span class="token punctuation">;</span> //Failed to enter initialization mode //进入初始化模<span class="token operator">&gt;</span>式失败
+        <span class="token punctuation">}</span>
+        //Non-time triggered communication mode
+        //非时间触发通信模式
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">7</span><span class="token punctuation">;</span>
+  //Software automatic offline management       
+        //软件自动离线管理
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">6</span><span class="token punctuation">;</span>        
+        //Sleep mode is awakened by software <span class="token punctuation">(</span>clear CAN1- <span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  //睡眠模式通过软件唤醒<span class="token punctuation">(</span>清除CAN1-<span class="token operator">&gt;</span>MCR的SLEEP位<span class="token punctuation">)</span>        
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">5</span><span class="token punctuation">;</span>
+        //Disallow automatic message transmission
+  //禁止报文自动传送    
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">4</span><span class="token punctuation">;</span>
+        //Messages are not locked, the new overwrites the old
+  //报文不锁定,新的覆盖旧的     
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">3</span><span class="token punctuation">;</span>
+        //The priority is determined by the message identifier  
+  //优先级由报文标识符决定  
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">2</span><span class="token punctuation">;</span>
+  //Clear the original Settings 
+  //清除原来的设置      
+        CAN1-<span class="token operator">&gt;</span>BTR<span class="token operator">=</span>0x00000000<span class="token punctuation">;</span> 
+        //Mode <span class="token builtin class-name">set</span> to <span class="token number">0</span>, normal mode<span class="token punctuation">;</span><span class="token number">1</span>. Loop mode<span class="token punctuation">;</span>
+        //模式设置 <span class="token number">0</span>,普通模式<span class="token punctuation">;</span><span class="token number">1</span>,回环模式<span class="token punctuation">;</span>
+        CAN1-<span class="token operator">&gt;</span>BTR<span class="token operator">|</span><span class="token operator">=</span>mode<span class="token operator">&lt;&lt;</span><span class="token number">30</span><span class="token punctuation">;</span>
+  //Resynchronization jump width <span class="token punctuation">(</span>TSJW<span class="token punctuation">)</span> is TSJW +1 <span class="token function">time</span> unit    
+               //重新同步跳跃宽度<span class="token punctuation">(</span>Tsjw<span class="token punctuation">)</span>为tsjw+1个时间单位
+        CAN1-<span class="token operator">&gt;</span>BTR<span class="token operator">|</span><span class="token operator">=</span>tsjw<span class="token operator">&lt;&lt;</span><span class="token number">24</span><span class="token punctuation">;</span> 
+  //Tbs2<span class="token operator">=</span> Tbs2 +1 <span class="token function">time</span> unit     
+        //Tbs2<span class="token operator">=</span>tbs2+1个时间单位
+        CAN1-<span class="token operator">&gt;</span>BTR<span class="token operator">|</span><span class="token operator">=</span>tbs<span class="token operator"><span class="token file-descriptor important">2</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">20</span><span class="token punctuation">;</span> 
+        //Tbs1<span class="token operator">=</span> Tbs1 +1 <span class="token function">time</span> unit       
+  //Tbs1<span class="token operator">=</span>tbs1+1个时间单位       
+        CAN1-<span class="token operator">&gt;</span>BTR<span class="token operator">|</span><span class="token operator">=</span>tbs<span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">16</span><span class="token punctuation">;</span>
+        //Frequency division coefficient <span class="token punctuation">(</span>Fdiv<span class="token punctuation">)</span> is brp +1, boulder rate: Fpclk1/<span class="token punctuation">((</span>Tbs1+Tbs2+1<span class="token punctuation">)</span>*Fdiv<span class="token punctuation">)</span>
+  //分频系数<span class="token punctuation">(</span>Fdiv<span class="token punctuation">)</span>为brp+1，波特率:Fpclk1/<span class="token punctuation">((</span>Tbs1+Tbs2+1<span class="token punctuation">)</span>*Fdiv<span class="token punctuation">)</span>
+        CAN1-<span class="token operator">&gt;</span>BTR<span class="token operator">|</span><span class="token operator">=</span>brp<span class="token operator">&lt;&lt;</span><span class="token number">0</span><span class="token punctuation">;</span>  
+  //Request CAN1 to <span class="token builtin class-name">exit</span> initialization mode    
+  //请求CAN1退出初始化模式                      
+        CAN1-<span class="token operator">&gt;</span>MCR<span class="token operator">&amp;</span><span class="token operator">=~</span><span class="token punctuation">(</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>       
+        while<span class="token punctuation">((</span>CAN1-<span class="token operator">&gt;</span>MSR<span class="token operator">&amp;</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+                i++<span class="token punctuation">;</span>
+                if<span class="token punctuation">(</span>i<span class="token operator">&gt;</span>0XFFF0<span class="token punctuation">)</span>return <span class="token number">3</span><span class="token punctuation">;</span> //Failed to <span class="token builtin class-name">exit</span> initialization mode //退出初始化<span class="token operator">&gt;</span>模式失败
+        <span class="token punctuation">}</span>
+        /*** Filter initialization <span class="token operator">||</span> 过滤器初始化 ***/
+        //Filter <span class="token function">groups</span> work <span class="token keyword">in</span> initialization mode
+        //过滤器组工作在初始化模式
+        CAN1-<span class="token operator">&gt;</span>FMR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span>        
+        //Filter <span class="token number">0</span> is not active
+  //过滤器0不激活       
+        CAN1-<span class="token operator">&gt;</span>FA1R<span class="token operator">&amp;</span><span class="token operator">=~</span><span class="token punctuation">(</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>    
+        //The filter bit width is <span class="token number">32</span> bits
+  //过滤器位宽为32位    
+        CAN1-<span class="token operator">&gt;</span>FS1R<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span> 
+        //Filter <span class="token number">0</span> works <span class="token keyword">in</span> identifier masking bit mode
+  //过滤器0工作在标识符屏蔽位模式       
+        CAN1-<span class="token operator">&gt;</span>FM1R<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span>                                                                                               //Filter <span class="token number">0</span> is associated with FIFO0
+  //过滤器0关联到FIFO0  
+        CAN1-<span class="token operator">&gt;</span>FFA1R<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span>      
+  //32 bit ID   
+        //32位ID
+        CAN1-<span class="token operator">&gt;</span>sFilterRegister<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>.FR1<span class="token operator">=</span>0X00000000<span class="token punctuation">;</span>
+        //32-bit MASK
+        //32位MASK
+        CAN1-<span class="token operator">&gt;</span>sFilterRegister<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>.FR2<span class="token operator">=</span>0X00000000<span class="token punctuation">;</span>
+        //Activation filter <span class="token number">0</span>
+        //激活过滤器0
+        CAN1-<span class="token operator">&gt;</span>FA1R<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span>       
+        //Filter group enters normal mode
+  //过滤器组进入正常模式        
+        CAN1-<span class="token operator">&gt;</span>FMR<span class="token operator">&amp;</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">0</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span>                        
+
+<span class="token comment">#if CAN1_RX0_INT_ENABLE</span>
+  //Enable to interrupt reception //使能中断接收
+        
+        //FIFO0消息挂号中断允许
+        CAN1-<span class="token operator">&gt;</span>IER<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">1</span><span class="token punctuation">;</span>                        
+        
+        //Configure CAN to receive interrupts
+        //配置CAN接收中断
+  NVIC_InitStructure.NVIC_IRQChannel <span class="token operator">=</span> CAN1_RX0_IRQn<span class="token punctuation">;</span>
+  //Preemption priority 
+        //抢占优先级
+        <span class="token assign-left variable">NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority</span><span class="token operator">=</span><span class="token number">1</span> <span class="token punctuation">;</span>
+        //Son priority
+        //子优先级
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority <span class="token operator">=</span> <span class="token number">3</span><span class="token punctuation">;</span>
+  //IRQ channel enablement
+        //IRQ通道使能   
+        NVIC_InitStructure.NVIC_IRQChannelCmd <span class="token operator">=</span> ENABLE<span class="token punctuation">;</span> 
+  //Initializes the VIC register according to the specified parameters 
+        //根据指定的参数初始化VIC寄存器 
+        NVIC_Init<span class="token punctuation">(</span><span class="token operator">&amp;</span>NVIC_InitStructure<span class="token punctuation">)</span><span class="token punctuation">;</span> 
+
+  CAN_ITConfig<span class="token punctuation">(</span>CAN1, CAN_IT_FMP0, ENABLE<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        
+<span class="token comment">#endif</span>
+        <span class="token builtin class-name">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>   
+
+</code></pre> 
+<p>上面为一段CAN的初始化代码，下面具体分析：</p> 
+<blockquote> 
+ <p>if(tsjw<mark>0||tbs2</mark>0||tbs1<mark>0||brp</mark>0)return 1;<br> tsjw-=1; //Subtract 1 before setting //先减去1.再用于设置<br> tbs2-=1;<br> tbs1-=1;<br> brp-=1;<br> <strong>因为寄存器中的每个变量都进行了加一，所以我们这里我们基于给定值做-1处理。</strong></p> 
+</blockquote> 
+<blockquote> 
+ <p>//使能相关时钟<br> RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);//使能PORTB时钟<br> RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);//使能CAN1时钟<br> <strong>使能GPIO时钟及CAN外设时钟。GPIO由AHB总线管理，CAN控制器由APB总线管理。</strong></p> 
+</blockquote> 
+<blockquote> 
+ <p>//初始化GPIO<br> GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0| GPIO_Pin_1;<br> GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;//复用功能<br> GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;//推挽输出<br> GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;//100MHz<br> GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;//上拉<br> GPIO_Init(GPIOD, &amp;GPIO_InitStructure);//初始化PB8 PB9<br> // //引脚复用映射配置<br> GPIO_PinAFConfig(GPIOD,GPIO_PinSource0,GPIO_AF_CAN1); //GPIOB8复用为CAN1<br> GPIO_PinAFConfig(GPIOD,GPIO_PinSource1,GPIO_AF_CAN1); //GPIOB9复用为CAN1<br> <strong>将CAN引脚设置为功能复用模式，类型为推挽输出，上拉电阻为100MHz，最后将引脚映射为can功能引脚。</strong></p> 
+</blockquote> 
+<blockquote> 
+ <p>CAN1-&gt;MCR=0x0000; //Exit sleep mode (setting all bits to 0 at the same time) //退出睡眠模式(同时设置所有位为0)<br> CAN1-&gt;MCR|=1&lt;&lt;0; //Request CAN1 to enter initialization mode //请求CAN1进<br> 入初始化模式<br> while((CAN1-&gt;MSR&amp;1&lt;&lt;0)==0)<br> {<!-- --><br> i++;<br> if(i&gt;100)return 2; //Failed to enter initialization mode //进入初始化模&gt;式失败<br> }<br> //Non-time triggered communication mode<br> //非时间触发通信模式<br> CAN1-&gt;MCR|=0&lt;&lt;7;<br> //Software automatic offline management<br> //软件自动离线管理<br> CAN1-&gt;MCR|=0&lt;&lt;6;<br> //Sleep mode is awakened by software (clear CAN1- &gt;;<br> //睡眠模式通过软件唤醒(清除CAN1-&gt;MCR的SLEEP位)<br> CAN1-&gt;MCR|=0&lt;&lt;5;<br> //Disallow automatic message transmission<br> //禁止报文自动传送<br> CAN1-&gt;MCR|=1&lt;&lt;4;<br> //Messages are not locked, the new overwrites the old<br> //报文不锁定,新的覆盖旧的<br> CAN1-&gt;MCR|=0&lt;&lt;3;<br> //The priority is determined by the message identifier<br> //优先级由报文标识符决定<br> CAN1-&gt;MCR|=0&lt;&lt;2;<br> 上面是对MCR寄存器进行设置，MCR是CAN 主控制寄存器。<br> <img src="https://images2.imgbox.com/fd/3c/LCOOhiOS_o.png" alt="在这里插入图片描述">CAN1-&gt;MCR=0x0000; //Exit sleep mode (setting all bits to 0 at the same time) //退出睡眠模式(同时设置所有位为0)<br> CAN1-&gt;MCR|=1&lt;&lt;0; //Request CAN1 to enter initialization mode //请求CAN1进<br> 入初始化模式<br> while((CAN1-&gt;MSR&amp;1&lt;&lt;0)==0)<br> {<!-- --><br> i++;<br> if(i&gt;100)return 2; //Failed to enter initialization mode //进入初始化模&gt;式失败<br> }<br> <strong>INRQ： 进入初始化模式，在初始化模式下对CAN的寄存器进行配置。并等待进入初始化模式完成。<br> SLEEP： 这里是退出休眠模式。所以置0<br> TXFP： 一般发送优先级都是消息标识符确定。所以置0<br> RFLM： 当接收FIFO满后，选择覆盖消息而不是丢弃。所以置0.<br> NART： 无论发送结果如何消息只会发送一次，不会一直发送直到发送成功。所以置1.<br> AWUM： 需要在SLEEP位置0后，就退出休眠模式。所以置0<br> ABOM： 当节点busoff后，等待128次11个隐性位后，置0可以让控制器先进入到初始化状态然后进入正常状态。所以置0.<br> TTCM： 不用使能CAN控制器内部的时间计数器（用于生成时间戳）。所以置0</strong><br> //Clear the original Settings<br> //清除原来的设置<br> CAN1-&gt;BTR=0x00000000;<br> //Mode set to 0, normal mode;1. Loop mode;<br> //模式设置 0,普通模式;1,回环模式;<br> CAN1-&gt;BTR|=mode&lt;&lt;30;<br> //Resynchronization jump width (TSJW) is TSJW +1 time unit<br> //重新同步跳跃宽度(Tsjw)为tsjw+1个时间单位<br> CAN1-&gt;BTR|=tsjw&lt;&lt;24;<br> //Tbs2= Tbs2 +1 time unit<br> //Tbs2=tbs2+1个时间单位<br> CAN1-&gt;BTR|=tbs2&lt;&lt;20;<br> //Tbs1= Tbs1 +1 time unit<br> //Tbs1=tbs1+1个时间单位<br> CAN1-&gt;BTR|=tbs1&lt;&lt;16;<br> //Frequency division coefficient (Fdiv) is brp +1, boulder rate: Fpclk1/((Tbs1+Tbs2+1)<em>Fdiv)<br> //分频系数(Fdiv)为brp+1，波特率:Fpclk1/((Tbs1+Tbs2+1)<em>Fdiv)<br> CAN1-&gt;BTR|=brp&lt;&lt;0;<br> <strong>这里就是设置波特率以及分频系数，在位时序中已经说明。</strong><br> //请求CAN1退出初始化模式<br> CAN1-&gt;MCR&amp;=~(1&lt;&lt;0);<br> while((CAN1-&gt;MSR&amp;1&lt;&lt;0)==1)<br> {<!-- --><br> i++;<br> if(i&gt;0XFFF0)return 3; //Failed to exit initialization mode //退出初始化&gt;模式失败<br> }<br> <strong>退出初始化模式进入到正常模式</strong><br> /</em></em>* Filter initialization || 过滤器初始化 ***/<br> //Filter groups work in initialization mode<br> //过滤器组工作在初始化模式<br> CAN1-&gt;FMR|=1&lt;&lt;0;<br> <img src="https://images2.imgbox.com/4f/4e/kWfdcdul_o.png" alt="在这里插入图片描述"> <strong>进入筛选器初始化模式后对筛选器进行设置</strong>。<br> //Filter 0 is not active<br> //过滤器0不激活<br> CAN1-&gt;FA1R&amp;=~(1&lt;&lt;0);<br> <img src="https://images2.imgbox.com/cd/3b/JeFy0BRE_o.png" alt="在这里插入图片描述"><br> <strong>一共有28个筛选器，选择激活哪个筛选器。</strong><br> //The filter bit width is 32 bits<br> //过滤器位宽为32位<br> CAN1-&gt;FS1R|=1&lt;&lt;0;<br> <strong>设置筛选器位宽尺寸。</strong><br> //Filter 0 works in identifier masking bit mode<br> //过滤器0工作在标识符屏蔽位模式<br> CAN1-&gt;FM1R|=0&lt;&lt;0;<br> <strong>可以选择筛选器是屏蔽模式还是列表模式，屏蔽模式表示屏蔽哪些CANID，列表模式表示哪些列表可以通过。一般选屏蔽模式。</strong><br> //Filter 0 is associated with FIFO0<br> //过滤器0关联到FIFO0<br> CAN1-&gt;FFA1R|=0&lt;&lt;0;<br> <strong>关联到哪个FIFO，有FIFO0和FIFO1可以选择。</strong><br> //32 bit ID<br> //32位ID<br> CAN1-&gt;sFilterRegister[0].FR1=0X00000000;<br> //32-bit MASK<br> //32位MASK<br> CAN1-&gt;sFilterRegister[0].FR2=0X00000000;<br> //Activation filter 0<br> <strong>设置过滤ID</strong><br> //激活过滤器0<br> CAN1-&gt;FA1R|=1&lt;&lt;0;<br> <strong>激活过滤器0</strong><br> //Filter group enters normal mode<br> //过滤器组进入正常模式<br> CAN1-&gt;FMR&amp;=0&lt;&lt;0;<br> <strong>过滤器进入到正常状态。</strong><br> //FIFO0消息挂号中断允许<br> CAN1-&gt;IER|=1&lt;&lt;1;<br> <em><strong>FIFO 开始时处于空状态,在接收的第一条有效消息存储在其中后,变为 Pending_1 状态。<br> 硬件通过将 CAN_RFR 寄存器的 FMP[1:0] 位置为 01b 来指示该事件。消息将在 FIFO 输出<br> 邮箱中供读取。软件将读取邮箱内容,并通过将 CAN_RFR 寄存器的 RFOM 位置 1,来将<br> 邮箱释放。FIFO 随即恢复空状态。如果同时接收到新的有效消息,FIFO 将保持 Pending_1<br> 状态,新消息将在输出邮箱中供读取。</strong></em><br> ![在这里插入图片描述](https://img-blog.csdnimg.cn/direct/0b6d3a23af4e4d989a7a571230dffbaf.png#pic_center<br> <strong>允许有新消息挂起时产生中断。</strong><br> //Configure CAN to receive interrupts<br> //配置CAN接收中断<br> NVIC_InitStructure.NVIC_IRQChannel = CAN1_RX0_IRQn;<br> //Preemption priority<br> //抢占优先级<br> NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority=1 ;<br> //Son priority<br> //子优先级<br> NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;<br> //IRQ channel enablement<br> //IRQ通道使能<br> NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;<br> //Initializes the VIC register according to the specified parameters<br> //根据指定的参数初始化VIC寄存器<br> NVIC_Init(&amp;NVIC_InitStructure);<br> CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE);<br> <strong>上面是设置CAN的中断通道，及中断抢占和响应优先级，最后使能中断。</strong></p> 
+</blockquote> 
+<p>接收部分主要代码：</p> 
+<pre><code class="prism language-bash">void CAN1_Rx_Msg<span class="token punctuation">(</span>u8 fifox,u32 *id,u8 *ide,u8 *rtr,u8 *len,u8 *dat<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+        *ide<span class="token operator">=</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RIR<span class="token operator">&amp;</span>0x04<span class="token punctuation">;</span> //Gets the value of the identifier selection bit //得
+到标识符选择位的值  
+        if<span class="token punctuation">(</span>*ide<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span> //Standard identifier //标准标识符
+        <span class="token punctuation">{<!-- --></span>
+                *id<span class="token operator">=</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RIR<span class="token operator">&gt;&gt;</span><span class="token number">21</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>else        //Extended identifier //扩展标识符
+        <span class="token punctuation">{<!-- --></span>
+                *id<span class="token operator">=</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RIR<span class="token operator">&gt;&gt;</span><span class="token number">3</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        *rtr<span class="token operator">=</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RIR<span class="token operator">&amp;</span>0x02<span class="token punctuation">;</span>        //Gets the remote send request value //得到远<span class="token operator">&gt;</span>程发送请求值
+        *len<span class="token operator">=</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDTR<span class="token operator">&amp;</span>0x0F<span class="token punctuation">;</span> //Get the DLC //得到DLC
+        //*fmi<span class="token operator">=</span><span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>FIFONumber<span class="token punctuation">]</span>.RDTR<span class="token operator">&gt;&gt;</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>0xFF<span class="token punctuation">;</span> //Get the FMI //得到FMI
+        //Receive data //接收数据
+        dat<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token operator">=</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDLR<span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+        dat<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDLR<span class="token operator">&gt;&gt;</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+        dat<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDLR<span class="token operator">&gt;&gt;</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+        dat<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDLR<span class="token operator">&gt;&gt;</span><span class="token number">24</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+        dat<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span><span class="token operator">=</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDHR<span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+        dat<span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDHR<span class="token operator">&gt;&gt;</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+        dat<span class="token punctuation">[</span><span class="token number">6</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDHR<span class="token operator">&gt;&gt;</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+        dat<span class="token punctuation">[</span><span class="token number">7</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>sFIFOMailBox<span class="token punctuation">[</span>fifox<span class="token punctuation">]</span>.RDHR<span class="token operator">&gt;&gt;</span><span class="token number">24</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>0XFF<span class="token punctuation">;</span>
+  if<span class="token punctuation">(</span>fifox<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>CAN1-<span class="token operator">&gt;</span>RF0R<span class="token operator">|</span><span class="token operator">=</span>0X20<span class="token punctuation">;</span>      //Free the FIFO0 mailbox //释放FIFO0邮箱
+        <span class="token keyword">else</span> if<span class="token punctuation">(</span>fifox<span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">)</span>CAN1-<span class="token operator">&gt;</span>RF1R<span class="token operator">|</span><span class="token operator">=</span>0X20<span class="token punctuation">;</span> //Free the FIFO1 mailbox //释放FIFO1邮箱      
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p>上面函数入参有FIFO号，上面设置了FIFO为FIFO0.其他的都是出参。<br> ide 用来区分是正常帧还是扩展帧。寄存器为RIR。<br> RDTR寄存器可以获取数据大小，大小为0-8.<br> RDLR寄存器可以获取实际的数据。<br> RF0R 寄存器可以释放FIFO，以供下次填充。<br> <img src="https://images2.imgbox.com/66/7f/hQfgmvp7_o.png" alt="在这里插入图片描述"><br> 发送部分主要代码：</p> 
+<pre><code class="prism language-bash">u8 CAN1_Send_Msg<span class="token punctuation">(</span>u8* msg,u8 len<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+        u8 mbox<span class="token punctuation">;</span>
+        u16 <span class="token assign-left variable">i</span><span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+  <span class="token assign-left variable">mbox</span><span class="token operator">=</span>CAN1_Tx_Msg<span class="token punctuation">(</span>0X601,0,0,len,msg<span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                     
+        <span class="token keyword">while</span><span class="token variable"><span class="token punctuation">((</span>CAN1_Tx_Staus<span class="token punctuation">(</span>mbox<span class="token punctuation">)</span><span class="token operator">!=</span><span class="token number">0</span>X07<span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>i<span class="token operator">&lt;</span><span class="token number">0</span>XFFF<span class="token punctuation">))</span></span>i++<span class="token punctuation">;</span> //Waiting <span class="token keyword">for</span> the end of sending //等待发送结束
+        if<span class="token punctuation">(</span>i<span class="token operator">&gt;=</span>0XFFF<span class="token punctuation">)</span>return <span class="token number">1</span><span class="token punctuation">;</span> //Send failure //发送失败
+        <span class="token builtin class-name">return</span> <span class="token number">0</span><span class="token punctuation">;</span>       //Send a success //发送成功                                                                     
+<span class="token punctuation">}</span>
+
+u8 CAN1_Tx_Msg<span class="token punctuation">(</span>u32 id,u8 ide,u8 rtr,u8 len,u8 *dat<span class="token punctuation">)</span>                                                                  
+<span class="token punctuation">{<!-- --></span>          
+        u8 mbox<span class="token punctuation">;</span>          
+        if<span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>TSR<span class="token operator">&amp;</span><span class="token punctuation">(</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">26</span><span class="token punctuation">))</span>mbox<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>              //Mailbox <span class="token number">0</span> is empty //邮箱0为空
+        <span class="token keyword">else</span> if<span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>TSR<span class="token operator">&amp;</span><span class="token punctuation">(</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">27</span><span class="token punctuation">))</span>mbox<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>       //Mailbox <span class="token number">1</span> is empty //邮箱1为空
+        <span class="token keyword">else</span> if<span class="token punctuation">(</span>CAN1-<span class="token operator">&gt;</span>TSR<span class="token operator">&amp;</span><span class="token punctuation">(</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">28</span><span class="token punctuation">))</span>mbox<span class="token operator">=</span><span class="token number">2</span><span class="token punctuation">;</span>       //Mailbox <span class="token number">2</span> is empty //邮箱2为空
+        <span class="token keyword">else</span> <span class="token builtin class-name">return</span> 0XFF<span class="token punctuation">;</span>                                               //No empty mailbox, cannot send //无空邮箱,无法发送       
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TIR<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span> //Clear the previous Settings //清除之前的设置            
+        if<span class="token punctuation">(</span>ide<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span> //The standard frame //标准帧
+        <span class="token punctuation">{<!-- --></span>       
+                <span class="token function">id</span><span class="token operator">&amp;</span><span class="token operator">=</span>0x7ff<span class="token punctuation">;</span> //Take the low <span class="token number">11</span> bit STDID //取低11位stdid
+                id<span class="token operator">&lt;&lt;</span><span class="token operator">=</span><span class="token number">21</span><span class="token punctuation">;</span>                  
+        <span class="token punctuation">}</span>else   //Extend the frame //扩展帧
+        <span class="token punctuation">{<!-- --></span>       
+                <span class="token function">id</span><span class="token operator">&amp;</span><span class="token operator">=</span>0X1FFFFFFF<span class="token punctuation">;</span> //Take a low <span class="token number">32</span>-bit extid //取低32位extid                  
+                id<span class="token operator">&lt;&lt;</span><span class="token operator">=</span><span class="token number">3</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TIR<span class="token operator">|</span><span class="token operator">=</span>id<span class="token punctuation">;</span>           
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TIR<span class="token operator">|</span><span class="token operator">=</span>ide<span class="token operator">&lt;&lt;</span><span class="token number">2</span><span class="token punctuation">;</span>
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TIR<span class="token operator">|</span><span class="token operator">=</span>rtr<span class="token operator">&lt;&lt;</span><span class="token number">1</span><span class="token punctuation">;</span>
+        len<span class="token operator">&amp;</span><span class="token operator">=</span>0X0F<span class="token punctuation">;</span> //Get lower <span class="token number">4</span> bits //得到低四位
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TDTR<span class="token operator">&amp;</span><span class="token operator">=~</span><span class="token punctuation">(</span>0X0000000F<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TDTR<span class="token operator">|</span><span class="token operator">=</span>len<span class="token punctuation">;</span>       //Set the DLC   //设置DLC
+        //The data to be sent is stored <span class="token keyword">in</span> the mailbox
+        //待发送数据存入邮箱
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TDHR<span class="token operator">=</span><span class="token variable"><span class="token punctuation">((</span><span class="token punctuation">(</span>u32<span class="token punctuation">)</span>dat[<span class="token number">7</span>]<span class="token operator">&lt;&lt;</span><span class="token number">24</span><span class="token punctuation">)</span><span class="token operator">|</span>                                                                         <span class="token punctuation">((</span>u32<span class="token punctuation">)</span>dat[<span class="token number">6</span>]<span class="token operator">&lt;&lt;</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token operator">|</span>                                                               <span class="token punctuation">((</span>u32<span class="token punctuation">)</span>dat[<span class="token number">5</span>]<span class="token operator">&lt;&lt;</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token operator">|</span>                                                                <span class="token punctuation">((</span>u32<span class="token punctuation">)</span>dat[<span class="token number">4</span>]<span class="token punctuation">))</span></span><span class="token punctuation">;</span>
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TDLR<span class="token operator">=</span><span class="token variable"><span class="token punctuation">((</span><span class="token punctuation">(</span>u32<span class="token punctuation">)</span>dat[<span class="token number">3</span>]<span class="token operator">&lt;&lt;</span><span class="token number">24</span><span class="token punctuation">)</span><span class="token operator">|</span>                                                                         <span class="token punctuation">((</span>u32<span class="token punctuation">)</span>dat[<span class="token number">2</span>]<span class="token operator">&lt;&lt;</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token operator">|</span>                                                                <span class="token punctuation">((</span>u32<span class="token punctuation">)</span>dat[<span class="token number">1</span>]<span class="token operator">&lt;&lt;</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token operator">|</span>                                                        <span class="token punctuation">((</span>u32<span class="token punctuation">)</span>dat[<span class="token number">0</span>]<span class="token punctuation">))</span></span><span class="token punctuation">;</span>
+        CAN1-<span class="token operator">&gt;</span>sTxMailBox<span class="token punctuation">[</span>mbox<span class="token punctuation">]</span>.TIR<span class="token operator">|</span><span class="token operator">=</span><span class="token operator"><span class="token file-descriptor important">1</span>&lt;</span><span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">;</span> //Request to send mailbox data//请求发送邮箱数据
+        <span class="token builtin class-name">return</span> mbox<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+</code></pre> 
+<blockquote> 
+ <p>mbox=CAN1_Tx_Msg(0X601,0,0,len,msg);<br> while((CAN1_Tx_Staus(mbox)!=0X07)&amp;&amp;(i&lt;0XFFF))i++; //Waiting for the end of sending //等待发送结束<br> if(i&gt;=0XFFF)return 1; //Send failure //发送失败<br> <strong>上面两行比较简单，发送，并且等待发送完成。</strong></p> 
+</blockquote> 
+<blockquote> 
+ <p>if(CAN1-&gt;TSR&amp;(1&lt;&lt;26))mbox=0; //Mailbox 0 is empty //邮箱0为空<br> else if(CAN1-&gt;TSR&amp;(1&lt;&lt;27))mbox=1; //Mailbox 1 is empty //邮箱1为空<br> else if(CAN1-&gt;TSR&amp;(1&lt;&lt;28))mbox=2; //Mailbox 2 is empty //邮箱2为空<br> else return 0XFF; //No empty mailbox, cannot send //无空邮箱,无法发送<br> CAN1-&gt;sTxMailBox[mbox].TIR=0; //Clear the previous Settings //清除之前的设置<br> if(ide==0) //The standard frame //标准帧<br> {<!-- --><br> id&amp;=0x7ff; //Take the low 11 bit STDID //取低11位stdid<br> id&lt;&lt;=21;<br> }else //Extend the frame //扩展帧<br> {<!-- --><br> id&amp;=0X1FFFFFFF; //Take a low 32-bit extid //取低32位extid<br> id&lt;&lt;=3;<br> }<br> <strong>发送一共有三个邮箱，判断哪个邮箱有空，就选择哪个邮箱进行发送，根据ide判断是标准帧还是扩展帧。然后进行位填充。</strong></p> 
+</blockquote> 
+<blockquote> 
+ <p>CAN1-&gt;sTxMailBox[mbox].TIR|=id;<br> CAN1-&gt;sTxMailBox[mbox].TIR|=ide&lt;&lt;2;<br> CAN1-&gt;sTxMailBox[mbox].TIR|=rtr&lt;&lt;1;<br> len&amp;=0X0F; //Get lower 4 bits //得到低四位<br> CAN1-&gt;sTxMailBox[mbox].TDTR&amp;=~(0X0000000F);<br> CAN1-&gt;sTxMailBox[mbox].TDTR|=len; //Set the DLC //设置DLC<br> //The data to be sent is stored in the mailbox<br> //待发送数据存入邮箱<br> CAN1-&gt;sTxMailBox[mbox].TDHR=(((u32)dat[7]&lt;&lt;24)|<br> ((u32)dat[6]&lt;&lt;16)|<br> ((u32)dat[5]&lt;&lt;8)|<br> ((u32)dat[4]));<br> CAN1-&gt;sTxMailBox[mbox].TDLR=(((u32)dat[3]&lt;&lt;24)|<br> ((u32)dat[2]&lt;&lt;16)|<br> ((u32)dat[1]&lt;&lt;8)|<br> ((u32)dat[0]));<br> CAN1-&gt;sTxMailBox[mbox].TIR|=1&lt;&lt;0; //Request to send mailbox data//请求发送邮箱数据<br> <strong>填充仲裁段，控制端，数据段数据。最后请求发送邮箱中的数据。</strong></p> 
+</blockquote>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/bba4aa977edcb1c069c0d6b058afe1db/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">前端开发环境模拟HTTPS</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/49762506c928e9fe97f650592b36d3ec/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">CentOS 7 系统安装初始化之yum，linux系统使用起步</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

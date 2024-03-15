@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>C语言翻译环境：预编译&#43;编译&#43;汇编&#43;链接详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="C语言翻译环境：预编译&#43;编译&#43;汇编&#43;链接详解" />
+<meta property="og:description" content="目录
+翻译环境和运行环境
+翻译环境
+预处理（预编译）
+编译
+词法分析
+语法分析
+语义分析
+汇编
+链接
+运行环境
+⭐翻译环境和运行环境 在ANSI C的任何⼀种实现中，存在两个不同的环境。
+第1种是翻译环境，在这个环境中源代码被转换为可执行的机器指令。第2种是运行环境，它用于实际执行代码。 可执行程序中存储的是二进制指令（机器指令）
+⭐翻译环境 那翻译环境是怎么将源代码转换为可执行的机器指令的呢？这里我们就得展开开讲解⼀下翻译环境所做的事情。
+其实翻译环境是由编译和链接两个大的过程组成的，而编译⼜可以分解成：预处理（有些书也叫预编译）、编译、汇编三个过程。
+⼀个C语言的项目中可能有多个.c文件⼀起构建，那多个.c文件如何生成可执行程序呢？
+多个.c文件单独经过编译器，编译处理生成对应的目标文件（后缀为.obj）。注：在Windows环境下的目标文件的后缀是.obj，Linux环境下目标文件的后缀是.o多个目标文件和链接库⼀起经过链接器处理生成最终的可执行程序。链接库是指运行时库(它是支持程序运行的基本函数集合)或者第三方库。
+如果再把编译器展开成3个过程，那就变成了下面的过程：
+🏲预处理（预编译） 在预处理阶段，源文件和头文件会被处理成为.i为后缀的文件。
+在(Linux) gcc 环境下想观察一下，对 test.c 文件预处理后的.i 文件，命令如下：
+gcc -E test.c -o test.i 预处理阶段主要处理那些源文件中#开始的预编译指令。比如：#include,#define，处理的规则如下：
+将所有的#define删除，并展开所有的宏定义。处理所有的条件编译指令，如： #if、#ifdef、#elif、#else、#endif 。处理#include预编译指令，将包含的头文件的内容插入到该预编译指令的位置。这个过程是递归进行的，也就是说被包含的头文也可能包含其他文件。删除所有的注释添加行号和文件名标识，方便后续编译器生成调试信息等。或保留所有的#pragma的编译器指令，编译器后续会使用。 经过预处理后的 .i 文件中不再包含宏定义，因为宏已经被展开（替换）。并且包含的头文件都被插入到 .i 文件中。所以当我们无法知道宏定义或者头文件是否包含正确的时候，可以查看预处理后的 .i 文件来确认。
+🏲编译 编译过程就是将预处理后的文件进行⼀系列的：词法分析、语法分析、语义分析及优化，生成相应的汇编代码文件。
+编译过程的命令如下：
+gcc -S test.i -o test.s
+对下面代码进行编译的时候，会怎么做呢？假设有下面的代码
+array[index] = (index&#43;4)*(2&#43;6); ⚡词法分析 将源代码程序被输入扫描器，扫描器的任务就是简单的进行词法分析，把代码中的字符分割成⼀系列的记号（关键字、标识符、字⾯量、特殊字符等）。
+array[index] = (index&#43;4)*(2&#43;6); 上面程序进行词法分析后得到了16个记号：
+记号类型array标识符[左方括号index标识符]右方括号=赋值(左圆括号index标识符&#43;加号4数字)右圆括号*乘号(左圆括号2数字&#43;加号6数字)右圆括号 ⚡语法分析 接下来语法分析器，将对扫描产生的记号进行语法分析，从而产生语法树。这些语法树是以表达式为节点的树。
+⚡语义分析 由语义分析器来完成语义分析，即对表达式的语法层⾯分析。编译器所能做的分析是语义的静态分" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ee3ba2621b86f7de9baac5e0920ab5c9/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-22T18:46:46+08:00" />
+<meta property="article:modified_time" content="2024-02-22T18:46:46+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">C语言翻译环境：预编译&#43;编译&#43;汇编&#43;链接详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><img alt="" height="575" src="https://images2.imgbox.com/2f/4d/q0jYu9Ve_o.png" width="1125"></p> 
+<p id="main-toc"><strong>目录</strong></p> 
+<p id="-toc" style="margin-left:0px;"></p> 
+<p id="%E7%BF%BB%E8%AF%91%E7%8E%AF%E5%A2%83%E5%92%8C%E8%BF%90%E8%A1%8C%E7%8E%AF%E5%A2%83-toc" style="margin-left:0px;"><a href="#%E7%BF%BB%E8%AF%91%E7%8E%AF%E5%A2%83%E5%92%8C%E8%BF%90%E8%A1%8C%E7%8E%AF%E5%A2%83" rel="nofollow">翻译环境和运行环境</a></p> 
+<p id="%E7%BF%BB%E8%AF%91%E7%8E%AF%E5%A2%83-toc" style="margin-left:0px;"><a href="#%E7%BF%BB%E8%AF%91%E7%8E%AF%E5%A2%83" rel="nofollow">翻译环境</a></p> 
+<p id="%E9%A2%84%E5%A4%84%E7%90%86%EF%BC%88%E9%A2%84%E7%BC%96%E8%AF%91%EF%BC%89-toc" style="margin-left:40px;"><a href="#%E9%A2%84%E5%A4%84%E7%90%86%EF%BC%88%E9%A2%84%E7%BC%96%E8%AF%91%EF%BC%89" rel="nofollow">预处理（预编译）</a></p> 
+<p id="%E7%BC%96%E8%AF%91-toc" style="margin-left:40px;"><a href="#%E7%BC%96%E8%AF%91" rel="nofollow">编译</a></p> 
+<p id="%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90-toc" style="margin-left:80px;"><a href="#%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90" rel="nofollow">词法分析</a></p> 
+<p id="%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90-toc" style="margin-left:80px;"><a href="#%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90" rel="nofollow">语法分析</a></p> 
+<p id="%C2%A0%E8%AF%AD%E4%B9%89%E5%88%86%E6%9E%90-toc" style="margin-left:80px;"><a href="#%C2%A0%E8%AF%AD%E4%B9%89%E5%88%86%E6%9E%90" rel="nofollow"> 语义分析</a></p> 
+<p id="%E6%B1%87%E7%BC%96-toc" style="margin-left:40px;"><a href="#%E6%B1%87%E7%BC%96" rel="nofollow">汇编</a></p> 
+<p id="%E9%93%BE%E6%8E%A5-toc" style="margin-left:40px;"><a href="#%E9%93%BE%E6%8E%A5" rel="nofollow">链接</a></p> 
+<p id="%E8%BF%90%E8%A1%8C%E7%8E%AF%E5%A2%83-toc" style="margin-left:0px;"><a href="#%E8%BF%90%E8%A1%8C%E7%8E%AF%E5%A2%83" rel="nofollow">运行环境</a></p> 
+<hr id="hr-toc"> 
+<p style="text-align:center;"><br><img alt="" src="https://images2.imgbox.com/32/c6/Br4jSMTW_o.gif"></p> 
+<h2 id="%E7%BF%BB%E8%AF%91%E7%8E%AF%E5%A2%83%E5%92%8C%E8%BF%90%E8%A1%8C%E7%8E%AF%E5%A2%83" style="background-color:transparent;">⭐翻译环境和运行环境</h2> 
+<p>在ANSI C的任何⼀种实现中，存在两个不同的环境。</p> 
+<ul><li>第1种是翻译环境，在这个环境中源代码被转换为可执行的机器指令。</li><li>第2种是运行环境，它用于实际执行代码。</li></ul> 
+<p><img alt="" height="575" src="https://images2.imgbox.com/7b/bd/DDCUzltl_o.png" width="1200"></p> 
+<p>可执行程序中存储的是二进制指令（机器指令）</p> 
+<h2 id="%E7%BF%BB%E8%AF%91%E7%8E%AF%E5%A2%83">⭐翻译环境</h2> 
+<p>那翻译环境是怎么将源代码转换为可执行的机器指令的呢？这里我们就得展开开讲解⼀下翻译环境所做的事情。<br> 其实翻译环境是由<strong>编译</strong>和<strong>链接</strong>两个大的过程组成的，而<strong>编译</strong>⼜可以分解成：<span style="background-color:#38d8f0;">预处理（有些书也叫预编译）、编译、汇编三个过程。</span><br><img alt="" height="740" src="https://images2.imgbox.com/e5/88/kqxLdpCG_o.png" width="1200"></p> 
+<p><strong>⼀个C语言的项目中可能有多个.c文件⼀起构建，那多个.c文件如何生成可执行程序呢？</strong></p> 
+<ul><li>多个.c文件单独经过编译器，编译处理生成对应的<strong>目标文件（后缀为.obj）</strong>。</li><li><span style="background-color:#ffd900;">注：在Windows环境下的目标文件的后缀是<span style="color:#fe2c24;">.obj</span>，Linux环境下目标文件的后缀是<span style="color:#fe2c24;">.o</span></span></li><li>多个目标文件和链接库⼀起经过<strong>链接器处理生成最终的可执行程序</strong>。</li><li><strong>链接库</strong>是指运行时库(它是支持程序运行的基本函数集合)或者第三方库。<br>  </li></ul> 
+<p>如果再把编译器展开成3个过程，那就变成了下面的过程：</p> 
+<p><img alt="" height="1000" src="https://images2.imgbox.com/62/07/EnAtAfHl_o.png" width="1200"></p> 
+<h3 id="%E9%A2%84%E5%A4%84%E7%90%86%EF%BC%88%E9%A2%84%E7%BC%96%E8%AF%91%EF%BC%89" style="background-color:transparent;">🏲预处理（预编译）</h3> 
+<p>在预处理阶段，源文件和头文件会被处理成为.i为后缀的文件。<br> 在(Linux)<strong> gcc </strong>环境下想观察一下，<strong>对 test.c 文件预处理</strong>后的<span style="color:#fe2c24;"><span style="background-color:#f3f3f4;">.i</span></span><span style="background-color:#f3f3f4;"> </span>文件，命令如下：</p> 
+<blockquote> 
+ <ul><li>gcc -E test.c -o test.i</li></ul> 
+</blockquote> 
+<p class="img-center"><img alt="" height="298" src="https://images2.imgbox.com/66/59/jfSyPa63_o.png" width="394"></p> 
+<p><img alt="" height="1021" src="https://images2.imgbox.com/dc/2d/zmwTBj3o_o.png" width="1200"></p> 
+<p>预处理阶段主要处理那些源文件中#开始的预编译指令。比如：#include,#define，处理的规则如下：</p> 
+<ul><li>将所有的<span style="color:#fe2c24;"><span style="background-color:#fef2f0;">#define</span></span>删除，并展开所有的宏定义。</li><li>处理所有的条件编译指令，如：<span style="color:#fe2c24;"><span style="background-color:#e7fafa;"> #if、#ifdef、#elif、#else、#endif </span></span>。</li><li>处理<span style="color:#fe2c24;"><span style="background-color:#fef2f0;">#include</span></span>预编译指令，<strong>将包含的头文件的内容插入到该预编译指令的位置</strong>。这个过程是递归进行的，也就是说被包含的头文也可能包含其他文件。</li><li>删除所有的注释</li><li>添加行号和文件名标识，方便后续编译器生成调试信息等。</li><li>或保留所有的#pragma的编译器指令，编译器后续会使用。</li></ul> 
+<p>经过预处理后的 .i 文件中不再包含宏定义，因为宏已经被展开（替换）。并且包含的头文件都被插入到 .i 文件中。所以当我们无法知道宏定义或者头文件是否包含正确的时候，可以查看预处理后的 .i 文件来确认。</p> 
+<h3 id="%E7%BC%96%E8%AF%91" style="background-color:transparent;">🏲编译</h3> 
+<p>编译过程就是将预处理后的文件进行⼀系列的：<span style="color:#fe2c24;"><span style="background-color:#fef2f0;">词法分析、语法分析、语义分析及优化</span></span>，生成相应的<strong>汇编代码</strong>文件。<br> 编译过程的命令如下：</p> 
+<blockquote> 
+ <p>gcc -S test.i -o test.s</p> 
+</blockquote> 
+<p><img alt="" height="1200" src="https://images2.imgbox.com/a3/78/N7FFy5ew_o.png" width="835"></p> 
+<p>对下面代码进行编译的时候，会怎么做呢？假设有下面的代码</p> 
+<pre><code class="language-cpp">array[index] = (index+4)*(2+6);</code></pre> 
+<p></p> 
+<h4 id="%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90" style="background-color:transparent;">⚡词法分析</h4> 
+<p>将源代码程序被输入扫描器，扫描器的任务就是简单的进行词法分析，把代码中的字符分割成⼀系列的记号（关键字、标识符、字⾯量、特殊字符等）。</p> 
+<pre><code class="language-cpp">array[index] = (index+4)*(2+6);</code></pre> 
+<p>上面程序进行词法分析后得到了16个记号：</p> 
+<table border="1" cellpadding="1" cellspacing="1" style="width:500px;"><tbody><tr><td><strong>记号</strong></td><td><strong>类型</strong></td></tr><tr><td>array</td><td>标识符</td></tr><tr><td>[</td><td>左方括号</td></tr><tr><td>index</td><td>标识符</td></tr><tr><td>]</td><td>右方括号</td></tr><tr><td>=</td><td>赋值</td></tr><tr><td>(</td><td>左圆括号</td></tr><tr><td>index</td><td>标识符</td></tr><tr><td>+</td><td>加号</td></tr><tr><td>4</td><td>数字</td></tr><tr><td>)</td><td>右圆括号</td></tr><tr><td>*</td><td>乘号</td></tr><tr><td>(</td><td>左圆括号</td></tr><tr><td>2</td><td>数字</td></tr><tr><td>+</td><td>加号</td></tr><tr><td>6</td><td>数字</td></tr><tr><td>)</td><td>右圆括号</td></tr></tbody></table> 
+<h4 id="%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90" style="background-color:transparent;">⚡语法分析</h4> 
+<p>接下来<strong>语法分析器</strong>，将对扫描产生的记号进行语法分析，从而产生<span style="color:#fe2c24;"><span style="background-color:#fef2f0;">语法树</span></span>。这些语法树是以表达式为节点的树。</p> 
+<p><img alt="" height="804" src="https://images2.imgbox.com/29/28/0M97OttJ_o.png" width="1200"></p> 
+<h4 id="%C2%A0%E8%AF%AD%E4%B9%89%E5%88%86%E6%9E%90" style="background-color:transparent;"> ⚡语义分析</h4> 
+<p>由<strong>语义分析器</strong>来完成<strong>语义分析</strong>，即<strong>对表达式的语法层⾯分析</strong>。编译器所能做的分析是语义的静态分<br> 析。静态语义分析通常包括声明和类型的匹配，类型的转换等。<strong><span style="background-color:#38d8f0;">这个阶段会报告错误的语法信息</span></strong>。</p> 
+<p><img alt="" height="564" src="https://images2.imgbox.com/72/40/jN50QPMq_o.png" width="987"></p> 
+<h3 id="%E6%B1%87%E7%BC%96" style="background-color:transparent;">🏲汇编</h3> 
+<p>汇编器是将汇编代码转转变成机器可执行的指令，每⼀个汇编语句几乎都对应⼀条机器指令。就是根据汇编指令和机器指令的对照表⼀⼀地进行翻译，翻译成机器语言（二进制指令），也不做指令优化。<br> 汇编的命令如下：</p> 
+<pre><code class="language-bash">gcc -c test.s -o test.o</code></pre> 
+<p><img alt="" height="749" src="https://images2.imgbox.com/ca/81/cOutGRia_o.png" width="1200"><br>  因为编辑器格式不匹配，所以这些二进制指令展示出来的是乱码。</p> 
+<h3 id="%E9%93%BE%E6%8E%A5" style="background-color:transparent;">🏲链接</h3> 
+<p>链接是⼀个复杂的过程，链接的时候需要把⼀堆文件链接在⼀起才生成可执行程序。<br> 链接过程主要包括：地址和空间分配，符号决议和重定位等这些步骤。<br> 链接解决的是⼀个项目中多文件、多模块之间互相调用的问题。<br> 比如：<br> 在⼀个C的项目中有2个.c文件（ test.c 和 add.c ），代码如下<br><img alt="" height="439" src="https://images2.imgbox.com/10/8f/9shuAULl_o.png" width="979"></p> 
+<p>test.c 经过编译器处理生成 test.o <br> add.c 经过编译器处理生成 add.o <br> 我们在 test.c 的文件中使用了 add.c 文件中的 Add 函数和 g_val 变量。</p> 
+<blockquote> 
+ <p>我们在 test.c 文件中每一次使用 <strong>Add 函数</strong>和 <strong>g_val变量 </strong>的时候必须确切的知道 Add 和 g_val 的地址，但是由于每个文件是单独编译的，在编译器编译 test.c 的时候并不知道 Add 函数和 g_val变量的地址，所以暂时把调用 Add 的指令的目标地址和 g_val 的地址搁置。等待最后<strong>链接</strong>的时候由链接器根据引用的符号 Add 在其他模块中查找 Add 函数的地址，然后将 test.c 中所有引用到Add 的指令重新修正，让他们的目标地址为真正的 Add 函数的地址，对于全局变量 g_val 也是类似的方法来修正地址。这个地址修正的过程也被叫做：<strong>重定位</strong></p> 
+</blockquote> 
+<p><strong>在编译阶段，每个.c文件都会生成一个符号表，然后在链接的时候进行汇总。</strong></p> 
+<p><img alt="" height="636" src="https://images2.imgbox.com/6c/24/ZCuTxXDT_o.png" width="1152"></p> 
+<h2 id="%E8%BF%90%E8%A1%8C%E7%8E%AF%E5%A2%83" style="background-color:transparent;">⭐运行环境</h2> 
+<ol><li>程序必须载入内存中。在有操作系统的环境中：⼀般这个由操作系统完成。在独立的环境中，程序的载入必须由手动安排，也可能是通过可执行代码置入只读内存来完成。</li><li>程序的执行便开始。接着便调用main函数。</li><li>开始执行程序代码。这个时候程序将使用⼀个运行时堆栈（stack），存储函数的局部变量和返回地址。程序同时也可以使用静态（static）内存，存储于静态内存中的变量在程序的整个执行过程⼀直保留他们的值。</li><li>终止程序。正常终止main函数；也有可能是意外终止。<br>  </li></ol> 
+<p>____________________</p> 
+<p>⭐感谢你的阅读，希望本文能够对你有所帮助。如果你喜欢我的内容，记得点赞关注收藏我的博客，我会继续分享更多的内容。⭐</p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/0eae4e43322047462e2c51d88030856a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">产品渲染3D效果图一张多少钱，哪个平台更有性价比？</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/019cbdea4361b0615ff39466154a97c2/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Excel之index、MATCH面试题、VLOOKUP函数，</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

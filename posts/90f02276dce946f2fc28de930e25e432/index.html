@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>一文看懂自编码器、堆叠自编码器、稀疏自编码器、降噪自编码器 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="一文看懂自编码器、堆叠自编码器、稀疏自编码器、降噪自编码器" />
+<meta property="og:description" content="我的小程序： 待办计划：给自己立个小目标吧！ 自从Hinton 2006年的工作之后，越来越多的研究者开始关注各种自编码器模型相应的堆叠模型。实际上，自编码器（Auto-Encoder）是一个较早的概念了，比如Hinton等人在1986, 1989年的工作。（说来说去都是这些人呐。。。）
+自编码器简介
+先暂且不谈神经网络、深度学习，仅是自编码器的话，其原理很简单。自编码器可以理解为一个试图去还原其原始输入的系统。如下图所示：
+图中，虚线蓝色框内就是一个自编码器模型，它由编码器（Encoder）和解码器（Decoder）两部分组成，本质上都是对输入信号做某种变换。编码器将输入信号x变换成编码信号y，而解码器将编码y转换成输出信号，即：
+而自编码器的目的是，让输出尽可能复现输入x，即tries to copy its input to its output。但是，这样问题就来了——如果f和g都是恒等映射，那不就恒有=x了？不错，确实如此，但这样的变换——没有任何卵用啊！因此，我们经常对中间信号y（也叫作“编码”）做一定的约束，这样，系统往往能学出很有趣的编码变换f和编码y。
+这里强调一点，对于自编码器，我们往往并不关系输出是啥（反正只是复现输入），我们真正关心的是中间层的编码，或者说是从输入到编码的映射。可以这么想，在我们强迫编码y和输入x不同的情况下，系统还能够去复原原始信号x，那么说明编码y已经承载了原始数据的所有信息，但以一种不同的形式！这就是特征提取啊，而且是自动学出来的！实际上，自动学习原始数据的特征表达也是神经网络和深度学习的核心目的之一。
+为了更好的理解自编码器，下面结合神经网络加以介绍。
+自编码器与神经网络
+神经网络的知识不再详细介绍，相信了解自编码器的读者或多或少会了解一些。简单来讲，神经网络就是在对原始信号逐层地做非线性变换，如下图所示：
+该网络把输入层数据x∈Rn转换到中间层（隐层）h∈Rp，再转换到输出层y∈Rm。图中的每个节点代表数据的一个维度（偏置项图中未标出）。每两层之间的变换都是“线性变化”&#43;“非线性激活”，用公式表示即为：
+h=f(W(1)x&#43;b(1))
+y=f(W(2)h&#43;b(2)) 神经网络往往用于分类，其目的是去逼近从输入层到输出层的变换函数。因此，我们会定义一个目标函数来衡量当前的输出和真实结果的差异，利用该函数去逐步调整（如梯度下降）系统的参数（W(1),b(1),W(2),b(2)），以使得整个网络尽可能去拟合训练数据。如果有正则约束的话，还同时要求模型尽量简单（防止过拟合）。
+那么，自编码器怎么表示呢？前面已说过，自编码器试图复现其原始输入，因此，在训练中，网络中的输出应与输入相同，即y=x，因此，一个自编码器的输入、输出应有相同的结构，即：
+我们利用训练数据训练这个网络，等训练结束后，这个网络即学习出了x→h→x的能力。对我们来说，此时的h是至关重要的，因为它是在尽量不损失信息量的情况下，对原始数据的另一种表达。结合神经网络的惯例，我们再将自编码器的公式表示如下：（假设激活函数是sigmoid，用s表示）
+其中，L表示损失函数，结合数据的不同形式，可以是二次误差（squared error loss）或交叉熵误差（cross entropy loss）。如果，一般称为tied weights。
+为了尽量学到有意义的表达，我们会给隐层加入一定的约束。从数据维度来看，常见以下两种情况：
+n&gt;p，即隐层维度小于输入数据维度。也就是说从x→h的变换是一种降维的操作，网络试图以更小的维度去描述原始数据而尽量不损失数据信息。实际上，当每两层之间的变换均为线性，且监督训练的误差是二次型误差时，该网络等价于PCA！没反应过来的童鞋可以反思下PCA是在做什么事情。 n&lt;p，即隐层维度大于输入数据维度。这又有什么用呢？其实不好说，但比如我们同时约束h的表达尽量稀疏（有大量维度为0，未被激活），此时的编码器便是大名鼎鼎的“稀疏自编码器”。可为什么稀疏的表达就是好的？这就说来话长了，有人试图从人脑机理对比，即人类神经系统在某一刺激下，大部分神经元是被抑制的。个人觉得，从特征的角度来看更直观些，稀疏的表达意味着系统在尝试去特征选择，找出大量维度中真正重要的若干维。 堆叠自编码器
+有过深度学习基础的童鞋想必了解，深层网络的威力在于其能够逐层地学习原始数据的多种表达。每一层的都以底一层的表达为基础，但往往更抽象，更加适合复杂的分类等任务。
+堆叠自编码器实际上就在做这样的事情，如前所述，单个自编码器通过虚构x→h→x的三层网络，能够学习出一种特征变化h=fθ(x)（这里用θ表示变换的参数，包括W,b和激活函数）。实际上，当训练结束后，输出层已经没什么意义了，我们一般将其去掉，即将自编码器表示为：
+之前之所以将自编码器模型表示为3层的神经网络，那是因为训练的需要，我们将原始数据作为假想的目标输出，以此构建监督误差来训练整个网络。等训练结束后，输出层就可以去掉了，我们关心的只是从x到h的变换。
+接下来的思路就很自然了——我们已经得到特征表达h，那么我们可不可以将h再当做原始信息，训练一个新的自编码器，得到新的特征表达呢？当然可以！这就是所谓的堆叠自编码器（Stacked Auto-Encoder, SAE）。Stacked就是逐层垒叠的意思，跟“栈”有点像。UFLDL教程将其翻译为“栈式自编码”，anyway，不管怎么称呼，都是这个东东，别被花里胡哨的专业术语吓到就行。当把多个自编码器Stack起来之后，这个系统看起来就像这样：
+亦可赛艇！这个系统实际上已经有点深度学习的味道了，即learning multiple levels of representation and abstraction(Hinton, Bengio, LeCun, 2015)。需要注意的是，整个网络的训练不是一蹴而就的，而是逐层进行。按题主提到的结构n,m,k结构，实际上我们是先训练网络n→m→n，得到n→m的变换，然后再训练m→k→m，得到m→k的变换。最终堆叠成SAE，即为n→m→k的结果，整个过程就像一层层往上盖房子，这便是大名鼎鼎的layer-wise unsuperwised pre-training（逐层非监督预训练），正是导致深度学习（神经网络）在2006年第3次兴起的核心技术。
+关于逐层预训练与深度学习，将在本文最后探讨。
+自编码器的变种形式
+上述介绍的自编码器是最基本的形式。善于思考的童鞋可能已经意识到了这个问题：隐层的维度到底怎么确定？为什么稀疏的特征比较好？或者更准确的说，怎么才能称得上是一个好的表达（What defines a good representation）？
+事实上，这个问题回答并不唯一，也正是从不同的角度去思考这个问题，导致了自编码器的各种变种形式出现。目前常见的几种模型总结如下（有些术语实在不好翻译，看英文就好。。。）
+下面简介下其中两种模型，以对这些变种模型有个直观感受。
+稀疏自编码器
+UFLDL-自编码算法与稀疏性对该模型有着比较详细的介绍。如前所示，这种模型背后的思想是，高维而稀疏的表达是好的。一般而言，我们不会指定隐层表达h中哪些节点是被抑制的（对于sigmoid单元即输出为0），而是指定一个稀疏性参数ρ，代表隐藏神经元的平均活跃程度（在训练集上取平均）。比如，当ρ=0.05时，可以认为隐层节点在95%的时间里都是被一直的，只有5%的机会被激活。实际上，为了满足这一条件，隐层神经元的活跃度需要接近于0。
+那么，怎么从数学模型上做到这点呢？思路也不复杂，既然要求平均激活度为ρ，那么只要引入一个度量，来衡量神经元ii的实际激活度与期望激活度ρ之间的差异即可，然后将这个度量添加到目标函数作为正则，训练整个网络即可。那么，什么样的度量适合这个任务呢？有过概率论、信息论基础的同学应该很容易想到它——相对熵，也就是KL散度（KL divergence）。因此，整个网络所添加的惩罚项即为：
+具体的公式不再展开，可以从下图（摘自UFLDL）中直观理解KL散度作为惩罚项的含义。图中假设平均激活度ρ=0.2。
+可以看出，当^ρiρ^i一旦偏离期望激活度ρρ，这种误差便急剧增大，从而作为惩罚项添加到目标函数，指导整个网络学习出稀疏的特征表达。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/90f02276dce946f2fc28de930e25e432/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-10-24T08:51:20+08:00" />
+<meta property="article:modified_time" content="2022-10-24T08:51:20+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">一文看懂自编码器、堆叠自编码器、稀疏自编码器、降噪自编码器</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h4 style="text-align:center;"><span style="color:#fe2c24;"><strong>我的小程序：</strong></span></h4> 
+<div class="img-center"> 
+ <figure class="image"> 
+  <img alt="" height="200" src="https://images2.imgbox.com/2e/9f/m96VdVXM_o.jpg" width="200"> 
+  <figcaption> 
+   <strong>待办计划：给自己立个小目标吧！</strong> 
+  </figcaption> 
+ </figure> 
+</div> 
+<p>自从Hinton 2006年的工作之后，越来越多的研究者开始关注各种自编码器模型相应的堆叠模型。实际上，自编码器（Auto-Encoder）是一个较早的概念了，比如Hinton等人在1986, 1989年的工作。（<a href="https://www.baidu.com/s?wd=%E8%AF%B4%E6%9D%A5%E8%AF%B4%E5%8E%BB&amp;tn=24004469_oem_dg&amp;rsv_dl=gh_pl_sl_csd" rel="nofollow" title="说来说去">说来说去</a>都是这些人呐。。。）</p> 
+<p><strong>自编码器简介</strong></p> 
+<p>先暂且不谈神经网络、深度学习，仅是自编码器的话，其原理很简单。自编码器可以理解为一个试图去还原其原始输入的系统。如下图所示：</p> 
+<p style="text-align:center;"><img alt="" class="has" src="https://images2.imgbox.com/e6/88/gw8qtGnV_o.png"></p> 
+<p>图中，虚线蓝色框内就是一个自编码器模型，它由编码器（Encoder）和解码器（Decoder）两部分组成，本质上都是对输入信号做某种变换。编码器将输入信号x变换成编码信号y，而解码器将编码y转换成输出信号<img alt="\widetilde{x}" class="mathcode" src="https://images2.imgbox.com/80/70/Mmg3fv31_o.gif">，即：</p> 
+<p><img alt="y=f(x)" class="mathcode" src="https://images2.imgbox.com/f9/e0/2L8IoiqX_o.gif"></p> 
+<p><img alt="\widetilde{x} = g(y) = g(f(x))" class="mathcode" src="https://images2.imgbox.com/4a/c1/qGXNO8sN_o.gif"></p> 
+<p>而自编码器的目的是，让输出<img alt="\widetilde{x}" class="mathcode" src="https://images2.imgbox.com/bf/62/31QkUITU_o.gif">尽可能复现输入x，即tries to copy its input to its output。但是，这样问题就来了——如果f和g都是恒等映射，那不就恒有<img alt="\widetilde{x}" class="mathcode" src="https://images2.imgbox.com/92/76/lMlxLf5f_o.gif">=x了？不错，确实如此，但这样的变换——没有任何卵用啊！因此，我们经常对中间信号y（也叫作“编码”）做一定的约束，这样，系统往往能学出很有趣的编码变换f和编码y。</p> 
+<p>这里强调一点，对于自编码器，我们往往并不关系输出是啥（反正只是复现输入），我们真正关心的是中间层的编码，或者说是从输入到编码的映射。可以这么想，在我们强迫编码y和输入x不同的情况下，系统还能够去复原原始信号x，那么说明编码y已经承载了原始数据的所有信息，但以一种不同的形式！这就是特征提取啊，而且是自动学出来的！实际上，自动学习原始数据的特征表达也是神经网络和深度学习的核心目的之一。</p> 
+<p>为了更好的理解自编码器，下面结合神经网络加以介绍。</p> 
+<p><strong>自编码器与神经网络</strong></p> 
+<p>神经网络的知识不再详细介绍，相信了解自编码器的读者或多或少会了解一些。简单来讲，神经网络就是在对原始信号逐层地做非线性变换，如下图所示：</p> 
+<p style="text-align:center;"><img alt="" class="has" height="351" src="https://images2.imgbox.com/db/27/OqTxbIp6_o.png" width="300"></p> 
+<p>该网络把输入层数据x∈Rn转换到中间层（隐层）h∈Rp，再转换到输出层y∈Rm。图中的每个节点代表数据的一个维度（偏置项图中未标出）。每两层之间的变换都是“线性变化”+“非线性激活”，用公式表示即为：</p> 
+<p>h=f(W(1)x+b(1))<br> y=f(W(2)h+b(2)) </p> 
+<p>神经网络往往用于分类，其目的是去逼近从输入层到输出层的变换函数。因此，我们会定义一个目标函数来衡量当前的输出和真实结果的差异，利用该函数去逐步调整（如梯度下降）系统的参数（W(1),b(1),W(2),b(2)），以使得整个网络尽可能去拟合训练数据。如果有正则约束的话，还同时要求模型尽量简单（防止过拟合）。</p> 
+<p>那么，自编码器怎么表示呢？前面已说过，自编码器试图复现其原始输入，因此，在训练中，网络中的输出应与输入相同，即y=x，因此，一个自编码器的输入、输出应有相同的结构，即：</p> 
+<p style="text-align:center;"><img alt="" class="has" height="355" src="https://images2.imgbox.com/a1/f2/sjIhm9cU_o.png" width="300"></p> 
+<p>我们利用训练数据训练这个网络，等训练结束后，这个网络即学习出了x→h→x的能力。对我们来说，此时的h是至关重要的，因为它是在尽量不损失信息量的情况下，对原始数据的另一种表达。结合神经网络的惯例，我们再将自编码器的公式表示如下：（假设激活函数是sigmoid，用s表示）</p> 
+<p><img alt="y = f\theta (x) = s(Wx+b)" class="mathcode" src="https://images2.imgbox.com/7d/3b/brTTAQ6y_o.gif"></p> 
+<p><img alt="\widetilde{x} = g\theta '(y) = s(W'y+b')" class="mathcode" src="https://images2.imgbox.com/0f/37/5UMCtEw6_o.gif"></p> 
+<p><img alt="L(x,\widetilde{x}) = L(x,g(f(x)))" class="mathcode" src="https://images2.imgbox.com/cc/c5/nJhrJnPp_o.gif"></p> 
+<p>其中，L表示损失函数，结合数据的不同形式，可以是二次误差（squared error loss）或交叉熵误差（cross entropy loss）。如果<img alt="W' = W^{T}" class="mathcode" src="https://images2.imgbox.com/25/1a/QSCWyUrv_o.gif">，一般称为tied weights。</p> 
+<p>为了尽量学到有意义的表达，我们会给隐层加入一定的约束。从数据维度来看，常见以下两种情况：</p> 
+<ul><li>n&gt;p，即隐层维度小于输入数据维度。也就是说从x→h的变换是一种降维的操作，网络试图以更小的维度去描述原始数据而尽量不损失数据信息。实际上，当每两层之间的变换均为线性，且监督训练的误差是二次型误差时，该网络等价于PCA！没反应过来的童鞋可以反思下PCA是在做什么事情。</li></ul> 
+<p></p> 
+<ul><li>n&lt;p，即隐层维度大于输入数据维度。这又有什么用呢？其实不好说，但比如我们同时约束h的表达尽量稀疏（有大量维度为0，未被激活），此时的编码器便是<a href="https://www.baidu.com/s?wd=%E5%A4%A7%E5%90%8D%E9%BC%8E%E9%BC%8E&amp;tn=24004469_oem_dg&amp;rsv_dl=gh_pl_sl_csd" rel="nofollow" title="大名鼎鼎">大名鼎鼎</a>的“稀疏自编码器”。可为什么稀疏的表达就是好的？这就说来话长了，有人试图从人脑机理对比，即人类神经系统在某一刺激下，大部分神经元是被抑制的。个人觉得，从特征的角度来看更直观些，稀疏的表达意味着系统在尝试去特征选择，找出大量维度中真正重要的若干维。</li></ul> 
+<p><strong>堆叠自编码器</strong></p> 
+<p>有过深度学习基础的童鞋想必了解，深层网络的威力在于其能够逐层地学习原始数据的多种表达。每一层的都以底一层的表达为基础，但往往更抽象，更加适合复杂的分类等任务。</p> 
+<p>堆叠自编码器实际上就在做这样的事情，如前所述，单个自编码器通过虚构x→h→x的三层网络，能够学习出一种特征变化h=fθ(x)（这里用θ表示变换的参数，包括W,b和激活函数）。实际上，当训练结束后，输出层已经没什么意义了，我们一般将其去掉，即将自编码器表示为：</p> 
+<p style="text-align:center;"><img alt="" class="has" src="https://images2.imgbox.com/c9/fb/6c1Ms2rC_o.png"></p> 
+<p>之前之所以将自编码器模型表示为3层的神经网络，那是因为训练的需要，我们将原始数据作为假想的目标输出，以此构建监督误差来训练整个网络。等训练结束后，输出层就可以去掉了，我们关心的只是从x到h的变换。</p> 
+<p>接下来的思路就很自然了——我们已经得到特征表达h，那么我们可不可以将h再当做原始信息，训练一个新的自编码器，得到新的特征表达呢？当然可以！这就是所谓的堆叠自编码器（Stacked Auto-Encoder, SAE）。Stacked就是逐层垒叠的意思，跟“栈”有点像。<a href="http://link.zhihu.com/?target=http%3A//deeplearning.stanford.edu/wiki/index.php/%25E6%25A0%2588%25E5%25BC%258F%25E8%2587%25AA%25E7%25BC%2596%25E7%25A0%2581%25E7%25AE%2597%25E6%25B3%2595" rel="nofollow" title="UFLDL">UFLDL</a>教程将其翻译为“栈式自编码”，anyway，不管怎么称呼，都是这个东东，别被<a href="https://www.baidu.com/s?wd=%E8%8A%B1%E9%87%8C%E8%83%A1%E5%93%A8&amp;tn=24004469_oem_dg&amp;rsv_dl=gh_pl_sl_csd" rel="nofollow" title="花里胡哨">花里胡哨</a>的专业术语吓到就行。当把多个自编码器Stack起来之后，这个系统看起来就像这样：</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/1c/ad/GzShlzEM_o.png"></p> 
+<p>亦可赛艇！这个系统实际上已经有点深度学习的味道了，即learning multiple levels of representation and abstraction(Hinton, Bengio, LeCun, 2015)。需要注意的是，整个网络的训练不是一蹴而就的，而是逐层进行。按题主提到的结构n,m,k结构，实际上我们是先训练网络n→m→n，得到n→m的变换，然后再训练m→k→m，得到m→k的变换。最终堆叠成SAE，即为n→m→k的结果，整个过程就像一层层往上盖房子，这便是大名鼎鼎的layer-wise unsuperwised pre-training（逐层非监督预训练），正是导致深度学习（神经网络）在2006年第3次兴起的核心技术。</p> 
+<p>关于逐层预训练与深度学习，将在本文最后探讨。</p> 
+<p><strong>自编码器的变种形式</strong></p> 
+<p>上述介绍的自编码器是最基本的形式。善于思考的童鞋可能已经意识到了这个问题：隐层的维度到底怎么确定？为什么稀疏的特征比较好？或者更准确的说，怎么才能称得上是一个好的表达（What defines a good representation）？</p> 
+<p>事实上，这个问题回答并不唯一，也正是从不同的角度去思考这个问题，导致了自编码器的各种变种形式出现。目前常见的几种模型总结如下（有些术语实在不好翻译，看英文就好。。。）</p> 
+<p style="text-align:center;"><img alt="" class="has" src="https://images2.imgbox.com/fe/13/1WxyaaRk_o.png"></p> 
+<p>下面简介下其中两种模型，以对这些变种模型有个直观感受。</p> 
+<p><strong>稀疏自编码器</strong></p> 
+<p>UFLDL-自编码算法与稀疏性对该模型有着比较详细的介绍。如前所示，这种模型背后的思想是，高维而稀疏的表达是好的。一般而言，我们不会指定隐层表达h中哪些节点是被抑制的（对于sigmoid单元即输出为0），而是指定一个稀疏性参数ρ，代表隐藏神经元的平均活跃程度（在训练集上取平均）。比如，当ρ=0.05时，可以认为隐层节点在95%的时间里都是被一直的，只有5%的机会被激活。实际上，为了满足这一条件，隐层神经元的活跃度需要接近于0。</p> 
+<p>那么，怎么从数学模型上做到这点呢？思路也不复杂，既然要求平均激活度为ρ，那么只要引入一个度量，来衡量神经元ii的实际激活度<img alt="\widetilde{\rho _{a}}" class="mathcode" src="https://images2.imgbox.com/84/dc/WoepnfbO_o.gif">与期望激活度ρ之间的差异即可，然后将这个度量添加到目标函数作为正则，训练整个网络即可。那么，什么样的度量适合这个任务呢？有过概率论、信息论基础的同学应该很容易想到它——相对熵，也就是KL散度（KL divergence）。因此，整个网络所添加的惩罚项即为：</p> 
+<p><img alt="\sum_{i\in h}KL(\rho ||\widetilde{\rho _{a}} )" class="mathcode" src="https://images2.imgbox.com/f6/ac/s1rT1pET_o.gif"></p> 
+<p>具体的公式不再展开，可以从下图（摘自UFLDL）中直观理解KL散度作为惩罚项的含义。图中假设平均激活度ρ=0.2。</p> 
+<p style="text-align:center;"><img alt="" class="has" height="375" src="https://images2.imgbox.com/61/a1/npmBG0of_o.png" width="500"></p> 
+<p>可以看出，当^ρiρ^i一旦偏离期望激活度ρρ，这种误差便急剧增大，从而作为惩罚项添加到目标函数，指导整个网络学习出稀疏的特征表达。</p> 
+<p><strong>降噪自编码器</strong></p> 
+<p>关于降噪自编码器，强烈推荐其作者Pascal Vincent的论文Stacked Denoising Autoencoders: Learning Useful Representations in a Deep Network with a Local Denoising Criterion。DAE的核心思想是，一个能够从中恢复出原始信号的表达未必是最好的，能够对“被污染/破坏”的原始数据编码、解码，然后还能恢复真正的原始数据，这样的特征才是好的。</p> 
+<p>稍微数学一点，假设原始数据x被我们“故意破坏”，比如加入高斯白噪，或者把某些维度数据抹掉，变成了<img alt="\overline{x}" class="mathcode" src="https://images2.imgbox.com/ad/be/H7OeI9HP_o.gif">，然后再对<img alt="\overline{x}" class="mathcode" src="https://images2.imgbox.com/61/95/batMFYlh_o.gif">编码、解码，得到恢复信号<img alt="\widetilde{x} = g(f(x))" class="mathcode" src="https://images2.imgbox.com/45/2d/JrG2RSyr_o.gif">，该恢复信号尽可能逼近未被污染的数据xx。此时，监督训练的误差从L(x,g(f(x)))变成了L(x,g(f(<img alt="\widetilde{x}" class="mathcode" src="https://images2.imgbox.com/f4/46/LOSfpYYA_o.gif">))。</p> 
+<p>直观上理解，DAE希望学到的特征变换尽可能鲁棒，能够在一定程度上对抗原始数据的污染、缺失。Vincent论文里也对DAE提出了基于流行的解释，并且在图像数据上进行测试，发现DAE能够学出类似Gabor边缘提取的特征变换。注意，这一切都是在我们定义好规则、误差后，系统自动学出来的！从而避免了领域专家费尽心力去设计这些性能良好的特征。</p> 
+<p>DAE的系统结构如下图（摘自Vincent论文）所示：</p> 
+<p style="text-align:center;"><img alt="" class="has" src="https://images2.imgbox.com/2f/6e/IVneXkwR_o.png"></p> 
+<p>现在使用比较多的noise主要是mask noise，即原始数据中部分数据缺失，这是有着很强的实际意义的，比如图像部分像素被遮挡、文本因记录原因漏掉了一些单词等等。</p> 
+<p>其他的模型就不再展开了，总之，每遇到一个自编码器的一个变种模型时，搞清楚其背后的思想（什么样的表达才是好的），就很容易掌握了。套用V的”Behind this mask is a man, and behind this man is an idea, and ideas are bulletproof”，我们可以说，”Behind this auto-encoder is a model, and behind this model is an idea, and ideas are bulletproof”。</p> 
+<div class="img-center"> 
+ <figure class="image"> 
+  <img alt="" height="200" src="https://images2.imgbox.com/0f/5d/wUPYOXZb_o.jpg" width="200"> 
+  <figcaption> 
+   <strong>待办计划：给自己立个小目标吧！</strong> 
+  </figcaption> 
+ </figure> 
+</div> 
+<p></p> 
+<p>转自：<a href="https://www.zhihu.com/question/41490383/answer/103006793" rel="nofollow" title="为什么稀疏自编码器很少见到多层的？ - 知乎">为什么稀疏自编码器很少见到多层的？ - 知乎</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/495551d6ce0e2c2d9da16e0218e6c78a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">STM32采用串口DMA方式，用115200bps或更高速率向上位机连续发送数据</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/aa10fd561c1dd304c938f3ccb25e2c1c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">黑盒测试之场景法</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

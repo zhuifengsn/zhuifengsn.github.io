@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>SpringCloud(12) —— Feign:使用接口方式调用服务 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="SpringCloud(12) —— Feign:使用接口方式调用服务" />
+<meta property="og:description" content="目录 1.Feign简介2.Feign的作用3.Feign的使用步骤4.小结5.怎么选择使用Ribbon还是Feign 1.Feign简介 Feign是声明式Web Service客户端，它让微服务之间的调用变得更简单，类似controller调用service。SpringCloud集成了Ribbon和Eureka，可以使用Feigin提供负载均衡的http客户端只需要创建一个接口，然后添加注解即可使用FeignFeign，主要是社区版，大家都习惯面向接口编程。这个是很多开发人员的规范。调用微服务访问两种方法 微服务名字 【ribbon，即前面我们使用ribbon实现负载均衡的时候选中哪一个服务集群是依据注册中心的 服务名称/微服务名字 进行选择的，但是我们不应该在客户端中将要调用的服务集群名称写死了，而是应该是一个变量，因为一个客户端在正常情况下不会只消费一个服务者一个的服务，它会消费多个服务者提供的不同的服务，所以将服务名称写死是满足我们使用需求的，所以就出现了Feign，通过接口解决这个问题】接口和注解 【feign】 我们需要注意：Feign是声明式Web Service客户端，说明它和ribbon一样，都是在客户端使用的负载均衡工具，所以在使用Feign的时候，我们还是要在消费者微服务中去进行代码编写 2.Feign的作用 Feign旨在使编写Java Http客户端变得更容易前面在使用Ribbon &#43; RestTemplate时，利用RestTemplate对Http请求的封装处理，形成了一套模板化的调用方法。但是在实际开发中，由于对服务依赖的调用可能不止一处，往往一个接口会被多处调用，所以通常都会针对每个微服务自行封装一个客户端类来包装这些依赖服务的调用。所以，Feign在此基础上做了进一步的封装，由他来帮助我们定义和实现依赖服务接口的定义，在Feign的实现下，我们只需要创建一个接口并使用注解的方式来配置它 (类似以前Dao接口上标注Mapper注解，现在是一个微服务接口上面标注一个Feign注解即可)，即可完成对服务提供方的接口绑定，简化了使用Spring Cloud Ribbon 时，自动封装服务调用客户端的开发量Feign默认集成了Ribbon 利用Ribbon维护了MicroServiceCloud-Dept的服务列表信息，并且通过轮询实现了客户端的负载均衡，而与Ribbon不同的是，通过Feign只需要定义服务绑定接口且以声明式的方法，优雅而简单的实现了服务调用 3.Feign的使用步骤 直接在前面我们写的微服务项目中进行改造即可这里为了和使用ribbon的消费者微服务model分别开，我们新创建一个使用Feign实现负载均衡的消费者model：springcould-consumer-dept-Feign
+然后回到最开始提供实体类dept的springcould-api模块中，到现在我们应该可以理解这个模块的作用了，它的作用就是将整个服务需要的实体类抽取了出来，抽取出来之后，我们可以在其他model中通过pom.xml将它导入，导入之后就可以实现复用，而不用每一个要使用这个实体类的model中都去定义一遍这个类现在使用Feign，我们需要回到这个model中，首先导入Feign的依赖，否则不能使用Feign的注解(为了等会儿我们新创建的消费者模块也可以使用Feign，在springcould-consumer-dept-Feign的pom.xml中也导入Feign的依赖)&lt;!-- Feign --&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.cloud&lt;/groupId&gt; &lt;artifactId&gt;spring-cloud-starter-feign&lt;/artifactId&gt; &lt;version&gt;1.4.7.RELEASE&lt;/version&gt; &lt;/dependency&gt; Feign实现消费者模块调用服务提供者模块的原理和原来的Dubbo&#43;zookeeper类似，即需要使用注解实现远程注入，所以我们直接在springcould-api模块中添加一个接口DeptClientService，这个接口中的方法定义自己随意，只是方法上面要像controller一样写上@RequestMapping或者它的变体@GetMapping、@PostMapping等，但是这个接口上面不需要使用注解@Controller或@RestController这个接口上面需要使用注解@FeignClient(value = “服务集群在注册中心中的名称”)和注解@Component或者它的变体@Service；其中注解@FeignClient&#43;value属性用于指定注册中心中哪一个服务中的package com.thhh.springcould.service; import com.thhh.springcould.pojo.Dept; import org.springframework.cloud.openfeign.FeignClient; import org.springframework.stereotype.Component; import org.springframework.stereotype.Service; import org.springframework.web.bind.annotation.*; import java.util.List; @Service @Component //@FeignClient:微服务客户端注解,value:指定微服务的名字,这样就可以使Feign客户端直接找到对应的微服务 @FeignClient(value = &#34;SPRINGCOULD-PROVIDER-DEPT&#34;) public interface DeptClientService { @GetMapping(&#34;/dept/queryById/{id}&#34;)/ Dept queryById(@PathVariable(&#34;id&#34;) Long id); @GetMapping(&#34;/dept/queryList&#34;) List&lt;Dept&gt; queryAll(); @PostMapping(&#34;/dept/add&#34;) boolean addDept(Dept dept); } 注意：还需要在这个接口上加上注解@Component/@Service，否则这个接口不会被spring托管/装配到spring容器中，那么我们在消费者model中使用这个类的时候就不能使用注解@Autowired实现对象自动注入到消费者的controller中(注意：我们是在springcould-api模块中定义的这个接口，并在这个接口上面加上了注解@Component，这个注解不是要在springcould-api模块中起作用，而是要在使用springcould-api模块的其他模块中起作用，即哪个模块导入了springcould-api模块，那么在这个model启动的时候，有注解@Component的这个接口就会被装配到spring容器中去，然后我们只需要在当前的这个模块中使用注解@Autowired就可以获取到这个接口在spring容器中的实例，就可以调用它内部的方法实现对应的功能)然后去修改刚刚粘贴到springcould-consumer-dept-Feign中的的controller的代码" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/fc41bbc91e59fdfadc24b6b41423673b/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-10-15T21:57:52+08:00" />
+<meta property="article:modified_time" content="2020-10-15T21:57:52+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">SpringCloud(12) —— Feign:使用接口方式调用服务</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>目录</h4> 
+ <ul><li><ul><li><a href="#1Feign_3" rel="nofollow">1.Feign简介</a></li><li><a href="#2Feign_11" rel="nofollow">2.Feign的作用</a></li><li><a href="#3Feign_17" rel="nofollow">3.Feign的使用步骤</a></li><li><a href="#4_90" rel="nofollow">4.小结</a></li><li><a href="#5RibbonFeign_102" rel="nofollow">5.怎么选择使用Ribbon还是Feign</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<hr> 
+<h3><a id="1Feign_3"></a>1.Feign简介</h3> 
+<ul><li><strong>Feign是声明式Web Service客户端</strong>，<strong>它让微服务之间的调用</strong>变得更简单，<strong>类似controller调用service</strong>。SpringCloud集成了Ribbon和Eureka，可以使用Feigin提供负载均衡的http客户端</li><li><mark>只需要创建一个接口，然后添加注解即可使用Feign</mark></li><li>Feign，主要是社区版，大家都习惯面向接口编程。这个是很多开发人员的规范。调用微服务访问两种方法</li></ul> 
+<ol><li>微服务名字 【ribbon，即前面我们使用ribbon实现负载均衡的时候选中哪一个服务集群是依据注册中心的 服务名称/微服务名字 进行选择的，但是我们不应该在客户端中将要调用的服务集群名称写死了，而是应该是一个变量，因为一个客户端在正常情况下不会只消费一个服务者一个的服务，它会消费多个服务者提供的不同的服务，所以将服务名称写死是满足我们使用需求的，所以就出现了Feign，通过接口解决这个问题】</li><li>接口和注解 【feign】</li></ol> 
+<ul><li>我们需要注意：Feign是声明式Web Service客户端，说明它和ribbon一样，都是在客户端使用的负载均衡工具，所以在使用Feign的时候，我们还是要在消费者微服务中去进行代码编写</li></ul> 
+<hr> 
+<h3><a id="2Feign_11"></a>2.Feign的作用</h3> 
+<ul><li>Feign旨在使编写Java Http客户端变得更容易</li><li>前面在使用Ribbon + RestTemplate时，利用RestTemplate对Http请求的封装处理，形成了一套模板化的调用方法。但是在实际开发中，由于对服务依赖的调用可能不止一处，往往一个接口会被多处调用，所以通常都会针对每个微服务自行封装一个客户端类来包装这些依赖服务的调用。所以，Feign在此基础上做了进一步的封装，由他来帮助我们定义和实现依赖服务接口的定义，<mark>在Feign的实现下，我们只需要创建一个接口并使用注解的方式来配置它 (类似以前Dao接口上标注Mapper注解，现在是一个微服务接口上面标注一个Feign注解即可)</mark>，即可完成对服务提供方的接口绑定，简化了使用Spring Cloud Ribbon 时，自动封装服务调用客户端的开发量</li><li><strong>Feign默认集成了Ribbon</strong> 
+  <ul><li>利用Ribbon维护了MicroServiceCloud-Dept的服务列表信息，并且通过轮询实现了客户端的负载均衡，而与Ribbon不同的是，通过Feign只需要定义服务绑定接口且以声明式的方法，优雅而简单的实现了服务调用</li></ul> </li></ul> 
+<hr> 
+<h3><a id="3Feign_17"></a>3.Feign的使用步骤</h3> 
+<ul><li>直接在前面我们写的微服务项目中进行改造即可</li><li>这里为了和使用ribbon的消费者微服务model分别开，我们新创建一个使用Feign实现负载均衡的消费者model：springcould-consumer-dept-Feign<br> <img src="https://images2.imgbox.com/90/34/BSWed7Su_o.png" alt="在这里插入图片描述"></li><li>然后回到最开始提供实体类dept的springcould-api模块中，到现在我们应该可以理解这个模块的作用了，它的作用就是将整个服务需要的实体类抽取了出来，抽取出来之后，我们可以在其他model中通过pom.xml将它导入，导入之后就可以实现复用，而不用每一个要使用这个实体类的model中都去定义一遍这个类</li><li>现在使用Feign，我们需要回到这个model中，首先导入Feign的依赖，否则不能使用Feign的注解(为了等会儿我们新创建的消费者模块也可以使用Feign，在springcould-consumer-dept-Feign的pom.xml中也导入Feign的依赖)<pre><code class="prism language-xml"><span class="token comment">&lt;!-- Feign --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.cloud<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-cloud-starter-feign<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.4.7.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre> </li><li>Feign实现消费者模块调用服务提供者模块的原理和原来的Dubbo+zookeeper类似，即需要使用注解实现远程注入，所以我们直接在springcould-api模块中添加一个接口DeptClientService，<strong>这个接口中的方法定义自己随意，只是方法上面要像controller一样写上@RequestMapping或者它的变体@GetMapping、@PostMapping等，但是这个接口上面不需要使用注解@Controller或@RestController</strong></li><li><strong>这个接口上面需要使用注解@FeignClient(value = “服务集群在注册中心中的名称”)和注解@Component或者它的变体@Service</strong>；其中注解@FeignClient+value属性用于指定注册中心中哪一个服务中的<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>thhh<span class="token punctuation">.</span>springcould<span class="token punctuation">.</span>service<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>thhh<span class="token punctuation">.</span>springcould<span class="token punctuation">.</span>pojo<span class="token punctuation">.</span>Dept<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>cloud<span class="token punctuation">.</span>openfeign<span class="token punctuation">.</span>FeignClient<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span>Component<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span>Service<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>web<span class="token punctuation">.</span>bind<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>*<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>List<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Service</span>
+<span class="token annotation punctuation">@Component</span>
+<span class="token comment">//@FeignClient:微服务客户端注解,value:指定微服务的名字,这样就可以使Feign客户端直接找到对应的微服务</span>
+<span class="token annotation punctuation">@FeignClient</span><span class="token punctuation">(</span>value <span class="token operator">=</span> <span class="token string">"SPRINGCOULD-PROVIDER-DEPT"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">DeptClientService</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@GetMapping</span><span class="token punctuation">(</span><span class="token string">"/dept/queryById/{id}"</span><span class="token punctuation">)</span><span class="token operator">/</span>
+    Dept <span class="token function">queryById</span><span class="token punctuation">(</span><span class="token annotation punctuation">@PathVariable</span><span class="token punctuation">(</span><span class="token string">"id"</span><span class="token punctuation">)</span> Long id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@GetMapping</span><span class="token punctuation">(</span><span class="token string">"/dept/queryList"</span><span class="token punctuation">)</span>
+    List<span class="token generics function"><span class="token punctuation">&lt;</span>Dept<span class="token punctuation">&gt;</span></span> <span class="token function">queryAll</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@PostMapping</span><span class="token punctuation">(</span><span class="token string">"/dept/add"</span><span class="token punctuation">)</span>
+    <span class="token keyword">boolean</span> <span class="token function">addDept</span><span class="token punctuation">(</span>Dept dept<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> </li><li>注意：还需要在这个接口上加上注解@Component/@Service，否则这个接口不会被spring托管/装配到spring容器中，那么我们在消费者model中使用这个类的时候就不能使用注解@Autowired实现对象自动注入到消费者的controller中(注意：我们是在springcould-api模块中定义的这个接口，并在这个接口上面加上了注解@Component，这个注解不是要在springcould-api模块中起作用，而是要在使用springcould-api模块的其他模块中起作用，即哪个模块导入了springcould-api模块，那么在这个model启动的时候，有注解@Component的这个接口就会被装配到spring容器中去，然后我们只需要在当前的这个模块中使用注解@Autowired就可以获取到这个接口在spring容器中的实例，就可以调用它内部的方法实现对应的功能)</li><li>然后去修改刚刚粘贴到springcould-consumer-dept-Feign中的的controller的代码<br> <img src="https://images2.imgbox.com/d9/24/jbOVzYJO_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/7f/a5/AZd4ygBv_o.png" alt="在这里插入图片描述"></li><li>最后还要在spring boot项目的入口程序处加上启动Feign的注解@EnableFeignClients(basePackages = “我们定义的service所在的包路径”)，注意：这里不是实际存在于springcould-consumer-dept-feign的model下的包路径，而是我们导入的springcould-api的包路径<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>thhh<span class="token punctuation">.</span>springcould<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>SpringApplication<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>autoconfigure<span class="token punctuation">.</span>SpringBootApplication<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>cloud<span class="token punctuation">.</span>netflix<span class="token punctuation">.</span>eureka<span class="token punctuation">.</span>EnableEurekaClient<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>cloud<span class="token punctuation">.</span>openfeign<span class="token punctuation">.</span>EnableFeignClients<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@SpringBootApplication</span>
+<span class="token annotation punctuation">@EnableEurekaClient</span>
+<span class="token annotation punctuation">@EnableFeignClients</span><span class="token punctuation">(</span>basePackages <span class="token operator">=</span> <span class="token string">"com.thhh.springcould"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">FeignDeptConsumer_80</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span>String<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+       SpringApplication<span class="token punctuation">.</span><span class="token function">run</span><span class="token punctuation">(</span>FeignDeptConsumer_80<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span>args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> </li><li>启动Feign模块测试效果</li></ul> 
+<p><img src="https://images2.imgbox.com/89/03/fC4xrxGW_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/cb/ba/Y0Iobcg1_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/5a/bd/6mYcjKiA_o.png" alt="在这里插入图片描述"></p> 
+<ul><li>从上面的测试结果可以发现，Feign默认使用的也是轮询算法</li></ul> 
+<hr> 
+<h3><a id="4_90"></a>4.小结</h3> 
+<ul><li>注意：通过上面使用Feign实现负载均衡我们可以发现，Feign做的事情就是在本地代码中，通过在springcould-api定义一个专门用于通过Feign实现负载均衡的接口，并在接口上写上注解@FeignClient以及这个注解的name/value属性，用于绑定注册中心中指定名称的服务，就像上面的例子中<br> <img src="https://images2.imgbox.com/2c/d4/JlJ3c1bl_o.png" alt="在这里插入图片描述"></li><li>绑定之后，接口中的方法和注册中心已经注册的服务中的功能提供的API通过注解@RequestMapping或其变体进行绑定<br> <img src="https://images2.imgbox.com/dc/90/DOeXqKdn_o.png" alt="在这里插入图片描述"></li><li>然后再将springcould-api模块导入其他的模块中进行复用，在需要使用服务者功能的消费者的controller中，通过注解@Autowired实现上面定义的接口的依赖注入，并在消费者的controller中直接像controller层调用service层一样，调用这个接口中的方法，实现消费者对于服务者提供的服务的消费<br> <img src="https://images2.imgbox.com/7b/87/SzztaJz3_o.png" alt="在这里插入图片描述"></li><li>最后在使用这个接口的model的入口程序/主启动类上添加注解@EnableFeignClients(basePackages = “springcould-api中接口所在的包路径”)<br> <img src="https://images2.imgbox.com/5a/a8/LRQ7uuYp_o.png" alt="在这里插入图片描述"></li><li>所以Feign的核心就是将服务者提供的服务API进行本地化，存入消费者model中，然后再通过注解@EnableFeignClients和注解@FeignClient实现通过调用消费者模块中的本地化的服务API，调用到注册中心中真正服务提供者的API的作用(所以接口上的API映射需要和服务提供者的API保持一致)</li><li>只需要4步就实现了Feign实现负载均衡</li></ul> 
+<hr> 
+<h3><a id="5RibbonFeign_102"></a>5.怎么选择使用Ribbon还是Feign</h3> 
+<ul><li>通过对比Feign和Ribbon实现负载均衡，我可以发现，二者一个是通过接口的思想实现了消费者在客户端对于服务提供者提供的服务的消费和负载均衡，一个是按照RESTFUL风格实现了消费者在客户端对于服务提供者提供的服务的消费和负载均衡，在实际的开发中我们可以根据需要选择二者中的一个实现负载均衡；如果不需要使用负载均衡我们可以直接像前面的做法，直接在消费者端将某一个服务提供者的URL写死，通过URL+服务提供者在controller中暴露的API，实现一直只调用这一个服务提供者提供的服务</li><li>如果对于效率要求高一些，对于代码可读性要求低一些可以选择使用Feign，因为它在中间加了一层，所以效率会变低，但是它通过接口的思想，简化了消费者调用服务者服务的流程，使得调用流程更像controller层调用service层</li><li>相反可以选择Ribbon</li></ul>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d30a8fa0a54f53700b8e9c886ea9d6ac/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">ubuntu linux vnc server</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e5b0620991d6a5851c2c4d02112bc1a1/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Keychain的介绍和使用</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

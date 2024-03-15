@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>深入理解java线程池_深入理解Java线程池 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="深入理解java线程池_深入理解Java线程池" />
+<meta property="og:description" content="深入理解Java线程池
+线程池初探
+所谓线程池，就是将多个线程放在一个池子里面(所谓池化技术)，然后需要线程的时候不是创建一个线程，而是从线程池里面获取一个可用的线程，然后执行我们的任务。线程池的关键在于它为我们管理了多个线程，我们不需要关心如何创建线程，我们只需要关系我们的核心业务，然后需要线程来执行任务的时候从线程池中获取线程。任务执行完之后线程不会被销毁，而是会被重新放到池子里面，等待机会去执行任务。
+我们为什么需要线程池呢？首先一点是线程池为我们提高了一种简易的多线程编程方案，我们不需要投入太多的精力去管理多个线程，线程池会自动帮我们管理好，它知道什么时候该做什么事情，我们只要在需要的时候去获取就可以了。其次，我们使用线程池很大程度上归咎于创建和销毁线程的代价是非常昂贵的，甚至我们创建和销毁线程的资源要比我们实际执行的任务所花费的时间还要长，这显然是不科学也是不合理的，而且如果没有一个合理的管理者，可能会出现创建了过多的线程的情况，也就是在JVM中存活的线程过多，而存活着的线程也是需要销毁资源的，另外一点，过多的线程可能会造成线程过度切换的尴尬境地。
+对线程池有了一个初步的认识之后，我们来看看如何使用线程池。
+// 创建一个线程池
+ExecutorService executorService = Executors.newFixedThreadPool(1);
+// 提交任务
+executorService.submit(() -&gt; System.out.println(&#34;run&#34;));
+Future stringFuture = executorService.submit(() -&gt; &#34;run&#34;);
+// 创建一个调度线程池
+ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+// 提交一个周期性执行的任务
+scheduledExecutorService.scheduleAtFixedRate(() -&gt; System.out.println(&#34;schedule&#34;),0,1, TimeUnit.SECONDS);
+// shutdown
+executorService.shutdown();
+scheduledExecutorService.shutdown();
+可以发现使用线程池非常简单，只需要极少的代码就可以创建出我们需要的线程池，然后将我们的任务提交到线程池中去。我们只需要在结束之时记得关闭线程池就可以了。本文的重点并非在于如何使用线程池，而是试图剖析线程池的实现，比如一个调度线程池是怎么实现的？是靠什么实现的？为什么能这样实现等等问题。
+Java线程池实现架构
+Java中与线程池相关的类都在java.util.concurrent包下，如下展示了一些：
+Executor
+ExecutorService
+ScheduledExecutorService
+ThreadPoolExecutor
+ScheduledThreadPoolExecutor
+Executors
+通过上面一节中的使用示例，可以发现Executors类是一个创建线程池的有用的类，事实上，Executors类的角色也就是创建线程池，它是一个工厂类，可以产生不同类型的线程池。而Executor是线程池的鼻祖类，它有两个子类是ExecutorService和ScheduledExecutorService，而ThreadPoolExecutor和ScheduledThreadPoolExecutor则是真正的线程池，我们的任务将被这两个类交由其所管理者的线程池运行，可以发现，ScheduledThreadPoolExecutor是一个万千宠爱于一身的类，下面我们可以看看它的类关系图：
+ScheduledThreadPoolExecutor继承了ThreadPoolExecutor，ThreadPoolExecutor实现了一般的线程池，没有调度功能，而ScheduledThreadPoolExecutor继承了ThreadPoolExecutor的实现，然后增加了调度功能。
+最为原始的Executor只有一个方法execute，它接受一个Runnable类型的参数，意思是使用线程池来执行这个Runnable，可以发现Executor不提供有返回值的任务。ExecutorService继承了Executor，并且极大的增强了Executor的功能，不仅支持有返回值的任务执行，而且还有很多十分有用的方法来为你提供服务，下面展示了ExecutorService提供的方法：
+ScheduledExecutorService继承了ExecutorService，并且增加了特有的调度(schedule)功能。关于Executor、ExecutorService和ScheduledExecutorService的关系，可以见下图：
+总结一下，经过我们的调研，可以发现其实对于我们编写多线程代码来说，最为核心的是Executors类，根据我们是需要ExecutorService类型的线程池还是ScheduledExecutorService类型的线程池调用相应的工厂方法就可以了，而ExecutorService的实现表现在ThreadPoolExecutor上，ScheduledExecutorService的实现则表现在ScheduledThreadPoolExecutor上，下文将分别剖析这两者，尝试弄清楚线程池的原理。
+ThreadPoolExecutor解析
+上文中描述了Java中线程池相关的架构，了解了这些内容其实我们就可以使用java的线程池为我们工作了，使用其提供的线程池我们可以很方便的写出高质量的多线程代码，本节将分析ThreadPoolExecutor的实现，来探索线程池的运行原理。下面的图片展示了ThreadPoolExecutor的类图：
+private final BlockingQueue workQueue; // 任务队列，我们的任务会添加到该队列里面，线程将从该队列获取任务来执行
+private final HashSet workers = new HashSet();//所有工作线程的集合，来消费workQueue里面的任务
+private volatile ThreadFactory threadFactory;//线程工厂" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/bc5958400253af48fb8d0deb0fdae224/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-02-13T01:51:44+08:00" />
+<meta property="article:modified_time" content="2021-02-13T01:51:44+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">深入理解java线程池_深入理解Java线程池</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div style="font-size:16px;"> 
+ <p>深入理解Java线程池</p> 
+ <p>线程池初探</p> 
+ <p>所谓线程池，就是将多个线程放在一个池子里面(所谓池化技术)，然后需要线程的时候不是创建一个线程，而是从线程池里面获取一个可用的线程，然后执行我们的任务。线程池的关键在于它为我们管理了多个线程，我们不需要关心如何创建线程，我们只需要关系我们的核心业务，然后需要线程来执行任务的时候从线程池中获取线程。任务执行完之后线程不会被销毁，而是会被重新放到池子里面，等待机会去执行任务。</p> 
+ <p>我们为什么需要线程池呢？首先一点是线程池为我们提高了一种简易的多线程编程方案，我们不需要投入太多的精力去管理多个线程，线程池会自动帮我们管理好，它知道什么时候该做什么事情，我们只要在需要的时候去获取就可以了。其次，我们使用线程池很大程度上归咎于创建和销毁线程的代价是非常昂贵的，甚至我们创建和销毁线程的资源要比我们实际执行的任务所花费的时间还要长，这显然是不科学也是不合理的，而且如果没有一个合理的管理者，可能会出现创建了过多的线程的情况，也就是在JVM中存活的线程过多，而存活着的线程也是需要销毁资源的，另外一点，过多的线程可能会造成线程过度切换的尴尬境地。</p> 
+ <p>对线程池有了一个初步的认识之后，我们来看看如何使用线程池。</p> 
+ <p>// 创建一个线程池</p> 
+ <p>ExecutorService executorService = Executors.newFixedThreadPool(1);</p> 
+ <p>// 提交任务</p> 
+ <p>executorService.submit(() -&gt; System.out.println("run"));</p> 
+ <p>Future stringFuture = executorService.submit(() -&gt; "run");</p> 
+ <p>// 创建一个调度线程池</p> 
+ <p>ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);</p> 
+ <p>// 提交一个周期性执行的任务</p> 
+ <p>scheduledExecutorService.scheduleAtFixedRate(() -&gt; System.out.println("schedule"),0,1, TimeUnit.SECONDS);</p> 
+ <p>// shutdown</p> 
+ <p>executorService.shutdown();</p> 
+ <p>scheduledExecutorService.shutdown();</p> 
+ <p>可以发现使用线程池非常简单，只需要极少的代码就可以创建出我们需要的线程池，然后将我们的任务提交到线程池中去。我们只需要在结束之时记得关闭线程池就可以了。本文的重点并非在于如何使用线程池，而是试图剖析线程池的实现，比如一个调度线程池是怎么实现的？是靠什么实现的？为什么能这样实现等等问题。</p> 
+ <p>Java线程池实现架构</p> 
+ <p>Java中与线程池相关的类都在java.util.concurrent包下，如下展示了一些：</p> 
+ <p>Executor</p> 
+ <p>ExecutorService</p> 
+ <p>ScheduledExecutorService</p> 
+ <p>ThreadPoolExecutor</p> 
+ <p>ScheduledThreadPoolExecutor</p> 
+ <p>Executors</p> 
+ <p>通过上面一节中的使用示例，可以发现Executors类是一个创建线程池的有用的类，事实上，Executors类的角色也就是创建线程池，它是一个工厂类，可以产生不同类型的线程池。而Executor是线程池的鼻祖类，它有两个子类是ExecutorService和ScheduledExecutorService，而ThreadPoolExecutor和ScheduledThreadPoolExecutor则是真正的线程池，我们的任务将被这两个类交由其所管理者的线程池运行，可以发现，ScheduledThreadPoolExecutor是一个万千宠爱于一身的类，下面我们可以看看它的类关系图：</p> 
+ <p align="center"><img src="https://images2.imgbox.com/19/fd/5GMaIAb3_o.png" alt="5ee684544731530f5f25d4873dc30d8f.png"></p> 
+ <p>ScheduledThreadPoolExecutor继承了ThreadPoolExecutor，ThreadPoolExecutor实现了一般的线程池，没有调度功能，而ScheduledThreadPoolExecutor继承了ThreadPoolExecutor的实现，然后增加了调度功能。</p> 
+ <p>最为原始的Executor只有一个方法execute，它接受一个Runnable类型的参数，意思是使用线程池来执行这个Runnable，可以发现Executor不提供有返回值的任务。ExecutorService继承了Executor，并且极大的增强了Executor的功能，不仅支持有返回值的任务执行，而且还有很多十分有用的方法来为你提供服务，下面展示了ExecutorService提供的方法：</p> 
+ <p align="center"><img src="https://images2.imgbox.com/85/be/LpIG7HDG_o.png" alt="dcf82aa870fe43613d7f986673405097.png"></p> 
+ <p>ScheduledExecutorService继承了ExecutorService，并且增加了特有的调度(schedule)功能。关于Executor、ExecutorService和ScheduledExecutorService的关系，可以见下图：</p> 
+ <p align="center"><img src="https://images2.imgbox.com/b0/82/MTEkMLO8_o.png" alt="5256b1d1346b273fbcf3b9d552d24399.png"></p> 
+ <p>总结一下，经过我们的调研，可以发现其实对于我们编写多线程代码来说，最为核心的是Executors类，根据我们是需要ExecutorService类型的线程池还是ScheduledExecutorService类型的线程池调用相应的工厂方法就可以了，而ExecutorService的实现表现在ThreadPoolExecutor上，ScheduledExecutorService的实现则表现在ScheduledThreadPoolExecutor上，下文将分别剖析这两者，尝试弄清楚线程池的原理。</p> 
+ <p>ThreadPoolExecutor解析</p> 
+ <p>上文中描述了Java中线程池相关的架构，了解了这些内容其实我们就可以使用java的线程池为我们工作了，使用其提供的线程池我们可以很方便的写出高质量的多线程代码，本节将分析ThreadPoolExecutor的实现，来探索线程池的运行原理。下面的图片展示了ThreadPoolExecutor的类图：</p> 
+ <p align="center"><img src="https://images2.imgbox.com/c3/9d/fbkOBIZO_o.png" alt="1ab34553bff78ba06bc6806657369d29.png"></p> 
+ <p>private final BlockingQueue workQueue; // 任务队列，我们的任务会添加到该队列里面，线程将从该队列获取任务来执行</p> 
+ <p>private final HashSet workers = new HashSet();//所有工作线程的集合，来消费workQueue里面的任务</p> 
+ <p>private volatile ThreadFactory threadFactory;//线程工厂</p> 
+ <p>private volatile RejectedExecutionHandler handler;//拒绝策略，默认会抛出异常，还要其他几种拒绝策略如下：</p> 
+ <p>1、CallerRunsPolicy：在调用者线程里面运行该任务</p> 
+ <p>2、DiscardPolicy：丢弃任务</p> 
+ <p>3、DiscardOldestPolicy：丢弃workQueue的头部任务</p> 
+ <p>private volatile int corePoolSize;//最下保活work数量</p> 
+ <p>private volatile int maximumPoolSize;//work上限</p> 
+ <p>我们尝试执行submit方法，下面是执行的关键路径，总结起来就是：如果Worker数量还没达到上限则继续创建，否则提交任务到workQueue，然后让worker来调度运行任务。</p> 
+ <p>step 1: </p> 
+ <p>Future&gt; submit(Runnable task);</p> 
+ <p>step 2:</p> 
+ <p>public Future&gt; submit(Runnable task) {<!-- --></p> 
+ <p>if (task == null) throw new NullPointerException();</p> 
+ <p>RunnableFuture ftask = newTaskFor(task, null);</p> 
+ <p>execute(ftask);</p> 
+ <p>return ftask;</p> 
+ <p>}</p> 
+ <p>step 3:</p> 
+ <p>void execute(Runnable command);</p> 
+ <p>step 4:</p> 
+ <p>public void execute(Runnable command) {<!-- --></p> 
+ <p>if (command == null)</p> 
+ <p>throw new NullPointerException();</p> 
+ <p>/*</p> 
+ <p>* Proceed in 3 steps:</p> 
+ <p>*</p> 
+ <p>* 1. If fewer than corePoolSize threads are running, try to</p> 
+ <p>* start a new thread with the given command as its first</p> 
+ <p>* task. The call to addWorker atomically checks runState and</p> 
+ <p>* workerCount, and so prevents false alarms that would add</p> 
+ <p>* threads when it shouldn't, by returning false.</p> 
+ <p>*</p> 
+ <p>* 2. If a task can be successfully queued, then we still need</p> 
+ <p>* to double-check whether we should have added a thread</p> 
+ <p>* (because existing ones died since last checking) or that</p> 
+ <p>* the pool shut down since entry into this method. So we</p> 
+ <p>* recheck state and if necessary roll back the enqueuing if</p> 
+ <p>* stopped, or start a new thread if there are none.</p> 
+ <p>*</p> 
+ <p>* 3. If we cannot queue task, then we try to add a new</p> 
+ <p>* thread. If it fails, we know we are shut down or saturated</p> 
+ <p>* and so reject the task.</p> 
+ <p>*/</p> 
+ <p>int c = ctl.get();</p> 
+ <p>if (workerCountOf(c) &lt; corePoolSize) {<!-- --></p> 
+ <p>if (addWorker(command, true))</p> 
+ <p>return;</p> 
+ <p>c = ctl.get();</p> 
+ <p>}</p> 
+ <p>if (isRunning(c) &amp;&amp; workQueue.offer(command)) { //提交我们的任务到workQueue</p> 
+ <p>int recheck = ctl.get();</p> 
+ <p>if (! isRunning(recheck) &amp;&amp; remove(command))</p> 
+ <p>reject(command);</p> 
+ <p>else if (workerCountOf(recheck) == 0)</p> 
+ <p>addWorker(null, false);</p> 
+ <p>}</p> 
+ <p>else if (!addWorker(command, false)) //使用maximumPoolSize作为边界</p> 
+ <p>reject(command); //还不行？拒绝提交的任务</p> 
+ <p>}</p> 
+ <p>step 5:</p> 
+ <p>private boolean addWorker(Runnable firstTask, boolean core)</p> 
+ <p>step 6:</p> 
+ <p>w = new Worker(firstTask); //包装任务</p> 
+ <p>final Thread t = w.thread; //获取线程(包含任务)</p> 
+ <p>workers.add(w); // 任务被放到works中</p> 
+ <p>t.start(); //执行任务</p> 
+ <p>上面的流程是高度概括的，实际情况远比这复杂得多，但是我们关心的是怎么打通整个流程，所以这样分析问题是没有太大的问题的。观察上面的流程，我们发现其实关键的地方在于Worker，如果弄明白它是如何工作的，那么我们也就大概明白了线程池是怎么工作的了。下面分析一下Worker类。</p> 
+ <p align="center"><img src="https://images2.imgbox.com/7c/cd/f7RG7T2M_o.png" alt="69ec78997ae2868b938e7fd360433833.png"></p> 
+ <p>上面的图片展示了Worker的类关系图，关键在于他实现了Runnable接口，所以问题的关键就在于run方法上。在这之前，我们来看一下Worker类里面的关键成员：</p> 
+ <p>/** Thread this worker is running in. Null if factory fails. */</p> 
+ <p>final Thread thread;</p> 
+ <p>/** Initial task to run. Possibly null. */</p> 
+ <p>Runnable firstTask; // 我们提交的任务，可能被立刻执行，也可能被放到队列里面</p> 
+ <p>thread是Worker的工作线程，上面的分析我们也发现了在addWorker中会获取worker里面的thread然后start，也就是这个线程的执行，而Worker实现了Runnable接口，所以在构造thread的时候Worker将自己传递给了构造函数，thread.start执行的其实就是Worker的run方法。下面是run方法的内容：</p> 
+ <p>/** Delegates main run loop to outer runWorker */</p> 
+ <p>public void run() {<!-- --></p> 
+ <p>runWorker(this);</p> 
+ <p>}</p> 
+ <p>final void runWorker(Worker w) {<!-- --></p> 
+ <p>Thread wt = Thread.currentThread();</p> 
+ <p>Runnable task = w.firstTask;</p> 
+ <p>w.firstTask = null;</p> 
+ <p>w.unlock(); // allow interrupts</p> 
+ <p>boolean completedAbruptly = true;</p> 
+ <p>try {<!-- --></p> 
+ <p>while (task != null || (task = getTask()) != null) {<!-- --></p> 
+ <p>w.lock();</p> 
+ <p>// If pool is stopping, ensure thread is interrupted;</p> 
+ <p>// if not, ensure thread is not interrupted. This</p> 
+ <p>// requires a recheck in second case to deal with</p> 
+ <p>// shutdownNow race while clearing interrupt</p> 
+ <p>if ((runStateAtLeast(ctl.get(), STOP) ||</p> 
+ <p>(Thread.interrupted() &amp;&amp;</p> 
+ <p>runStateAtLeast(ctl.get(), STOP))) &amp;&amp;</p> 
+ <p>!wt.isInterrupted())</p> 
+ <p>wt.interrupt();</p> 
+ <p>try {<!-- --></p> 
+ <p>beforeExecute(wt, task);</p> 
+ <p>Throwable thrown = null;</p> 
+ <p>try {<!-- --></p> 
+ <p>task.run();</p> 
+ <p>} catch (RuntimeException x) {<!-- --></p> 
+ <p>thrown = x; throw x;</p> 
+ <p>} catch (Error x) {<!-- --></p> 
+ <p>thrown = x; throw x;</p> 
+ <p>} catch (Throwable x) {<!-- --></p> 
+ <p>thrown = x; throw new Error(x);</p> 
+ <p>} finally {<!-- --></p> 
+ <p>afterExecute(task, thrown);</p> 
+ <p>}</p> 
+ <p>} finally {<!-- --></p> 
+ <p>task = null;</p> 
+ <p>w.completedTasks++;</p> 
+ <p>w.unlock();</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>completedAbruptly = false;</p> 
+ <p>} finally {<!-- --></p> 
+ <p>processWorkerExit(w, completedAbruptly);</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>我们来分析一下runWorker这个方法，这就是整个线程池的核心。首先获取到了我们刚提交的任务firstTask，然后会循环从workQueue里面获取任务来执行，获取任务的方法如下：</p> 
+ <p>private Runnable getTask() {<!-- --></p> 
+ <p>boolean timedOut = false; // Did the last poll() time out?</p> 
+ <p>for (;;) {<!-- --></p> 
+ <p>int c = ctl.get();</p> 
+ <p>int rs = runStateOf(c);</p> 
+ <p>// Check if queue empty only if necessary.</p> 
+ <p>if (rs &gt;= SHUTDOWN &amp;&amp; (rs &gt;= STOP || workQueue.isEmpty())) {<!-- --></p> 
+ <p>decrementWorkerCount();</p> 
+ <p>return null;</p> 
+ <p>}</p> 
+ <p>int wc = workerCountOf(c);</p> 
+ <p>// Are workers subject to culling?</p> 
+ <p>boolean timed = allowCoreThreadTimeOut || wc &gt; corePoolSize;</p> 
+ <p>if ((wc &gt; maximumPoolSize || (timed &amp;&amp; timedOut))</p> 
+ <p>&amp;&amp; (wc &gt; 1 || workQueue.isEmpty())) {<!-- --></p> 
+ <p>if (compareAndDecrementWorkerCount(c))</p> 
+ <p>return null;</p> 
+ <p>continue;</p> 
+ <p>}</p> 
+ <p>try {<!-- --></p> 
+ <p>Runnable r = timed ?</p> 
+ <p>workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :</p> 
+ <p>workQueue.take();</p> 
+ <p>if (r != null)</p> 
+ <p>return r;</p> 
+ <p>timedOut = true;</p> 
+ <p>} catch (InterruptedException retry) {<!-- --></p> 
+ <p>timedOut = false;</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>其实核心也就一句：</p> 
+ <p>Runnable r = timed ? workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) : workQueue.take();</p> 
+ <p>我们再回头看一下execute，其实我们上面只走了一条逻辑，在execute的时候，我们的worker的数量还没有到达我们设定的corePoolSize的时候，会走上面我们分析的逻辑，而如果达到了我们设定的阈值之后，execute中会尝试去提交任务，如果提交成功了就结束，否则会拒绝任务的提交。我们上面还提到一个成员：maximumPoolSize，其实线程池的最大的Worker数量应该是maximumPoolSize，但是我们上面的分析是corePoolSize，这是因为我们的private boolean addWorker(Runnable firstTask, boolean core)的参数core的值来控制的，core为true则使用corePoolSize来设定边界，否则使用maximumPoolSize来设定边界。直观的解释一下，当线程池里面的Worker数量还没有到corePoolSize，那么新添加的任务会伴随着产生一个新的worker，如果Worker的数量达到了corePoolSize，那么就将任务存放在阻塞队列中等待Worker来获取执行，如果没有办法再向阻塞队列放任务了，那么这个时候maximumPoolSize就变得有用了，新的任务将会伴随着产生一个新的Worker，如果线程池里面的Worker已经达到了maximumPoolSize，那么接下来提交的任务只能被拒绝策略拒绝了。可以参考下面的描述来理解：</p> 
+ <p>* When a new task is submitted in method {@link #execute(Runnable)},</p> 
+ <p>* and fewer than corePoolSize threads are running, a new thread is</p> 
+ <p>* created to handle the request, even if other worker threads are</p> 
+ <p>* idle. If there are more than corePoolSize but less than</p> 
+ <p>* maximumPoolSize threads running, a new thread will be created only</p> 
+ <p>* if the queue is full. By setting corePoolSize and maximumPoolSize</p> 
+ <p>* the same, you create a fixed-size thread pool. By setting</p> 
+ <p>* maximumPoolSize to an essentially unbounded value such as {@code</p> 
+ <p>* Integer.MAX_VALUE}, you allow the pool to accommodate an arbitrary</p> 
+ <p>* number of concurrent tasks. Most typically, core and maximum pool</p> 
+ <p>* sizes are set only upon construction, but they may also be changed</p> 
+ <p>* dynamically using {@link #setCorePoolSize} and {@link</p> 
+ <p>* #setMaximumPoolSize}.</p> 
+ <p>在此需要说明一点，有一个重要的成员：keepAliveTime，当线程池里面的线程数量超过corePoolSize了，那么超出的线程将会在空闲keepAliveTime之后被terminated。可以参考下面的文档：</p> 
+ <p>* If the pool currently has more than corePoolSize threads,</p> 
+ <p>* excess threads will be terminated if they have been idle for more</p> 
+ <p>* than the keepAliveTime (see {@link #getKeepAliveTime(TimeUnit)}).</p> 
+ <p>ScheduledThreadPoolExecutor解析</p> 
+ <p>ScheduledThreadPoolExecutor适用于延时执行，或者周期性执行的任务调度，ScheduledThreadPoolExecutor在实现上继承了ThreadPoolExecutor，所以你依然可以将ScheduledThreadPoolExecutor当成ThreadPoolExecutor来使用，但是ScheduledThreadPoolExecutor的功能要强大得多，因为ScheduledThreadPoolExecutor可以根据设定的参数来周期性调度运行，下面的图片展示了四个和周期性相关的方法：</p> 
+ <p align="center"><img src="https://images2.imgbox.com/d9/36/YKyE5tYg_o.png" alt="6a825a1b9185558e083e223ca3e99c4d.png"></p> 
+ <p>如果你想延时一段时间然后运行一个Callable，那么使用的第一个方法</p> 
+ <p>如果你想延时一段时间之后运行一个Runnable，那么使用第二个方法；</p> 
+ <p>如果你想要延时一段时间，然后根据设定的参数周期执行Runnable，那么可以选择第三个和第四个方法，第三个方法和第四个方法的区别在于：第三个方法严格按照规划的时间路径来执行，比如周期为2，延时为0，那么执行的序列为0，2，4，6，8....，而第四个方法将基于上次执行时间来规划下次的执行，也就是在上次执行完成之后再次执行。比如上面的执行序列0，2，4，6，8...，如果第2秒没有被调度执行，而在第三秒的时候才被调度，那么下次执行的时间不是4，而是5，以此类推。</p> 
+ <p>下面来看一下这四个方法的一些细节：</p> 
+ <p>public ScheduledFuture&gt; schedule(Runnable command,</p> 
+ <p>long delay,</p> 
+ <p>TimeUnit unit) {<!-- --></p> 
+ <p>if (command == null || unit == null)</p> 
+ <p>throw new NullPointerException();</p> 
+ <p>RunnableScheduledFuture&gt; t = decorateTask(command,</p> 
+ <p>new ScheduledFutureTask(command, null,</p> 
+ <p>triggerTime(delay, unit)));</p> 
+ <p>delayedExecute(t);</p> 
+ <p>return t;</p> 
+ <p>}</p> 
+ <p>public ScheduledFuture schedule(Callable callable,</p> 
+ <p>long delay,</p> 
+ <p>TimeUnit unit) {<!-- --></p> 
+ <p>if (callable == null || unit == null)</p> 
+ <p>throw new NullPointerException();</p> 
+ <p>RunnableScheduledFuture t = decorateTask(callable,</p> 
+ <p>new ScheduledFutureTask(callable,</p> 
+ <p>triggerTime(delay, unit)));</p> 
+ <p>delayedExecute(t);</p> 
+ <p>return t;</p> 
+ <p>}</p> 
+ <p>public ScheduledFuture&gt; scheduleAtFixedRate(Runnable command,</p> 
+ <p>long initialDelay,</p> 
+ <p>long period,</p> 
+ <p>TimeUnit unit) {<!-- --></p> 
+ <p>if (command == null || unit == null)</p> 
+ <p>throw new NullPointerException();</p> 
+ <p>if (period &lt;= 0)</p> 
+ <p>throw new IllegalArgumentException();</p> 
+ <p>ScheduledFutureTask sft =</p> 
+ <p>new ScheduledFutureTask(command,</p> 
+ <p>null,</p> 
+ <p>triggerTime(initialDelay, unit),</p> 
+ <p>unit.toNanos(period));</p> 
+ <p>RunnableScheduledFuture t = decorateTask(command, sft);</p> 
+ <p>sft.outerTask = t;</p> 
+ <p>delayedExecute(t);</p> 
+ <p>return t;</p> 
+ <p>}</p> 
+ <p>public ScheduledFuture&gt; scheduleWithFixedDelay(Runnable command,</p> 
+ <p>long initialDelay,</p> 
+ <p>long delay,</p> 
+ <p>TimeUnit unit) {<!-- --></p> 
+ <p>if (command == null || unit == null)</p> 
+ <p>throw new NullPointerException();</p> 
+ <p>if (delay &lt;= 0)</p> 
+ <p>throw new IllegalArgumentException();</p> 
+ <p>ScheduledFutureTask sft =</p> 
+ <p>new ScheduledFutureTask(command,</p> 
+ <p>null,</p> 
+ <p>triggerTime(initialDelay, unit),</p> 
+ <p>unit.toNanos(-delay));</p> 
+ <p>RunnableScheduledFuture t = decorateTask(command, sft);</p> 
+ <p>sft.outerTask = t;</p> 
+ <p>delayedExecute(t);</p> 
+ <p>return t;</p> 
+ <p>}</p> 
+ <p>通过上面的代码我们可以发现，前两个方法是类似的，后两个方法也是类似的。前两个方法属于一次性调度，所以period都为0，区别在于参数不同，一个是Runnable，而一个是Callable，可笑的是，最后都变为了Callable了，见下面的构造函数：</p> 
+ <p>public FutureTask(Runnable runnable, V result) {<!-- --></p> 
+ <p>this.callable = Executors.callable(runnable, result);</p> 
+ <p>this.state = NEW; // ensure visibility of callable</p> 
+ <p>}</p> 
+ <p>对于后两个方法，区别仅仅在于period的，scheduleWithFixedDelay对参数进行了操作，将原来的时间变为负数了，而后面在计算下次被调度的时间的时候会根据这个参数的正负值来分别处理，正数代表scheduleAtFixedRate，而负数代表了scheduleWithFixedDelay。</p> 
+ <p>一个需要被我们注意的细节是，以上四个方法最后都会调用一个方法: delayedExecute(t)，下面看一下这个方法：</p> 
+ <p>private void delayedExecute(RunnableScheduledFuture&gt; task) {<!-- --></p> 
+ <p>if (isShutdown())</p> 
+ <p>reject(task);</p> 
+ <p>else {<!-- --></p> 
+ <p>super.getQueue().add(task);</p> 
+ <p>if (isShutdown() &amp;&amp;</p> 
+ <p>!canRunInCurrentRunState(task.isPeriodic()) &amp;&amp;</p> 
+ <p>remove(task))</p> 
+ <p>task.cancel(false);</p> 
+ <p>else</p> 
+ <p>ensurePrestart();</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>大概的意思就是先判断线程池是否被关闭了，如果被关闭了，则拒绝任务的提交，否则将任务加入到任务队列中去等待被调度执行。最后的ensurePrestart的意思是需要确保线程池已经被启动起来了。下面是这个方法：</p> 
+ <p>void ensurePrestart() {<!-- --></p> 
+ <p>int wc = workerCountOf(ctl.get());</p> 
+ <p>if (wc &lt; corePoolSize)</p> 
+ <p>addWorker(null, true);</p> 
+ <p>else if (wc == 0)</p> 
+ <p>addWorker(null, false);</p> 
+ <p>}</p> 
+ <p>主要是增加了一个没有任务的worker，有什么用呢？我们还记得Worker的逻辑吗？addWorker方法的执行，会触发Worker的run方法的执行，然后runWorker方法就会被执行，而runWorker方法是循环从workQueue中取任务执行的，所以确保线程池被启动起来是重要的，而只需要简单的执行addWorker便会触发线程池的启动流程。对于调度线程池来说，只要执行了addWorker方法，那么线程池就会一直在后台周期性的调度执行任务。</p> 
+ <p>到此，似乎我们还是没有闹明白ScheduledThreadPoolExecutor是如何实现周期性的，上面讲到四个scheduled方法时，我们没有提一个重要的类：ScheduledFutureTask，对，所有神奇的事情将会发生在这个类中，下面来分析一下这个类。</p> 
+ <p align="center"><img src="https://images2.imgbox.com/97/01/iXFPrVdl_o.png" alt="9fc862f1f0eea75c8c416b48599b01a8.png"></p> 
+ <p>看上面的类图，貌似这个类非常复杂，还好，我们发现他实现了Runnable接口，那么必然会有一个run方法，而这个run方法必然是整个类的核心，下面来看一下这个run方法的内容：</p> 
+ <p>public void run() {<!-- --></p> 
+ <p>boolean periodic = isPeriodic();</p> 
+ <p>if (!canRunInCurrentRunState(periodic))</p> 
+ <p>cancel(false);</p> 
+ <p>else if (!periodic)</p> 
+ <p>ScheduledFutureTask.super.run();</p> 
+ <p>else if (ScheduledFutureTask.super.runAndReset()) {<!-- --></p> 
+ <p>setNextRunTime();</p> 
+ <p>reExecutePeriodic(outerTask);</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>首先，判断是否是周期性的任务，如果不是，则直接执行(一次性)，否则执行后，然后设置下次执行的时间，然后重新调度，等待下次执行。这里有一个方法需要注意，也就是setNextRunTime，上面我们提到scheduleAtFixedRate和scheduleWithFixedDelay在传递参数时不一样，后者将delay值变为了负数，所以下面的处理正好印证了前文所述。</p> 
+ <p>/**</p> 
+ <p>* Sets the next time to run for a periodic task.</p> 
+ <p>*/</p> 
+ <p>private void setNextRunTime() {<!-- --></p> 
+ <p>long p = period;</p> 
+ <p>if (p &gt; 0)</p> 
+ <p>time += p;</p> 
+ <p>else</p> 
+ <p>time = triggerTime(-p);</p> 
+ <p>}</p> 
+ <p>下面来看一下reExecutePeriodic方法是如何做的，他的目标是将任务再次被调度执行，下面的代码展示了这个功能的实现：</p> 
+ <p>void reExecutePeriodic(RunnableScheduledFuture&gt; task) {<!-- --></p> 
+ <p>if (canRunInCurrentRunState(true)) {<!-- --></p> 
+ <p>super.getQueue().add(task);</p> 
+ <p>if (!canRunInCurrentRunState(true) &amp;&amp; remove(task))</p> 
+ <p>task.cancel(false);</p> 
+ <p>else</p> 
+ <p>ensurePrestart();</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>可以看到，这个方法就是将我们的任务再次放到了workQueue里面，那这个参数是什么？在上面的run方法中我们调用了reExecutePeriodic方法，参数为outerTask，而这个变量是什么？看下面的代码：</p> 
+ <p>/** The actual task to be re-enqueued by reExecutePeriodic */</p> 
+ <p>RunnableScheduledFuture outerTask = this;</p> 
+ <p>这个变量指向了自己，而this的类型是什么？是ScheduledFutureTask，也就是可以被调度的task，这样就实现了循环执行任务了。</p> 
+ <p>上面的分析已经到了循环执行，但是ScheduledThreadPoolExecutor的功能是周期性执行，所以我们接着分析ScheduledThreadPoolExecutor是如何根据我们的参数走走停停的。这个时候，是应该看一下ScheduledThreadPoolExecutor的构造函数了，我们来看一个最简单的构造函数：</p> 
+ <p>public ScheduledThreadPoolExecutor(int corePoolSize) {<!-- --></p> 
+ <p>super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,</p> 
+ <p>new DelayedWorkQueue());</p> 
+ <p>}</p> 
+ <p>我们知道ScheduledThreadPoolExecutor的父类是ThreadPoolExecutor，所以这里的super其实是ThreadPoolExecutor的构造函数，我们发现其中有一个参数DelayedWorkQueue，看名字貌似是一个延迟队列的样子，进一步跟踪代码，发现了下面的一行代码(构造函数中)：</p> 
+ <p>this.workQueue = workQueue;</p> 
+ <p>所以在ScheduledThreadPoolExecutor中，workQueue是一个DelayedWorkQueue类型的队列，我们暂且认为DelayedWorkQueue是一种具备延迟功能的队列吧，那么，到此我们便可以想明白了，上面的分析我们明白了ScheduledThreadPoolExecutor是如何循环执行任务的，而这里我们明白了ScheduledThreadPoolExecutor使用DelayedWorkQueue来达到延迟的目标，所以组合起来，就可以实现ScheduledThreadPoolExecutor周期性执行的目标。下面我们来看一下DelayedWorkQueue是如何做到延迟的吧，上文中提到一个方法:getTask，这个方法的作用是从workQueue中取出任务来执行，而在ScheduledThreadPoolExecutor里面，getTask方法是从DelayedWorkQueue中取任务的，而取任务无非两个方法:poll或者take，下面我们对DelayedWorkQueue的take方法来分析一下：</p> 
+ <p>public RunnableScheduledFuture&gt; take() throws InterruptedException {<!-- --></p> 
+ <p>final ReentrantLock lock = this.lock;</p> 
+ <p>lock.lockInterruptibly();</p> 
+ <p>try {<!-- --></p> 
+ <p>for (;;) {<!-- --></p> 
+ <p>RunnableScheduledFuture&gt; first = queue[0];</p> 
+ <p>if (first == null)</p> 
+ <p>available.await();</p> 
+ <p>else {<!-- --></p> 
+ <p>long delay = first.getDelay(NANOSECONDS);</p> 
+ <p>if (delay &lt;= 0)</p> 
+ <p>return finishPoll(first);</p> 
+ <p>first = null; // don't retain ref while waiting</p> 
+ <p>if (leader != null)</p> 
+ <p>available.await();</p> 
+ <p>else {<!-- --></p> 
+ <p>Thread thisThread = Thread.currentThread();</p> 
+ <p>leader = thisThread;</p> 
+ <p>try {<!-- --></p> 
+ <p>available.awaitNanos(delay);</p> 
+ <p>} finally {<!-- --></p> 
+ <p>if (leader == thisThread)</p> 
+ <p>leader = null;</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>} finally {<!-- --></p> 
+ <p>if (leader == null &amp;&amp; queue[0] != null)</p> 
+ <p>available.signal();</p> 
+ <p>lock.unlock();</p> 
+ <p>}</p> 
+ <p>}</p> 
+ <p>在for循环里面，首先从queue中获取第一个任务，然后从任务中取出延迟时间，而后使用available变量来实现延迟效果。这里面需要几个点需要探索一下：</p> 
+ <p>这个queue是什么东西？</p> 
+ <p>延迟时间的来龙去脉？</p> 
+ <p>available变量的来龙去脉？</p> 
+ <p>对于第一个问题，看下面的代码：</p> 
+ <p>`</p> 
+ <p>private RunnableScheduledFuture&gt;[] queue = new RunnableScheduledFuture&gt;[INITIAL_CAPACITY];`</p> 
+ <p>它是一个RunnableScheduledFuture类型的数组，下面是RunnableScheduledFuture类的类关系图：</p> 
+ <p align="center"><img src="https://images2.imgbox.com/5b/85/48anxdgr_o.png" alt="3dfa3442b575a8774c9e65abdf821231.png"></p> 
+ <p>数组里面保存了我们的RunnableScheduledFuture，对queue的操作，主要来看一下增加元素和消费元素的操作。首先，假设使用add方法来增加RunnableScheduledFuture到queue，调用的链路如下：</p> 
+ <p>public boolean add(Runnable e) {<!-- --></p> 
+ <p>return offer(e);</p> 
+ <p>}</p> 
+ <p>public boolean offer(Runnable x) {<!-- --></p> 
+ <p>if (x == null)</p> 
+ <p>throw new NullPointerException();</p> 
+ <p>RunnableScheduledFuture&gt; e = (RunnableScheduledFuture&gt;)x;</p> 
+ <p>final ReentrantLock lock = this.lock;</p> 
+ <p>lock.lock();</p> 
+ <p>try {<!-- --></p> 
+ <p>int i = size;</p> 
+ <p>if (i &gt;= queue.length)</p> 
+ <p>grow();</p> 
+ <p>size = i + 1;</p> 
+ <p>if (i == 0) {<!-- --></p> 
+ <p>queue[0] = e;</p> 
+ <p>setIndex(e, 0);</p> 
+ <p>} else {<!-- --></p> 
+ <p>siftUp(i, e);</p> 
+ <p>}</p> 
+ <p>if (queue[0] == e) {<!-- --></p> 
+ <p>leader = null;</p> 
+ <p>available.signal();</p> 
+ <p>}</p> 
+ <p>} finally {<!-- --></p> 
+ <p>lock.unlock();</p> 
+ <p>}</p> 
+ <p>return true;</p> 
+ <p>}</p> 
+ <p>解释一下，add方法直接转到了offer方法，该方法中，首先判断数组的容量是否足够，如果不够则grow，增长的策略如下：</p> 
+ <p>int newCapacity = oldCapacity + (oldCapacity &gt;&gt; 1); // grow 50%</p> 
+ <p>每次增长50%。增长完成后，如果这是第一个元素，则放在坐标为0的位置，否则，使用siftUp操作，下面是该方法的内容：</p> 
+ <p>private void siftUp(int k, RunnableScheduledFuture&gt; key) {<!-- --></p> 
+ <p>while (k &gt; 0) {<!-- --></p> 
+ <p>int parent = (k - 1) &gt;&gt;&gt; 1;</p> 
+ <p>RunnableScheduledFuture&gt; e = queue[parent];</p> 
+ <p>if (key.compareTo(e) &gt;= 0)</p> 
+ <p>break;</p> 
+ <p>queue[k] = e;</p> 
+ <p>setIndex(e, k);</p> 
+ <p>k = parent;</p> 
+ <p>}</p> 
+ <p>queue[k] = key;</p> 
+ <p>setIndex(key, k);</p> 
+ <p>}</p> 
+ <p>这个数组实现了堆这种数据结构，使用对象比较将最需要被调度执行的RunnableScheduledFuture放到数组的前面，而这得力于compareTo方法，下面是RunnableScheduledFuture类的compareTo方法的实现，主要是通过延迟时间来做比较。</p> 
+ <p>public int compareTo(Delayed other) {<!-- --></p> 
+ <p>if (other == this) // compare zero if same object</p> 
+ <p>return 0;</p> 
+ <p>if (other instanceof ScheduledFutureTask) {<!-- --></p> 
+ <p>ScheduledFutureTask&gt; x = (ScheduledFutureTask&gt;)other;</p> 
+ <p>long diff = time - x.time;</p> 
+ <p>if (diff &lt; 0)</p> 
+ <p>return -1;</p> 
+ <p>else if (diff &gt; 0)</p> 
+ <p>return 1;</p> 
+ <p>else if (sequenceNumber &lt; x.sequenceNumber)</p> 
+ <p>return -1;</p> 
+ <p>else</p> 
+ <p>return 1;</p> 
+ <p>}</p> 
+ <p>long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS);</p> 
+ <p>return (diff &lt; 0) ? -1 : (diff &gt; 0) ? 1 : 0;</p> 
+ <p>}</p> 
+ <p>上面是生产元素，下面来看一下消费数据。在上面我们提到的take方法中，使用了一个方法如下：</p> 
+ <p>private RunnableScheduledFuture&gt; finishPoll(RunnableScheduledFuture&gt; f) {<!-- --></p> 
+ <p>int s = --size;</p> 
+ <p>RunnableScheduledFuture&gt; x = queue[s];</p> 
+ <p>queue[s] = null;</p> 
+ <p>if (s != 0)</p> 
+ <p>siftDown(0, x);</p> 
+ <p>setIndex(f, -1);</p> 
+ <p>return f;</p> 
+ <p>}</p> 
+ <p>这个方法中调用了一个方法siftDown，这个方法如下：</p> 
+ <p>private void siftDown(int k, RunnableScheduledFuture&gt; key) {<!-- --></p> 
+ <p>int half = size &gt;&gt;&gt; 1;</p> 
+ <p>while (k &lt; half) {<!-- --></p> 
+ <p>int child = (k &lt;&lt; 1) + 1;</p> 
+ <p>RunnableScheduledFuture&gt; c = queue[child];</p> 
+ <p>int right = child + 1;</p> 
+ <p>if (right &lt; size &amp;&amp; c.compareTo(queue[right]) &gt; 0)</p> 
+ <p>c = queue[child = right];</p> 
+ <p>if (key.compareTo(c) &lt;= 0)</p> 
+ <p>break;</p> 
+ <p>queue[k] = c;</p> 
+ <p>setIndex(c, k);</p> 
+ <p>k = child;</p> 
+ <p>}</p> 
+ <p>queue[k] = key;</p> 
+ <p>setIndex(key, k);</p> 
+ <p>}</p> 
+ <p>对其的解释就是：</p> 
+ <p>Replaces first element with last and sifts it down. Call only when holding lock.</p> 
+ <p>总结一下，当我们向queue插入任务的时候，会发生siftUp方法的执行，这个时候会把任务尽量往根部移动，而当我们完成任务调度之后，会发生siftDown方法的执行，与siftUp相反，siftDown方法会将任务尽量移动到queue的末尾。总之，大概的意思就是queue通过compareTo实现了类似于优先级队列的功能。</p> 
+ <p>下面我们来看一下第二个问题：延迟时间的来龙去脉。在上面的take方法里面，首先获取了delay，然后再使用available来做延迟效果，那这个delay从哪里来的呢？通过上面的类图RunnableScheduledFuture的类图我们知道，RunnableScheduledFuture类实现了Delayed接口，而Delayed接口里面的唯一方法是getDelay，我们到RunnableScheduledFuture里面看一下这个方法的具体实现：</p> 
+ <p>public long getDelay(TimeUnit unit) {<!-- --></p> 
+ <p>return unit.convert(time - now(), NANOSECONDS);</p> 
+ <p>}</p> 
+ <p>time是我们设定的下次执行的时间，所以延迟就是(time - now())，没毛病！</p> 
+ <p>第三个问题：available变量的来龙去脉，至于这个问题，我们看下面的代码：</p> 
+ <p>/**</p> 
+ <p>* Condition signalled when a newer task becomes available at the</p> 
+ <p>* head of the queue or a new thread may need to become leader.</p> 
+ <p>*/</p> 
+ <p>private final Condition available = lock.newCondition();</p> 
+ <p>这是一个条件变量，take方法里面使用这个变量来做延迟效果。Condition可以在多个线程间做同步协调工作，更为具体细致的关于Condition的内容，可以参考更多的资料来学习，本文对此知识点点到为止。</p> 
+ <p>到此为止，我们梳理了ScheduledThreadPoolExecutor是如何实现周期性调度的，首先分析了它的循环性，然后分析了它的延迟效果。</p> 
+ <p>本文到此也就结束了，对于线程池的学习现在才刚刚起步，需要更多更专业的知识类帮我理解更为底层的内容，当然，为了更进一步理解线程池的实现细节，首先需要对线程间通信有足够的把握，其次是要对各种数据结构有清晰的认识，比如队列、优先级队列、堆等高级的数据结构，以及java语言对于这些数据结构的实现，更为重要的是要结合实际情况分析问题，在工作和平时的学习中不断总结，不断迭代对于线程、线程池的认知。</p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/171f3a2a548a5446576c817d124fc51c/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">java数组删除元素_java中删除 数组中的指定元素方法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/6214db990e7ec9fc2568769405381e90/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">深入理解java线程池_深入理解Java之线程池</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

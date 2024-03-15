@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>C#通过TCP实现 HL7医疗系统传输的协议，并使用MLLP协议接收HL7消息并解析 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="C#通过TCP实现 HL7医疗系统传输的协议，并使用MLLP协议接收HL7消息并解析" />
+<meta property="og:description" content="本文讲解的是利用C# 对接医院HIS系统，接收HL7协议数据，并解析数据
+之前和医院系统对接一直是使用数据库中间表，或者webservices等接口方式，上次遇到别人HIS提供了一份HL7的接口文档；果断开始查各种资料，网上的资料不是很全面，查了很多加上自己的感悟终于有所了解了，下面分享我的经验。关于HL7的详解打击自行查阅网上资料。
+1. HL7 医疗系统传输的协议一般是使用TCP方式实时通讯的，既然是TCP通讯肯定一方作为发送端，一方作为接收端了；跟HIS系统对接我们需要取到HIS里面挂号（登记）的个人信息，HIS那边有人挂号之后马上把个人信息发送给我们，那我们那边就是作为接收端了，代码如下：
+using System; using System.Collections.Generic; using System.ComponentModel; using System.Data; using System.Drawing; using System.Linq; using System.Text; using System.Windows.Forms; using System.Net.Sockets; using System.Net; using System.Threading; namespace socketServer { public partial class ServerForm : Form { public ServerForm() { InitializeComponent(); } //创建一个和客户端通信的套接字 Socket SocketWatch = null; //定义一个集合，存储客户端信息 Dictionary&lt;string, Socket&gt; ClientConnectionItems = new Dictionary&lt;string, Socket&gt; { }; private void btnStartSer_Click(object sender, EventArgs e) { //端口号（用来监听的） int port = Convert." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/1dbf8ac46bcc1962e323c4af7ac520d1/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-05-20T16:57:02+08:00" />
+<meta property="article:modified_time" content="2020-05-20T16:57:02+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">C#通过TCP实现 HL7医疗系统传输的协议，并使用MLLP协议接收HL7消息并解析</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>本文讲解的是利用C# 对接医院HIS系统，接收HL7协议数据，并解析数据</strong></p> 
+<p style="text-indent:33px;">之前和医院系统对接一直是使用数据库中间表，或者webservices等接口方式，上次遇到别人HIS提供了一份HL7的接口文档；果断开始查各种资料，网上的资料不是很全面，查了很多加上自己的感悟终于有所了解了，下面分享我的经验。关于HL7的详解打击自行查阅网上资料。</p> 
+<p style="text-indent:33px;">1. HL7 医疗系统传输的协议一般是使用TCP方式实时通讯的，既然是TCP通讯肯定一方作为发送端，一方作为接收端了；跟HIS系统对接我们需要取到HIS里面挂号（登记）的个人信息，HIS那边有人挂号之后马上把个人信息发送给我们，那我们那边就是作为接收端了，代码如下：</p> 
+<pre><code class="language-cs">using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
+using System.Net.Sockets;
+using System.Net;
+using System.Threading;
+
+namespace socketServer
+{
+    public partial class ServerForm : Form
+    {
+        public ServerForm()
+        {
+            InitializeComponent();
+        }
+        //创建一个和客户端通信的套接字
+        Socket SocketWatch = null;
+        //定义一个集合，存储客户端信息
+         Dictionary&lt;string, Socket&gt; ClientConnectionItems = new Dictionary&lt;string, Socket&gt; { };
+        private void btnStartSer_Click(object sender, EventArgs e)
+        {
+            //端口号（用来监听的）
+            int port = Convert.ToInt32(txtPort.Text);
+
+            //string host = "127.0.0.1";
+            //IPAddress ip = IPAddress.Parse(host);
+            IPAddress ip = IPAddress.Any;
+
+            //将IP地址和端口号绑定到网络节点point上 
+            IPEndPoint ipe = new IPEndPoint(ip, port);
+
+            //定义一个套接字用于监听客户端发来的消息，包含三个参数（IP4寻址协议，流式连接，Tcp协议） 
+            SocketWatch = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            //监听绑定的网络节点 
+            SocketWatch.Bind(ipe);
+            //将套接字的监听队列长度限制为20 
+            SocketWatch.Listen(20);
+
+
+            //负责监听客户端的线程:创建一个监听线程 
+            Thread threadwatch = new Thread(WatchConnecting);
+            //将窗体线程设置为与后台同步，随着主线程结束而结束 
+            threadwatch.IsBackground = true;
+            //启动线程   
+            threadwatch.Start();
+            statuBar.Text = "服务已启动";
+
+           // SocketWatch.Close();
+
+            //Socket serverSocket = null;
+
+            //int i=1;
+            //while (true)
+            //{
+            //  //receive message
+            //  serverSocket = SocketWatch.Accept();
+            //  SettextData("连接已经建立！");
+            //  string recStr = "";
+            //  byte[] recByte = new byte[4096];
+            //  int bytes = serverSocket.Receive(recByte, recByte.Length, 0);
+            //  //recStr += Encoding.ASCII.GetString(recByte, 0, bytes);
+            //  recStr += Encoding.GetEncoding("utf-8").GetString(recByte, 0, bytes);
+
+            //  //send message
+            //  SettextData(recStr);
+
+            //  Console.Write("请输入内容：");
+            //  string sendStr = Console.ReadLine();
+
+            //  //byte[] sendByte = Encoding.ASCII.GetBytes(sendStr);
+            //  byte[] sendByte = Encoding.GetEncoding("utf-8").GetBytes(sendStr);
+
+            //  //Thread.Sleep(4000);
+
+            //  serverSocket.Send(sendByte, sendByte.Length, 0);
+            //  serverSocket.Close();
+            //  if (i &gt;= 100)
+            //  {
+            //    break;
+            //  }
+            //  i++;
+            //}
+
+            //sSocket.Close();
+            //SettextData("连接关闭！");
+
+        }
+        //监听客户端发来的请求 
+        private void WatchConnecting()
+        {
+            Socket connection = null;
+
+            //持续不断监听客户端发来的请求   
+            while (true)
+            {
+                try
+                {
+                    connection = SocketWatch.Accept();
+                }
+                catch (Exception ex)
+                {
+                    //提示套接字监听异常   
+                    SettextData(ex.Message);
+                    break;
+                }
+
+                //客户端网络结点号 
+                string remoteEndPoint = connection.RemoteEndPoint.ToString();
+                //添加客户端信息 
+                ClientConnectionItems.Add(remoteEndPoint, connection);
+                //显示与客户端连接情况
+                SettextData("\r\n[客户端\"" + remoteEndPoint + "\"建立连接成功！ 客户端数量：" + ClientConnectionItems.Count + "]");
+                SetListData("\r\n[客户端\"" + remoteEndPoint + "\"数量：" + ClientConnectionItems.Count + "]");
+                //获取客户端的IP和端口号 
+                IPAddress clientIP = (connection.RemoteEndPoint as IPEndPoint).Address;
+                int clientPort = (connection.RemoteEndPoint as IPEndPoint).Port;
+
+                //让客户显示"连接成功的"的信息 
+                string sendmsg = "[" + "本地IP：" + clientIP + " 本地端口：" + clientPort.ToString() + " 连接服务端成功！]";
+                byte[] arrSendMsg = Encoding.UTF8.GetBytes(sendmsg);
+                connection.Send(arrSendMsg);
+
+                //创建一个通信线程   
+                Thread thread = new Thread(recvData);
+                //设置为后台线程，随着主线程退出而退出 
+                thread.IsBackground = true;
+                //启动线程   
+                thread.Start(connection);
+            }
+        }
+        /// &lt;summary&gt;
+  /// 接收客户端发来的信息，客户端套接字对象
+  /// &lt;/summary&gt;
+  /// &lt;param name="socketclientpara"&gt;&lt;/param&gt;  
+        private void recvData(object socketclientpara)
+        {
+            Socket socketServer = socketclientpara as Socket;
+
+            while (true)
+            {
+                //创建一个内存缓冲区，其大小为1024*1024字节 即1M   
+                byte[] arrServerRecMsg = new byte[1024 * 1024];
+                //将接收到的信息存入到内存缓冲区，并返回其字节数组的长度  
+                try
+                {
+                    int length = socketServer.Receive(arrServerRecMsg);
+
+                    //将机器接受到的字节数组转换为人可以读懂的字符串   
+                    string strSRecMsg = Encoding.UTF8.GetString(arrServerRecMsg, 0, length);
+
+                    //将发送的字符串信息附加到文本框txtMsg上   
+                    SettextData("\r\n[客户端：" + socketServer.RemoteEndPoint + " 时间：" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:fff") + "]\r\n" + strSRecMsg);
+
+                    //Thread.Sleep(3000);
+                    //socketServer.Send(Encoding.UTF8.GetBytes("[" + socketServer.RemoteEndPoint + "]："+strSRecMsg));
+                    发送客户端数据
+                    //if (ClientConnectionItems.Count &gt; 0)
+                    //{
+                    //    foreach (var socketTemp in ClientConnectionItems)
+                    //    {
+                    //        socketTemp.Value.Send(Encoding.UTF8.GetBytes("[" + socketServer.RemoteEndPoint + "]：" + strSRecMsg));
+                    //    }
+                    //}
+                }
+                catch (Exception)
+                {
+                    ClientConnectionItems.Remove(socketServer.RemoteEndPoint.ToString());
+                    //提示套接字监听异常 
+                    SettextData("\r\n[客户端\"" + socketServer.RemoteEndPoint + "\"已经中断连接！ 客户端数量：" + ClientConnectionItems.Count + "]");
+                    //关闭之前accept出来的和客户端进行通信的套接字 
+                    socketServer.Close();
+                    break;
+                }
+            }
+        }
+
+        private void SettextData(string strmsgdata)
+        {
+            if (this.InvokeRequired == true)
+            {
+                this.Invoke(
+                            new MethodInvoker(delegate
+                            {
+                                txtreceive.Text += strmsgdata;
+                            })
+                            );
+
+            }
+            else
+            {
+                txtreceive.Text += strmsgdata;
+            }
+        }
+        private void SetListData(string strmsgdata)
+        {
+            if (this.InvokeRequired == true)
+            {
+                this.Invoke(
+                            new MethodInvoker(delegate
+                            {
+                                userList.Items.Add(strmsgdata);
+                            })
+                            );
+
+            }
+            else
+            {
+                userList.Items.Add(strmsgdata);
+            }
+        }
+        private void send_Click(object sender, EventArgs e)
+        {
+            //发送客户端数据
+            if (ClientConnectionItems.Count &gt; 0)
+            {
+                foreach (var socketTemp in ClientConnectionItems)
+                {
+                    socketTemp.Value.Send(Encoding.UTF8.GetBytes(txtsendmsg.Text));
+                }
+            }
+        }
+
+
+    }
+}
+</code></pre> 
+<p> 测试界面如下，服务启动监听把你本机的Ip地址和端口告诉HIS那边，等待HIS给你发送数据</p> 
+<p><img alt="" height="560" src="https://images2.imgbox.com/db/78/EV9JbOnr_o.png" width="673"></p> 
+<p> 2.、这边我们用一个模拟发送数据的工具 <strong>HL7Spy </strong>来测试</p> 
+<p>工具打开界面如图所示</p> 
+<p><img alt="" height="824" src="https://images2.imgbox.com/e4/d3/5mO9cheO_o.png" width="1200"></p> 
+<p> 打开工具后，选择菜单<strong>File-New</strong>就会出现一个新窗口，接着选择菜单<strong>Tools-Seed Messages(MLLP)</strong></p> 
+<p>会出现如图右边一样的一个配置窗口，在窗口中配置请求地址的信息，如下图</p> 
+<p><img alt="" height="417" src="https://images2.imgbox.com/5c/c7/fG1YHKoH_o.png" width="460"></p> 
+<p>点击 添加（+）按钮新建连接，配置ip，端口，选择UTF-8编码，否则中文可能出现乱码的情况，其他默认，点OK</p> 
+<p><img alt="" height="474" src="https://images2.imgbox.com/3c/c8/fudHRqMe_o.png" width="674"></p> 
+<p> 然后按照下图配置</p> 
+<p>唯一一个需要特别注意的是 Frame Start 和 Frame End 这两个属性 ，他们分别表示MLLP格式的一头两尾</p> 
+<p>“\x” 代表转义符，0b、1c、0d分别代表16进制编码  ，可查看：http://ascii.911cha.com/</p> 
+<p>配置完成之后回到了首页，如下图，勾选上Show的3个复选框，点击Single就可以发送了</p> 
+<p><img alt="" height="442" src="https://images2.imgbox.com/f0/2d/G2L9MCtO_o.png" width="453"></p> 
+<p>测试结果如图所示，服务端正常接收到数据</p> 
+<p><img alt="" height="793" src="https://images2.imgbox.com/4c/34/j1t3Opis_o.png" width="936"></p> 
+<p>3、数据接收到之后如何解析呢？可以通过字符串处理来解析这里就不举例了，我这边提供一种标准的解析方法，请看下图，这样就很清晰明了</p> 
+<p><img alt="" height="768" src="https://images2.imgbox.com/a4/23/rRtNCMhC_o.png" width="1011"></p> 
+<p>代码如下：</p> 
+<pre><code class="language-cs">using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
+using HLSevenLib.Base;
+
+namespace HL7Test
+{
+    public partial class analydataform : Form
+    {
+        public analydataform()
+        {
+            InitializeComponent();
+        }
+
+        private void analydataform_Load(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnanlytoTab_Click(object sender, EventArgs e)
+        {
+             HLSevenLib.Base.Message msg = null;
+            msg=new HLSevenLib.Base.Message(txtvalue.Text);
+            if (msg != null)
+            {
+                ShowGrid(dtgRev, msg.Segments, 2);
+            }
+
+        }
+           private void ShowGrid(DataGridView dtg, List&lt;Segment&gt; segments, int mode)
+        {
+            dtg.Rows.Clear();
+            int count = 0;
+            for (int i = 0; i &lt; segments.Count; i++)
+            {
+                Segment seg = segments[i];
+                if (seg.Name == "PID")
+                {
+                   //
+                }
+
+                count = dtg.RowCount;
+                dtg.Rows.Add(1);
+                dtg[0, count].Value = seg.Name;
+                dtg[1, count].Value = seg.Usage.ToString();
+                dtg.Rows[count].ReadOnly = true;
+                if (seg.Usage == Usage.NotUsed)
+                {
+                    dtg.Rows[count].DefaultCellStyle.BackColor = Color.Red;
+                }
+                else if (seg.Usage == Usage.Optional)
+                {
+                    dtg.Rows[count].DefaultCellStyle.BackColor = Color.Pink;
+                }
+                else
+                {
+                    dtg.Rows[count].DefaultCellStyle.BackColor = Color.SkyBlue;
+                }
+
+                for (int j = 1; j &lt; seg.Fields.Count; j++)
+                {
+                    List&lt;HLSevenLib.Base.Component&gt; com = seg.Fields[j].Components;
+                    string pre = "";
+                    if (com.Count &gt; 1)
+                    {
+                        count = dtg.RowCount;
+                        dtg.Rows.Add(1);
+
+                        if (seg.Fields[j].LocalName != "")
+                        {
+                            dtg[0, count].Value = "+" + seg.Fields[j].LocalName;
+                        }
+                        else
+                        {
+                            dtg[0, count].Value = "+" + seg.Fields[j].EnglishName;
+                        }
+
+                        dtg[1, count].Value = " ------";
+
+
+                        dtg[0, count].Style.BackColor = Color.Yellow;
+                        dtg.Rows[count].ReadOnly = true;
+
+                        pre = " - ";
+                    }
+
+                    bool haveValue = false;
+                    for (int k = 0; k &lt; com.Count; k++)
+                    {
+                        if (com[k].Value == "" &amp;&amp; mode == 2)
+                        {
+
+                            continue;
+                        }
+
+                        haveValue = true;
+                        count = dtg.RowCount;
+                        dtg.Rows.Add(1);
+                        string fieldName = "";
+                        if (com[k].LocalName != "")
+                        {
+                            fieldName = com[k].LocalName;
+                        }
+                        else
+                        {
+                            fieldName = com[k].EnglishName;
+                        }
+
+
+                        if (fieldName == "")
+                        {
+                            if (seg.Fields[j].LocalName != "")
+                            {
+                                fieldName = seg.Fields[j].LocalName;
+                            }
+                            else
+                            {
+                                fieldName = seg.Fields[j].EnglishName;
+                            }
+
+                        }
+
+                        dtg[0, count].Value = pre + fieldName;
+                        dtg[1, count].Value = com[k].Value;
+                        dtg.Rows[count].Tag = com[k];
+                    }
+
+                    if (haveValue == false &amp;&amp; mode == 2)
+                    {
+                        dtg.Rows[count].Visible = false;
+                    }
+                }
+
+            }
+
+        }
+
+         //循环具体某一项目
+           private void btnsingle_Click(object sender, EventArgs e)
+           {
+               string stridnumber = "";
+               string strpname = "";
+               string strSex = "";
+               string strIDcard = "";
+               string strAddress = "";
+
+               HLSevenLib.Base.Message msg = null;
+               msg = new HLSevenLib.Base.Message(txtvalue.Text);
+               if (msg != null)
+               {
+                   List&lt;Segment&gt; segments = msg.Segments;
+                   for (int i = 0; i &lt; segments.Count; i++)
+                   {
+                       Segment seg = segments[i];
+                       if (seg.Name == "MSH")
+                       {
+                           //其他依次类推
+                       }
+                       else if (seg.Name == "PID")
+                       {
+                           for (int j = 1; j &lt; seg.Fields.Count; j++) //  竖线分割的项目 |
+                           {
+                               List&lt;HLSevenLib.Base.Component&gt; item = seg.Fields[j].Components; //子项目 此符号分割的 ^
+                               for (int k= 0; k &lt; item.Count; k++)
+                               {
+                                   //用EnglishName部分名称会相同，建议用ID,相关名称可以自己在类文件夹Segments中查看
+                                   if (item[k].EnglishName=="ID Number" || item[k].ID=="PID-3.1")
+                                   {
+                                       if (stridnumber=="" || stridnumber==null)
+                                       {
+                                           stridnumber = item[k].Value;
+                                       }
+                                      
+                                   }
+                                   else if (item[k].ID == "PID-5.1")
+                                   {
+                                       strpname = item[k].Value;
+                                   }
+                                   else if (item[k].ID == "PID-8.1")
+                                   {
+                                       strSex = item[k].Value;
+                                   }
+                                   else if (item[k].ID == "PID-19.1")
+                                   {
+                                       strIDcard = item[k].Value;
+                                   }
+                                   else if (item[k].ID == "PID-11.1")
+                                   {
+                                       strAddress = item[k].Value;
+                                   }
+                                   //if (item[k].Value == "")
+                                   // {
+                                   //     continue;
+                                   // }
+
+                               }
+                           }
+                           MessageBox.Show("编号：" + stridnumber + "\r\n姓名：" + strpname + "\r\n性别：" + strSex + "\r\n身份证号：" + strIDcard + "\r\n地址：" + strAddress);
+                
+                       }
+                   }
+               }
+           }
+
+          
+    }
+}
+</code></pre> 
+<p> 至此整个HL7医疗系统传输的协议跟HIS系统接口对接完成，其他细节问题各位自行处理，网上有很多解析类用不了，要不就一堆DLL文件没说明，我这个纯代码，有示列demo的哦</p> 
+<p>HL7格式示列内容：</p> 
+<p>MSH|^~\&amp;|HIS|01|RIS|01|20200303094408+0800|•|ORM^O01|u8200303014408141705|P|2.4|•|•|NE|AL|•|utf-8<br> PID|1|90543276|90543276~90543276|•|方南廷^FANG NAN TING^•|•|19690125000000+0800|男|•|•^其他|浙江省仙居县横溪镇西对村路西3-7号^•^•^•^•|•|13858602337^•^•^•^•^•^•^•^•|•^•^•^•^•^•^•^•^•|•|•|•|•|332624196901251675|•|•|•^汉族|•|•|•|•|•^167|•^79<br> PV1|1|I|心血管内科^6-8病区^19007039^A01020040000^A01050560000^•^60812^27|治疗|•|•|00004698^周颖|•^•|•|•|•|1|•|治疗|•|•|•^•|自费病员|20200300716|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|•|20200303090500+0800|•<br> ORC|NW|2020030300027697^HIS|•^CT^A01030010000|185|•|1|•^•^•^•^•^0|•|20200303094300+0800|•|•|00001425^庞洁|心血管内科|680531|•|•^否|A01020040000^心血管内科^01<br> OBR|1|2020030300027697|•^•|6454^胸部平扫^CT^•^CT|•|•|•|•|•|•|•|•|0|•|•|•|•|•|•|01|A01030010000<br> DG1|1|•|•|住院检查：[跌倒标识]否 [隔离标识]否[病史] <br> DG1|2|•|•|冠状动脉搭桥术后状态<br> DG1|3|•|•|•<br> DG1|4|•|•|•<br>  </p> 
+<p>特别说明HLSevenLib  为HL7解析类，整个程序源代码在下面可以下载到</p> 
+<p> <img alt="" height="248" src="https://images2.imgbox.com/2b/ac/cJA8z6SM_o.png" width="562"></p> 
+<p>下载地址：<a href="https://download.csdn.net/download/bdb1018/12440626">https://download.csdn.net/download/bdb1018/12440626</a></p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/5f5f1a8cd98b7684666f3d9b6fe77529/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">SpringBoot文件上传到数据库</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/4fb512d7f66495b26b23db2ca7fd2a76/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">中国工业企业数据库stata处理</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

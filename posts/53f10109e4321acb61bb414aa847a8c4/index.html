@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>SpringBoot整合RabbitMQ与RabbitMQ高级特性 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="SpringBoot整合RabbitMQ与RabbitMQ高级特性" />
+<meta property="og:description" content="SpringBoot整合RabbitMQ与RabbitMQ高级特性 Spring整合RabbitMQ生产者消费者测试简单模式测试fanout广播模式小结 SpringBoot整合RabbitMQ生产端消费端案例测试小结 消息的可靠性投递生产端案例演示生产方确认Confirm小结Consumer AckConsumer Ack案例演示Consumer Ack 小结消息可靠性总结 消费端限流消费端限流案例消费端限流小结 Spring整合RabbitMQ 生产者 创建生产者工程
+添加依赖
+&lt;dependency&gt; &lt;groupId&gt;org.springframework&lt;/groupId&gt; &lt;artifactId&gt;spring-context&lt;/artifactId&gt; &lt;version&gt;5.1.7.RELEASE&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.amqp&lt;/groupId&gt; &lt;artifactId&gt;spring-rabbit&lt;/artifactId&gt; &lt;version&gt;2.1.8.RELEASE&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;junit&lt;/groupId&gt; &lt;artifactId&gt;junit&lt;/artifactId&gt; &lt;version&gt;4.12&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework&lt;/groupId&gt; &lt;artifactId&gt;spring-test&lt;/artifactId&gt; &lt;version&gt;5.1.7.RELEASE&lt;/version&gt; &lt;/dependency&gt; 配置整合
+rabbitmq.properties rabbitmq.host=192.168.1.104 rabbitmq.port=5672 rabbitmq.username=yemuxia rabbitmq.password=123456 rabbitmq.virtual-host=/yemuxia_vir spring-rabbitmq-producer.xml
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt; &lt;beans xmlns=&#34;http://www.springframework.org/schema/beans&#34; xmlns:xsi=&#34;http://www.w3.org/2001/XMLSchema-instance&#34; xmlns:context=&#34;http://www.springframework.org/schema/context&#34; xmlns:rabbit=&#34;http://www.springframework.org/schema/rabbit&#34; xsi:schemaLocation=&#34;http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/rabbit http://www.springframework.org/schema/rabbit/spring-rabbit.xsd&#34;&gt; &lt;!--加载配置文件--&gt; &lt;context:property-placeholder location=&#34;classpath:rabbitmq.properties&#34;/&gt; &lt;!-- 定义rabbitmq connectionFactory --&gt; &lt;rabbit:connection-factory id=&#34;connectionFactory&#34; host=&#34;${rabbitmq.host}&#34; port=&#34;${rabbitmq.port}&#34; username=&#34;${rabbitmq.username}&#34; password=&#34;${rabbitmq.password}&#34; virtual-host=&#34;${rabbitmq.virtual-host}&#34;/&gt; &lt;!" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/53f10109e4321acb61bb414aa847a8c4/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-11-15T13:23:42+08:00" />
+<meta property="article:modified_time" content="2021-11-15T13:23:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">SpringBoot整合RabbitMQ与RabbitMQ高级特性</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>SpringBoot整合RabbitMQ与RabbitMQ高级特性</h4> 
+ <ul><li><a href="#SpringRabbitMQ_2" rel="nofollow">Spring整合RabbitMQ</a></li><li><ul><li><a href="#_3" rel="nofollow">生产者</a></li><li><a href="#_196" rel="nofollow">消费者</a></li><li><a href="#_300" rel="nofollow">测试简单模式</a></li><li><a href="#fanout_304" rel="nofollow">测试fanout广播模式</a></li><li><a href="#_348" rel="nofollow">小结</a></li></ul> 
+  </li><li><a href="#SpringBootRabbitMQ_352" rel="nofollow">SpringBoot整合RabbitMQ</a></li><li><ul><li><a href="#_353" rel="nofollow">生产端</a></li><li><a href="#_467" rel="nofollow">消费端</a></li><li><a href="#_495" rel="nofollow">案例测试</a></li><li><a href="#_498" rel="nofollow">小结</a></li></ul> 
+  </li><li><a href="#_503" rel="nofollow">消息的可靠性投递</a></li><li><ul><li><a href="#_504" rel="nofollow">生产端</a></li><li><a href="#_515" rel="nofollow">案例演示</a></li><li><a href="#Confirm_741" rel="nofollow">生产方确认Confirm小结</a></li><li><a href="#Consumer_Ack_746" rel="nofollow">Consumer Ack</a></li><li><a href="#Consumer_Ack_754" rel="nofollow">Consumer Ack案例演示</a></li><li><a href="#Consumer_Ack__840" rel="nofollow">Consumer Ack 小结</a></li><li><a href="#_844" rel="nofollow">消息可靠性总结</a></li></ul> 
+  </li><li><a href="#_852" rel="nofollow">消费端限流</a></li><li><ul><li><a href="#_854" rel="nofollow">消费端限流案例</a></li><li><a href="#_916" rel="nofollow">消费端限流小结</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="SpringRabbitMQ_2"></a>Spring整合RabbitMQ</h2> 
+<h3><a id="_3"></a>生产者</h3> 
+<ul><li> <p>创建生产者工程<br> <img src="https://images2.imgbox.com/44/30/VkffWDBi_o.png" alt="在这里插入图片描述"></p> </li><li> <p>添加依赖</p> </li></ul> 
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-context<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>5.1.7.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.amqp<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-rabbit<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>2.1.8.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>junit<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>junit<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>4.12<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-test<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>5.1.7.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<ul><li>配置整合<br> rabbitmq.properties</li></ul> 
+<pre><code class="prism language-prop">rabbitmq.host=192.168.1.104
+rabbitmq.port=5672
+rabbitmq.username=yemuxia
+rabbitmq.password=123456
+rabbitmq.virtual-host=/yemuxia_vir
+</code></pre> 
+<p>spring-rabbitmq-producer.xml</p> 
+<pre><code class="prism language-xml"><span class="token prolog">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>beans</span> <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>xsi</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.w3.org/2001/XMLSchema-instance<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>context</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/context<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>rabbit</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/rabbit<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xsi:</span>schemaLocation</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context
+       https://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/rabbit
+       http://www.springframework.org/schema/rabbit/spring-rabbit.xsd<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!--加载配置文件--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>property-placeholder</span> <span class="token attr-name">location</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>classpath:rabbitmq.properties<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!-- 定义rabbitmq connectionFactory --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>connection-factory</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.host}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">port</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.port}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">username</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.username}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">password</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.password}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">virtual-host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.virtual-host}<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+    <span class="token comment">&lt;!--定义管理交换机、队列--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>admin</span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!--定义持久化队列，不存在则自动创建；不绑定到交换机则绑定到默认交换机
+    默认交换机类型为direct，名字为：""，路由键为队列的名称
+    --&gt;</span>
+    <span class="token comment">&lt;!--
+        id：bean的名称
+        name：queue的名称
+        auto-declare:自动创建
+        auto-delete:自动删除。 最后一个消费者和该队列断开连接后，自动删除队列
+        durable：是否持久化
+    --&gt;</span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_queue<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_queue<span class="token punctuation">"</span></span>    <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~广播；所有队列都能收到消息~~~~~~~~~~~~~~~~~~~~~~~~~~~~ --&gt;</span>
+    <span class="token comment">&lt;!--定义广播交换机中的持久化队列，不存在则自动创建--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_1<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_1<span class="token punctuation">"</span></span> <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!--定义广播交换机中的持久化队列，不存在则自动创建--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_2<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_2<span class="token punctuation">"</span></span> <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!--定义广播类型交换机；并绑定上述两个队列--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>fanout-exchange</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_exchange<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_exchange<span class="token punctuation">"</span></span>  <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>binding</span>  <span class="token attr-name">queue</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_1<span class="token punctuation">"</span></span>  <span class="token punctuation">/&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>binding</span> <span class="token attr-name">queue</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_2<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>fanout-exchange</span><span class="token punctuation">&gt;</span></span>
+
+
+    <span class="token comment">&lt;!-- 定义队列--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_direct_queue<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_direct_queue<span class="token punctuation">"</span></span>  <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!--
+      定义 Routing  路由模式 交互机
+    --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>direct-exchange</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_direct_exchange<span class="token punctuation">"</span></span> <span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+            <span class="token comment">&lt;!--direct 类型的交换机绑定队列  key ：路由key  queue：队列名称--&gt;</span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>binding</span> <span class="token attr-name">queue</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_direct_queue<span class="token punctuation">"</span></span> <span class="token attr-name">key</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>info<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>binding</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>direct-exchange</span><span class="token punctuation">&gt;</span></span>
+
+    <span class="token comment">&lt;!-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~通配符；*匹配一个单词，#匹配多个单词 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ --&gt;</span>
+    <span class="token comment">&lt;!--定义广播交换机中的持久化队列，不存在则自动创建--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_star<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_star<span class="token punctuation">"</span></span>  <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+    <span class="token comment">&lt;!--定义广播交换机中的持久化队列，不存在则自动创建--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_well<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_well<span class="token punctuation">"</span></span> <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+    <span class="token comment">&lt;!--定义广播交换机中的持久化队列，不存在则自动创建--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_well2<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_well2<span class="token punctuation">"</span></span> <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!--
+      声明  topic 类型的交换机
+    --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>topic-exchange</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_exchange<span class="token punctuation">"</span></span>  <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_exchange<span class="token punctuation">"</span></span> <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>binding</span> <span class="token attr-name">pattern</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>baiqi.*<span class="token punctuation">"</span></span>  <span class="token attr-name">queue</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_star<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>binding</span> <span class="token attr-name">pattern</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>baiqi.#<span class="token punctuation">"</span></span> <span class="token attr-name">queue</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_well<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>binding</span> <span class="token attr-name">pattern</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>itcast.#<span class="token punctuation">"</span></span> <span class="token attr-name">queue</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_topic_queue_well2<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>topic-exchange</span><span class="token punctuation">&gt;</span></span>
+
+    <span class="token comment">&lt;!--定义rabbitTemplate对象操作可以在代码中方便发送消息--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>template</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>rabbitTemplate<span class="token punctuation">"</span></span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>beans</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<ul><li>编写代码发送消息<br> 添加单元测试类ProducerTest</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>junit<span class="token punctuation">.</span></span><span class="token class-name">Test</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>junit<span class="token punctuation">.</span>runner<span class="token punctuation">.</span></span><span class="token class-name">RunWith</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">RabbitTemplate</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Autowired</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>test<span class="token punctuation">.</span>context<span class="token punctuation">.</span></span><span class="token class-name">ContextConfiguration</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>test<span class="token punctuation">.</span>context<span class="token punctuation">.</span>junit4<span class="token punctuation">.</span></span><span class="token class-name">SpringJUnit4ClassRunner</span><span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@RunWith</span><span class="token punctuation">(</span><span class="token class-name">SpringJUnit4ClassRunner</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@ContextConfiguration</span><span class="token punctuation">(</span>locations <span class="token operator">=</span> <span class="token string">"classpath:spring-rabbitmq-producer.xml"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ProducerTest</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">//1.注入 RabbitTemplate</span>
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">private</span> <span class="token class-name">RabbitTemplate</span> rabbitTemplate<span class="token punctuation">;</span>
+
+
+    <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">testHelloWorld</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//2.发送消息</span>
+
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"spring_queue"</span><span class="token punctuation">,</span><span class="token string">"hello world spring...."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+
+    <span class="token comment">/**
+     * 发送fanout消息
+     */</span>
+    <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">testFanout</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//2.发送消息</span>
+
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"spring_fanout_exchange"</span><span class="token punctuation">,</span><span class="token string">""</span><span class="token punctuation">,</span><span class="token string">"spring fanout...."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+
+    <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">testDirect</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//2.发送消息</span>
+
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"spring_direct_exchange"</span><span class="token punctuation">,</span><span class="token string">"info"</span><span class="token punctuation">,</span><span class="token string">"spring Direct...."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">/**
+     * 发送topic消息
+     */</span>
+    <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">testTopics</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//2.发送消息</span>
+
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"spring_topic_exchange"</span><span class="token punctuation">,</span><span class="token string">"baiqi.hehe.haha"</span><span class="token punctuation">,</span><span class="token string">"spring topic...."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<h3><a id="_196"></a>消费者</h3> 
+<ul><li> <p>创建消费者01工程<br> <img src="https://images2.imgbox.com/21/39/MZJDuJSC_o.png" alt="在这里插入图片描述"></p> </li><li> <p>添加依赖（和生产者项目依赖保持一致）</p> </li><li> <p>配置整合</p> </li></ul> 
+<pre><code class="prism language-prop">rabbitmq.host=192.168.1.104
+rabbitmq.port=5672
+rabbitmq.username=yemuxia
+rabbitmq.password=123456
+rabbitmq.virtual-host=/yemuxia_vir
+</code></pre> 
+<p>spring-rabbitmq-consumer.xml</p> 
+<pre><code class="prism language-xml"><span class="token prolog">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>beans</span> <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>xsi</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.w3.org/2001/XMLSchema-instance<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>context</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/context<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>rabbit</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/rabbit<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xsi:</span>schemaLocation</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context
+       https://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/rabbit
+       http://www.springframework.org/schema/rabbit/spring-rabbit.xsd<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!--加载配置文件--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>property-placeholder</span> <span class="token attr-name">location</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>classpath:rabbitmq.properties<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!-- 定义rabbitmq connectionFactory --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>connection-factory</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.host}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">port</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.port}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">username</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.username}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">password</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.password}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">virtual-host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.virtual-host}<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>springQueueListener<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.baiqi.rabbitmq.listener.SpringQueueListener<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>fanoutListener1<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.baiqi.rabbitmq.listener.FanoutListener<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+<span class="token comment">&lt;!--    &lt;bean id="topicListenerStar" class="com.baiqi.rabbitmq.listener.TopicListenerStar"/&gt;
+    &lt;bean id="topicListenerWell" class="com.baiqi.rabbitmq.listener.TopicListenerWell"/&gt;
+    &lt;bean id="topicListenerWell2" class="com.baiqi.rabbitmq.listener.TopicListenerWell2"/&gt;
+--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener-container</span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+       <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener</span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>springQueueListener<span class="token punctuation">"</span></span> <span class="token attr-name">queue-names</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_queue<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener</span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>fanoutListener1<span class="token punctuation">"</span></span> <span class="token attr-name">queue-names</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_1<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+        <span class="token comment">&lt;!--   &lt;rabbit:listener ref="topicListenerStar" queue-names="spring_topic_queue_star"/&gt;
+           &lt;rabbit:listener ref="topicListenerWell" queue-names="spring_topic_queue_well"/&gt;
+           &lt;rabbit:listener ref="topicListenerWell2" queue-names="spring_topic_queue_well2"/&gt;--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener-container</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>beans</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<ul><li>编写消息监听器</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>listener</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">Message</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">MessageListener</span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">SpringQueueListener</span> <span class="token keyword">implements</span> <span class="token class-name">MessageListener</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//打印消息</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>listener</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">Message</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">MessageListener</span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">FanoutListener</span> <span class="token keyword">implements</span> <span class="token class-name">MessageListener</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//打印消息</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>添加此类是为了启动消费者服务</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>test</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span></span><span class="token class-name">ApplicationContext</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>support<span class="token punctuation">.</span></span><span class="token class-name">ClassPathXmlApplicationContext</span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Test</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//初始化IOC容器</span>
+        <span class="token class-name">ApplicationContext</span> ctx <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ClassPathXmlApplicationContext</span><span class="token punctuation">(</span><span class="token string">"classpath:spring-rabbitmq-consumer.xml"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="_300"></a>测试简单模式</h3> 
+<ul><li>运行消费者，再运行生产者testHelloWorld单元用例<br> <img src="https://images2.imgbox.com/c9/58/oNHMfSWX_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/83/ec/HVkIlbz0_o.png" alt="在这里插入图片描述"></li></ul> 
+<h3><a id="fanout_304"></a>测试fanout广播模式</h3> 
+<ul><li>创建消费者02项目<br> <img src="https://images2.imgbox.com/18/bc/6GdsgkQW_o.png" alt="在这里插入图片描述"></li><li>配置文件</li></ul> 
+<pre><code class="prism language-xml"><span class="token prolog">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>beans</span> <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>xsi</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.w3.org/2001/XMLSchema-instance<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>context</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/context<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>rabbit</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/rabbit<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xsi:</span>schemaLocation</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context
+       https://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/rabbit
+       http://www.springframework.org/schema/rabbit/spring-rabbit.xsd<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!--加载配置文件--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>property-placeholder</span> <span class="token attr-name">location</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>classpath:rabbitmq.properties<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token comment">&lt;!-- 定义rabbitmq connectionFactory --&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>connection-factory</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.host}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">port</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.port}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">username</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.username}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">password</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.password}<span class="token punctuation">"</span></span>
+                               <span class="token attr-name">virtual-host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.virtual-host}<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>fanoutListener2<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.baiqi.rabbitmq.listener.FanoutListener2<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+    <span class="token comment">&lt;!-- &lt;bean id="topicListenerStar" class="com.baiqi.rabbitmq.listener.TopicListenerStar"/&gt;
+    &lt;bean id="topicListenerWell" class="com.baiqi.rabbitmq.listener.TopicListenerWell"/&gt;
+    &lt;bean id="topicListenerWell2" class="com.baiqi.rabbitmq.listener.TopicListenerWell2"/&gt;
+--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener-container</span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">auto-declare</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener</span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>fanoutListener2<span class="token punctuation">"</span></span> <span class="token attr-name">queue-names</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>spring_fanout_queue_2<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+        <span class="token comment">&lt;!--&lt;rabbit:listener ref="topicListenerStar" queue-names="spring_topic_queue_star"/&gt;
+        &lt;rabbit:listener ref="topicListenerWell" queue-names="spring_topic_queue_well"/&gt;
+        &lt;rabbit:listener ref="topicListenerWell2" queue-names="spring_topic_queue_well2"/&gt;--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener-container</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>beans</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<ul><li>启动消费者01和02项目，并启动生产者testFanout单元测试<br> <img src="https://images2.imgbox.com/d3/d9/PWmgKldB_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/dc/a5/3xQD65k8_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/58/c2/Hqn29hHG_o.png" alt="在这里插入图片描述"></li></ul> 
+<h3><a id="_348"></a>小结</h3> 
+<ul><li>使用 Spring 整合 RabbitMQ 将组件全部使用配置方式实现，简化编码</li><li>Spring 提供 RabbitTemplate 简化发送消息 API</li><li>使用监听机制简化消费者编码</li></ul> 
+<h2><a id="SpringBootRabbitMQ_352"></a>SpringBoot整合RabbitMQ</h2> 
+<h3><a id="_353"></a>生产端</h3> 
+<ul><li> <p>创建生产者SpringBoot工程<br> <img src="https://images2.imgbox.com/c4/0c/F6C5rSp6_o.png" alt="在这里插入图片描述"></p> </li><li> <p>引入start，依赖坐标</p> </li></ul> 
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>parent</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-boot-starter-parent<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>2.1.4.RELEASE<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>parent</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+    <span class="token comment">&lt;!--2. rabbitmq--&gt;</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-boot-starter-amqp<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-boot-starter-test<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<ul><li>编写yml配置，基本信息配置</li></ul> 
+<pre><code class="prism language-prop"># 配置RabbitMQ的基本信息  ip 端口 username  password..
+spring:
+  rabbitmq:
+    host: 192.168.1.104 #主机ip
+    port: 5672 #端口
+    username: yemuxia
+    password: 123456
+    virtual-host: /yemuxia_vir
+</code></pre> 
+<ul><li>定义交换机，队列以及绑定关系的配置类</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>config</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Qualifier</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Bean</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Configuration</span><span class="token punctuation">;</span>
+
+
+<span class="token annotation punctuation">@Configuration</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">RabbitMqConfig</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">//定义交换机的名字</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span>  EXCHANGE_NAME <span class="token operator">=</span> <span class="token string">"boot_topic_exchange"</span><span class="token punctuation">;</span>
+    <span class="token comment">//定义队列的名字</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> QUEUE_NAME <span class="token operator">=</span> <span class="token string">"boot_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">//1、声明交换机</span>
+    <span class="token annotation punctuation">@Bean</span><span class="token punctuation">(</span><span class="token string">"bootExchange"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> <span class="token class-name">Exchange</span> <span class="token function">bootExchange</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+
+        <span class="token keyword">return</span> <span class="token class-name">ExchangeBuilder</span><span class="token punctuation">.</span><span class="token function">topicExchange</span><span class="token punctuation">(</span>EXCHANGE_NAME<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">durable</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+
+
+    <span class="token comment">//2、声明队列</span>
+    <span class="token annotation punctuation">@Bean</span><span class="token punctuation">(</span><span class="token string">"bootQueue"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> <span class="token class-name">Queue</span> <span class="token function">bootQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+
+        <span class="token keyword">return</span> <span class="token class-name">QueueBuilder</span><span class="token punctuation">.</span><span class="token function">durable</span><span class="token punctuation">(</span>QUEUE_NAME<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+
+    <span class="token comment">//3、队列与交换机进行绑定</span>
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> <span class="token class-name">Binding</span> <span class="token function">bindQueueExchange</span><span class="token punctuation">(</span><span class="token annotation punctuation">@Qualifier</span><span class="token punctuation">(</span><span class="token string">"bootQueue"</span><span class="token punctuation">)</span> <span class="token class-name">Queue</span> queue<span class="token punctuation">,</span> <span class="token annotation punctuation">@Qualifier</span><span class="token punctuation">(</span><span class="token string">"bootExchange"</span><span class="token punctuation">)</span> <span class="token class-name">Exchange</span> exchange<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token class-name">BindingBuilder</span><span class="token punctuation">.</span><span class="token function">bind</span><span class="token punctuation">(</span>queue<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token keyword">to</span><span class="token punctuation">(</span>exchange<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token keyword">with</span><span class="token punctuation">(</span><span class="token string">"boot.#"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">noargs</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<ul><li>注入RabbitTemplate，调用方法，完成消息发送</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>test</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>junit<span class="token punctuation">.</span></span><span class="token class-name">Test</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>junit<span class="token punctuation">.</span>runner<span class="token punctuation">.</span></span><span class="token class-name">RunWith</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">RabbitTemplate</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Autowired</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>test<span class="token punctuation">.</span>context<span class="token punctuation">.</span></span><span class="token class-name">SpringBootTest</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>test<span class="token punctuation">.</span>context<span class="token punctuation">.</span>junit4<span class="token punctuation">.</span></span><span class="token class-name">SpringRunner</span><span class="token punctuation">;</span>
+
+
+<span class="token annotation punctuation">@SpringBootTest</span>
+<span class="token annotation punctuation">@RunWith</span><span class="token punctuation">(</span><span class="token class-name">SpringRunner</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ProducerTest</span> <span class="token punctuation">{<!-- --></span>
+
+     <span class="token comment">//注入 RabbitTemplate</span>
+    <span class="token annotation punctuation">@Autowired</span>
+     <span class="token keyword">private</span> <span class="token class-name">RabbitTemplate</span>  rabbitTemplate<span class="token punctuation">;</span>
+
+     <span class="token annotation punctuation">@Test</span>
+     <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">send</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+         rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"boot_topic_exchange"</span><span class="token punctuation">,</span><span class="token string">"boot.haha"</span><span class="token punctuation">,</span><span class="token string">"boot mq..."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+     <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<h3><a id="_467"></a>消费端</h3> 
+<ul><li> <p>创建消费者SpringBoot工程<br> <img src="https://images2.imgbox.com/0a/79/CugcIbjY_o.png" alt="在这里插入图片描述"></p> </li><li> <p>引入start，依赖坐标（和生产端保持一致）</p> </li><li> <p>编写yml配置，基本信息配置（和生产端保持一致）</p> </li><li> <p>定义监听类，使用@RabbitListener注解完成队列监听。</p> </li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>consumerspringboot</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">Message</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">RabbitListener</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Component</span><span class="token punctuation">;</span>
+
+
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">RabbitMQListener</span> <span class="token punctuation">{<!-- --></span>
+
+      <span class="token comment">//定义方法进行信息的监听   RabbitListener中的参数用于表示监听的是哪一个队列</span>
+      <span class="token annotation punctuation">@RabbitListener</span><span class="token punctuation">(</span>queues <span class="token operator">=</span> <span class="token string">"boot_queue"</span><span class="token punctuation">)</span>
+      <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token class-name">ListenerQueue</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+          <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"message:"</span><span class="token operator">+</span><span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+
+</code></pre> 
+<h3><a id="_495"></a>案例测试</h3> 
+<p>运行消费端服务，再运行生产端的单元测试案例<br> <img src="https://images2.imgbox.com/36/b8/q8gePtV5_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_498"></a>小结</h3> 
+<ul><li>SpringBoot提供了快速整合RabbitMQ的方式</li><li>基本信息在yml中配置，队列交互机以及绑定关系在配置类中使用Bean的方式配置</li><li>生产端直接注入RabbitTemplate完成消息发送</li><li>消费端直接使用@RabbitListener完成消息接收</li></ul> 
+<h2><a id="_503"></a>消息的可靠性投递</h2> 
+<h3><a id="_504"></a>生产端</h3> 
+<p>在使用 RabbitMQ 的时候，作为<strong>消息发送方</strong>希望杜绝任何消息丢失或者投递失败场景。RabbitMQ 为我们提供了两种方式用来控制消息的投递可靠性模式。</p> 
+<ul><li>confirm 确认模式</li><li>return 退回模式</li></ul> 
+<p>rabbitmq 整个消息投递的路径为：<br> <strong>producer—&gt;rabbitmq broker—&gt;exchange—&gt;queue—&gt;consumer</strong></p> 
+<ul><li>消息从 producer 到 exchange 则会返回一个 confirmCallback 。</li><li>消息从 exchange–&gt;queue 投递失败则会返回一个 returnCallback 。</li></ul> 
+<p>我们将利用这两个 callback 控制消息的可靠性投递</p> 
+<h3><a id="_515"></a>案例演示</h3> 
+<ul><li>创建生产端项目，并配置<br> <img src="https://images2.imgbox.com/20/c9/v5Ttw4Wq_o.png" alt="在这里插入图片描述"></li></ul> 
+<pre><code class="prism language-xml"> <span class="token comment">&lt;!--加载配置文件--&gt;</span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>property-placeholder</span> <span class="token attr-name">location</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>classpath:rabbitmq.properties<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+ <span class="token comment">&lt;!-- 定义rabbitmq connectionFactory --&gt;</span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>connection-factory</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.host}<span class="token punctuation">"</span></span>
+                            <span class="token attr-name">port</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.port}<span class="token punctuation">"</span></span>
+                            <span class="token attr-name">username</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.username}<span class="token punctuation">"</span></span>
+                            <span class="token attr-name">password</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.password}<span class="token punctuation">"</span></span>
+                            <span class="token attr-name">virtual-host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.virtual-host}<span class="token punctuation">"</span></span>
+                            <span class="token attr-name">publisher-confirms</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span>
+                            <span class="token attr-name">publisher-returns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>true<span class="token punctuation">"</span></span>
+ <span class="token punctuation">/&gt;</span></span>
+ <span class="token comment">&lt;!--定义管理交换机、队列--&gt;</span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>admin</span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+ <span class="token comment">&lt;!--定义rabbitTemplate对象操作可以在代码中方便发送消息--&gt;</span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>template</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>rabbitTemplate<span class="token punctuation">"</span></span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+
+
+
+ <span class="token comment">&lt;!--消息可靠性投递（生产端）--&gt;</span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>queue</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>test_queue_confirm<span class="token punctuation">"</span></span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>test_queue_confirm<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>queue</span><span class="token punctuation">&gt;</span></span>
+
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>direct-exchange</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>test_exchange_confirm<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+     <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+         <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>binding</span> <span class="token attr-name">queue</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>test_queue_confirm<span class="token punctuation">"</span></span> <span class="token attr-name">key</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>confirm<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>binding</span><span class="token punctuation">&gt;</span></span>
+     <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>bindings</span><span class="token punctuation">&gt;</span></span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>direct-exchange</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>test</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>junit<span class="token punctuation">.</span></span><span class="token class-name">Test</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>junit<span class="token punctuation">.</span>runner<span class="token punctuation">.</span></span><span class="token class-name">RunWith</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">Message</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>connection<span class="token punctuation">.</span></span><span class="token class-name">CorrelationData</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">RabbitTemplate</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Autowired</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>test<span class="token punctuation">.</span>context<span class="token punctuation">.</span></span><span class="token class-name">ContextConfiguration</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>test<span class="token punctuation">.</span>context<span class="token punctuation">.</span>junit4<span class="token punctuation">.</span></span><span class="token class-name">SpringJUnit4ClassRunner</span><span class="token punctuation">;</span>
+
+<span class="token comment">/**
+ * @author 白起老师
+ */</span>
+<span class="token annotation punctuation">@RunWith</span><span class="token punctuation">(</span><span class="token class-name">SpringJUnit4ClassRunner</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@ContextConfiguration</span><span class="token punctuation">(</span>locations <span class="token operator">=</span> <span class="token string">"classpath:spring-rabbitmq-producer.xml"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ProducerTest</span> <span class="token punctuation">{<!-- --></span>
+
+        <span class="token annotation punctuation">@Autowired</span>
+        <span class="token keyword">private</span> <span class="token class-name">RabbitTemplate</span>  rabbitTemplate<span class="token punctuation">;</span>
+
+
+        <span class="token comment">//测试   Confirm 模式</span>
+    <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">testConfirm</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+
+         <span class="token comment">//定义回调</span>
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">setConfirmCallback</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">RabbitTemplate<span class="token punctuation">.</span>ConfirmCallback</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">/**
+             *
+             * @param correlationData 相关配置信息
+             * @param ack   exchange交换机 是否成功收到了消息。true 成功，false代表失败
+             * @param cause 失败原因
+             */</span>
+            <span class="token annotation punctuation">@Override</span>
+            <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">confirm</span><span class="token punctuation">(</span><span class="token class-name">CorrelationData</span> correlationData<span class="token punctuation">,</span> <span class="token keyword">boolean</span> ack<span class="token punctuation">,</span> <span class="token class-name">String</span> cause<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"confirm方法被执行了...."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                 <span class="token comment">//ack 为  true表示 消息已经到达交换机</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>ack<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                    <span class="token comment">//接收成功</span>
+                    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"接收成功消息"</span> <span class="token operator">+</span> cause<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+                    <span class="token comment">//接收失败</span>
+                    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"接收失败消息"</span> <span class="token operator">+</span> cause<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token comment">//做一些处理，让消息再次发送。</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+           <span class="token comment">//进行消息发送</span>
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"test_exchange_confirm"</span><span class="token punctuation">,</span><span class="token string">"confirm"</span><span class="token punctuation">,</span><span class="token string">"message Confirm..."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//进行睡眠操作</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">5000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            e<span class="token punctuation">.</span><span class="token function">printStackTrace</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+
+    <span class="token comment">//测试 return模式</span>
+    <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">testReturn</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+
+        <span class="token comment">//设置交换机处理失败消息的模式   为true的时候，消息达到不了 队列时，会将消息重新返回给生产者</span>
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">setMandatory</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//定义回调</span>
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">setReturnCallback</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">RabbitTemplate<span class="token punctuation">.</span>ReturnCallback</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">/**
+             *
+             * @param message   消息对象
+             * @param replyCode 错误码
+             * @param replyText 错误信息
+             * @param exchange  交换机
+             * @param routingKey 路由键
+             */</span>
+            <span class="token annotation punctuation">@Override</span>
+            <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">returnedMessage</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">,</span> <span class="token keyword">int</span> replyCode<span class="token punctuation">,</span> <span class="token class-name">String</span> replyText<span class="token punctuation">,</span> <span class="token class-name">String</span> exchange<span class="token punctuation">,</span> <span class="token class-name">String</span> routingKey<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"return 执行了...."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"message:"</span><span class="token operator">+</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"replyCode:"</span><span class="token operator">+</span>replyCode<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"replyText:"</span><span class="token operator">+</span>replyText<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"exchange:"</span><span class="token operator">+</span>exchange<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"routingKey:"</span><span class="token operator">+</span>routingKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                <span class="token comment">//处理</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//进行消息发送</span>
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"test_exchange_confirm"</span><span class="token punctuation">,</span><span class="token string">"confirm"</span><span class="token punctuation">,</span><span class="token string">"message return..."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//进行睡眠操作</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">5000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            e<span class="token punctuation">.</span><span class="token function">printStackTrace</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<ul><li>创建消费端项目，并配置<br> <img src="https://images2.imgbox.com/0d/90/KAnsIXpO_o.png" alt="在这里插入图片描述"></li></ul> 
+<pre><code class="prism language-xml"><span class="token comment">&lt;!--加载配置文件--&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>property-placeholder</span> <span class="token attr-name">location</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>classpath:rabbitmq.properties<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+<span class="token comment">&lt;!-- 定义rabbitmq connectionFactory --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>connection-factory</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.host}<span class="token punctuation">"</span></span>
+                           <span class="token attr-name">port</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.port}<span class="token punctuation">"</span></span>
+                           <span class="token attr-name">username</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.username}<span class="token punctuation">"</span></span>
+                           <span class="token attr-name">password</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.password}<span class="token punctuation">"</span></span>
+                           <span class="token attr-name">virtual-host</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>${rabbitmq.virtual-host}<span class="token punctuation">"</span></span><span class="token punctuation">/&gt;</span></span>
+
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>component-scan</span> <span class="token attr-name">base-package</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.baiqi.listener<span class="token punctuation">"</span></span> <span class="token punctuation">/&gt;</span></span>
+<span class="token comment">&lt;!--定义监听器容器  
+    --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener-container</span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener</span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>ackListener<span class="token punctuation">"</span></span> <span class="token attr-name">queue-names</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>test_queue_confirm<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener-container</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>listener</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">Message</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>listener<span class="token punctuation">.</span>api<span class="token punctuation">.</span></span><span class="token class-name">ChannelAwareMessageListener</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Component</span><span class="token punctuation">;</span>
+
+
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">AckListener</span> <span class="token keyword">implements</span> <span class="token class-name">ChannelAwareMessageListener</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">,</span> <span class="token class-name">Channel</span> channel<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//1、获取消息的id</span>
+        <span class="token keyword">long</span> deliveryTag <span class="token operator">=</span> message<span class="token punctuation">.</span><span class="token function">getMessageProperties</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeliveryTag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+
+
+        <span class="token comment">//2、获取消息</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"message:"</span><span class="token operator">+</span><span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//3、进行业务处理</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"=====进行业务处理===="</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//4、进行消息签收</span>
+        channel<span class="token punctuation">.</span><span class="token function">basicAck</span><span class="token punctuation">(</span>deliveryTag<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+
+            <span class="token comment">//拒绝签收</span>
+             <span class="token comment">/*
+            第三个参数：requeue：重回队列。如果设置为true，则消息重新回到queue，broker会重新发送该消息给消费端
+             */</span>
+            channel<span class="token punctuation">.</span><span class="token function">basicNack</span><span class="token punctuation">(</span>deliveryTag<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<ul><li>测试Confirm 模式<br> 项目运行演示，先运行生产端，再运行消费端（队列和交换机在哪个项目创建，就先启动哪个服务，本案例队列在生产端创建）<br> <img src="https://images2.imgbox.com/72/2e/nzckBqgR_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/c0/6a/KdQOGd1v_o.png" alt="在这里插入图片描述"></li></ul> 
+<pre><code class="prism language-java">   <span class="token comment">//进行消息发送    rabbitTemplate.convertAndSend("test_exchange_confirm11","confirm","message Confirm...");</span>
+</code></pre> 
+<p>在testConfirm单元用例中故意将交换机名称写错，让其走回调的else分支。<br> <img src="https://images2.imgbox.com/d9/5f/M9cxbT2m_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/ef/0a/HHO914rS_o.png" alt="在这里插入图片描述"></p> 
+<ul><li>测试Return 模式<br> 将单元测试用例的testReturn中部分逻辑修改如下</li></ul> 
+<pre><code class="prism language-java"><span class="token comment">//进行消息发送</span>
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"test_exchange_confirm"</span><span class="token punctuation">,</span><span class="token string">"confirm11"</span><span class="token punctuation">,</span><span class="token string">"message return..."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>此处故意将路由名称写错，让交换机不能正确路由到队列中去<br> 运行该案例<br> <img src="https://images2.imgbox.com/0e/05/gqi4qhbs_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="Confirm_741"></a>生产方确认Confirm小结</h3> 
+<ul><li>设置ConnectionFactory的publisher-confirms=“true” 开启 确认模式。</li><li>使用rabbitTemplate.setConfirmCallback设置回调函数。当消息发送到exchange后回调confirm方法。在方法中判断ack，如果为true，则发送成功，如果为false，则发送失败，需要处理。</li><li>设置ConnectionFactory的publisher-returns=“true” 开启 退回模式。</li><li>使用rabbitTemplate.setReturnCallback设置退回函数，当消息从exchange路由到queue失败后，如果设置了rabbitTemplate.setMandatory(true)参数，则会将消息退回给producer。并执行回调函数returnedMessage。</li></ul> 
+<h3><a id="Consumer_Ack_746"></a>Consumer Ack</h3> 
+<p>ack指Acknowledge，确认。 表示<strong>消费端收到消息后的确认方式</strong>。<br> 有三种确认方式：</p> 
+<ul><li>自动确认：acknowledge=“none”</li><li>手动确认：acknowledge=“manual”</li><li>根据异常情况确认：acknowledge=“auto”，（这种方式使用麻烦，不作讲解）</li></ul> 
+<p>其中<strong>自动确认是指，当消息一旦被Consumer接收到，则自动确认收到，并将相应 message 从 RabbitMQ 的消息缓存中移除</strong>。但是<strong>在实际业务处理中，很可能消息接收到，业务处理出现异常，那么该消息就会丢失。如果设置了手动确认方式，则需要在业务处理成功后，调用channel.basicAck()，手动签收，如果出现异常，则调用channel.basicNack()方法，让其自动重新发送消息</strong>。</p> 
+<h3><a id="Consumer_Ack_754"></a>Consumer Ack案例演示</h3> 
+<ul><li>修改原有消费端程序，去掉签收代码，并配置成手动签收</li></ul> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">AckListener</span> <span class="token keyword">implements</span> <span class="token class-name">ChannelAwareMessageListener</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">,</span> <span class="token class-name">Channel</span> channel<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//1、获取消息的id</span>
+        <span class="token keyword">long</span> deliveryTag <span class="token operator">=</span> message<span class="token punctuation">.</span><span class="token function">getMessageProperties</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeliveryTag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+
+
+        <span class="token comment">//2、获取消息</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"message:"</span><span class="token operator">+</span><span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//3、进行业务处理</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"=====进行业务处理===="</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<pre><code class="prism language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener-container</span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">acknowledge</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>manual<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener</span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>ackListener<span class="token punctuation">"</span></span> <span class="token attr-name">queue-names</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>test_queue_confirm<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener-container</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<ul><li>生产端程序修改回正常，并运行<br> <img src="https://images2.imgbox.com/dc/33/pdBCSJVy_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/af/5c/X2h99nOj_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/52/e7/pRbpxHwt_o.png" alt="在这里插入图片描述"></li><li>再次修改消费端程序，模拟异常出现</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>listener</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">Message</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>listener<span class="token punctuation">.</span>api<span class="token punctuation">.</span></span><span class="token class-name">ChannelAwareMessageListener</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Component</span><span class="token punctuation">;</span>
+
+
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">AckListener</span> <span class="token keyword">implements</span> <span class="token class-name">ChannelAwareMessageListener</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">,</span> <span class="token class-name">Channel</span> channel<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//1、获取消息的id</span>
+        <span class="token keyword">long</span> deliveryTag <span class="token operator">=</span> message<span class="token punctuation">.</span><span class="token function">getMessageProperties</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeliveryTag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+
+
+        <span class="token comment">//2、获取消息</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"message:"</span><span class="token operator">+</span><span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//3、进行业务处理</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"=====进行业务处理===="</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//模拟出现异常</span>
+        <span class="token keyword">int</span>  i <span class="token operator">=</span> <span class="token number">5</span><span class="token operator">/</span><span class="token number">0</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//4、进行消息签收</span>
+        channel<span class="token punctuation">.</span><span class="token function">basicAck</span><span class="token punctuation">(</span>deliveryTag<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+
+            <span class="token comment">//拒绝签收</span>
+             <span class="token comment">/*
+            第三个参数：requeue：重回队列。如果设置为true，则消息重新回到queue，broker会重新发送该消息给消费端
+             */</span>
+            channel<span class="token punctuation">.</span><span class="token function">basicNack</span><span class="token punctuation">(</span>deliveryTag<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/16/f7/ZiFFlf4V_o.png" alt="在这里插入图片描述"><br> 消费端出现异常之后，拒绝签收并将消息返回至发送端，发送端又开始重发，但是消费端一直再抛异常，导致发送端出现了循环发送消息的情况</p> 
+<h3><a id="Consumer_Ack__840"></a>Consumer Ack 小结</h3> 
+<ul><li>在rabbit:listener-container标签中设置acknowledge属性，设置ack方式 none：自动确认，manual：手动确认</li><li>如果在消费端没有出现异常，则调用channel.basicAck(deliveryTag,false);方法确认签收消息</li><li>如果出现异常，则在catch中调用 basicNack或 basicReject，拒绝消息，让MQ重新发送消息。</li></ul> 
+<h3><a id="_844"></a>消息可靠性总结</h3> 
+<ul><li>持久化 
+  <ul><li>exchange要持久化</li><li>queue要持久化</li><li>message要持久化</li></ul> </li><li>生产方确认Confirm</li><li>消费方确认Ack</li><li>Broker高可用</li></ul> 
+<h2><a id="_852"></a>消费端限流</h2> 
+<p><img src="https://images2.imgbox.com/7e/c1/Yy33JJpF_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_854"></a>消费端限流案例</h3> 
+<ul><li>生产端案例</li></ul> 
+<pre><code class="prism language-java"><span class="token comment">//批量发送消息，让消费者每次拉去指定的数量</span>
+<span class="token annotation punctuation">@Test</span>
+<span class="token keyword">public</span> <span class="token keyword">void</span>  <span class="token function">testQos</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> <span class="token number">10</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 发送消息</span>
+        rabbitTemplate<span class="token punctuation">.</span><span class="token function">convertAndSend</span><span class="token punctuation">(</span><span class="token string">"test_exchange_confirm"</span><span class="token punctuation">,</span> <span class="token string">"confirm"</span><span class="token punctuation">,</span> <span class="token string">"message confirm...."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<ul><li>消费端配置修改</li></ul> 
+<pre><code class="prism language-xml"><span class="token comment">&lt;!--定义监听器容器
+      acknowledge="manual":手动签收
+      prefetch="1":每次抓取多少条消息
+      acknowledge="manual" prefetch="2"
+    --&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener-container</span> <span class="token attr-name">connection-factory</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>connectionFactory<span class="token punctuation">"</span></span> <span class="token attr-name">acknowledge</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>manual<span class="token punctuation">"</span></span> <span class="token attr-name">prefetch</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>2<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">rabbit:</span>listener</span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>qosListener<span class="token punctuation">"</span></span> <span class="token attr-name">queue-names</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>test_queue_confirm<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener</span><span class="token punctuation">&gt;</span></span>
+
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span><span class="token namespace">rabbit:</span>listener-container</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">com<span class="token punctuation">.</span>baiqi<span class="token punctuation">.</span>listener</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">Message</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>amqp<span class="token punctuation">.</span>rabbit<span class="token punctuation">.</span>listener<span class="token punctuation">.</span>api<span class="token punctuation">.</span></span><span class="token class-name">ChannelAwareMessageListener</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span></span><span class="token class-name">Component</span><span class="token punctuation">;</span>
+
+
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">QosListener</span> <span class="token keyword">implements</span> <span class="token class-name">ChannelAwareMessageListener</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span><span class="token class-name">Message</span> message<span class="token punctuation">,</span> <span class="token class-name">Channel</span> channel<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+
+          <span class="token comment">//获取到的消息</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//处理业务逻辑</span>
+
+        <span class="token comment">//进行消息的签收</span>
+        <span class="token comment">//channel.basicAck(message.getMessageProperties().getDeliveryTag(),true);</span>
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>在不进行签收的情况下，等到消费端签收了这两条内容之后，发送方会继续发送<br> <img src="https://images2.imgbox.com/5d/a7/dIVYppLb_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_916"></a>消费端限流小结</h3> 
+<ul><li>在&lt; rabbit:listener-container&gt; 中配置 prefetch属性设置消费端一次拉取多少消息</li><li>消费端的确认模式一定为手动确认。acknowledge=“manual”</li></ul>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2cab613590ff7785a2689517f08bbe0c/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【汇编语言】除法（DIV/IDIV）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/05463addbc04c10c57ec6f9654c8a8e9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">人工智胀 | 堂妹教你用KNN算法筛选约会对象</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

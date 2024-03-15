@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>为什么spring要使用三级缓存？ - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="为什么spring要使用三级缓存？" />
+<meta property="og:description" content=" 问题 spring使用三级缓存处理了循环依赖问题，并且第三级缓存中的对象工厂getObject()的时候会牵扯到AOP，一般来说，getObject()之后就会放到二级缓存中。
+那么，为什么不能去掉三级缓存，每次都创建好代理版本放到二级缓存中完事？
+AOP代理的两个时机 getObject()的时候在SmartInstanitiaionAwareBeanPostProcessor里面代理初始化的时候使用BeanPostProcessor的回调代理 解释 getObject会被调到的情况，只能是存在循环依赖的情况：
+即，A工厂放入三级缓存，A准备属性注入B，B工厂放入三级缓存，B raw bean准备属性注入A，找到三级缓存中的A工厂，调用getObject。
+工厂其实包括两个东西，一个是raw bean，一个是lambda表达式，里面会有个特殊的postProcessor进行AOP代理。
+如果不存在循环依赖，则A的属性赋值过程中都不会间接调用到getObject方法，那么就往下走去到初始化阶段里面使用BeanPostProcessor的回调进行动态代理。
+不存在循环依赖的情况下，A在缓存中位置的变化是：先进入三级缓存，然后装配B，接着进入初始化阶段，之后直接进入一级缓存。存在循环依赖的情况下，A在缓存中位置的变化是：先进入三级缓存，然后装配B，接着被B调用工厂方法，提前AOP，进入二级缓存，之后再装配一级缓存中的B，自身完整赋值好了，就进入一级缓存。 不知道从哪里看见的，说是Spring设计初衷就是要Bean完全属性赋值完成之后再进行AOP(对应生命周期是初始化阶段)，因此，初始化阶段会有BeanPostProcessor的回调方法进行AOP代理，此时的target都是赋值完整的target。
+但是在存在循环依赖的时候，这个设计初衷就被打破了。
+举个例子，仅考虑2个对象AB的相互依赖，AB都有代理逻辑。
+实例化后的『A原始Bean』装配B =&gt; 实例化后的『B原始Bean』装配A，那么这个时候装配的A必须进行代理，否则装配的就是原始A了！所以B调用了A工厂的getObject提前进行代理，然后注入到B中，B就可以顺利属性赋值完成，然后进入初始化阶段，B在初始化阶段进行AOP。
+既然A提前代理了，当A到初始化阶段再次碰到代理逻辑怎么办？
+实际上会判断下是否已经提前代理过了，如果代理过了，初始化阶段的代理逻辑就不做了，用之前的代理Bean作为结果。
+总结 一级缓存：代理过 &amp; 属性赋值 完成的Bean （注意，仅指自身属性赋值完整，属性的属性有没有赋值不管）
+二级缓存：提前代理好了 &amp; 属性未完全赋值
+三级缓存：对象工厂，包含提前代理的逻辑
+能否把二三级合并？每次都提前判断是否代理再放到二级缓存中？
+可以，但是这样做彻底违背了Spring初衷，因为这样做的话，所有代理都提前到了初始化阶段前面做。能否全部合并？每次都代理好放入一级缓存中？
+可以，但是第一：违反了Spring属性赋值后代理的初衷，第二：第一级缓存中不仅存在属性赋值完成的，还存在属性未完整赋值的，属于是结构比较混乱，为了逻辑清晰，Spring选择把半成品和完成品分开。 " />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/c1d0921c2f943845334413c25202b758/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-05-18T16:12:55+08:00" />
+<meta property="article:modified_time" content="2023-05-18T16:12:55+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">为什么spring要使用三级缓存？</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="_0"></a>问题</h2> 
+<p>spring使用三级缓存处理了循环依赖问题，并且第三级缓存中的对象工厂<code>getObject()</code>的时候会牵扯到AOP，一般来说，<code>getObject()</code>之后就会放到二级缓存中。<br> 那么，为什么不能去掉三级缓存，每次都创建好代理版本放到二级缓存中完事？</p> 
+<h2><a id="AOP_4"></a>AOP代理的两个时机</h2> 
+<ol><li><code>getObject()</code>的时候在<code>SmartInstanitiaionAwareBeanPostProcessor</code>里面代理</li><li>初始化的时候使用<code>BeanPostProcessor</code>的回调代理</li></ol> 
+<h2><a id="_8"></a>解释</h2> 
+<p><code>getObject</code>会被调到的情况，<strong>只能是存在循环依赖的情况</strong>：<br> 即，A工厂放入三级缓存，A准备属性注入B，B工厂放入三级缓存，B raw bean准备属性注入A，找到三级缓存中的A工厂，调用<code>getObject</code>。</p> 
+<p>工厂其实包括两个东西，一个是raw bean，一个是lambda表达式，里面会有个特殊的postProcessor进行AOP代理。</p> 
+<p>如果不存在循环依赖，则A的属性赋值过程中都不会间接调用到<code>getObject</code>方法，那么就往下走去到<strong>初始化阶段</strong>里面使用<code>BeanPostProcessor</code>的回调进行动态代理。</p> 
+<ol><li>不存在循环依赖的情况下，A在缓存中位置的变化是：先进入三级缓存，然后装配B，接着进入初始化阶段，之后直接进入一级缓存。</li><li>存在循环依赖的情况下，A在缓存中位置的变化是：先进入三级缓存，然后装配B，接着被B调用工厂方法，提前AOP，进入二级缓存，之后再装配一级缓存中的B，自身完整赋值好了，就进入一级缓存。</li></ol> 
+<p>不知道从哪里看见的，说是Spring设计初衷就是要<strong>Bean完全属性赋值完成之后再进行AOP</strong>(对应生命周期是初始化阶段)，因此，初始化阶段会有<code>BeanPostProcessor</code>的回调方法进行AOP代理，此时的target都是赋值完整的target。</p> 
+<p>但是在存在循环依赖的时候，这个设计初衷就被<strong>打破</strong>了。</p> 
+<p>举个例子，仅考虑2个对象AB的相互依赖，AB都有代理逻辑。<br> <code>实例化后的『A原始Bean』装配B</code> =&gt; <code>实例化后的『B原始Bean』装配A</code>，那么这个时候装配的A必须进行代理，否则装配的就是原始A了！所以B调用了A工厂的<code>getObject</code><strong>提前</strong>进行代理，然后注入到B中，B就可以顺利属性赋值完成，然后进入初始化阶段，B在初始化阶段进行AOP。</p> 
+<p>既然A提前代理了，当A到初始化阶段再次碰到代理逻辑怎么办？<br> 实际上会判断下是否已经提前代理过了，如果代理过了，初始化阶段的代理逻辑就不做了，用之前的代理Bean作为结果。</p> 
+<h2><a id="_29"></a>总结</h2> 
+<p>一级缓存：代理过 &amp; 属性赋值 完成的Bean （注意，仅指自身属性赋值完整，属性的属性有没有赋值不管）<br> 二级缓存：提前代理好了 &amp; 属性未完全赋值<br> 三级缓存：对象工厂，包含提前代理的逻辑</p> 
+<ol><li>能否把二三级合并？每次都提前判断是否代理再放到二级缓存中？<br> 可以，但是这样做彻底违背了Spring初衷，因为这样做的话，所有代理都提前到了初始化阶段前面做。</li><li>能否全部合并？每次都代理好放入一级缓存中？<br> 可以，但是第一：违反了Spring属性赋值后代理的初衷，第二：第一级缓存中不仅存在属性赋值完成的，还存在属性未完整赋值的，属于是结构比较混乱，为了逻辑清晰，Spring选择把半成品和完成品分开。</li></ol>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/dc3986e4888d5798aeaa1a9e855316f4/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">三维视觉之数字图像处理基础（五） 图像几何变换</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/7de17248dcdc61b082e273891638fb80/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">SQL优化15个技巧</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

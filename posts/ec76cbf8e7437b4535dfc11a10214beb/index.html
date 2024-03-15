@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>GTest基础学习-04-第3个单元测试-测试夹具test fixture - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="GTest基础学习-04-第3个单元测试-测试夹具test fixture" />
+<meta property="og:description" content="这篇来学习一下Gtest中更高级一些的特性test fixture，测试夹具的基本上使用。什么的场景需要使用到测试夹具呢？测试夹具是哪个宏，这篇来学习这个主题。
+1.什么叫test fixture
+什么是测试夹具，这个概念在任何xUnit系列的单元测试框架都会出现。一般是指，所有的测试用例都可以共享的步骤，例如初始化和事后清理操作，能提供这个功能的对象叫test fixture。
+在test fixture是这样使用的，我们需要单独写一个类并且继承testing::Test，如果有必要都需要实现SetUp()和TearDown()函数，当然这两个至少有一个需要实现，不然我们不会去使用test fixture这个功能。在SetUp()函数中一般写一些初始化操作，例如测试对象的创建，对象的成员变量的初始化等，在TearDown()一般用来集中清除资源操作，例如销毁在SetUp()中创建的被测试对象。
+2.测试夹具使用
+sample03.h代码
+#ifndef GTEST_SAMPLES_SAMPLE03_INL_H_ #define GTEST_SAMPLES_SAMPLE03_INL_H_ #include &lt;stddef.h&gt; // Queue类是一个简单的队列，内部是基于单链表实现 // // 元素数据类型必须支持拷贝构造 template &lt;typename E&gt; // E 是元素的类型。使用了模板类 class Queue; // QueueNode 是Queue对象中的一个结点, 存储元素E和指向下一个结点的指针 template &lt;typename E&gt; // E 是元素的类型。使用了模板类 class QueueNode { friend class Queue&lt;E&gt;; public: // 获取结点中的元素 const E&amp; element() const { return element_; } // 获取下一个结点 QueueNode* next() { return next_; } const QueueNode* next() const { return next_; } private: // 创建一个结点，元素是参数element，下一个结点的指针设置为NULL explicit QueueNode(const E&amp; an_element) : element_(an_element), next_(nullptr) {} // 这里禁用默认的赋值操作和构造 const QueueNode&amp; operator = (const QueueNode&amp;); QueueNode(const QueueNode&amp;); E element_; QueueNode* next_; }; template &lt;typename E&gt; // E 是可以任意类型 class Queue { public: // 创建一个空的队列 Queue() : head_(nullptr), last_(nullptr), size_(0) {} // 析构函数 清空队列 ~Queue() { Clear(); } // 清空队列函数 void Clear() { if (size_ &gt; 0) { // 1." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ec76cbf8e7437b4535dfc11a10214beb/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-08-29T13:52:10+08:00" />
+<meta property="article:modified_time" content="2020-08-29T13:52:10+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">GTest基础学习-04-第3个单元测试-测试夹具test fixture</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>这篇来学习一下Gtest中更高级一些的特性test fixture，测试夹具的基本上使用。什么的场景需要使用到测试夹具呢？测试夹具是哪个宏，这篇来学习这个主题。</p> 
+<p> </p> 
+<p><strong>1.什么叫test fixture</strong></p> 
+<p>什么是测试夹具，这个概念在任何xUnit系列的单元测试框架都会出现。一般是指，所有的测试用例都可以共享的步骤，例如初始化和事后清理操作，能提供这个功能的对象叫test fixture。</p> 
+<p>在test fixture是这样使用的，我们需要单独写一个类并且继承testing::Test，如果有必要都需要实现SetUp()和TearDown()函数，当然这两个至少有一个需要实现，不然我们不会去使用test fixture这个功能。在SetUp()函数中一般写一些初始化操作，例如测试对象的创建，对象的成员变量的初始化等，在TearDown()一般用来集中清除资源操作，例如销毁在SetUp()中创建的被测试对象。</p> 
+<p> </p> 
+<p><strong>2.测试夹具使用</strong></p> 
+<p>sample03.h代码</p> 
+<pre><code class="language-cpp">#ifndef GTEST_SAMPLES_SAMPLE03_INL_H_
+#define GTEST_SAMPLES_SAMPLE03_INL_H_
+
+#include &lt;stddef.h&gt;
+
+
+// Queue类是一个简单的队列，内部是基于单链表实现
+//
+// 元素数据类型必须支持拷贝构造
+template &lt;typename E&gt;  // E 是元素的类型。使用了模板类
+class Queue;
+
+// QueueNode 是Queue对象中的一个结点, 存储元素E和指向下一个结点的指针
+template &lt;typename E&gt;  // E 是元素的类型。使用了模板类
+class QueueNode {
+	friend class Queue&lt;E&gt;;
+
+public:
+	// 获取结点中的元素
+	const E&amp; element() const { return element_; }
+
+	// 获取下一个结点
+	QueueNode* next() { return next_; }
+	const QueueNode* next() const { return next_; }
+
+private:
+	// 创建一个结点，元素是参数element，下一个结点的指针设置为NULL
+	explicit QueueNode(const E&amp; an_element)
+		: element_(an_element), next_(nullptr) {}
+
+	// 这里禁用默认的赋值操作和构造
+	const QueueNode&amp; operator = (const QueueNode&amp;);
+	QueueNode(const QueueNode&amp;);
+
+	E element_;
+	QueueNode* next_;
+};
+
+template &lt;typename E&gt;  // E 是可以任意类型
+class Queue {
+public:
+	// 创建一个空的队列
+	Queue() : head_(nullptr), last_(nullptr), size_(0) {}
+
+	// 析构函数 清空队列
+	~Queue() { Clear(); }
+
+	// 清空队列函数
+	void Clear() {
+		if (size_ &gt; 0) {
+			// 1. 删除每一个结点
+			QueueNode&lt;E&gt;* node = head_;
+			QueueNode&lt;E&gt;* next = node-&gt;next();
+			for (; ;) {
+				delete node;
+				node = next;
+				if (node == nullptr) break;  //跳槽循环在这行
+				next = node-&gt;next();
+			}
+
+			// 2.重置成员变量，队列大小为0，头结点和尾结点都设置为空指针
+			head_ = last_ = nullptr;
+			size_ = 0;
+		}
+	}
+
+	// 获取队列元素个数
+	size_t Size() const { return size_; }
+
+	// 获取队列头部元素, 如果队列为空返回NULL
+	QueueNode&lt;E&gt;* Head() { return head_; }
+	const QueueNode&lt;E&gt;* Head() const { return head_; }
+
+	// 获取队列尾部元素, 如果队列为空返回NULL
+	QueueNode&lt;E&gt;* Last() { return last_; }
+	const QueueNode&lt;E&gt;* Last() const { return last_; }
+
+	// 往队列尾部插入一个元素，使用拷贝构造创建这个元素并存储在队列中 
+	//对队列中的元素所做的更改不会影响源对象，反之亦然。
+	void Enqueue(const E&amp; element) {
+		QueueNode&lt;E&gt;* new_node = new QueueNode&lt;E&gt;(element);
+
+		if (size_ == 0) {
+			head_ = last_ = new_node;
+			size_ = 1;
+		}
+		else {
+			last_-&gt;next_ = new_node;
+			last_ = new_node;
+			size_++;
+		}
+	}
+
+	// 删除头部元素并返回这个元素，如果队列为空，返回NULL
+	E* Dequeue() {
+		if (size_ == 0) {
+			return nullptr;
+		}
+
+		const QueueNode&lt;E&gt;* const old_head = head_;
+		head_ = head_-&gt;next_;
+		size_--;
+		if (size_ == 0) {
+			last_ = nullptr;
+		}
+
+		E* element = new E(old_head-&gt;element());
+		delete old_head;
+
+		return element;
+	}
+
+	// 提供一个函数，遍历队列中每一元素，调用这个函数，返回结果存储在一个新的队列，源队列对象不受影响
+	template &lt;typename F&gt;
+	Queue* Map(F function) const {
+		Queue* new_queue = new Queue();
+		for (const QueueNode&lt;E&gt;* node = head_; node != nullptr;
+			node = node-&gt;next_) {
+			new_queue-&gt;Enqueue(function(node-&gt;element()));
+		}
+
+		return new_queue;
+	}
+
+private:
+	QueueNode&lt;E&gt;* head_;  // 队列头结点
+	QueueNode&lt;E&gt;* last_;  // 队列尾结点
+	size_t size_;  // 队列元素个数
+
+	// 这里不允许复制队列.
+	Queue(const Queue&amp;);
+	const Queue&amp; operator = (const Queue&amp;);
+};
+
+#endif  // GTEST_SAMPLES_SAMPLE03_INL_H_
+
+</code></pre> 
+<p> </p> 
+<p>TestSample03.cpp代码</p> 
+<pre><code class="language-cpp">//在这个例子中，我们使用Gtest中更高级一点的特性，叫test fixture, 一般翻译测试夹具
+//
+// 测试夹具是用来放置对象和函数，并共享给所有的测试用例在一个测试cpp文件中
+// 使用测试夹具能够避免测试代码重复，特别是哪些每个测试都需要用到的初始化和清除操作
+//
+//测试从代码共享的意义上共享的是测试夹具，而不是数据共享。
+//每个测试都有自己的最新副本夹具。 您不能期望一次测试修改的数据是传递给另一个测试，这是一个坏主意.
+//
+// 这么设计的原因是保持测试的独立性和可重复性  
+// 一个测试不能受其他的测试失败而导致失败
+//如果一个测试依赖于另一个测试，这两个测试应该是被看作一个大的测试
+//
+// 响应测试成功或失败的宏（例如 EXPECT_TRUE, FAIL, 等）需要知道当前的测试是什么
+// 当Google test打印测试结果，如果遇到失败，打印结果会告诉失败是哪一个测试
+//从技术上讲，这些宏会调用Test类的成员函数。 因此，您不能在全局函数中使用他们。
+//这就是为什么您应该放置测试子例程在测试夹具中。
+//
+
+#include "sample03.h"
+#include "gtest/gtest.h"
+namespace {
+	// 想要使用测试夹具，需要定义一个类并继承testing::Test 
+	class QueueTestSmpl3 : public testing::Test {
+	protected:  // 这里使用保护关键字，成员都受访问保护，可以从子类中访问到父类受保护的成员
+
+	// 每个TEST宏的测试在开始运行之前都会调用virtual void SetUp() 
+	//应该实现这个SetUp()，例如一些变量初始化，如果用不到就不需要提供SetUp()
+				
+	void SetUp() override {
+		q1_.Enqueue(1);
+		q2_.Enqueue(2);
+		q2_.Enqueue(3);
+	}
+
+	// 每个TEST宏的测试在结束之前都会调用virtual void TearDown() 
+	// 你应该定义在TearDown中做哪些清除操作，否则不应该提供这个TearDown函数
+	//
+	// virtual void TearDown() {
+	// }
+
+	// 一个帮助函数，有些测试需要用到
+	static int Double(int n) {
+		return 2 * n;
+	}
+
+	// 一个帮助函数，为了测试 Queue::Map().
+	void MapTester(const Queue&lt;int&gt; * q) {
+		// 新建一个对象，队列中每一个元素都是q中元素的两倍大小
+		const Queue&lt;int&gt; * const new_q = q-&gt;Map(Double);
+
+		// 确认新的队列大小和q是一样大
+		ASSERT_EQ(q-&gt;Size(), new_q-&gt;Size());
+
+		// 确认两个队列之间元素的关系
+		for (const QueueNode&lt;int&gt;*n1 = q-&gt;Head(), *n2 = new_q-&gt;Head();
+			n1 != nullptr; n1 = n1-&gt;next(), n2 = n2-&gt;next()) {
+			EXPECT_EQ(2 * n1-&gt;element(), n2-&gt;element());
+		}
+
+		delete new_q;
+	}
+
+		// 声明接下来你想用到的几个变量
+		Queue&lt;int&gt; q0_;
+		Queue&lt;int&gt; q1_;
+		Queue&lt;int&gt; q2_;
+	};
+
+	// 当你有需要测试夹具（ fixture翻译为夹具），需要使用 TEST_F宏编写测试用例，不用TEST宏
+
+	// 测试默认构造函数
+	TEST_F(QueueTestSmpl3, DefaultConstructor) {
+		// 可以访问元素使用TEST_IF
+		EXPECT_EQ(0u, q0_.Size());
+	}
+
+	// 测试 Dequeue().
+	TEST_F(QueueTestSmpl3, Dequeue) {
+		int * n = q0_.Dequeue();
+		EXPECT_TRUE(n == nullptr);
+
+		n = q1_.Dequeue();
+		ASSERT_TRUE(n != nullptr);
+		EXPECT_EQ(1, *n);
+		EXPECT_EQ(0u, q1_.Size());
+		delete n;
+
+		n = q2_.Dequeue();
+		ASSERT_TRUE(n != nullptr);
+		EXPECT_EQ(2, *n);
+		EXPECT_EQ(1u, q2_.Size());
+		delete n;
+	}
+
+	// 测试函数Queue::Map() 
+	TEST_F(QueueTestSmpl3, Map) {
+		MapTester(&amp;q0_);
+		MapTester(&amp;q1_);
+		MapTester(&amp;q2_);
+	}
+}  // namespace
+</code></pre> 
+<p>在拷贝我的代码过程需要注意，我在每个cpp文件都右键-属性-预编译头中选择了不使用预编译头。</p> 
+<p>点击生成解决方案，查看gtest的运行输出结果</p> 
+<p><img alt="" height="531" src="https://images2.imgbox.com/98/59/8hTOxCsu_o.png" width="585"></p> 
+<p>红圈这几个测试结果是本篇关于test fixture的用例运行结果，注意看倒数第3行，Global test environment tear-down，这个gtest在运行全部测试用例的时候，内部也使用了TearDown()这个机制。</p> 
+<p> </p> 
+<p><strong>3.总结</strong></p> 
+<p>这篇重点是介绍学习test fixture的基本使用。被测试的对象是一个自定义的队列数据结构的MyQueue类。测试代码中用到了new开辟内存空间和delete删除内存空间，还有模板类的定义。</p> 
+<p>1.使用TEST_F(测试夹具名称，测试用例名称)</p> 
+<p>这个测试夹具名称一般就是我们在cpp文件中提前写的自定义类的名称，这个类是必须继承testing::Test</p> 
+<p> </p> 
+<p>本篇就新使用到了几个测试断言宏</p> 
+<pre><code>ASSERT_EQ	//强断言 两个对象是否相等
+ASSERT_TRUE	//强断言，表达式或函数返回值是不是true
+</code></pre> 
+<p>这个看起来和前面的EXPECT_EQ和EXPECT_TRUE是一样的作用，很自然，我们就会去想ASSER和EXPECT有什么区别。</p> 
+<p> </p> 
+<p><strong>4.ASSERT和EXPECT的区别</strong></p> 
+<p>我们在gtest中光标定位在ASSERT_TURE,按下键盘F12，可以看到定义这个方法的代码如下</p> 
+<p><img alt="" height="386" src="https://images2.imgbox.com/df/ec/Gw58anUB_o.png" width="868"></p> 
+<p>        通过对比ASSERT_TRUE和EXPECT_TRUE中调用代码的实现，发现两个断言宏的根本区别是在于NONFATAL 和FATAL的区别。上面可以看到EXPECT是调用NONFATAL，而ASSERT是调用FATAL实现。在不继续看代码之前，我们先搞清楚FATAL这个英文单词的意思，翻译过来就是致命。也就是ASSERT走的是致命失败，而EXPECT走的是非致命失败。</p> 
+<p>        接着分别来看<strong>GTEST_NONFATAL_FAILURE_</strong> 和<strong>GTEST_FATAL_FAILURE_</strong>的内部实现</p> 
+<p><img alt="" height="368" src="https://images2.imgbox.com/29/92/DvPHoiFV_o.png" width="793"></p> 
+<p>上面我们点击右侧TestPartResult这个接口，点击F12。</p> 
+<p><img alt="" height="366" src="https://images2.imgbox.com/3d/39/A8ji2n7i_o.png" width="674"></p> 
+<p>马上就接近真相，通过红圈两个枚举的注释我们得到了答案。</p> 
+<p><span style="color:#f33b45;"><strong>ASSERT_TRUE ：如果失败，测试应该被终止</strong></span></p> 
+<p><span style="color:#f33b45;"><strong>EXPECT_TRUE：如果失败，测试可以继续往下运行</strong></span></p> 
+<p>根据这个结论，但是我们当前的水平不好写代码去验证，因为gtest的运行报告不会显示我们自己写的std::cout语句的打印数据。</p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/501170a1d530233f00de9792357cd8ea/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">PTA 检查密码（java）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/53a75ac8fb9b19b2921a915163de89f1/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">GTest基础学习-05-第5个单元测试-父test fixture和子test fixture的使用</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【天池】心跳信号分类预测 最后的一堂课 part4 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【天池】心跳信号分类预测 最后的一堂课 part4" />
+<meta property="og:description" content="文章目录 1. 依赖安装和导入2. 数据加载与预处理3. 数据探索性分析3.1 基本分析3.2 查看类别分布 4. 辅助函数评估函数5. 模型训练与推理 (TensorFlow 2.2&#43;)5.1 Net 15.2 Net 35.3 Net 8 6. 软投票融合 &#43; 阈值法7. 保存结果用于提交8. 后话 写在前面：
+这比赛也跟着各位大佬打了一遍，可惜的是当初使用的是传统的机器学习模型，并没有使用CNN这种深度学习框架，但是在这过程中也学习到好多——列如各样特征技巧、处理技巧！
+从结束的那天起，就好像看前几名的关键方案了
+碎碎念——》终于出来了
+让我们跟着大佬的思路学一波
+这也是我对这场比赛最后的一个交代吧！
+1. 依赖安装和导入 import os import math import time import random import datetime import numpy as np import pandas as pd import seaborn as sns import matplotlib.pyplot as plt import tensorflow as tf import tensorflow.keras as K from tensorflow.keras import Sequential, utils, regularizers, Model, Input from tensorflow." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3a5b667a1279c0aed4cf28814364d199/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-06-08T19:56:45+08:00" />
+<meta property="article:modified_time" content="2021-06-08T19:56:45+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【天池】心跳信号分类预测 最后的一堂课 part4</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#1__15" rel="nofollow">1. 依赖安装和导入</a></li><li><a href="#2__35" rel="nofollow">2. 数据加载与预处理</a></li><li><a href="#3__120" rel="nofollow">3. 数据探索性分析</a></li><li><ul><li><a href="#31__121" rel="nofollow">3.1 基本分析</a></li><li><a href="#32__153" rel="nofollow">3.2 查看类别分布</a></li></ul> 
+  </li><li><a href="#4__178" rel="nofollow">4. 辅助函数</a></li><li><a href="#_179" rel="nofollow">评估函数</a></li><li><a href="#5__TensorFlow_22_188" rel="nofollow">5. 模型训练与推理 (TensorFlow 2.2+)</a></li><li><ul><li><a href="#51_Net_1_195" rel="nofollow">5.1 Net 1</a></li><li><a href="#52_Net_3_239" rel="nofollow">5.2 Net 3</a></li><li><a href="#53_Net_8_303" rel="nofollow">5.3 Net 8</a></li></ul> 
+  </li><li><a href="#6____356" rel="nofollow">6. 软投票融合 + 阈值法</a></li><li><a href="#7__416" rel="nofollow">7. 保存结果用于提交</a></li><li><a href="#8__427" rel="nofollow">8. 后话</a></li></ul> 
+</div> 
+<p></p> 
+<p><strong>写在前面：</strong><br> 这比赛也跟着各位大佬打了一遍，可惜的是当初使用的是传统的机器学习模型，并没有使用CNN这种深度学习框架，但是在这过程中也学习到好多——列如各样特征技巧、处理技巧！</p> 
+<p>从结束的那天起，就好像看前几名的关键方案了</p> 
+<p>碎碎念——》终于出来了</p> 
+<p>让我们跟着大佬的思路学一波</p> 
+<p>这也是我对这场比赛最后的一个交代吧！</p> 
+<h2><a id="1__15"></a>1. 依赖安装和导入</h2> 
+<pre><code class="prism language-bash"><span class="token function">import</span> os
+<span class="token function">import</span> math
+<span class="token function">import</span> <span class="token function">time</span>
+<span class="token function">import</span> random
+<span class="token function">import</span> datetime
+<span class="token function">import</span> numpy as np
+<span class="token function">import</span> pandas as pd
+<span class="token function">import</span> seaborn as sns
+<span class="token function">import</span> matplotlib.pyplot as plt
+<span class="token function">import</span> tensorflow as tf
+<span class="token function">import</span> tensorflow.keras as K
+from tensorflow.keras <span class="token function">import</span> Sequential, utils, regularizers, Model, Input
+from tensorflow.keras.layers <span class="token function">import</span> Flatten, Dense, Conv1D, MaxPool1D, Dropout, AvgPool1D
+from imblearn.over_sampling <span class="token function">import</span> SMOTE
+from sklearn.model_selection <span class="token function">import</span> KFold
+from sklearn.preprocessing <span class="token function">import</span> OneHotEncoder
+</code></pre> 
+<h2><a id="2__35"></a>2. 数据加载与预处理</h2> 
+<pre><code class="prism language-bash"><span class="token comment"># 加载训练集和测试集(相对路径)</span>
+train <span class="token operator">=</span> pd.read_csv<span class="token punctuation">(</span><span class="token string">'./train.csv'</span><span class="token punctuation">)</span>
+<span class="token builtin class-name">test</span> <span class="token operator">=</span> pd.read_csv<span class="token punctuation">(</span><span class="token string">'./testA.csv'</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash"><span class="token comment"># 数据精度量化压缩</span>
+def reduce_mem_usage<span class="token punctuation">(</span>df<span class="token punctuation">)</span>:
+    <span class="token comment"># 处理前 数据集总内存计算</span>
+    start_mem <span class="token operator">=</span> df.memory_usage<span class="token punctuation">(</span><span class="token punctuation">)</span>.sum<span class="token punctuation">(</span><span class="token punctuation">)</span> / <span class="token number">1024</span>**2 
+    print<span class="token punctuation">(</span><span class="token string">'Memory usage of dataframe is {:.2f} MB'</span>.format<span class="token punctuation">(</span>start_mem<span class="token punctuation">))</span>
+    
+    <span class="token comment"># 遍历特征列</span>
+    <span class="token keyword">for</span> <span class="token for-or-select variable">col</span> <span class="token keyword">in</span> df.columns:
+        <span class="token comment"># 当前特征类型</span>
+        col_type <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.dtype
+        <span class="token comment"># 处理 numeric 型数据</span>
+        <span class="token keyword">if</span> col_type <span class="token operator">!=</span> object:
+            c_min <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.min<span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment"># 最小值</span>
+            c_max <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.max<span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment"># 最大值</span>
+            <span class="token comment"># int 型数据 精度转换</span>
+            <span class="token keyword">if</span> str<span class="token punctuation">(</span>col_type<span class="token punctuation">)</span><span class="token punctuation">[</span>:3<span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'int'</span><span class="token builtin class-name">:</span>
+                <span class="token keyword">if</span> c_min <span class="token operator">&gt;</span> np.iinfo<span class="token punctuation">(</span>np.int8<span class="token punctuation">)</span>.min and c_max <span class="token operator">&lt;</span> np.iinfo<span class="token punctuation">(</span>np.int8<span class="token punctuation">)</span>.max:
+                    df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span>np.int8<span class="token punctuation">)</span>
+                <span class="token keyword">elif</span> c_min <span class="token operator">&gt;</span> np.iinfo<span class="token punctuation">(</span>np.int16<span class="token punctuation">)</span>.min and c_max <span class="token operator">&lt;</span> np.iinfo<span class="token punctuation">(</span>np.int16<span class="token punctuation">)</span>.max:
+                    df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span>np.int16<span class="token punctuation">)</span>
+                <span class="token keyword">elif</span> c_min <span class="token operator">&gt;</span> np.iinfo<span class="token punctuation">(</span>np.int32<span class="token punctuation">)</span>.min and c_max <span class="token operator">&lt;</span> np.iinfo<span class="token punctuation">(</span>np.int32<span class="token punctuation">)</span>.max:
+                    df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span>np.int32<span class="token punctuation">)</span>
+                <span class="token keyword">elif</span> c_min <span class="token operator">&gt;</span> np.iinfo<span class="token punctuation">(</span>np.int64<span class="token punctuation">)</span>.min and c_max <span class="token operator">&lt;</span> np.iinfo<span class="token punctuation">(</span>np.int64<span class="token punctuation">)</span>.max:
+                    df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span>np.int64<span class="token punctuation">)</span>  
+            <span class="token comment"># float 型数据 精度转换</span>
+            else:
+                <span class="token keyword">if</span> c_min <span class="token operator">&gt;</span> np.finfo<span class="token punctuation">(</span>np.float16<span class="token punctuation">)</span>.min and c_max <span class="token operator">&lt;</span> np.finfo<span class="token punctuation">(</span>np.float16<span class="token punctuation">)</span>.max:
+                    df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span>np.float16<span class="token punctuation">)</span>
+                <span class="token keyword">elif</span> c_min <span class="token operator">&gt;</span> np.finfo<span class="token punctuation">(</span>np.float32<span class="token punctuation">)</span>.min and c_max <span class="token operator">&lt;</span> np.finfo<span class="token punctuation">(</span>np.float32<span class="token punctuation">)</span>.max:
+                    df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span>np.float32<span class="token punctuation">)</span>
+                else:
+                    df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span>np.float64<span class="token punctuation">)</span>
+        <span class="token comment"># 处理 object 型数据</span>
+        else:
+            df<span class="token punctuation">[</span>col<span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span>col<span class="token punctuation">]</span>.astype<span class="token punctuation">(</span><span class="token string">'category'</span><span class="token punctuation">)</span>  <span class="token comment"># object 转 category</span>
+    
+    <span class="token comment"># 处理后 数据集总内存计算</span>
+    end_mem <span class="token operator">=</span> df.memory_usage<span class="token punctuation">(</span><span class="token punctuation">)</span>.sum<span class="token punctuation">(</span><span class="token punctuation">)</span> / <span class="token number">1024</span>**2 
+    print<span class="token punctuation">(</span><span class="token string">'Memory usage after optimization is: {:.2f} MB'</span>.format<span class="token punctuation">(</span>end_mem<span class="token punctuation">))</span>
+    print<span class="token punctuation">(</span><span class="token string">'Decreased by {:.1f}%'</span>.format<span class="token punctuation">(</span><span class="token number">100</span> * <span class="token punctuation">(</span>start_mem - end_mem<span class="token punctuation">)</span> / start_mem<span class="token punctuation">))</span>
+    
+    <span class="token builtin class-name">return</span> <span class="token function">df</span>
+
+
+<span class="token comment"># 训练集特征处理与精度量化</span>
+train_list <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+<span class="token keyword">for</span> <span class="token for-or-select variable">items</span> <span class="token keyword">in</span> train.values:
+    train_list.append<span class="token punctuation">(</span><span class="token punctuation">[</span>items<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">]</span> + <span class="token punctuation">[</span>float<span class="token punctuation">(</span>i<span class="token punctuation">)</span> <span class="token keyword">for</span> <span class="token for-or-select variable">i</span> <span class="token keyword">in</span> items<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>.split<span class="token punctuation">(</span><span class="token string">','</span><span class="token punctuation">)</span><span class="token punctuation">]</span> + <span class="token punctuation">[</span>items<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+train <span class="token operator">=</span> pd.DataFrame<span class="token punctuation">(</span>np.array<span class="token punctuation">(</span>train_list<span class="token punctuation">))</span>
+train.columns <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'id'</span><span class="token punctuation">]</span> + <span class="token punctuation">[</span><span class="token string">'s_'</span> + str<span class="token punctuation">(</span>i<span class="token punctuation">)</span> <span class="token keyword">for</span> <span class="token for-or-select variable">i</span> <span class="token keyword">in</span> range<span class="token punctuation">(</span>len<span class="token punctuation">(</span>train_list<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span>-2<span class="token punctuation">)</span><span class="token punctuation">]</span> + <span class="token punctuation">[</span><span class="token string">'label'</span><span class="token punctuation">]</span>  <span class="token comment"># 特征分离</span>
+train <span class="token operator">=</span> reduce_mem_usage<span class="token punctuation">(</span>train<span class="token punctuation">)</span>  <span class="token comment"># 精度量化</span>
+
+
+<span class="token comment"># 测试集特征处理与精度量化</span>
+<span class="token assign-left variable">test_list</span><span class="token operator">=</span><span class="token punctuation">[</span><span class="token punctuation">]</span>
+<span class="token keyword">for</span> <span class="token for-or-select variable">items</span> <span class="token keyword">in</span> test.values:
+    test_list.append<span class="token punctuation">(</span><span class="token punctuation">[</span>items<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">]</span> + <span class="token punctuation">[</span>float<span class="token punctuation">(</span>i<span class="token punctuation">)</span> <span class="token keyword">for</span> <span class="token for-or-select variable">i</span> <span class="token keyword">in</span> items<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>.split<span class="token punctuation">(</span><span class="token string">','</span><span class="token punctuation">)</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+<span class="token builtin class-name">test</span> <span class="token operator">=</span> pd.DataFrame<span class="token punctuation">(</span>np.array<span class="token punctuation">(</span>test_list<span class="token punctuation">))</span>
+test.columns <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'id'</span><span class="token punctuation">]</span> + <span class="token punctuation">[</span><span class="token string">'s_'</span>+str<span class="token punctuation">(</span>i<span class="token punctuation">)</span> <span class="token keyword">for</span> <span class="token for-or-select variable">i</span> <span class="token keyword">in</span> range<span class="token punctuation">(</span>len<span class="token punctuation">(</span>test_list<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span>-1<span class="token punctuation">)</span><span class="token punctuation">]</span>  <span class="token comment"># 特征分离</span>
+<span class="token builtin class-name">test</span> <span class="token operator">=</span> reduce_mem_usage<span class="token punctuation">(</span>test<span class="token punctuation">)</span>  <span class="token comment"># 精度量化</span>
+</code></pre> 
+<pre><code class="prism language-bash"><span class="token comment"># 查看训练集, 分离标签与样本, 去除 id</span>
+y_train <span class="token operator">=</span> train<span class="token punctuation">[</span><span class="token string">'label'</span><span class="token punctuation">]</span>
+x_train <span class="token operator">=</span> train.drop<span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">'id'</span>, <span class="token string">'label'</span><span class="token punctuation">]</span>, <span class="token assign-left variable">axis</span><span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">)</span>
+print<span class="token punctuation">(</span>x_train.shape, y_train.shape<span class="token punctuation">)</span>
+
+<span class="token comment"># 查看测试集, 去除 id</span>
+X_test <span class="token operator">=</span> test.drop<span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">'id'</span><span class="token punctuation">]</span>, <span class="token assign-left variable">axis</span><span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">)</span>
+print<span class="token punctuation">(</span>X_test.shape<span class="token punctuation">)</span>
+
+<span class="token comment"># 将测试集转换为适应 CNN 输入的 shape</span>
+X_test <span class="token operator">=</span> np.array<span class="token punctuation">(</span>X_test<span class="token punctuation">)</span>.reshape<span class="token punctuation">(</span>X_test.shape<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>, X_test.shape<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>, <span class="token number">1</span><span class="token punctuation">)</span>
+print<span class="token punctuation">(</span>X_test.shape, X_test.dtype<span class="token punctuation">)</span>
+</code></pre> 
+<h2><a id="3__120"></a>3. 数据探索性分析</h2> 
+<h3><a id="31__121"></a>3.1 基本分析</h3> 
+<pre><code class="prism language-bash">train.head<span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment"># 查看前 5 条信息</span>
+</code></pre> 
+<pre><code class="prism language-bash">test.head<span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token comment"># 查看前 5 条信息</span>
+</code></pre> 
+<pre><code class="prism language-bash">train.describe<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash">test.describe<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash">train.info<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash">test.info<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<p>综上可知：</p> 
+<ol><li>主要的特征数据为 1 维信号振幅 (已被归一化至 0～1 了)，总长度均为 205 (205 个时间节点/心跳节拍)</li><li>同时，除波形数据外，没有任何辅助或先验信息可以利用</li><li>波形数据均已被量化为 float16 类型的数值型特征，且没有类别型特征需要考虑</li><li>没有缺失值，无需填充，非常理想 —— 事实上，未采集到的信号默认振幅就是 0，故不存在缺失值的问题</li><li>显然，这类非表格数据更适合用神经网络来处理，而非传统机器学习模型</li></ol> 
+<h3><a id="32__153"></a>3.2 查看类别分布</h3> 
+<pre><code class="prism language-bash">plt.hist<span class="token punctuation">(</span>train<span class="token punctuation">[</span><span class="token string">'label'</span><span class="token punctuation">]</span>, orientation <span class="token operator">=</span> <span class="token string">'vertical'</span>, histtype <span class="token operator">=</span> <span class="token string">'bar'</span>, color <span class="token operator">=</span> <span class="token string">'red'</span><span class="token punctuation">)</span>
+plt.show<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+</code></pre> 
+<p>试了很多种方法，最后发现还是用 SMOTE 对少数类别上采样效果最好：</p> 
+<pre><code class="prism language-bash"><span class="token comment"># 使用 SMOTE 对数据进行上采样以解决类别不平衡问题</span>
+smote <span class="token operator">=</span> SMOTE<span class="token punctuation">(</span>random_state<span class="token operator">=</span><span class="token number">2021</span>, <span class="token assign-left variable">n_jobs</span><span class="token operator">=</span>-1<span class="token punctuation">)</span>
+k_x_train, k_y_train <span class="token operator">=</span> smote.fit_resample<span class="token punctuation">(</span>x_train, y_train<span class="token punctuation">)</span>  
+print<span class="token punctuation">(</span>f<span class="token string">"after smote, k_x_train.shape: {k_x_train.shape}, k_y_train.shape: {k_y_train.shape}"</span><span class="token punctuation">)</span>
+
+<span class="token comment"># 将训练集转换为适应 CNN 输入的 shape</span>
+k_x_train <span class="token operator">=</span> np.array<span class="token punctuation">(</span>k_x_train<span class="token punctuation">)</span>.reshape<span class="token punctuation">(</span>k_x_train.shape<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>, k_x_train.shape<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>, <span class="token number">1</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash">plt.hist<span class="token punctuation">(</span>k_y_train, orientation <span class="token operator">=</span> <span class="token string">'vertical'</span>, histtype <span class="token operator">=</span> <span class="token string">'bar'</span>, color <span class="token operator">=</span> <span class="token string">'blue'</span><span class="token punctuation">)</span>
+plt.show<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+</code></pre> 
+<p>但这样做的缺点也显而易见 —— 运算量大幅度增加且容易导致过拟合，这也是我从 A 榜切换到 B 榜分数大跌的原因之一 T T</p> 
+<h2><a id="4__178"></a>4. 辅助函数</h2> 
+<h2><a id="_179"></a>评估函数</h2> 
+<pre><code class="prism language-bash">def abs_sum<span class="token punctuation">(</span>y_pred, y_true<span class="token punctuation">)</span>:
+    y_pred <span class="token operator">=</span> np.array<span class="token punctuation">(</span>y_pred<span class="token punctuation">)</span>
+    y_true <span class="token operator">=</span> np.array<span class="token punctuation">(</span>y_true<span class="token punctuation">)</span>
+    loss <span class="token operator">=</span> sum<span class="token punctuation">(</span>sum<span class="token punctuation">(</span>abs<span class="token punctuation">(</span>y_pred-y_true<span class="token punctuation">))</span><span class="token punctuation">)</span>
+    <span class="token builtin class-name">return</span> loss
+</code></pre> 
+<h2><a id="5__TensorFlow_22_188"></a>5. 模型训练与推理 (TensorFlow 2.2+)</h2> 
+<ul><li>由于数据特征形式较简单，仅 SMOTE 上采样处理后重复、相似性高，使用 过于复杂和深层 的神经网络将 极易过拟合，故本方案采用的模型都较为简单，且均使用了 Dropout 减轻过拟合(几乎是必须的操作)</li><li>共用 3 个单模融合，A 榜得分分别约为：Net1 142，Net3 156，Net8 145，此亦为加权融合设置权重的依据</li><li>模型融合并取得提升的前提是 好而不同，为此，3 个模型各自具有一定性能 (较好) 但在细节上都有一定差别 (不同)。模型的设计是本方案提升的关键，例如膨胀卷积、各种池化、分类器等，需细品 ^ ^</li><li>由于模型及其超参数在 B 榜时已确定和固定，不再划分训练集和验证集，直接使用全数据集训练模型 (但 A 榜平时采用 10-fold CV)</li><li>训练策略均为：学习率阶梯衰减策略 LearningRateScheduler + Adam 优化器 + sparse_categorical_crossentropy 损失函数 + batch_size 64 + epoch 30</li></ul> 
+<h3><a id="51_Net_1_195"></a>5.1 Net 1</h3> 
+<pre><code class="prism language-bash">class Net1<span class="token punctuation">(</span>K.Model<span class="token punctuation">)</span>:
+    def __init__<span class="token punctuation">(</span>self<span class="token punctuation">)</span>:
+        super<span class="token punctuation">(</span>Net1, self<span class="token punctuation">)</span>.__init__<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        self.conv1 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">16</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span>, input_shape <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">205</span>, <span class="token number">1</span><span class="token punctuation">))</span>
+        self.conv2 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">32</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv3 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">64</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv4 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">64</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.max_pool1 <span class="token operator">=</span> MaxPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        
+        self.conv5 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv6 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.max_pool2 <span class="token operator">=</span> MaxPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        
+        self.dropout <span class="token operator">=</span> Dropout<span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">)</span>
+        self.flatten <span class="token operator">=</span> Flatten<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        
+        self.fc1 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">256</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.fc21 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">16</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.fc22 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">256</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'sigmoid'</span><span class="token punctuation">)</span>
+        self.fc3 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">4</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'softmax'</span><span class="token punctuation">)</span>
+            
+    def call<span class="token punctuation">(</span>self, x<span class="token punctuation">)</span>:
+        x <span class="token operator">=</span> self.conv1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv2<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv3<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv4<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.max_pool1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        
+        x <span class="token operator">=</span> self.conv5<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv6<span class="token punctuation">(</span>x<span class="token punctuation">)</span> 
+        x <span class="token operator">=</span> self.max_pool2<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        
+        x <span class="token operator">=</span> self.dropout<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.flatten<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        
+        x1 <span class="token operator">=</span> self.fc1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x2 <span class="token operator">=</span> self.fc22<span class="token punctuation">(</span>self.fc21<span class="token punctuation">(</span>x<span class="token punctuation">))</span>
+        x <span class="token operator">=</span> self.fc3<span class="token punctuation">(</span>x1+x2<span class="token punctuation">)</span>
+        
+        <span class="token builtin class-name">return</span> x 
+</code></pre> 
+<h3><a id="52_Net_3_239"></a>5.2 Net 3</h3> 
+<pre><code class="prism language-bash">class GeMPooling<span class="token punctuation">(</span>tf.keras.layers.Layer<span class="token punctuation">)</span>:
+    def __init__<span class="token punctuation">(</span>self, <span class="token assign-left variable">p</span><span class="token operator">=</span><span class="token number">1.0</span>, <span class="token assign-left variable">train_p</span><span class="token operator">=</span>False<span class="token punctuation">)</span>:
+        super<span class="token punctuation">(</span><span class="token punctuation">)</span>.__init__<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        self.eps <span class="token operator">=</span> 1e-6
+        self.p <span class="token operator">=</span> tf.Variable<span class="token punctuation">(</span>p, <span class="token assign-left variable">dtype</span><span class="token operator">=</span>tf.float32<span class="token punctuation">)</span> <span class="token keyword">if</span> train_p <span class="token keyword">else</span> p
+
+    def call<span class="token punctuation">(</span>self, inputs: tf.Tensor, **kwargs<span class="token punctuation">)</span>:
+        inputs <span class="token operator">=</span> tf.clip_by_value<span class="token punctuation">(</span>inputs, <span class="token assign-left variable">clip_value_min</span><span class="token operator">=</span>1e-6, <span class="token assign-left variable">clip_value_max</span><span class="token operator">=</span>tf.reduce_max<span class="token punctuation">(</span>inputs<span class="token punctuation">))</span>
+        inputs <span class="token operator">=</span> tf.pow<span class="token punctuation">(</span>inputs, self.p<span class="token punctuation">)</span>
+        inputs <span class="token operator">=</span> tf.reduce_mean<span class="token punctuation">(</span>inputs, <span class="token assign-left variable">axis</span><span class="token operator">=</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>, <span class="token assign-left variable">keepdims</span><span class="token operator">=</span>False<span class="token punctuation">)</span>
+        inputs <span class="token operator">=</span> tf.pow<span class="token punctuation">(</span>inputs, <span class="token number">1</span>./self.p<span class="token punctuation">)</span>
+        <span class="token builtin class-name">return</span> inputs
+
+
+class Net3<span class="token punctuation">(</span>K.Model<span class="token punctuation">)</span>:
+    def __init__<span class="token punctuation">(</span>self<span class="token punctuation">)</span>:
+        super<span class="token punctuation">(</span>Net3, self<span class="token punctuation">)</span>.__init__<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        self.conv1 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">16</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span>, input_shape <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">205</span>, <span class="token number">1</span><span class="token punctuation">))</span>
+        self.conv2 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">32</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv3 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">64</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.max_pool1 <span class="token operator">=</span> MaxPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        
+        self.conv4 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">64</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv5 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.max_pool2 <span class="token operator">=</span> MaxPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        
+        self.conv6 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">256</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv7 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">7</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.gempool <span class="token operator">=</span> GeMPooling<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        
+        self.dropout1 <span class="token operator">=</span> Dropout<span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">)</span>
+        self.flatten <span class="token operator">=</span> Flatten<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+        self.fc1 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">256</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.fc21 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">16</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.fc22 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">256</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'sigmoid'</span><span class="token punctuation">)</span>
+        self.fc3 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">4</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'softmax'</span><span class="token punctuation">)</span>
+
+    def call<span class="token punctuation">(</span>self, x<span class="token punctuation">)</span>:
+        x <span class="token operator">=</span> self.conv1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv2<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv3<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.max_pool1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        
+        x <span class="token operator">=</span> self.conv4<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv5<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.max_pool2<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        
+        x <span class="token operator">=</span> self.conv6<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv7<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+
+        x <span class="token operator">=</span> self.gempool<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.dropout1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        
+        x <span class="token operator">=</span> self.flatten<span class="token punctuation">(</span>x<span class="token punctuation">)</span>  
+        x1 <span class="token operator">=</span> self.fc1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x2 <span class="token operator">=</span> self.fc22<span class="token punctuation">(</span>self.fc21<span class="token punctuation">(</span>x<span class="token punctuation">))</span>
+        x <span class="token operator">=</span> self.fc3<span class="token punctuation">(</span>x1 + x2<span class="token punctuation">)</span>  
+        
+        <span class="token builtin class-name">return</span> x
+</code></pre> 
+<h3><a id="53_Net_8_303"></a>5.3 Net 8</h3> 
+<pre><code class="prism language-bash">class Net8<span class="token punctuation">(</span>K.Model<span class="token punctuation">)</span>: 
+    def __init__<span class="token punctuation">(</span>self<span class="token punctuation">)</span>:
+        super<span class="token punctuation">(</span>Net8, self<span class="token punctuation">)</span>.__init__<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        self.conv1 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">16</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span>,input_shape <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">205</span>, <span class="token number">1</span><span class="token punctuation">))</span>
+        self.conv2 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">32</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv3 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">64</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv4 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv5 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.max_pool1 <span class="token operator">=</span> MaxPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        self.avg_pool1 <span class="token operator">=</span> AvgPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        
+        self.conv6 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.conv7 <span class="token operator">=</span> Conv1D<span class="token punctuation">(</span>filters<span class="token operator">=</span><span class="token number">128</span>, <span class="token assign-left variable">kernel_size</span><span class="token operator">=</span><span class="token number">5</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span>, <span class="token assign-left variable">dilation_rate</span><span class="token operator">=</span><span class="token number">2</span>,  <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.max_pool2 <span class="token operator">=</span> MaxPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        self.avg_pool2 <span class="token operator">=</span> AvgPool1D<span class="token punctuation">(</span>pool_size<span class="token operator">=</span><span class="token number">3</span>, <span class="token assign-left variable">strides</span><span class="token operator">=</span><span class="token number">2</span>, <span class="token assign-left variable">padding</span><span class="token operator">=</span><span class="token string">'same'</span><span class="token punctuation">)</span>
+        
+        self.dropout <span class="token operator">=</span> Dropout<span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">)</span>
+    
+        self.flatten <span class="token operator">=</span> Flatten<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        
+        self.fc1 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">256</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.fc21 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">16</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'relu'</span><span class="token punctuation">)</span>
+        self.fc22 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">256</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'sigmoid'</span><span class="token punctuation">)</span>
+        self.fc3 <span class="token operator">=</span> Dense<span class="token punctuation">(</span>units<span class="token operator">=</span><span class="token number">4</span>, <span class="token assign-left variable">activation</span><span class="token operator">=</span><span class="token string">'softmax'</span><span class="token punctuation">)</span>
+            
+    def call<span class="token punctuation">(</span>self, x<span class="token punctuation">)</span>:
+        x <span class="token operator">=</span> self.conv1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv2<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv3<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv4<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv5<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        xm1 <span class="token operator">=</span> self.max_pool1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        xa1 <span class="token operator">=</span> self.avg_pool1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> tf.concat<span class="token punctuation">(</span><span class="token punctuation">[</span>xm1, xa1<span class="token punctuation">]</span>, <span class="token number">2</span><span class="token punctuation">)</span>
+        
+        x <span class="token operator">=</span> self.conv6<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.conv7<span class="token punctuation">(</span>x<span class="token punctuation">)</span> 
+        xm2 <span class="token operator">=</span> self.max_pool2<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        xa2 <span class="token operator">=</span> self.avg_pool2<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> tf.concat<span class="token punctuation">(</span><span class="token punctuation">[</span>xm2, xa2<span class="token punctuation">]</span>, <span class="token number">2</span><span class="token punctuation">)</span>
+        
+        x <span class="token operator">=</span> self.dropout<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x <span class="token operator">=</span> self.flatten<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        
+        x1 <span class="token operator">=</span> self.fc1<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+        x2 <span class="token operator">=</span> self.fc22<span class="token punctuation">(</span>self.fc21<span class="token punctuation">(</span>x<span class="token punctuation">))</span>
+        x <span class="token operator">=</span> self.fc3<span class="token punctuation">(</span>x1+x2<span class="token punctuation">)</span>
+        
+        <span class="token builtin class-name">return</span> x 
+</code></pre> 
+<h2><a id="6____356"></a>6. 软投票融合 + 阈值法</h2> 
+<ul><li>由于 3 个单模均输出类别概率预测值，故使用 Soft Voting 根据 A 榜单模得分设置权重，以实现预测结果加权融合</li><li>由于本赛题属于分类问题，可使用阈值法将预测概率不小于 0.5 的类别置 1，其余则置 0</li><li>对于预测概率均小于 0.5 的难样本，使用二次处理：若最大预测值比次大预测值至少高 0.04 (这个值需要自己把握)，则认为最大预测值足够可信并置 1 其余置 0；否则认为最大预测值和次大预测值区分度不够高，难以分辨不作处理，仅令最小的另外两个预测值置 0</li></ul> 
+<pre><code class="prism language-bash"><span class="token comment"># 根据 A 榜得分，加权融合预测结果</span>
+predictions_weighted <span class="token operator">=</span> <span class="token number">0.35</span> * predictions_nn1 + <span class="token number">0.31</span> * predictions_nn3 + <span class="token number">0.34</span>* predictions_nn8
+predictions_weighted<span class="token punctuation">[</span>:5<span class="token punctuation">]</span>
+</code></pre> 
+<pre><code class="prism language-bash"><span class="token comment"># 准备提交结果</span>
+submit <span class="token operator">=</span> pd.DataFrame<span class="token punctuation">(</span><span class="token punctuation">)</span>
+submit<span class="token punctuation">[</span><span class="token string">'id'</span><span class="token punctuation">]</span> <span class="token operator">=</span> range<span class="token punctuation">(</span><span class="token number">100000</span>, <span class="token number">120000</span><span class="token punctuation">)</span>
+submit<span class="token punctuation">[</span><span class="token string">'label_0'</span><span class="token punctuation">]</span> <span class="token operator">=</span> predictions_weighted<span class="token punctuation">[</span>:, <span class="token number">0</span><span class="token punctuation">]</span>
+submit<span class="token punctuation">[</span><span class="token string">'label_1'</span><span class="token punctuation">]</span> <span class="token operator">=</span> predictions_weighted<span class="token punctuation">[</span>:, <span class="token number">1</span><span class="token punctuation">]</span>
+submit<span class="token punctuation">[</span><span class="token string">'label_2'</span><span class="token punctuation">]</span> <span class="token operator">=</span> predictions_weighted<span class="token punctuation">[</span>:, <span class="token number">2</span><span class="token punctuation">]</span>
+submit<span class="token punctuation">[</span><span class="token string">'label_3'</span><span class="token punctuation">]</span> <span class="token operator">=</span> predictions_weighted<span class="token punctuation">[</span>:, <span class="token number">3</span><span class="token punctuation">]</span>
+submit.head<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash"><span class="token comment"># 第一次后处理未涉及的难样本 index</span>
+others <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+
+<span class="token comment"># 第一次后处理 - 将预测概率值大于 0.5 的样本的概率置 1，其余置 0</span>
+threshold <span class="token operator">=</span> <span class="token number">0.5</span>  
+<span class="token keyword">for</span> index, row <span class="token keyword">in</span> submit.iterrows<span class="token punctuation">(</span><span class="token punctuation">)</span>:
+    row_max <span class="token operator">=</span> max<span class="token punctuation">(</span>list<span class="token punctuation">(</span>row<span class="token punctuation">[</span><span class="token number">1</span>:<span class="token punctuation">]</span><span class="token punctuation">))</span>  <span class="token comment"># 当前行中的最大类别概率预测值</span>
+    <span class="token keyword">if</span> row_max <span class="token operator">&gt;</span> threshold:
+        <span class="token keyword">for</span> <span class="token for-or-select variable">i</span> <span class="token keyword">in</span> range<span class="token punctuation">(</span><span class="token number">1</span>, <span class="token number">5</span><span class="token punctuation">)</span>:
+            <span class="token keyword">if</span> row<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">&gt;</span> threshold:
+                submit.iloc<span class="token punctuation">[</span>index, i<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">1</span>  <span class="token comment"># 大于 0.5 的类别概率预测值置 1</span>
+            else:
+                submit.iloc<span class="token punctuation">[</span>index, i<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">0</span>  <span class="token comment"># 其余类别概率预测值置 0</span>
+    else:
+        others.append<span class="token punctuation">(</span>index<span class="token punctuation">)</span>  <span class="token comment"># 否则，没有类别概率预测值不小于 0.5，加入第一次后处理未涉及的难样本列表，等待第二次后处理</span>
+        print<span class="token punctuation">(</span>index, row<span class="token punctuation">)</span>
+                
+submit.head<span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash"><span class="token comment"># 第二次后处理 - 在预测概率值均不大于 0.5 的样本中，若最大预测值与次大预测值相差大于 0.04，则将最大预测值置 1，其余预测值置 0；</span>
+<span class="token comment">#                否则，对最大预测值和次大预测值不处理 (难分类)，仅对其余样本预测值置 0</span>
+<span class="token keyword">for</span> <span class="token for-or-select variable">idx</span> <span class="token keyword">in</span> others:
+    value <span class="token operator">=</span> submit.iloc<span class="token punctuation">[</span>idx<span class="token punctuation">]</span>.values<span class="token punctuation">[</span><span class="token number">1</span>:<span class="token punctuation">]</span>
+    ordered_value <span class="token operator">=</span> sorted<span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">(</span>v, j<span class="token punctuation">)</span> <span class="token keyword">for</span> j, <span class="token function">v</span> <span class="token keyword">in</span> enumerate<span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">]</span>, <span class="token assign-left variable">reverse</span><span class="token operator">=</span>True<span class="token punctuation">)</span>  <span class="token comment"># 根据类别概率预测值大小排序</span>
+    <span class="token comment">#print(ordered_value)</span>
+    <span class="token keyword">if</span> ordered_value<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> - ordered_value<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">&gt;</span><span class="token operator">=</span> <span class="token number">0.04</span>:  <span class="token comment"># 最大与次大值相差至少 0.04</span>
+        submit.iloc<span class="token punctuation">[</span>idx, ordered_value<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>+1<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">1</span>  <span class="token comment"># 则足够置信最大概率预测值并置为 1</span>
+        <span class="token keyword">for</span> <span class="token for-or-select variable">k</span> <span class="token keyword">in</span> range<span class="token punctuation">(</span><span class="token number">1</span>, <span class="token number">4</span><span class="token punctuation">)</span>:
+            submit.iloc<span class="token punctuation">[</span>idx, ordered_value<span class="token punctuation">[</span>k<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>+1<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">0</span>  <span class="token comment"># 对非最大的其余三个类别概率预测值置 0</span>
+    else:
+        <span class="token keyword">for</span> <span class="token for-or-select variable">s</span> <span class="token keyword">in</span> range<span class="token punctuation">(</span><span class="token number">2</span>, <span class="token number">4</span><span class="token punctuation">)</span>:
+            submit.iloc<span class="token punctuation">[</span>idx, ordered_value<span class="token punctuation">[</span>s<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>+1<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">0</span>  <span class="token comment"># 难分样本，仅对最小的两个类别概率预测值置 0        </span>
+        
+    print<span class="token punctuation">(</span>submit.iloc<span class="token punctuation">[</span>idx<span class="token punctuation">]</span><span class="token punctuation">)</span>   
+</code></pre> 
+<h2><a id="7__416"></a>7. 保存结果用于提交</h2> 
+<pre><code class="prism language-bash"><span class="token comment"># 检视最后的预测结果</span>
+submit.head<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<pre><code class="prism language-bash"><span class="token comment"># 保存预测结果</span>
+submit.to_csv<span class="token punctuation">((</span><span class="token string">"./submit_"</span>+datetime.datetime.now<span class="token punctuation">(</span><span class="token punctuation">)</span>.strftime<span class="token punctuation">(</span><span class="token string">'%Y%m%d_%H%M%S'</span><span class="token punctuation">)</span> + <span class="token string">".csv"</span><span class="token punctuation">)</span>, <span class="token assign-left variable">index</span><span class="token operator">=</span>False<span class="token punctuation">)</span> 
+</code></pre> 
+<h2><a id="8__427"></a>8. 后话</h2> 
+<ul><li>对于这类非表格数据，我觉得显然不适合用 LGB、XGB 等。因为从我的角度看，每条样本的 205 个振幅实际是就是一个长度为 205 的特征，而非 205 个具有不同性质的特征，所以我一开始就采用神经网络。当然，LGB、XGB 也试过，效果差很多，在预料的范围之内</li><li>这不是十分严格的时间序列数据 (没有周期性)，我估摸着这仅仅是人的心跳的其中一个周期，所以针对时间序列预测的技术可能并不很好发挥</li><li>其实第 0 类样本数量最多，我估摸着这是正常人的心跳，而第 1、2、3 类应该是病人心跳。观察训练后的混淆矩阵容易知道，主要分类错误来自于将第 0 类错分为其他类 (误把正常人当病人)，这是一条潜在的改进线索</li><li>找到好用的数据增强方式并不容易，而其实 SMOTE 这种插值方式本身就是一种</li><li>提交结果之前先检查一下，不要一把梭就交上去了 …</li><li>需要强大的毅力和耐心，起落沉浮非常考验心态 T T</li></ul> 
+<p>比赛地址（里面含前几名方案）<br> https://tianchi.aliyun.com/competition/entrance/531883/rankingList/0</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4571de71cc39df9b7c8b7a2d07db520a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">MybatisPlus实现联表分页查询</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/5f9ea8c91879c0c14d58282bcb4d77fa/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【WPF】绘图--《深入浅出WPF》by刘铁锰</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

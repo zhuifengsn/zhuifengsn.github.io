@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>基于KaKadu的JPEG2000解压缩算法的改进 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="基于KaKadu的JPEG2000解压缩算法的改进" />
+<meta property="og:description" content="网络上可以找到的KaKadu源程序版本都是基于文件的，可移植性和通用性不强，本文就是将KaKadu的文件解压模式改为缓存解压模式。增强了可移植性和通用性，效果很好，而且可以做成DLL。 1 解压缩输入接口的修改
+解压缩的输入参数主要有3个：解压缩基本参数，这些基本参数包括质量层数量、质量层码率、切片大小等；输入文件格式，KaKadu可识别的压缩图像文件格式为：jp2、jpx；压缩图像数据。
+KaKadu中有一个名为kdu_args的类，它的作用是将命令行中的输入信息解析为解压缩所需的各种基本参数。具体过程为：首先定义一个kdu_args类，并将输入的命令行作为kdu_args类的初始化参数；然后，定义各种解压缩变量；最后调用全局函数parse_simple_args，解析命令行参数，并将解压缩变量赋值。实际上，全局函数parse_simple_args主要是调用kdu_args中的三个成员函数：get_first()、find()、advance()，并根据规定的命令行格式将解压缩基本参数解析出来。在实时图像处理过程中，图像解压缩所需的基本参数都是固定的，没有必要采用命令行传递参数，直接定义基本参数变量，并根据项目要求进行初始化即可，因此可以将解压缩代码中有关输入参数的kdu_args类、全局函数parse_simple_args删除。同时，由于输入压缩图像数据格式为数据码流，因此文件格式的识别也就没有必要，可以删除判断文件格式的代码。
+压缩图像数据的输入是修改解压缩输入接口的关键步骤。KaKadu定义了一个名为kdu_compressed_source的虚基类作为图像数据输入的接口，KaKadu程序代码中同时定义了一个名为kdu_simple_file_source的类，它是kdu_compressed_source的一个派生类。kdu_simple_file_source通过成员函数open(char *fname)打开压缩图像文件，然后通过成员函数read(kdu_byte *buf, int num_bytes)把图像数据从硬盘文件读入数据缓存中，而且根据JPEG2000的算法特性，将压缩图像数据读入数据缓存是通过多次调用read(kdu_byte *buf, int num_bytes)函数完成的。在实时图像处理的条件下，读取外部数据缓存中的压缩图像数据进行解压缩的处理工作，要比读取硬盘的压缩图像数据文件有更快的速度和更大的灵活性。因此为了实现图像解压缩的实时处理，我们需要修改、添加kdu_simple_file_source这个类的成员函数和变量，来实现从数据缓存读取压缩图像数据的功能。
+首先，要在kdu_simple_file_source类内，定义三个成员变量inputbuffer、length和offset。inputbuffer的变量类型为unsigned char *（指针类型）,该变量的表示压缩图像数据缓存区的首地址。length的变量类型为int,该变量表示了压缩图像数据缓存区的长度。offset的变量类型为int,该变量表示了读取压缩图像数据的地址相对压缩图像数据缓存首地址的偏移量。这三个变量主要用来实现读取压缩图像数据缓存任意位置的数据。还需要定义一个kdu_simple_file_source类的成员函数getbuffer(unsigned char *buffer,int len)，这个成员函数的主要完成传递压缩数据缓存参数，初始化偏移量offset的工作，具体来说，就是将压缩图像数据缓存的首地址传递给inputbufffer,将压缩数据缓存的长度传递给length,将读取压缩数据缓存的地址相对首地址的偏移量传递给offset。最后，需要修改读取压缩图像数据的成员函数read(kdu_byte *buf, int num_bytes)。KaKadu定义的该函数的作用是将硬盘文件上长度为num_bytes的压缩图像数据读入地址为buf的缓存中，该函数调用的函数为常见的文件读取函数fread。要实现从压缩图像数据缓存到KaKadu定义的内部缓存的数据读入，就要修改这一成员函数。因为已经将外部数据缓存的地址，长度和读取的偏移量这三个变量通过getbuffer(unsigned char *buffer,int len)读入kdu_simple_file_source类的成员变量inputbuffer、length和offset。因此只要将fread函数改为memcpy(buf,inputbuffer &#43; offset,(size_t)num_bytes)即可。但是，有一点要格外重视的是，fread函数在实际能够读取的数据长度小于预期的读取数据长度（num_bytes）时，fread函数自身有调节和纠错能力，但是memcpy函数却不具备这种能力，因此需要程序员自己判断当前已经读取的数据量和一帧压缩图像的数据量之间的关系，正确的确定实际读取的数据量大小。
+通过对解压缩基本参数、输入文件格式和压缩图像数据，这三个关键参数的输入接口的修改，就可以完成对整个解压缩输入参数的修改。
+2 解压缩输出接口的修改
+由于JPEG2000算法的复杂性，KaKadu对于压缩图像的输出也略显复杂。首先KaKadu定义了一个类kde_file_binding作为数据输出的整体接口，在类kde_file_binding中，有一个成员变量writer，这个成员变量是一个名为kdu_image_out的类，为了满足图像输出文件的各种格式，kdu_image_out同样是个基类，根据用户所选定的输出图像格式，kdu_image_out可以派生出多个派生类以实现不同格式的图像输出。因为bmp格式的图像具有简单简单、应用广泛的特点，所以在实时图像处理领域使用最多的图像格式也是bmp格式的图像。KaKadu解压缩程序同样兼容bmp格式的图像文件输出，因此对于解压缩输出接口的修改思路就是修改kde_file_binding、kdu_image_out和bmp_out（kdu_image_out_base的派生类）这个三个类的成员函数和变量，以满足实时图像处理的要求。
+对于kde_file_binding类，要重新编写该类的构造函数，并定义一个新的成员变量outbuffer，outbuffer的变量类型为unsigned char *（指针类型）,该变量表示了图像数据输出缓存的首地址。重新编写的构造函数kde_file_binding(unsigned char *outbuffer)就是要将图像数据输出缓存的首地址读入到kde_file_binding类的成员变量outbuffer，为kdu_image_out类的输出图像数据说明目的地址。kde_file_binding类的成员变量writer（kdu_image_out类的一个对象）的初始化实际上就是根据压缩图像数据确定的各种参数和输出数据缓存的首地址构建kdu_image_out类的过程。而kdu_image_out类的构建过程也就是通过bmp_out类构建bmp文件的过程。因此修改解压缩输出接口的关键是修改bmp_out类。
+为了使得名为bmp_out的类实现将解压缩的图像数据输出到数据缓存中的功能，要增加两个成员变量lan和offset。lan的变量类型为unsigned char *(指针类型)，该变量存储外部数据缓存的首地址，offset的变量类型为int,该变量表明数据输出地址相对外部数据缓存首地址的偏移量。
+bmp_out类的输出结果是一个bmp格式图像文件，而bmp格式的图像文件包含三部分：图像文件头、图像信息头和位图数据。图像文件头说明有关这幅图像文件的信息，比如，图像文件大小，图像位图数据相对图像文件头的偏移量等信息。图像信息头说明图像信息，比如，图像的高度和宽度、图像的编码方式等。位图数据就是KaKadu解压缩出来的数据码流。
+对于图像文件头和图像信息头，主要是bmp_out类的构造函数bmp_out(unsigned char *outbuffer, kdu_image_dims &amp;dims, int &amp;next_comp_idx)进行初始化，因为图像文件头和图像信息头得格式和长度都是固定的，因此将构造函数中的fwrite函数改为相应的memcpy函数即可。对于解压缩出来的数据码流的输出在bmp_out类的成员函数put(int comp_idx, kdu_line_buf &amp;line, int x_tnum)
+中，KaKadu通过fwrite函数将解压缩出的图像数据存储到文件中，如果要实现将图像数据存储在数据缓存中就需要将fwrite函数用memcpy函数代替，同压缩数据读入类似，在图像数据输出调用memcpy函数时，同样要注意偏移量的问题。
+通过修改kde_file_binding、kdu_image_out和bmp_out（kdu_image_out_base的派生类）这个三个类的成员函数和变量，就可以实现图像输出接口的修改。
+在KaKadu解压缩程序中，还有计算CPU解压耗时，解压出的图像的大小等信息，这些信息对于创建良好的人机交互接口来说是非常有用的，但是在实时图像处理领域，保证整个图像处理系统的实时性最为重要，因此可以删掉计算此类辅助信息的程序代码，进一步提高程序的运行速度。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/8c807abf019e5386593818396c5c34b2/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2013-10-27T14:57:20+08:00" />
+<meta property="article:modified_time" content="2013-10-27T14:57:20+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">基于KaKadu的JPEG2000解压缩算法的改进</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <span style="font-size:14px; color:#3366ff; background-color:#ffffff">网络上可以找到的KaKadu源程序版本都是基于文件的，可移植性和通用性不强，本文就是将KaKadu的文件解压模式改为缓存解压模式。增强了可移植性和通用性，效果很好，而且可以做成DLL。</span> 
+<p align="center"><strong><span style="font-size:14px; color:#3366ff; background-color:#ffffff">1 解压缩输入接口的修改</span></strong></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 解压缩的输入参数主要有3个：解压缩基本参数，这些基本参数包括质量层数量、质量层码率、切片大小等；输入文件格式，KaKadu可识别的压缩图像文件格式为：jp2、jpx；压缩图像数据。</span></span></span></p> 
+<p><span style="font-size:14px; color:#3366ff; background-color:#ffffff">KaKadu中有一个名为kdu_args的类，它的作用是将命令行中的输入信息解析为解压缩所需的各种基本参数。具体过程为：首先定义一个kdu_args类，并将输入的命令行作为kdu_args类的初始化参数；然后，定义各种解压缩变量；最后调用全局函数parse_simple_args，解析命令行参数，并将解压缩变量赋值。实际上，全局函数parse_simple_args主要是调用kdu_args中的三个成员函数：get_first()、find()、advance()，并根据规定的命令行格式将解压缩基本参数解析出来。在实时图像处理过程中，图像解压缩所需的基本参数都是固定的，没有必要采用命令行传递参数，直接定义基本参数变量，并根据项目要求进行初始化即可，因此可以将解压缩代码中有关输入参数的kdu_args类、全局函数parse_simple_args删除。同时，由于输入压缩图像数据格式为数据码流，因此文件格式的识别也就没有必要，可以删除判断文件格式的代码。</span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 压缩图像数据的输入是修改解压缩输入接口的关键步骤。KaKadu定义了一个名为kdu_compressed_source的虚基类作为图像数据输入的接口，KaKadu程序代码中同时定义了一个名为kdu_simple_file_source的类，它是kdu_compressed_source的一个派生类。kdu_simple_file_source通过成员函数open(char *fname)打开压缩图像文件，然后通过成员函数read(kdu_byte *buf, int num_bytes)把图像数据从硬盘文件读入数据缓存中，而且根据JPEG2000的算法特性，将压缩图像数据读入数据缓存是通过多次调用read(kdu_byte *buf, int num_bytes)函数完成的。在实时图像处理的条件下，读取外部数据缓存中的压缩图像数据进行解压缩的处理工作，要比读取硬盘的压缩图像数据文件有更快的速度和更大的灵活性。因此为了实现图像解压缩的实时处理，我们需要修改、添加kdu_simple_file_source这个类的成员函数和变量，来实现从数据缓存读取压缩图像数据的功能。</span></span></span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 首先，要在kdu_simple_file_source类内，定义三个成员变量inputbuffer、length和offset。inputbuffer的变量类型为unsigned char *（指针类型）,该变量的表示压缩图像数据缓存区的首地址。length的变量类型为int,该变量表示了压缩图像数据缓存区的长度。offset的变量类型为int,该变量表示了读取压缩图像数据的地址相对压缩图像数据缓存首地址的偏移量。这三个变量主要用来实现读取压缩图像数据缓存任意位置的数据。还需要定义一个kdu_simple_file_source类的成员函数getbuffer(unsigned char *buffer,int len)，这个成员函数的主要完成传递压缩数据缓存参数，初始化偏移量offset的工作，具体来说，就是将压缩图像数据缓存的首地址传递给inputbufffer,将压缩数据缓存的长度传递给length,将读取压缩数据缓存的地址相对首地址的偏移量传递给offset。最后，需要修改读取压缩图像数据的成员函数read(kdu_byte *buf, int num_bytes)。KaKadu定义的该函数的作用是将硬盘文件上长度为num_bytes的压缩图像数据读入地址为buf的缓存中，该函数调用的函数为常见的文件读取函数fread。要实现从压缩图像数据缓存到KaKadu定义的内部缓存的数据读入，就要修改这一成员函数。因为已经将外部数据缓存的地址，长度和读取的偏移量这三个变量通过getbuffer(unsigned char *buffer,int len)读入kdu_simple_file_source类的成员变量inputbuffer、length和offset。因此只要将fread函数改为memcpy(buf,inputbuffer + offset,(size_t)num_bytes)即可。但是，有一点要格外重视的是，fread函数在实际能够读取的数据长度小于预期的读取数据长度（num_bytes）时，fread函数自身有调节和纠错能力，但是memcpy函数却不具备这种能力，因此需要程序员自己判断当前已经读取的数据量和一帧压缩图像的数据量之间的关系，正确的确定实际读取的数据量大小。</span></span></span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 通过对解压缩基本参数、输入文件格式和压缩图像数据，这三个关键参数的输入接口的修改，就可以完成对整个解压缩输入参数的修改。</span></span></span></p> 
+<p align="center"><strong><span style="font-size:14px; color:#3366ff; background-color:#ffffff">2 解压缩输出接口的修改</span></strong></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 由于JPEG2000算法的复杂性，KaKadu对于压缩图像的输出也略显复杂。首先KaKadu定义了一个类kde_file_binding作为数据输出的整体接口，在类kde_file_binding中，有一个成员变量writer，这个成员变量是一个名为kdu_image_out的类，为了满足图像输出文件的各种格式，kdu_image_out同样是个基类，根据用户所选定的输出图像格式，kdu_image_out可以派生出多个派生类以实现不同格式的图像输出。因为bmp格式的图像具有简单简单、应用广泛的特点，所以在实时图像处理领域使用最多的图像格式也是bmp格式的图像。KaKadu解压缩程序同样兼容bmp格式的图像文件输出，因此对于解压缩输出接口的修改思路就是修改kde_file_binding、kdu_image_out和bmp_out（kdu_image_out_base的派生类）这个三个类的成员函数和变量，以满足实时图像处理的要求。</span></span></span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 对于kde_file_binding类，要重新编写该类的构造函数，并定义一个新的成员变量outbuffer，outbuffer的变量类型为unsigned char *（指针类型）,该变量表示了图像数据输出缓存的首地址。重新编写的构造函数kde_file_binding(unsigned char *outbuffer)就是要将图像数据输出缓存的首地址读入到kde_file_binding类的成员变量outbuffer，为kdu_image_out类的输出图像数据说明目的地址。kde_file_binding类的成员变量writer（kdu_image_out类的一个对象）的初始化实际上就是根据压缩图像数据确定的各种参数和输出数据缓存的首地址构建kdu_image_out类的过程。而kdu_image_out类的构建过程也就是通过bmp_out类构建bmp文件的过程。因此修改解压缩输出接口的关键是修改bmp_out类。</span></span></span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 为了使得名为bmp_out的类实现将解压缩的图像数据输出到数据缓存中的功能，要增加两个成员变量lan和offset。lan的变量类型为unsigned char *(指针类型)，该变量存储外部数据缓存的首地址，offset的变量类型为int,该变量表明数据输出地址相对外部数据缓存首地址的偏移量。</span></span></span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> bmp_out类的输出结果是一个bmp格式图像文件，而bmp格式的图像文件包含三部分：图像文件头、图像信息头和位图数据。图像文件头说明有关这幅图像文件的信息，比如，图像文件大小，图像位图数据相对图像文件头的偏移量等信息。图像信息头说明图像信息，比如，图像的高度和宽度、图像的编码方式等。位图数据就是KaKadu解压缩出来的数据码流。</span></span></span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> 对于图像文件头和图像信息头，主要是bmp_out类的构造函数bmp_out(unsigned char *outbuffer, kdu_image_dims &amp;dims, int &amp;next_comp_idx)进行初始化，因为图像文件头和图像信息头得格式和长度都是固定的，因此将构造函数中的fwrite函数改为相应的memcpy函数即可。对于解压缩出来的数据码流的输出在bmp_out类的成员函数put(int comp_idx, kdu_line_buf &amp;line, int x_tnum)</span></span></span></p> 
+<p><span style="font-size:14px; color:#3366ff; background-color:#ffffff">中，KaKadu通过fwrite函数将解压缩出的图像数据存储到文件中，如果要实现将图像数据存储在数据缓存中就需要将fwrite函数用memcpy函数代替，同压缩数据读入类似，在图像数据输出调用memcpy函数时，同样要注意偏移量的问题。</span></p> 
+<p><span style="font-size:14px"><span style="background-color:#ffffff"><span style="color:#3366ff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 通过修改kde_file_binding、kdu_image_out和bmp_out（kdu_image_out_base的派生类）这个三个类的成员函数和变量，就可以实现图像输出接口的修改。</span></span></span></p> 
+<p><span style="font-size:14px; color:#3366ff; background-color:#ffffff"> <wbr></wbr> <wbr></wbr> <wbr></wbr> 在KaKadu解压缩程序中，还有计算CPU解压耗时，解压出的图像的大小等信息，这些信息对于创建良好的人机交互接口来说是非常有用的，但是在实时图像处理领域，保证整个图像处理系统的实时性最为重要，因此可以删掉计算此类辅助信息的程序代码，进一步提高程序的运行速度。</span></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/1507e00215fa44de4715e6da941575e8/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">蓝牙的Baseband说明</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/a27ad760841e8f98ae6396474a1e68d3/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">vncserver&amp;nbsp;开机自启动，免敲v…</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

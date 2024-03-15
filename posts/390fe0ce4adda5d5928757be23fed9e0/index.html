@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux--串口屏显示控制实验 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux--串口屏显示控制实验" />
+<meta property="og:description" content="一、 实验简介 实验目标：在Linux下通过串口屏显示并控制功能模块的状态和参数
+操作系统：Ubuntu 20.04.6 LTS
+串口屏：迪文串口屏 DMG48270C043_03W
+二、实现代码-- C语言 代码功能就是在Linux下使用串口和TCP，重点在于如何处理好串口和网口接收的数据。 通过本实验可以基本掌握如何在Linux下使用串口和TCP。网上很多教程都会介绍Liunx下如何实现串口和TCP这两种通信方式，很少有结合实际应用进行介绍的文章，本文就将结合一个实际应用例子进行分析记录，也是对自己学习这些东西的一个简单总结记录。
+2.1 通信协议 这里的通信协议不是说解释串口或是TCP这样的通信协议，本文指的是在传输数据过程自己定义的数据帧格式，不同的数据需要设置功能模块的不同功能通信协议的有助于我们管理不同的控制信号。发送数据时按以下格式设置好数据后再通过到其他模块。
+主控模块&lt;-----&gt;功能模块 网口通信TCP
+字段指令头指令码数据长度数据长度(字节)114N值0xAA不同指令N具体数据 主控模块&lt;-----&gt;串口屏 串口通信
+2.2 串口通信 Linux的串口表现为设备文件。实验使用的串口屏是USB扩展的，实验前需要安装CH341驱动串口设备文件命名为dev/ttyCH341USB*，不同的硬件平台对串口设备文件的命名有所区别。
+2.2.1 初始化串口 在Linux下，不管是设备、文档、可执行程序，对于内核来说都是读写文件，会涉及到open、read、write的操作，对于文件操作就有了“阻塞”和“非阻塞”的概念。不同模式对文件的处理方式会有不同，使用的场景也不一样。
+“阻塞”的定义
+对于 read，当串口的接收缓冲区没有数据的时候，read函数会阻塞在那里，不返回，程序也无法下一步执行，一直到串口的接收缓冲区中有数据可读时，read读到了想要长度的字节数后才会返回，返回值为读到的字节数。
+对于write，当串口发送缓冲区满时，或者剩下的空间小鱼将要写入的字节数时，则write阻塞，一直到串口的发送缓冲区中剩下的空间大于等于将要写入的字节数，再执行写操作，返回写入的字节数。
+“非阻塞”的定义
+对于read，当串口的接收缓冲区中没有数据时，read操作立即返回，返回值为0.
+对于write，当串口发送缓冲区满，或者剩下的空间小鱼将要写入的字节数时，write仍然会被执行，写入当前串口发送缓冲区剩下的空间字节数，然后返回写入的字节数。
+serial init
+serial = serial_new(); if (serial_open(serial,&#34;/dev/ttyCH341USB1&#34;,115200) &lt;0) //打开并设置设备文件 { serial_free(serial); printf(&#34;serial open failed!\n&#34;); } else { printf(&#34;serial opened! \n&#34;); } serial_open 函数
+网上很多都是直接用的open函数，实验使用的函数同样基于open函数通过该函数设置好串口，默认使用的阻塞模式。
+int serial_open(serial_t *serial, const char *path, uint32_t baudrate) { return serial_open_advanced(serial, path, baudrate, 8, PARITY_NONE, 1, false, false);//参数设置 } int serial_open_advanced(serial_t *serial, const char *path, uint32_t baudrate, unsigned int databits, serial_parity_t parity, unsigned int stopbits, bool xonxoff, bool rtscts) { struct termios termios_settings; /* Validate args */ if (databits !" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/390fe0ce4adda5d5928757be23fed9e0/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-26T09:39:56+08:00" />
+<meta property="article:modified_time" content="2024-02-26T09:39:56+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux--串口屏显示控制实验</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-github-gist">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="__0"></a>一、 实验简介</h2> 
+<p>实验目标：在Linux下通过串口屏显示并控制功能模块的状态和参数<br> 操作系统：Ubuntu 20.04.6 LTS<br> 串口屏：迪文串口屏 DMG48270C043_03W<br> <img src="https://images2.imgbox.com/16/5e/2CzmVIyh_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_C_5"></a>二、实现代码-- C语言</h2> 
+<p>   <strong>代码功能就是在Linux下使用串口和TCP，重点在于如何处理好串口和网口接收的数据。</strong> 通过本实验可以基本掌握如何在Linux下使用串口和TCP。网上很多教程都会介绍Liunx下如何实现串口和TCP这两种通信方式，很少有结合实际应用进行介绍的文章，本文就将结合一个实际应用例子进行分析记录，也是对自己学习这些东西的一个简单总结记录。</p> 
+<h3><a id="21__7"></a>2.1 通信协议</h3> 
+<p>  这里的通信协议不是说解释串口或是TCP这样的通信协议，本文指的是在传输数据过程自己定义的数据帧格式，不同的数据需要设置功能模块的不同功能通信协议的有助于我们管理不同的控制信号。发送数据时按以下格式设置好数据后再通过到其他模块。</p> 
+<p><strong>主控模块&lt;-----&gt;功能模块</strong> 网口通信TCP</p> 
+<table><thead><tr><th>字段</th><th>指令头</th><th>指令码</th><th>数据长度</th><th>数据</th></tr></thead><tbody><tr><td>长度(字节)</td><td>1</td><td>1</td><td>4</td><td>N</td></tr><tr><td>值</td><td>0xAA</td><td>不同指令</td><td>N</td><td>具体数据</td></tr></tbody></table> 
+<p><strong>主控模块&lt;-----&gt;串口屏</strong> 串口通信<br> <img src="https://images2.imgbox.com/72/23/Hj2k70PA_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="22__19"></a>2.2 串口通信</h3> 
+<p>   Linux的串口表现为设备文件。实验使用的串口屏是USB扩展的，实验前需要安装CH341驱动串口设备文件命名为dev/ttyCH341USB*，不同的硬件平台对串口设备文件的命名有所区别。</p> 
+<h4><a id="221__21"></a>2.2.1 初始化串口</h4> 
+<p>   在Linux下，不管是设备、文档、可执行程序，对于内核来说都是读写文件，会涉及到open、read、write的操作，对于文件操作就有了“阻塞”和“非阻塞”的概念。不同模式对文件的处理方式会有不同，使用的场景也不一样。</p> 
+<p><strong>“阻塞”的定义</strong><br> 对于 read，当串口的接收缓冲区没有数据的时候，read函数会阻塞在那里，不返回，程序也无法下一步执行，一直到串口的接收缓冲区中有数据可读时，read读到了想要长度的字节数后才会返回，返回值为读到的字节数。<br> 对于write，当串口发送缓冲区满时，或者剩下的空间小鱼将要写入的字节数时，则write阻塞，一直到串口的发送缓冲区中剩下的空间大于等于将要写入的字节数，再执行写操作，返回写入的字节数。</p> 
+<p><strong>“非阻塞”的定义</strong><br> 对于read，当串口的接收缓冲区中没有数据时，read操作立即返回，返回值为0.<br> 对于write，当串口发送缓冲区满，或者剩下的空间小鱼将要写入的字节数时，write仍然会被执行，写入当前串口发送缓冲区剩下的空间字节数，然后返回写入的字节数。</p> 
+<p><strong>serial init</strong></p> 
+<pre><code class="prism language-c">    serial <span class="token operator">=</span> <span class="token function">serial_new</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">serial_open</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span><span class="token string">"/dev/ttyCH341USB1"</span><span class="token punctuation">,</span><span class="token number">115200</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span> <span class="token comment">//打开并设置设备文件</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token function">serial_free</span><span class="token punctuation">(</span>serial<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"serial open failed!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">else</span>
+    <span class="token punctuation">{<!-- --></span>   
+        <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"serial opened! \n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>serial_open 函数</strong><br>    网上很多都是直接用的<strong>open函数</strong>，实验使用的函数同样基于open函数通过该函数设置好串口，默认使用的阻塞模式。</p> 
+<pre><code class="prism language-c"><span class="token keyword">int</span> <span class="token function">serial_open</span><span class="token punctuation">(</span><span class="token class-name">serial_t</span> <span class="token operator">*</span>serial<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>path<span class="token punctuation">,</span> <span class="token class-name">uint32_t</span> baudrate<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">return</span> <span class="token function">serial_open_advanced</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> path<span class="token punctuation">,</span> baudrate<span class="token punctuation">,</span> <span class="token number">8</span><span class="token punctuation">,</span> PARITY_NONE<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> false<span class="token punctuation">,</span> false<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//参数设置</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">int</span> <span class="token function">serial_open_advanced</span><span class="token punctuation">(</span><span class="token class-name">serial_t</span> <span class="token operator">*</span>serial<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>path<span class="token punctuation">,</span> <span class="token class-name">uint32_t</span> baudrate<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">int</span> databits<span class="token punctuation">,</span> <span class="token class-name">serial_parity_t</span> parity<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">int</span> stopbits<span class="token punctuation">,</span> bool xonxoff<span class="token punctuation">,</span> bool rtscts<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">struct</span> <span class="token class-name">termios</span> termios_settings<span class="token punctuation">;</span>
+
+    <span class="token comment">/* Validate args */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>databits <span class="token operator">!=</span> <span class="token number">5</span> <span class="token operator">&amp;&amp;</span> databits <span class="token operator">!=</span> <span class="token number">6</span> <span class="token operator">&amp;&amp;</span> databits <span class="token operator">!=</span> <span class="token number">7</span> <span class="token operator">&amp;&amp;</span> databits <span class="token operator">!=</span> <span class="token number">8</span><span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token function">_serial_error</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> SERIAL_ERROR_ARG<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token string">"Invalid data bits (can be 5,6,7,8)"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>parity <span class="token operator">!=</span> PARITY_NONE <span class="token operator">&amp;&amp;</span> parity <span class="token operator">!=</span> PARITY_ODD <span class="token operator">&amp;&amp;</span> parity <span class="token operator">!=</span> PARITY_EVEN<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token function">_serial_error</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> SERIAL_ERROR_ARG<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token string">"Invalid parity (can be PARITY_NONE,PARITY_ODD,PARITY_EVEN)"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>stopbits <span class="token operator">!=</span> <span class="token number">1</span> <span class="token operator">&amp;&amp;</span> stopbits <span class="token operator">!=</span> <span class="token number">2</span><span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token function">_serial_error</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> SERIAL_ERROR_ARG<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token string">"Invalid stop bits (can be 1,2)"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token function">memset</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token class-name">serial_t</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Open serial port */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>serial<span class="token operator">-&gt;</span>fd <span class="token operator">=</span> <span class="token function">open</span><span class="token punctuation">(</span>path<span class="token punctuation">,</span> O_RDWR <span class="token operator">|</span> O_NOCTTY<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token function">_serial_error</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> SERIAL_ERROR_OPEN<span class="token punctuation">,</span> errno<span class="token punctuation">,</span> <span class="token string">"Opening serial port \"%s\""</span><span class="token punctuation">,</span> path<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">fcntl</span><span class="token punctuation">(</span>serial<span class="token operator">-&gt;</span>fd<span class="token punctuation">,</span>F_SETFL<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">memset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>termios_settings<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>termios_settings<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* c_iflag */</span>
+
+    <span class="token comment">/* Ignore break characters */</span>
+    termios_settings<span class="token punctuation">.</span>c_iflag <span class="token operator">=</span> IGNBRK<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>parity <span class="token operator">!=</span> PARITY_NONE<span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_iflag <span class="token operator">|=</span> INPCK<span class="token punctuation">;</span>
+    <span class="token comment">/* Only use ISTRIP when less than 8 bits as it strips the 8th bit */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>parity <span class="token operator">!=</span> PARITY_NONE <span class="token operator">&amp;&amp;</span> databits <span class="token operator">!=</span> <span class="token number">8</span><span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_iflag <span class="token operator">|=</span> ISTRIP<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>xonxoff<span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_iflag <span class="token operator">|=</span> <span class="token punctuation">(</span>IXON <span class="token operator">|</span> IXOFF<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* c_oflag */</span>
+    termios_settings<span class="token punctuation">.</span>c_oflag <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* c_lflag */</span>
+    termios_settings<span class="token punctuation">.</span>c_lflag <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* c_cflag */</span>
+    <span class="token comment">/* Enable receiver, ignore modem control lines */</span>
+    termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">=</span> CREAD <span class="token operator">|</span> CLOCAL<span class="token punctuation">;</span>
+
+    <span class="token comment">/* Databits */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>databits <span class="token operator">==</span> <span class="token number">5</span><span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> CS5<span class="token punctuation">;</span>
+    <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>databits <span class="token operator">==</span> <span class="token number">6</span><span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> CS6<span class="token punctuation">;</span>
+    <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>databits <span class="token operator">==</span> <span class="token number">7</span><span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> CS7<span class="token punctuation">;</span>
+    <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>databits <span class="token operator">==</span> <span class="token number">8</span><span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> CS8<span class="token punctuation">;</span>
+
+    <span class="token comment">/* Parity */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>parity <span class="token operator">==</span> PARITY_EVEN<span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> PARENB<span class="token punctuation">;</span>
+    <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>parity <span class="token operator">==</span> PARITY_ODD<span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> <span class="token punctuation">(</span>PARENB <span class="token operator">|</span> PARODD<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Stopbits */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>stopbits <span class="token operator">==</span> <span class="token number">2</span><span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> CSTOPB<span class="token punctuation">;</span>
+
+    <span class="token comment">/* RTS/CTS */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>rtscts<span class="token punctuation">)</span>
+        termios_settings<span class="token punctuation">.</span>c_cflag <span class="token operator">|=</span> CRTSCTS<span class="token punctuation">;</span>
+
+    <span class="token comment">/* Baudrate */</span>
+    <span class="token function">cfsetispeed</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>termios_settings<span class="token punctuation">,</span> <span class="token function">_serial_baudrate_to_bits</span><span class="token punctuation">(</span>baudrate<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">cfsetospeed</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>termios_settings<span class="token punctuation">,</span> <span class="token function">_serial_baudrate_to_bits</span><span class="token punctuation">(</span>baudrate<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Set termios attributes */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">tcsetattr</span><span class="token punctuation">(</span>serial<span class="token operator">-&gt;</span>fd<span class="token punctuation">,</span> TCSANOW<span class="token punctuation">,</span> <span class="token operator">&amp;</span>termios_settings<span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">int</span> errsv <span class="token operator">=</span> errno<span class="token punctuation">;</span>
+        <span class="token function">close</span><span class="token punctuation">(</span>serial<span class="token operator">-&gt;</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        serial<span class="token operator">-&gt;</span>fd <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token function">_serial_error</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> SERIAL_ERROR_CONFIGURE<span class="token punctuation">,</span> errsv<span class="token punctuation">,</span> <span class="token string">"Setting serial port attributes"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    serial<span class="token operator">-&gt;</span>use_termios_timeout <span class="token operator">=</span> false<span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h4><a id="222__132"></a>2.2.2 读写串口</h4> 
+<p>fd为文件识别号，buf为收发数组<br> <strong>接收数据</strong></p> 
+<pre><code class="prism language-c"><span class="token keyword">int</span> len<span class="token punctuation">;</span><span class="token keyword">unsigned</span> <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">11</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+len <span class="token operator">=</span> <span class="token function">read</span><span class="token punctuation">(</span>fd<span class="token punctuation">,</span> buf<span class="token punctuation">,</span> <span class="token number">11</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>len <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>    
+<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"reading data faile \n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>发送数据</strong></p> 
+<pre><code class="prism language-c"><span class="token keyword">int</span> len<span class="token punctuation">;</span>
+<span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token string">"hello world!"</span><span class="token punctuation">;</span>
+len <span class="token operator">=</span> <span class="token function">write</span><span class="token punctuation">(</span>fd<span class="token punctuation">,</span> buf<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>len<span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>    
+<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"write data to serial failed! \n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="23_TCP_151"></a>2.3 TCP通信</h3> 
+<p>   Socket编程是一种网络编程的方式，用于实现不同计算机之间的数据通信。在网络应用中，Socket是端到端通信的一个抽象概念，它建立在网络模型的传输层之上，提供了一种方式来允许程序跨网络发送和接收数据。最常见的是TCP（传输控制协议）和UDP（用户数据报协议）。</p> 
+<h4><a id="241_TCP_153"></a>2.4.1 TCP初始化</h4> 
+<p>Socket编程通常涉及以下几个基本步骤：</p> 
+<ol><li>创建Socket：首先，需要在客户端和服务器端分别创建Socket。在服务器端，Socket用于监听来自客户端的连接请求；在客户端，Socket用于与服务器建立连接。</li><li>绑定（Bind）：服务器端的Socket需要绑定到一个网络地址（IP地址）和端口上，以便客户端能够找到并连接到它。</li><li>监听（Listen）：服务器端的Socket开始监听绑定的地址和端口，等待客户端的连接请求。</li><li>接受连接（Accept）：当服务器Socket监听到客户端的连接请求时，它会接受这个连接，从而在服务器和客户端之间建立一个新的通信链路。</li><li>数据传输：一旦连接建立，客户端和服务器端就可以通过读写操作在这个连接上发送和接收数据。数据的发送和接收可以是阻塞的也可以是非阻塞的，这取决于Socket的配置。</li><li>关闭连接：数据传输完成后，双方可以关闭连接。关闭连接的一方会向对方发送一个连接释放信号，以结束会话。</li></ol> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span><span class="token string">"TCPserver.h"</span></span>
+ 
+<span class="token keyword">int</span> <span class="token function">TCPserverinit</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token comment">//服务器监听套接字和连接套接字</span>
+	listen_fd<span class="token operator">=</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	connect_fd<span class="token operator">=</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">struct</span> <span class="token class-name">sockaddr_in</span> servaddr<span class="token punctuation">;</span><span class="token comment">//定义服务器对应的套接字地址</span>
+	<span class="token comment">//服务器接收和发送缓冲区</span>
+	<span class="token class-name">uint8_t</span> sendbuf<span class="token punctuation">[</span>MAXLINE<span class="token punctuation">]</span><span class="token punctuation">,</span> recbuf<span class="token punctuation">[</span>MAXLINE<span class="token punctuation">]</span><span class="token punctuation">;</span>
+ 
+	<span class="token comment">//初始化套接字地址结构体</span>
+	<span class="token function">memset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>servaddr<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>servaddr<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	servaddr<span class="token punctuation">.</span>sin_family <span class="token operator">=</span> AF_INET<span class="token punctuation">;</span><span class="token comment">//IPv4</span>
+	servaddr<span class="token punctuation">.</span>sin_port <span class="token operator">=</span> <span class="token function">htons</span><span class="token punctuation">(</span>PORT<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//设置监听端口</span>
+	servaddr<span class="token punctuation">.</span>sin_addr<span class="token punctuation">.</span>s_addr <span class="token operator">=</span> <span class="token function">htonl</span><span class="token punctuation">(</span>INADDR_ANY<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//表示接收任意IP的连接请求</span>
+ 
+	<span class="token comment">//创建套接字</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>listen_fd <span class="token operator">=</span> <span class="token function">socket</span><span class="token punctuation">(</span>AF_INET<span class="token punctuation">,</span> SOCK_STREAM<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		<span class="token comment">//如果创建套接字失败，返回错误信息</span>
+		<span class="token comment">//strerror(int errnum)获取错误的描述字符串</span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"create socket error: %s(error: %d)\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">,</span> errno<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token comment">//绑定套接字和本地IP地址和端口</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">bind</span><span class="token punctuation">(</span>listen_fd<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">sockaddr</span><span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>servaddr<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>servaddr<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		<span class="token comment">//绑定出现错误</span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"bind socket error: %s(error: %d)\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">,</span> errno<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+ 
+	<span class="token comment">//使得listen_fd变成监听描述符</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">listen</span><span class="token punctuation">(</span>listen_fd<span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"listen socket error: %s(error: %d)\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">,</span> errno<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token comment">//accept阻塞等待客户端请求</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"等待客户端发起连接\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>connect_fd <span class="token operator">=</span> <span class="token function">accept</span><span class="token punctuation">(</span>listen_fd<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">sockaddr</span><span class="token operator">*</span><span class="token punctuation">)</span><span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"accept socket error: %s(error: %d)\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">,</span> errno<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h4><a id="241_TCP_208"></a>2.4.1 TCP收发数据</h4> 
+<p>   在Linux下，都是按读写文件的方式去管理设备。<br> <strong>接收数据</strong></p> 
+<pre><code class="prism language-c"><span class="token keyword">int</span> len<span class="token punctuation">;</span><span class="token keyword">unsigned</span> <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">11</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+len <span class="token operator">=</span> <span class="token function">read</span><span class="token punctuation">(</span>fd<span class="token punctuation">,</span> buf<span class="token punctuation">,</span> <span class="token number">11</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>len <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>    
+<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"reading data faile \n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>发送数据</strong></p> 
+<pre><code class="prism language-c"><span class="token keyword">int</span> len<span class="token punctuation">;</span>
+<span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token string">"hello world!"</span><span class="token punctuation">;</span>
+len <span class="token operator">=</span> <span class="token function">write</span><span class="token punctuation">(</span>fd<span class="token punctuation">,</span> buf<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>len<span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>    
+<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"write data to serial failed! \n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="24__227"></a>2.4 数据收发处理</h3> 
+<h4><a id="241%09_228"></a>2.4.1 串口屏</h4> 
+<pre><code class="prism language-c"><span class="token keyword">void</span><span class="token operator">*</span> <span class="token function">ScreenTranslateMessage</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span> arg<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token class-name">uint8_t</span> i<span class="token punctuation">,</span>j<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> hedebyte<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> onebyte<span class="token punctuation">;</span>
+    <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token function">serial_read</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span><span class="token operator">&amp;</span>onebyte<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">usleep</span><span class="token punctuation">(</span><span class="token number">5000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span><span class="token punctuation">(</span>onebyte<span class="token operator">==</span><span class="token number">0X5A</span><span class="token punctuation">)</span> <span class="token comment">//识别帧头标识</span>
+            <span class="token punctuation">{<!-- --></span>
+            hedebyte<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token operator">=</span>onebyte<span class="token punctuation">;</span>
+            onebyte<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+            <span class="token function">serial_read</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span> hedebyte<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token function">usleep</span><span class="token punctuation">(</span><span class="token number">5000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>hedebyte<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token operator">==</span><span class="token number">0X5A</span> <span class="token operator">&amp;&amp;</span> hedebyte<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token operator">==</span><span class="token number">0XA5</span><span class="token punctuation">)</span>
+            <span class="token punctuation">{<!-- --></span>
+            sdatalen<span class="token operator">=</span>hedebyte<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+            <span class="token function">serial_read</span><span class="token punctuation">(</span>serial<span class="token punctuation">,</span>sdata<span class="token punctuation">,</span>sdatalen<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//接受串口屏反馈数据</span>
+            <span class="token function">usleep</span><span class="token punctuation">(</span><span class="token number">2500</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">for</span> <span class="token punctuation">(</span>i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i<span class="token operator">&lt;</span><span class="token number">3</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+                <span class="token punctuation">{<!-- --></span>
+                    <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"%02x"</span><span class="token punctuation">,</span>hedebyte<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">for</span> <span class="token punctuation">(</span>j <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> j<span class="token operator">&lt;</span>sdatalen<span class="token punctuation">;</span> j<span class="token operator">++</span><span class="token punctuation">)</span><span class="token comment">//数据</span>
+                <span class="token punctuation">{<!-- --></span>
+                    <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"%02x"</span><span class="token punctuation">,</span>sdata<span class="token punctuation">[</span>j<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token function">serialPolling</span><span class="token punctuation">(</span>sdata<span class="token punctuation">,</span>sdatalen<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//按照通信协议依次处理数据，通过TCP反馈到功能模块</span>
+            <span class="token function">memset</span><span class="token punctuation">(</span>sdata<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>sdata<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            sdatalen<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token function">usleep</span><span class="token punctuation">(</span><span class="token number">5000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">memset</span><span class="token punctuation">(</span>hedebyte<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>hedebyte<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>  
+    <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<pre><code class="prism language-c"><span class="token class-name">uint8_t</span> <span class="token function">serialPolling</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span>data<span class="token punctuation">,</span><span class="token class-name">uint8_t</span> datalen<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">int</span> i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">,</span>j<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">double</span> power<span class="token operator">=</span><span class="token number">2</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> chartonum<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span><span class="token punctuation">(</span>datalen<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span> 
+    <span class="token punctuation">{<!-- --></span>   <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span><span class="token punctuation">}</span>
+    <span class="token keyword">else</span>
+    <span class="token punctuation">{<!-- --></span>
+       LCDaddr<span class="token operator">=</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">uint16_t</span><span class="token punctuation">)</span>data<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token operator">&lt;&lt;</span><span class="token number">8</span><span class="token punctuation">)</span><span class="token operator">|</span>data<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span><span class="token comment">//识别串口屏部件</span>
+       <span class="token keyword">switch</span> <span class="token punctuation">(</span>LCDaddr<span class="token punctuation">)</span>
+       <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">case</span> State_check<span class="token operator">:</span>
+            sendbuf<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0xAA</span><span class="token punctuation">;</span>
+            sendbuf<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0x01</span><span class="token punctuation">;</span>
+            sendbuf<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0x00</span><span class="token punctuation">;</span>
+            sendbuf<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0x00</span><span class="token punctuation">;</span>
+            sendbuf<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0x00</span><span class="token punctuation">;</span>
+            sendbuf<span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0x00</span><span class="token punctuation">;</span> <span class="token comment">//设置数据帧</span>
+            <span class="token function">write</span><span class="token punctuation">(</span>connect_fd<span class="token punctuation">,</span> sendbuf<span class="token punctuation">,</span> <span class="token number">6</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//通过TCP反馈到功能模块</span>
+            <span class="token keyword">break</span><span class="token punctuation">;</span>
+        <span class="token keyword">case</span> IP_address <span class="token operator">:</span> <span class="token comment">//获得网络网址，将bits数据转化为网址</span>
+            <span class="token keyword">for</span><span class="token punctuation">(</span>i<span class="token operator">=</span><span class="token number">4</span><span class="token punctuation">;</span>i <span class="token operator">&lt;</span> <span class="token number">19</span><span class="token punctuation">;</span>i <span class="token operator">++</span><span class="token punctuation">)</span>
+            <span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">if</span><span class="token punctuation">(</span>data<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token operator">!=</span> <span class="token number">0xFF</span><span class="token punctuation">)</span>
+                <span class="token punctuation">{<!-- --></span>
+                    IPaddress<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> data<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span><span class="token punctuation">(</span>data<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token operator">!=</span><span class="token number">0x2e</span><span class="token punctuation">)</span>
+                    <span class="token punctuation">{<!-- --></span>
+                    chartonum<span class="token operator">=</span><span class="token punctuation">(</span>IPaddress<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token operator">-</span><span class="token number">0x30</span><span class="token punctuation">)</span><span class="token operator">*</span><span class="token function">pow</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">,</span>power<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    IP_buffer<span class="token punctuation">[</span>j<span class="token punctuation">]</span><span class="token operator">=</span>IP_buffer<span class="token punctuation">[</span>j<span class="token punctuation">]</span><span class="token operator">+</span>chartonum<span class="token punctuation">;</span>
+                    power<span class="token operator">--</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token keyword">else</span>
+                    <span class="token punctuation">{<!-- --></span>
+                        j<span class="token operator">++</span><span class="token punctuation">;</span>
+                        power<span class="token operator">=</span><span class="token number">2</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+		        <span class="token punctuation">}</span>
+	        <span class="token punctuation">}</span>
+            <span class="token function">memset</span><span class="token punctuation">(</span>IPaddress<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">15</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">break</span><span class="token punctuation">;</span>
+        <span class="token keyword">default</span><span class="token operator">:</span>
+        <span class="token keyword">break</span><span class="token punctuation">;</span>
+       <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<h4><a id="242%09_321"></a>2.4.2 功能模块</h4> 
+<pre><code class="prism language-c"><span class="token keyword">void</span><span class="token operator">*</span> <span class="token function">TCPtranslateMessage</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span> arg<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>   
+        <span class="token comment">//读取客户端发来的信息</span>
+        <span class="token class-name">ssize_t</span> tdatalen <span class="token operator">=</span> <span class="token function">read</span><span class="token punctuation">(</span>connect_fd<span class="token punctuation">,</span>tdata<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>tdata<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span><span class="token punctuation">(</span>tdatalen <span class="token operator">&lt;=</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> tdatalen<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+            <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"%02x"</span><span class="token punctuation">,</span>tdata<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">TCPPolling</span><span class="token punctuation">(</span>tdata<span class="token punctuation">,</span>tdatalen<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//处理TCP接收数据，和串口类似先找帧头然后针对不同数据进行处理</span>
+        <span class="token function">memset</span><span class="token punctuation">(</span>tdata<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>tdata<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>根据自己的需求去设计处理数据的函数</p> 
+<pre><code class="prism language-c"><span class="token class-name">uint8_t</span> <span class="token function">TCPPolling</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span>data<span class="token punctuation">,</span><span class="token class-name">uint8_t</span> datalen<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token class-name">uint8_t</span> position<span class="token operator">=</span><span class="token number">6</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>datalen<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span> 
+    <span class="token punctuation">{<!-- --></span>   <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span><span class="token punctuation">}</span>
+    <span class="token keyword">else</span>
+    <span class="token punctuation">{<!-- --></span>
+       command<span class="token operator">=</span>data<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+       <span class="token keyword">switch</span> <span class="token punctuation">(</span>command<span class="token punctuation">)</span>
+       <span class="token punctuation">{<!-- --></span>
+       <span class="token keyword">case</span> <span class="token number">01</span><span class="token operator">:</span>
+        <span class="token comment">/* code */</span>
+        <span class="token comment">//状态显示，设置屏幕显示数据</span>
+        <span class="token function">DW_SetValue</span><span class="token punctuation">(</span>Running_state<span class="token punctuation">,</span>data<span class="token punctuation">[</span>position<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">DW_SetValue</span><span class="token punctuation">(</span>Input_datastate<span class="token punctuation">,</span>data<span class="token punctuation">[</span>position<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">break</span><span class="token punctuation">;</span>
+       <span class="token keyword">case</span> <span class="token number">02</span><span class="token operator">:</span>
+        <span class="token function">DW_SetValue</span><span class="token punctuation">(</span>Output_power<span class="token punctuation">,</span>data<span class="token punctuation">[</span>position<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">DW_SetValue</span><span class="token punctuation">(</span>PAR_coefficient<span class="token punctuation">,</span>data<span class="token punctuation">[</span>position<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">break</span><span class="token punctuation">;</span>
+       <span class="token keyword">case</span> <span class="token number">03</span><span class="token operator">:</span>
+        <span class="token comment">/* code */</span>
+        <span class="token keyword">break</span><span class="token punctuation">;</span>
+       <span class="token keyword">default</span><span class="token operator">:</span>
+        <span class="token keyword">break</span><span class="token punctuation">;</span>
+       <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<h2><a id="_373"></a>三、参考资料</h2> 
+<p>《T5L DGUSII应用开发指南》<br> <a href="https://blog.csdn.net/makunIT/article/details/107033785">串口通信协议和Linux下的串口编程</a><br> <a href="https://blog.csdn.net/weixin_41752434/article/details/116002194">TCP的socket详解</a><br> <a href="https://blog.csdn.net/lzxiaotu/article/details/125718686">迪文串口屏教程</a><br> <a href="https://blog.csdn.net/Stack_/article/details/129652261">迪文串口屏（T5L2 &amp; DGUS II）开发 – 入门</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4eeddc62f23768e4a17105fc8ded36ce/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Android基础开发-数据存储</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/7442d4f843d730276fadbc666347de0e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">经销商文件分发 怎样兼顾安全和效率？</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

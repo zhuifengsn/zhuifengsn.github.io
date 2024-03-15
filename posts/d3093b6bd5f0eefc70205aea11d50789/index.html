@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>极简shiro入门 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="极简shiro入门" />
+<meta property="og:description" content="1.shiro是什么? Shiro是Apache下的一个开源项目。shiro属于轻量级框架，相对于SpringSecurity简单的多，也没有SpringSecurity那么复杂。以下是我自己学习之后的记录。
+官方架构图如下：
+2.主要功能 shiro主要有三大功能模块：
+Subject：主体，一般指用户。SecurityManager：安全管理器，管理所有Subject，可以配合内部安全组件。(类似于SpringMVC中的DispatcherServlet)Realms：用于进行权限信息的验证，一般需要自己实现。 3.细分功能
+Authentication：身份认证/登录(账号密码验证)。Authorization：授权，即角色或者权限验证。Session Manager：会话管理，用户登录后的session相关管理。Cryptography：加密，密码加密等。Web Support：Web支持，集成Web环境。Caching：缓存，用户信息、角色、权限等缓存到如redis等缓存中。Concurrency：多线程并发验证，在一个线程中开启另一个线程，可以把权限自动传播过去。Testing：测试支持；Run As：允许一个用户假装为另一个用户（如果他们允许）的身份进行访问。Remember Me：记住我，登录后，下次再来的话不用登录了。
+（更多关于shiro是什么的文字请自行去搜索引擎找，本文主要记录springboot与shiro的集成）
+首先先创建springboot项目，此处不过多描述。 上代码：
+目录结构：
+pom.xml
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt; &lt;project xmlns=&#34;http://maven.apache.org/POM/4.0.0&#34; xmlns:xsi=&#34;http://www.w3.org/2001/XMLSchema-instance&#34; xsi:schemaLocation=&#34;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&#34;&gt; &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt; &lt;parent&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt; &lt;version&gt;2.3.4.RELEASE&lt;/version&gt; &lt;relativePath/&gt; &lt;/parent&gt; &lt;groupId&gt;com.wsl&lt;/groupId&gt; &lt;artifactId&gt;spring-shiro-demo&lt;/artifactId&gt; &lt;version&gt;0.0.1-SNAPSHOT&lt;/version&gt; &lt;name&gt;spring-shiro-demo&lt;/name&gt; &lt;description&gt;Demo project for Spring Boot&lt;/description&gt; &lt;properties&gt; &lt;java.version&gt;1.8&lt;/java.version&gt; &lt;spring.shiro.version&gt;1.6.0&lt;/spring.shiro.version&gt; &lt;/properties&gt; &lt;dependencies&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt; &lt;scope&gt;test&lt;/scope&gt; &lt;/dependency&gt; &lt;!-- shiro --&gt; &lt;dependency&gt; &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt; &lt;artifactId&gt;shiro-spring&lt;/artifactId&gt; &lt;version&gt;${spring.shiro.version}&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.projectlombok&lt;/groupId&gt; &lt;artifactId&gt;lombok&lt;/artifactId&gt; &lt;optional&gt;true&lt;/optional&gt; &lt;/dependency&gt; &lt;!--页面模板依赖--&gt; &lt;dependency&gt; &lt;groupId&gt;org." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/d3093b6bd5f0eefc70205aea11d50789/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-12-07T22:49:32+08:00" />
+<meta property="article:modified_time" content="2020-12-07T22:49:32+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">极简shiro入门</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="1shiro_0"></a>1.shiro是什么?</h3> 
+<p>Shiro是Apache下的一个开源项目。shiro属于轻量级框架，相对于SpringSecurity简单的多，也没有SpringSecurity那么复杂。以下是我自己学习之后的记录。<br> 官方架构图如下：<br> <img src="https://images2.imgbox.com/bb/91/QHjA4Zpv_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="2_4"></a>2.主要功能</h3> 
+<p>shiro主要有三大功能模块：</p> 
+<ol><li>Subject：主体，一般指用户。</li><li>SecurityManager：安全管理器，管理所有Subject，可以配合内部安全组件。(类似于SpringMVC中的DispatcherServlet)</li><li>Realms：用于进行权限信息的验证，一般需要自己实现。</li></ol> 
+<p>3.细分功能</p> 
+<ol><li>Authentication：身份认证/登录(账号密码验证)。</li><li>Authorization：授权，即角色或者权限验证。</li><li>Session Manager：会话管理，用户登录后的session相关管理。</li><li>Cryptography：加密，密码加密等。</li><li>Web Support：Web支持，集成Web环境。</li><li>Caching：缓存，用户信息、角色、权限等缓存到如redis等缓存中。</li><li>Concurrency：多线程并发验证，在一个线程中开启另一个线程，可以把权限自动传播过去。</li><li>Testing：测试支持；</li><li>Run As：允许一个用户假装为另一个用户（如果他们允许）的身份进行访问。</li><li>Remember Me：记住我，登录后，下次再来的话不用登录了。<br> （更多关于shiro是什么的文字请自行去搜索引擎找，本文主要记录springboot与shiro的集成）<br> 首先先创建springboot项目，此处不过多描述。</li></ol> 
+<p>上代码：<br> 目录结构：</p> 
+<p><img src="https://images2.imgbox.com/4c/92/Y11H5Us1_o.png" alt="在这里插入图片描述"><br> pom.xml</p> 
+<pre><code class="prism language-bash"><span class="token operator">&lt;</span>?xml version<span class="token operator">=</span><span class="token string">"1.0"</span> encoding<span class="token operator">=</span><span class="token string">"UTF-8"</span>?<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>project xmlns<span class="token operator">=</span><span class="token string">"http://maven.apache.org/POM/4.0.0"</span> xmlns:xsi<span class="token operator">=</span><span class="token string">"http://www.w3.org/2001/XMLSchema-instance"</span>
+         xsi:schemaLocation<span class="token operator">=</span><span class="token string">"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"</span><span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>modelVersion<span class="token operator">&gt;</span>4.0.0<span class="token operator">&lt;</span>/modelVersion<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>parent<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.springframework.boot<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>spring-boot-starter-parent<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>version<span class="token operator">&gt;</span>2.3.4.RELEASE<span class="token operator">&lt;</span>/version<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>relativePath/<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>/parent<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>com.wsl<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>spring-shiro-demo<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>version<span class="token operator">&gt;</span>0.0.1-SNAPSHOT<span class="token operator">&lt;</span>/version<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>name<span class="token operator">&gt;</span>spring-shiro-demo<span class="token operator">&lt;</span>/name<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>description<span class="token operator">&gt;</span>Demo project <span class="token keyword">for</span> Spring Boot<span class="token operator">&lt;</span>/description<span class="token operator">&gt;</span>
+
+    <span class="token operator">&lt;</span>properties<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>java.version<span class="token operator">&gt;</span>1.8<span class="token operator">&lt;</span>/java.version<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>spring.shiro.version<span class="token operator">&gt;</span>1.6.0<span class="token operator">&lt;</span>/spring.shiro.version<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>/properties<span class="token operator">&gt;</span>
+
+    <span class="token operator">&lt;</span>dependencies<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>dependency<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.springframework.boot<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>spring-boot-starter-web<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>/dependency<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>dependency<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.springframework.boot<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>spring-boot-starter-test<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>scope<span class="token operator">&gt;</span>test<span class="token operator">&lt;</span>/scope<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>/dependency<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span><span class="token operator">!</span>-- shiro --<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>dependency<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.apache.shiro<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>shiro-spring<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>version<span class="token operator">&gt;</span><span class="token variable">${spring.shiro.version}</span><span class="token operator">&lt;</span>/version<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>/dependency<span class="token operator">&gt;</span>
+
+        <span class="token operator">&lt;</span>dependency<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.projectlombok<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>lombok<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>optional<span class="token operator">&gt;</span>true<span class="token operator">&lt;</span>/optional<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>/dependency<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span><span class="token operator">!</span>--页面模板依赖--<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>dependency<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.springframework.boot<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>spring-boot-starter-thymeleaf<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>/dependency<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span><span class="token operator">!</span>--热部署依赖--<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>dependency<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.springframework.boot<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>spring-boot-devtools<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>scope<span class="token operator">&gt;</span>runtime<span class="token operator">&lt;</span>/scope<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>/dependency<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>/dependencies<span class="token operator">&gt;</span>
+
+    <span class="token operator">&lt;</span>build<span class="token operator">&gt;</span>
+        <span class="token operator">&lt;</span>plugins<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>plugin<span class="token operator">&gt;</span>
+                <span class="token operator">&lt;</span>groupId<span class="token operator">&gt;</span>org.springframework.boot<span class="token operator">&lt;</span>/groupId<span class="token operator">&gt;</span>
+                <span class="token operator">&lt;</span>artifactId<span class="token operator">&gt;</span>spring-boot-maven-plugin<span class="token operator">&lt;</span>/artifactId<span class="token operator">&gt;</span>
+            <span class="token operator">&lt;</span>/plugin<span class="token operator">&gt;</span>    
+        <span class="token operator">&lt;</span>/plugins<span class="token operator">&gt;</span>
+    <span class="token operator">&lt;</span>/build<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span>/project<span class="token operator">&gt;</span>
+
+</code></pre> 
+<p>user.java(用户实体类)：</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>AllArgsConstructor<span class="token punctuation">;</span>
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>Data<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>Set<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Data</span>
+<span class="token annotation punctuation">@AllArgsConstructor</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">User</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">private</span> String id<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> String userName<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> String password<span class="token punctuation">;</span>
+    <span class="token comment">/**
+     * 用户对应的角色集合
+     */</span>
+    <span class="token keyword">private</span> Set<span class="token generics function"><span class="token punctuation">&lt;</span>Role<span class="token punctuation">&gt;</span></span> roles<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>Role.java(角色对应实体类)：</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>AllArgsConstructor<span class="token punctuation">;</span>
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>Data<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>Set<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Data</span>
+<span class="token annotation punctuation">@AllArgsConstructor</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Role</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">private</span> String id<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> String roleName<span class="token punctuation">;</span>
+    <span class="token comment">/**
+     * 角色对应权限集合
+     */</span>
+    <span class="token keyword">private</span> Set<span class="token generics function"><span class="token punctuation">&lt;</span>Permissions<span class="token punctuation">&gt;</span></span> permissions<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>Permissions.java(权限对应实体类):</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>AllArgsConstructor<span class="token punctuation">;</span>
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>Data<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Data</span>
+<span class="token annotation punctuation">@AllArgsConstructor</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Permissions</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">private</span> String id<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> String permissionsName<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>LoginServiceImpl.java:</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>service<span class="token punctuation">.</span>impl<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">.</span>Permissions<span class="token punctuation">;</span>
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">.</span>Role<span class="token punctuation">;</span>
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">.</span>User<span class="token punctuation">;</span>
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>service<span class="token punctuation">.</span>LoginService<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>stereotype<span class="token punctuation">.</span>Service<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>HashMap<span class="token punctuation">;</span>
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>HashSet<span class="token punctuation">;</span>
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>Map<span class="token punctuation">;</span>
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>Set<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Service</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LoginServiceImpl</span> <span class="token keyword">implements</span> <span class="token class-name">LoginService</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> User <span class="token function">getUserByName</span><span class="token punctuation">(</span>String getMapByName<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token function">getMapByName</span><span class="token punctuation">(</span>getMapByName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">/**
+     * 模拟数据库查询
+     *
+     * @param userName 用户名
+     * @return User
+     */</span>
+    <span class="token keyword">private</span> User <span class="token function">getMapByName</span><span class="token punctuation">(</span>String userName<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        Permissions permissions1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Permissions</span><span class="token punctuation">(</span><span class="token string">"1"</span><span class="token punctuation">,</span> <span class="token string">"query"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Permissions permissions2 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Permissions</span><span class="token punctuation">(</span><span class="token string">"2"</span><span class="token punctuation">,</span> <span class="token string">"add"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Set<span class="token generics function"><span class="token punctuation">&lt;</span>Permissions<span class="token punctuation">&gt;</span></span> permissionsSet <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        permissionsSet<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>permissions1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        permissionsSet<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>permissions2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Role role <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Role</span><span class="token punctuation">(</span><span class="token string">"1"</span><span class="token punctuation">,</span> <span class="token string">"admin"</span><span class="token punctuation">,</span> permissionsSet<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Set<span class="token generics function"><span class="token punctuation">&lt;</span>Role<span class="token punctuation">&gt;</span></span> roleSet <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        roleSet<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>role<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        User user <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">User</span><span class="token punctuation">(</span><span class="token string">"1"</span><span class="token punctuation">,</span> <span class="token string">"wsl"</span><span class="token punctuation">,</span> <span class="token string">"123456"</span><span class="token punctuation">,</span> roleSet<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Map<span class="token generics function"><span class="token punctuation">&lt;</span>String<span class="token punctuation">,</span> User<span class="token punctuation">&gt;</span></span> map <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        map<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>user<span class="token punctuation">.</span><span class="token function">getUserName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> user<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        
+        Set<span class="token generics function"><span class="token punctuation">&lt;</span>Permissions<span class="token punctuation">&gt;</span></span> permissionsSet1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        permissionsSet1<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>permissions1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Role role1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Role</span><span class="token punctuation">(</span><span class="token string">"2"</span><span class="token punctuation">,</span> <span class="token string">"user"</span><span class="token punctuation">,</span> permissionsSet1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Set<span class="token generics function"><span class="token punctuation">&lt;</span>Role<span class="token punctuation">&gt;</span></span> roleSet1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        roleSet1<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>role1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        User user1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">User</span><span class="token punctuation">(</span><span class="token string">"2"</span><span class="token punctuation">,</span> <span class="token string">"zhangsan"</span><span class="token punctuation">,</span> <span class="token string">"123456"</span><span class="token punctuation">,</span> roleSet1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        map<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>user1<span class="token punctuation">.</span><span class="token function">getUserName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> user1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> map<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>userName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>自定义Realm用于查询用户的角色和权限信息并保存到权限管理器：<br> CustomRealm.java</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>shiro<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">.</span>Permissions<span class="token punctuation">;</span>
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">.</span>Role<span class="token punctuation">;</span>
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">.</span>User<span class="token punctuation">;</span>
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>service<span class="token punctuation">.</span>LoginService<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authc<span class="token punctuation">.</span>AuthenticationException<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authc<span class="token punctuation">.</span>AuthenticationInfo<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authc<span class="token punctuation">.</span>AuthenticationToken<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authc<span class="token punctuation">.</span>SimpleAuthenticationInfo<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authz<span class="token punctuation">.</span>AuthorizationInfo<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authz<span class="token punctuation">.</span>SimpleAuthorizationInfo<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>realm<span class="token punctuation">.</span>AuthorizingRealm<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>subject<span class="token punctuation">.</span>PrincipalCollection<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>beans<span class="token punctuation">.</span>factory<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>Autowired<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>util<span class="token punctuation">.</span>StringUtils<span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">CustomRealm</span> <span class="token keyword">extends</span> <span class="token class-name">AuthorizingRealm</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">private</span> LoginService loginService<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * @MethodName doGetAuthorizationInfo
+     * @Description 权限配置类
+     * @Param [principalCollection]
+     * @Return AuthorizationInfo
+     * @Author WangShiLin
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> AuthorizationInfo <span class="token function">doGetAuthorizationInfo</span><span class="token punctuation">(</span>PrincipalCollection principalCollection<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">//获取登录用户名</span>
+        String name <span class="token operator">=</span> <span class="token punctuation">(</span>String<span class="token punctuation">)</span> principalCollection<span class="token punctuation">.</span><span class="token function">getPrimaryPrincipal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//查询用户名称</span>
+        User user <span class="token operator">=</span> loginService<span class="token punctuation">.</span><span class="token function">getUserByName</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//添加角色和权限</span>
+        SimpleAuthorizationInfo simpleAuthorizationInfo <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SimpleAuthorizationInfo</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>Role role <span class="token operator">:</span> user<span class="token punctuation">.</span><span class="token function">getRoles</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">//添加角色</span>
+            simpleAuthorizationInfo<span class="token punctuation">.</span><span class="token function">addRole</span><span class="token punctuation">(</span>role<span class="token punctuation">.</span><span class="token function">getRoleName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment">//添加权限</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Permissions permissions <span class="token operator">:</span> role<span class="token punctuation">.</span><span class="token function">getPermissions</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                simpleAuthorizationInfo<span class="token punctuation">.</span><span class="token function">addStringPermission</span><span class="token punctuation">(</span>permissions<span class="token punctuation">.</span><span class="token function">getPermissionsName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> simpleAuthorizationInfo<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">/**
+     * @MethodName doGetAuthenticationInfo
+     * @Description 认证配置类
+     * @Param [authenticationToken]
+     * @Return AuthenticationInfo
+     * @Author WangShiLin
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> AuthenticationInfo <span class="token function">doGetAuthenticationInfo</span><span class="token punctuation">(</span>AuthenticationToken authenticationToken<span class="token punctuation">)</span> <span class="token keyword">throws</span> AuthenticationException <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>StringUtils<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span>authenticationToken<span class="token punctuation">.</span><span class="token function">getPrincipal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment">//获取用户信息</span>
+        String name <span class="token operator">=</span> authenticationToken<span class="token punctuation">.</span><span class="token function">getPrincipal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        User user <span class="token operator">=</span> loginService<span class="token punctuation">.</span><span class="token function">getUserByName</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>user <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">//这里返回后会报出对应异常</span>
+            <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">//这里验证authenticationToken和simpleAuthenticationInfo的信息</span>
+            SimpleAuthenticationInfo simpleAuthenticationInfo <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SimpleAuthenticationInfo</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> user<span class="token punctuation">.</span><span class="token function">getPassword</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> simpleAuthenticationInfo<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p>ShiroConfig.java，把CustomRealm和SecurityManager等注入到spring容器中：</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>config<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>CustomRealm<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>mgt<span class="token punctuation">.</span>SecurityManager<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>spring<span class="token punctuation">.</span>security<span class="token punctuation">.</span>interceptor<span class="token punctuation">.</span>AuthorizationAttributeSourceAdvisor<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>spring<span class="token punctuation">.</span>web<span class="token punctuation">.</span>ShiroFilterFactoryBean<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>web<span class="token punctuation">.</span>mgt<span class="token punctuation">.</span>DefaultWebSecurityManager<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>aop<span class="token punctuation">.</span>framework<span class="token punctuation">.</span>autoproxy<span class="token punctuation">.</span>DefaultAdvisorAutoProxyCreator<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>autoconfigure<span class="token punctuation">.</span>condition<span class="token punctuation">.</span>ConditionalOnMissingBean<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>Bean<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>Configuration<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>HashMap<span class="token punctuation">;</span>
+<span class="token keyword">import</span> java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>Map<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@Configuration</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">shiroConfig</span> <span class="token punctuation">{<!-- --></span>
+    
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token annotation punctuation">@ConditionalOnMissingBean</span>
+    <span class="token keyword">public</span> DefaultAdvisorAutoProxyCreator <span class="token function">defaultAdvisorAutoProxyCreator</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        DefaultAdvisorAutoProxyCreator defaultAAP <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">DefaultAdvisorAutoProxyCreator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        defaultAAP<span class="token punctuation">.</span><span class="token function">setProxyTargetClass</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> defaultAAP<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">//将自己的验证方式加入容器</span>
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> CustomRealm <span class="token function">myShiroRealm</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        CustomRealm customRealm <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CustomRealm</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> customRealm<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">//权限管理，配置主要是Realm的管理认证</span>
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> SecurityManager <span class="token function">securityManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        DefaultWebSecurityManager securityManager <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">DefaultWebSecurityManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        securityManager<span class="token punctuation">.</span><span class="token function">setRealm</span><span class="token punctuation">(</span><span class="token function">myShiroRealm</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> securityManager<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">//Filter工厂，设置对应的过滤条件和跳转条件</span>
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> ShiroFilterFactoryBean <span class="token function">shiroFilterFactoryBean</span><span class="token punctuation">(</span>SecurityManager securityManager<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        ShiroFilterFactoryBean shiroFilterFactoryBean <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ShiroFilterFactoryBean</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        shiroFilterFactoryBean<span class="token punctuation">.</span><span class="token function">setSecurityManager</span><span class="token punctuation">(</span>securityManager<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Map<span class="token generics function"><span class="token punctuation">&lt;</span>String<span class="token punctuation">,</span> String<span class="token punctuation">&gt;</span></span> map <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//登出</span>
+        map<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"/logout"</span><span class="token punctuation">,</span> <span class="token string">"logout"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//对所有用户认证</span>
+        map<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"/**"</span><span class="token punctuation">,</span> <span class="token string">"authc"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//登录</span>
+        shiroFilterFactoryBean<span class="token punctuation">.</span><span class="token function">setLoginUrl</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token operator">/</span><span class="token operator">/</span>首页
+        shiroFilterFactoryBean<span class="token punctuation">.</span><span class="token function">setSuccessUrl</span><span class="token punctuation">(</span><span class="token string">"/index"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token operator">/</span><span class="token operator">/</span>错误页面，认证不通过跳转
+        shiroFilterFactoryBean<span class="token punctuation">.</span><span class="token function">setUnauthorizedUrl</span><span class="token punctuation">(</span><span class="token string">"/error"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        shiroFilterFactoryBean<span class="token punctuation">.</span><span class="token function">setFilterChainDefinitionMap</span><span class="token punctuation">(</span>map<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> shiroFilterFactoryBean<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+  
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> AuthorizationAttributeSourceAdvisor <span class="token function">authorizationAttributeSourceAdvisor</span><span class="token punctuation">(</span>SecurityManager securityManager<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        AuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">AuthorizationAttributeSourceAdvisor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        authorizationAttributeSourceAdvisor<span class="token punctuation">.</span><span class="token function">setSecurityManager</span><span class="token punctuation">(</span>securityManager<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> authorizationAttributeSourceAdvisor<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>LoginController.java:我们编写一个简单的登录方法，一个index页的查询方法，一个add方法，一个admin方法，对应不同的角色或权限拦截</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>controller<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>bean<span class="token punctuation">.</span>User<span class="token punctuation">;</span>
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>extern<span class="token punctuation">.</span>slf4j<span class="token punctuation">.</span>Slf4j<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>SecurityUtils<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authc<span class="token punctuation">.</span>AuthenticationException<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authc<span class="token punctuation">.</span>UnknownAccountException<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authc<span class="token punctuation">.</span>UsernamePasswordToken<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authz<span class="token punctuation">.</span>AuthorizationException<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authz<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>RequiresPermissions<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authz<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>RequiresRoles<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>subject<span class="token punctuation">.</span>Subject<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>util<span class="token punctuation">.</span>StringUtils<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>web<span class="token punctuation">.</span>bind<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>GetMapping<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>web<span class="token punctuation">.</span>bind<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>RestController<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@RestController</span>
+<span class="token annotation punctuation">@Slf4j</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LoginController</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@GetMapping</span><span class="token punctuation">(</span><span class="token string">"/login"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> String <span class="token function">login</span><span class="token punctuation">(</span>User user<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>StringUtils<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span>user<span class="token punctuation">.</span><span class="token function">getUserName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">||</span> StringUtils<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span>user<span class="token punctuation">.</span><span class="token function">getPassword</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">return</span> <span class="token string">"请输入用户名和密码！"</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment">//用户认证信息</span>
+        Subject subject <span class="token operator">=</span> SecurityUtils<span class="token punctuation">.</span><span class="token function">getSubject</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        UsernamePasswordToken usernamePasswordToken <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">UsernamePasswordToken</span><span class="token punctuation">(</span>
+                user<span class="token punctuation">.</span><span class="token function">getUserName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                user<span class="token punctuation">.</span><span class="token function">getPassword</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">//进行验证，这里可以捕获异常，然后返回对应信息</span>
+            subject<span class="token punctuation">.</span><span class="token function">login</span><span class="token punctuation">(</span>usernamePasswordToken<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">//            subject.checkRole("admin");</span>
+<span class="token comment">//            subject.checkPermissions("query", "add");</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">UnknownAccountException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"用户名不存在！"</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token string">"用户名不存在！"</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">AuthenticationException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"账号或密码错误！"</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token string">"账号或密码错误！"</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">AuthorizationException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"没有权限！"</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token string">"没有权限"</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> <span class="token string">"login success"</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@RequiresRoles</span><span class="token punctuation">(</span><span class="token string">"admin"</span><span class="token punctuation">)</span>
+    <span class="token annotation punctuation">@GetMapping</span><span class="token punctuation">(</span><span class="token string">"/admin"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> String <span class="token function">admin</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token string">"admin success!"</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@RequiresPermissions</span><span class="token punctuation">(</span><span class="token string">"query"</span><span class="token punctuation">)</span>
+    <span class="token annotation punctuation">@GetMapping</span><span class="token punctuation">(</span><span class="token string">"/index"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> String <span class="token function">index</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token string">"index success!"</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@RequiresPermissions</span><span class="token punctuation">(</span><span class="token string">"add"</span><span class="token punctuation">)</span>
+    <span class="token annotation punctuation">@GetMapping</span><span class="token punctuation">(</span><span class="token string">"/add"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> String <span class="token function">add</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token string">"add success!"</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p>注解验证角色和权限的话无法捕捉异常，从而无法正确的返回给前端错误信息，所以我加了一个类用于拦截异常，具体代码如下<br> MyExceptionHandler.java</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> com<span class="token punctuation">.</span>wsl<span class="token punctuation">.</span>filter<span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> lombok<span class="token punctuation">.</span>extern<span class="token punctuation">.</span>slf4j<span class="token punctuation">.</span>Slf4j<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>shiro<span class="token punctuation">.</span>authz<span class="token punctuation">.</span>AuthorizationException<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>web<span class="token punctuation">.</span>bind<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>ControllerAdvice<span class="token punctuation">;</span>
+<span class="token keyword">import</span> org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>web<span class="token punctuation">.</span>bind<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span>ExceptionHandler<span class="token punctuation">;</span>
+
+<span class="token annotation punctuation">@ControllerAdvice</span>
+<span class="token annotation punctuation">@Slf4j</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">MyExceptionHandler</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@ExceptionHandler</span>
+    <span class="token annotation punctuation">@ResponseBody</span>
+    <span class="token keyword">public</span> String <span class="token function">ErrorHandler</span><span class="token punctuation">(</span>AuthorizationException e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"没有通过权限验证！"</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token string">"没有通过权限验证！"</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/48c1b166560ea00da758ad32193baec4/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Spring AOP操作解析</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/6e1d986b5bebff99b55e12f662c7ea8b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">PowerDesigner概念介绍</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

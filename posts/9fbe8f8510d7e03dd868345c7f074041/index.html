@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>.NET Core使用NPOI导出复杂，美观的Excel详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content=".NET Core使用NPOI导出复杂，美观的Excel详解" />
+<meta property="og:description" content="前言： 这段时间一直专注于数据报表的开发，当然涉及到相关报表的开发数据导出肯定是一个不可避免的问题啦。客户要求要导出优雅，美观的Excel文档格式的来展示数据，当时的第一想法就是使用NPOI开源库来做数据导出Excel文档（当时想想真香，网上随便搜一搜教程一大堆），但是当自己真正的实践起来才知道原来想要给不同的单元格设置相关的字体样式、边框样式以及单元格样式一个简单的样式需要写这么多行代码来实现。作为一个喜欢编写简洁代码的我而言肯定是受不了的，于是乎提起袖子说干就干，我自己根据网上的一些资料自己封装了一个通用的NPOI导出Excel帮助类，主要包括行列创建，行内单元格常用样式封装（如：字体样式，字体颜色，字体大小，单元格背景颜色，单元格边框，单元格内容对齐方式等常用属性），希望在以后的开发中能够使用到，并且也希望能够帮助到更多有需要的同学。
+一、引入NPOI NuGet： NPOI GitHub源码地址： https://github.com/tonyqus/npoi
+版本说明： NPOI 2.4.1 （注意不同版本可能使用的姿势有点小差别）
+程序包管理器控制台输入一下命令安装： Install-Package NPOI -Version 2.4.1 通过NuGet管理解决方案安装： 选择=&gt;工具=&gt;NuGet包管理器=&gt;程序包管理器控制台： 搜索：NPOI进行安装： 二、导出Excel文档内容展示格式如下如所示： 三、CellStyle单元格常用样式概述： HSSFCellStyle cellStyle = (HSSFCellStyle)workbook.CreateCellStyle(); //创建列头单元格实例样式 cellStyle.Alignment = hAlignment; //水平布局方式（HorizontalAlignment hAlignment） cellStyle.VerticalAlignment = vAlignment; //垂直布局方式（VerticalAlignment vAlignment） cellStyle.WrapText =false;//是否自动换行 //TODO:十分注意，要设置单元格背景色必须是FillForegroundColor和FillPattern两个属性同时设置，否则是不会显示背景颜色 //如下设置黄色背景色 cellStyle.FillForegroundColor = cellBackgroundColor;//单元格背景颜色（short cellBackgroundColor = HSSFColor.Yellow.Index） cellStyle.FillPattern = fillPattern;//填充图案样式(FineDots 细点，SolidForeground立体前景，isAddFillPattern=true时存在（FillPattern fillPattern = FillPattern.SolidForeground） //设置单元格边框样式 //常用的边框样式 None(没有),Thin(细边框，瘦的),Medium(中等),Dashed(虚线),Dotted(星罗棋布的),Thick(厚的),Double(双倍),Hair(头发)[上右下左顺序设置] cellStyle.BorderBottom = BorderStyle.Thin; cellStyle.BorderRight = BorderStyle.Thin; cellStyle.BorderTop = BorderStyle.Thin; cellStyle.BorderLeft = BorderStyle.Thin; //设置单元格边框颜色[上右下左顺序设置] cellStyle." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9fbe8f8510d7e03dd868345c7f074041/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-25T14:39:25+08:00" />
+<meta property="article:modified_time" content="2024-02-25T14:39:25+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">.NET Core使用NPOI导出复杂，美观的Excel详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h3>前言：</h3> 
+<p>这段时间一直专注于数据报表的开发，当然涉及到相关报表的开发数据导出肯定是一个不可避免的问题啦。客户要求要导出优雅，美观的Excel文档格式的来展示数据，当时的第一想法就是使用NPOI开源库来做数据导出Excel文档（当时想想真香，网上随便搜一搜教程一大堆），但是当自己真正的实践起来才知道原来想要给不同的单元格设置相关的字体样式、边框样式以及单元格样式一个简单的样式需要写这么多行代码来实现。作为一个喜欢编写简洁代码的我而言肯定是受不了的，于是乎提起袖子说干就干，我自己根据网上的一些资料自己封装了一个通用的NPOI导出Excel帮助类，主要包括行列创建，行内单元格常用样式封装（如：字体样式，字体颜色，字体大小，单元格背景颜色，单元格边框，单元格内容对齐方式等常用属性），希望在以后的开发中能够使用到，并且也希望能够帮助到更多有需要的同学。</p> 
+<h3>一、引入NPOI NuGet：</h3> 
+<h4>NPOI GitHub源码地址：</h4> 
+<blockquote> 
+ <p><a href="https://github.com/tonyqus/npoi" title="https://github.com/tonyqus/npoi">https://github.com/tonyqus/npoi</a></p> 
+</blockquote> 
+<h4>版本说明：</h4> 
+<blockquote> 
+ <p>　　NPOI 2.4.1 （注意不同版本可能使用的姿势有点小差别）</p> 
+</blockquote> 
+<h4>程序包管理器控制台输入一下命令安装：</h4> 
+<pre><code class="language-cs">Install-Package NPOI -Version 2.4.1</code></pre> 
+<h4>通过NuGet管理解决方案安装：</h4> 
+<h5>选择=&gt;工具=&gt;NuGet包管理器=&gt;程序包管理器控制台：</h5> 
+<p></p> 
+<p class="img-center"><img alt="" height="555" src="https://images2.imgbox.com/eb/9e/8cygW4z3_o.png" width="729"></p> 
+<h5> 搜索：NPOI进行安装：</h5> 
+<p></p> 
+<p class="img-center"><img alt="" height="593" src="https://images2.imgbox.com/d3/39/j0xYvERN_o.png" width="1200"></p> 
+<h3> 二、导出Excel文档内容展示格式如下如所示：</h3> 
+<p></p> 
+<p class="img-center"><img alt="" height="443" src="https://images2.imgbox.com/ce/e9/Y18s77NS_o.png" width="1200"></p> 
+<h3> 三、CellStyle单元格常用样式概述：</h3> 
+<pre><code class="language-cs">HSSFCellStyle cellStyle = (HSSFCellStyle)workbook.CreateCellStyle(); //创建列头单元格实例样式
+cellStyle.Alignment = hAlignment; //水平布局方式（HorizontalAlignment hAlignment）
+cellStyle.VerticalAlignment = vAlignment; //垂直布局方式（VerticalAlignment vAlignment）
+cellStyle.WrapText =false;//是否自动换行
+
+//TODO:十分注意，要设置单元格背景色必须是FillForegroundColor和FillPattern两个属性同时设置，否则是不会显示背景颜色
+//如下设置黄色背景色
+cellStyle.FillForegroundColor = cellBackgroundColor;//单元格背景颜色（short cellBackgroundColor = HSSFColor.Yellow.Index）
+cellStyle.FillPattern = fillPattern;//填充图案样式(FineDots 细点，SolidForeground立体前景，isAddFillPattern=true时存在（FillPattern fillPattern = FillPattern.SolidForeground）
+
+//设置单元格边框样式
+//常用的边框样式 None(没有),Thin(细边框，瘦的),Medium(中等),Dashed(虚线),Dotted(星罗棋布的),Thick(厚的),Double(双倍),Hair(头发)[上右下左顺序设置]
+cellStyle.BorderBottom = BorderStyle.Thin;
+cellStyle.BorderRight = BorderStyle.Thin;
+cellStyle.BorderTop = BorderStyle.Thin;
+cellStyle.BorderLeft = BorderStyle.Thin;
+
+//设置单元格边框颜色[上右下左顺序设置]
+cellStyle.TopBorderColor = HSSFColor.DarkGreen.Index;//DarkGreen(黑绿色)
+cellStyle.RightBorderColor = HSSFColor.DarkGreen.Index;
+cellStyle.BottomBorderColor = HSSFColor.DarkGreen.Index;
+cellStyle.LeftBorderColor = HSSFColor.DarkGreen.Index;</code></pre> 
+<h3>四、Font字体常用属性概述：</h3> 
+<pre><code class="language-cs">var cellStyleFont = (HSSFFont)workbook.CreateFont();//创建字体对象实例
+//假如字体大小只需要是粗体的话直接使用下面该属性即可
+cellStyleFont.IsBold = true;
+
+//或者通过下面属性，设置字体weight来设置字体是否加粗
+cellStyleFont.Boldweight = boldWeight; //字体加粗（字体加粗 (None = 0,Normal = 400，Bold = 700）
+cellStyleFont.FontHeightInPoints = fontHeightInPoints; //字体大小（short fontHeightInPoints）
+cellStyleFont.FontName = fontName;//字体（仿宋，楷体，宋体 ）
+cellStyleFont.Color = fontColor;//设置字体颜色（short fontColor = HSSFColor.Black.Index）
+cellStyleFont.IsItalic =true;//是否将文字变为斜体（true是，false否）
+cellStyleFont.Underline = underlineStyle;//字体下划线（下划线样式（无下划线[None],单下划线[Single],双下划线[Double],会计用单下划线[SingleAccounting],会计用双下划线[DoubleAccounting]））
+cellStyleFont.TypeOffset = typeOffset;//字体上标下标（字体上标下标(普通默认值[None],上标[Sub],下标[Super]),即字体在单元格内的上下偏移量）
+cellStyleFont.IsStrikeout =true;//是否显示删除线（true显示，false不显示）</code></pre> 
+<h3>五、NPOI HSSFColor 颜色索引对照表:</h3> 
+<p><strong>说明：</strong>通过对相关属性的介绍，我们可以清楚的知道无论是字体颜色，表格边框颜色，还是单元格背景颜色我们都需要用到HSSFColor对象中的颜色属性索引（该索引的字符类型为short类型）。</p> 
+<h4>HSSFColor颜色索引对照表如下表所示：</h4> 
+<p><strong>表格来源：</strong><a href="https://www.cnblogs.com/Brainpan/p/5804167.html" rel="nofollow" title="https://www.cnblogs.com/Brainpan/p/5804167.html">https://www.cnblogs.com/Brainpan/p/5804167.html</a>  <strong>（潘小博1992）</strong></p> 
+<table border="1" cellpadding="0" cellspacing="0"><tbody><tr><td>颜色</td><td>Class名称(注意由于NPOI的版本原因，我们在使用对应Class名称时首字母可能需要小写)</td><td>short</td></tr><tr><td>　</td><td>Black</td><td>8</td></tr><tr><td>　</td><td>Brown</td><td>60</td></tr><tr><td>　</td><td>Olive_Green</td><td>59</td></tr><tr><td>　</td><td>Dark_Green</td><td>58</td></tr><tr><td>　</td><td>Dark_Teal</td><td>56</td></tr><tr><td>　</td><td>Dark_Blue</td><td>18</td></tr><tr><td>　</td><td>Indigo</td><td>62</td></tr><tr><td>　</td><td>Grey_80_PERCENT</td><td>63</td></tr><tr><td>　</td><td>Dark_Red</td><td>16</td></tr><tr><td>　</td><td>Orange</td><td>53</td></tr><tr><td>　</td><td>DARK_YELLOW</td><td>19</td></tr><tr><td>　</td><td>Green</td><td>17</td></tr><tr><td>　</td><td>Teal</td><td>21</td></tr><tr><td>　</td><td>Blue</td><td>12</td></tr><tr><td>　</td><td>Blue_Grey</td><td>54</td></tr><tr><td>　</td><td>Grey_50_PERCENT</td><td>23</td></tr><tr><td>　</td><td>Red</td><td>10</td></tr><tr><td>　</td><td>LIGHT_ORANGE</td><td>52</td></tr><tr><td>　</td><td>LIME</td><td>50</td></tr><tr><td>　</td><td>SEA_GREEN</td><td>57</td></tr><tr><td>　</td><td>AQUA</td><td>49</td></tr><tr><td>　</td><td>LIGHT_BLUE</td><td>48</td></tr><tr><td>　</td><td>VIOLET</td><td>20</td></tr><tr><td>　</td><td>GREY_40_PERCENT</td><td>55</td></tr><tr><td>　</td><td>Pink</td><td>14</td></tr><tr><td>　</td><td>Gold</td><td>51</td></tr><tr><td>　</td><td>Yellow</td><td>13</td></tr><tr><td>　</td><td>BRIGHT_GREEN</td><td>11</td></tr><tr><td>　</td><td>TURQUOISE</td><td>15</td></tr><tr><td>　</td><td>SKY_BLUE</td><td>40</td></tr><tr><td>　</td><td>Plum</td><td>61</td></tr><tr><td>　</td><td>GREY_25_PERCENT</td><td>22</td></tr><tr><td>　</td><td>Rose</td><td>45</td></tr><tr><td>　</td><td>Tan</td><td>47</td></tr><tr><td>　</td><td>LIGHT_YELLOW</td><td>43</td></tr><tr><td>　</td><td>LIGHT_GREEN</td><td>42</td></tr><tr><td>　</td><td>LIGHT_TURQUOISE</td><td>41</td></tr><tr><td>　</td><td>PALE_BLUE</td><td>44</td></tr><tr><td>　</td><td>LAVENDER</td><td>46</td></tr><tr><td>　</td><td>White</td><td>9</td></tr><tr><td>　</td><td>CORNFLOWER_BLUE</td><td>24</td></tr><tr><td>　</td><td>LEMON_CHIFFON</td><td>26</td></tr><tr><td>　</td><td>MAROON</td><td>25</td></tr><tr><td>　</td><td>ORCHID</td><td>28</td></tr><tr><td>　</td><td>CORAL</td><td>29</td></tr><tr><td>　</td><td>ROYAL_BLUE</td><td>30</td></tr><tr><td>　</td><td>LIGHT_CORNFLOWER_BLUE</td><td>31</td></tr><tr><td>　</td><td>AUTOMATIC</td><td>64</td></tr></tbody></table> 
+<h3> 六、关于NPOI对Excel中的行列常用操作方法概述：</h3> 
+<h4>创建Excel工作表，给工作表赋一个名称(Excel底部名称)：</h4> 
+<pre>var sheet = workbook.CreateSheet("人才培训课程表");
+</pre> 
+<p></p> 
+<p class="img-center"><img alt="" height="81" src="https://images2.imgbox.com/35/af/8H5jLR8O_o.png" width="365"></p> 
+<h4> 创建Excel中指定的行:</h4> 
+<pre><code class="language-cs">        /// &lt;summary&gt;
+        /// TODO:先创建行，然后在创建对应的列
+        /// 创建Excel中指定的行
+        /// &lt;/summary&gt;
+        /// &lt;param name="sheet"&gt;Excel工作表对象&lt;/param&gt;
+        /// &lt;param name="rowNum"&gt;创建第几行(从0开始)&lt;/param&gt;
+        /// &lt;param name="rowHeight"&gt;行高&lt;/param&gt;
+        public HSSFRow CreateRow(ISheet sheet, int rowNum, float rowHeight)
+        {
+            HSSFRow row = (HSSFRow)sheet.CreateRow(rowNum); //创建行
+            row.HeightInPoints = rowHeight; //设置列头行高
+            return row;
+        }</code></pre> 
+<h4>创建行内指定的单元格:</h4> 
+<pre><code class="language-cs">  /// &lt;summary&gt;
+        /// 创建行内指定的单元格
+        /// &lt;/summary&gt;
+        /// &lt;param name="row"&gt;需要创建单元格的行&lt;/param&gt;
+        /// &lt;param name="cellStyle"&gt;单元格样式&lt;/param&gt;
+        /// &lt;param name="cellNum"&gt;创建第几个单元格(从0开始)&lt;/param&gt;
+        /// &lt;param name="cellValue"&gt;给单元格赋值&lt;/param&gt;
+        /// &lt;returns&gt;&lt;/returns&gt;
+        public HSSFCell CreateCells(HSSFRow row, HSSFCellStyle cellStyle, int cellNum, string cellValue)
+        {
+            HSSFCell cell = (HSSFCell)row.CreateCell(cellNum); //创建单元格
+            cell.CellStyle = cellStyle; //将样式绑定到单元格
+            if (!string.IsNullOrWhiteSpace(cellValue))
+            {
+                //单元格赋值
+                cell.SetCellValue(cellValue);
+            }
+
+            return cell;
+        }</code></pre> 
+<h4>指定合并的行列:　　</h4> 
+<pre><code class="language-cs">                //TODO:关于Excel行列单元格合并问题(注意：合并单元格后，只需对第一个位置赋值即可)
+                /**
+                  第一个参数：从第几行开始合并
+                  第二个参数：到第几行结束合并
+                  第三个参数：从第几列开始合并
+                  第四个参数：到第几列结束合并
+                **/
+                CellRangeAddress region = new CellRangeAddress(0, 0, 0, 5);
+                sheet.AddMergedRegion(region);
+
+                cell.SetCellValue("人才培训课程表");//TODO:顶部标题</code></pre> 
+<h4>设置单元格的列宽：</h4> 
+<pre><code class="language-cs">sheet.SetColumnWidth(单元格索引,1000);//设置对应列宽（单元格索引从0开始，后面接宽度）　</code></pre> 
+<pre>　</pre> 
+<h3>七、NPOI生成Excel文档完整代码：</h3> 
+<h4>NPOI之Excel数据导出帮助类（创建Excel表格行列，设置行高，设置字体样式，单元格边框样式，单元格背景颜色和样式，单元格内容对齐方式等常用属性和样式封装）:</h4> 
+<pre><code class="language-cs">/**
+ * Author:追逐时光
+ * Description：Npoi之Excel数据导出帮助类（创建Excel表格行列，设置行高，设置字体样式，单元格边框样式，单元格背景颜色和样式，单元格内容对齐方式等常用属性和样式封装）
+ * Description：2020年3月29日
+ */
+using NPOI.HSSF.UserModel;
+using NPOI.SS.UserModel;
+using NPOI.HSSF.Util;
+
+namespace YY_Utility
+{
+    public class NpoiExcelExportHelper
+    {
+        private static NpoiExcelExportHelper _exportHelper;
+
+        public static NpoiExcelExportHelper _
+        {
+            get =&gt; _exportHelper ?? (_exportHelper = new NpoiExcelExportHelper());
+            set =&gt; _exportHelper = value;
+        }
+
+        /// &lt;summary&gt;
+        /// TODO:先创建行，然后在创建对应的列
+        /// 创建Excel中指定的行
+        /// &lt;/summary&gt;
+        /// &lt;param name="sheet"&gt;Excel工作表对象&lt;/param&gt;
+        /// &lt;param name="rowNum"&gt;创建第几行(从0开始)&lt;/param&gt;
+        /// &lt;param name="rowHeight"&gt;行高&lt;/param&gt;
+        public HSSFRow CreateRow(ISheet sheet, int rowNum, float rowHeight)
+        {
+            HSSFRow row = (HSSFRow)sheet.CreateRow(rowNum); //创建行
+            row.HeightInPoints = rowHeight; //设置列头行高
+            return row;
+        }
+
+        /// &lt;summary&gt;
+        /// 创建行内指定的单元格
+        /// &lt;/summary&gt;
+        /// &lt;param name="row"&gt;需要创建单元格的行&lt;/param&gt;
+        /// &lt;param name="cellStyle"&gt;单元格样式&lt;/param&gt;
+        /// &lt;param name="cellNum"&gt;创建第几个单元格(从0开始)&lt;/param&gt;
+        /// &lt;param name="cellValue"&gt;给单元格赋值&lt;/param&gt;
+        /// &lt;returns&gt;&lt;/returns&gt;
+        public HSSFCell CreateCells(HSSFRow row, HSSFCellStyle cellStyle, int cellNum, string cellValue)
+        {
+            HSSFCell cell = (HSSFCell)row.CreateCell(cellNum); //创建单元格
+            cell.CellStyle = cellStyle; //将样式绑定到单元格
+            if (!string.IsNullOrWhiteSpace(cellValue))
+            {
+                //单元格赋值
+                cell.SetCellValue(cellValue);
+            }
+
+            return cell;
+        }
+
+
+        /// &lt;summary&gt;
+        /// 行内单元格常用样式设置
+        /// &lt;/summary&gt;
+        /// &lt;param name="workbook"&gt;Excel文件对象&lt;/param&gt;
+        /// &lt;param name="hAlignment"&gt;水平布局方式&lt;/param&gt;
+        /// &lt;param name="vAlignment"&gt;垂直布局方式&lt;/param&gt;
+        /// &lt;param name="fontHeightInPoints"&gt;字体大小&lt;/param&gt;
+        /// &lt;param name="isAddBorder"&gt;是否需要边框&lt;/param&gt;
+        /// &lt;param name="boldWeight"&gt;字体加粗 (None = 0,Normal = 400，Bold = 700&lt;/param&gt;
+        /// &lt;param name="fontName"&gt;字体（仿宋，楷体，宋体，微软雅黑...与Excel主题字体相对应）&lt;/param&gt;
+        /// &lt;param name="isAddBorderColor"&gt;是否增加边框颜色&lt;/param&gt;
+        /// &lt;param name="isItalic"&gt;是否将文字变为斜体&lt;/param&gt;
+        /// &lt;param name="isLineFeed"&gt;是否自动换行&lt;/param&gt;
+        /// &lt;param name="isAddCellBackground"&gt;是否增加单元格背景颜色&lt;/param&gt;
+        /// &lt;param name="fillPattern"&gt;填充图案样式(FineDots 细点，SolidForeground立体前景，isAddFillPattern=true时存在)&lt;/param&gt;
+        /// &lt;param name="cellBackgroundColor"&gt;单元格背景颜色（当isAddCellBackground=true时存在）&lt;/param&gt;
+        /// &lt;param name="fontColor"&gt;字体颜色&lt;/param&gt;
+        /// &lt;param name="underlineStyle"&gt;下划线样式（无下划线[None],单下划线[Single],双下划线[Double],会计用单下划线[SingleAccounting],会计用双下划线[DoubleAccounting]）&lt;/param&gt;
+        /// &lt;param name="typeOffset"&gt;字体上标下标(普通默认值[None],上标[Sub],下标[Super]),即字体在单元格内的上下偏移量&lt;/param&gt;
+        /// &lt;param name="isStrikeout"&gt;是否显示删除线&lt;/param&gt;
+        /// &lt;returns&gt;&lt;/returns&gt;
+        public HSSFCellStyle CreateStyle(HSSFWorkbook workbook, HorizontalAlignment hAlignment, VerticalAlignment vAlignment, short fontHeightInPoints, bool isAddBorder, short boldWeight, string fontName = "宋体", bool isAddBorderColor = true, bool isItalic = false, bool isLineFeed = false, bool isAddCellBackground = false, FillPattern fillPattern = FillPattern.NoFill, short cellBackgroundColor = HSSFColor.Yellow.Index, short fontColor = HSSFColor.Black.Index, FontUnderlineType underlineStyle =
+            FontUnderlineType.None, FontSuperScript typeOffset = FontSuperScript.None, bool isStrikeout = false)
+        {
+            HSSFCellStyle cellStyle = (HSSFCellStyle)workbook.CreateCellStyle(); //创建列头单元格实例样式
+            cellStyle.Alignment = hAlignment; //水平居中
+            cellStyle.VerticalAlignment = vAlignment; //垂直居中
+            cellStyle.WrapText = isLineFeed;//自动换行
+
+            //背景颜色，边框颜色，字体颜色都是使用 HSSFColor属性中的对应调色板索引，关于 HSSFColor 颜色索引对照表，详情参考：https://www.cnblogs.com/Brainpan/p/5804167.html
+
+            //TODO：引用了NPOI后可通过ICellStyle 接口的 FillForegroundColor 属性实现 Excel 单元格的背景色设置，FillPattern 为单元格背景色的填充样式
+
+            //TODO:十分注意，要设置单元格背景色必须是FillForegroundColor和FillPattern两个属性同时设置，否则是不会显示背景颜色
+            if (isAddCellBackground)
+            {
+                cellStyle.FillForegroundColor = cellBackgroundColor;//单元格背景颜色
+                cellStyle.FillPattern = fillPattern;//填充图案样式(FineDots 细点，SolidForeground立体前景)
+            }
+
+
+            //是否增加边框
+            if (isAddBorder)
+            {
+                //常用的边框样式 None(没有),Thin(细边框，瘦的),Medium(中等),Dashed(虚线),Dotted(星罗棋布的),Thick(厚的),Double(双倍),Hair(头发)[上右下左顺序设置]
+                cellStyle.BorderBottom = BorderStyle.Thin;
+                cellStyle.BorderRight = BorderStyle.Thin;
+                cellStyle.BorderTop = BorderStyle.Thin;
+                cellStyle.BorderLeft = BorderStyle.Thin;
+            }
+
+            //是否设置边框颜色
+            if (isAddBorderColor)
+            {
+                //边框颜色[上右下左顺序设置]
+                cellStyle.TopBorderColor = HSSFColor.DarkGreen.Index;//DarkGreen(黑绿色)
+                cellStyle.RightBorderColor = HSSFColor.DarkGreen.Index;
+                cellStyle.BottomBorderColor = HSSFColor.DarkGreen.Index;
+                cellStyle.LeftBorderColor = HSSFColor.DarkGreen.Index;
+            }
+
+            /**
+             * 设置相关字体样式
+             */
+            var cellStyleFont = (HSSFFont)workbook.CreateFont(); //创建字体
+
+            //假如字体大小只需要是粗体的话直接使用下面该属性即可
+            //cellStyleFont.IsBold = true;
+
+            cellStyleFont.Boldweight = boldWeight; //字体加粗
+            cellStyleFont.FontHeightInPoints = fontHeightInPoints; //字体大小
+            cellStyleFont.FontName = fontName;//字体（仿宋，楷体，宋体 ）
+            cellStyleFont.Color = fontColor;//设置字体颜色
+            cellStyleFont.IsItalic = isItalic;//是否将文字变为斜体
+            cellStyleFont.Underline = underlineStyle;//字体下划线
+            cellStyleFont.TypeOffset = typeOffset;//字体上标下标
+            cellStyleFont.IsStrikeout = isStrikeout;//是否有删除线
+
+            cellStyle.SetFont(cellStyleFont); //将字体绑定到样式
+            return cellStyle;
+        }
+    }
+}</code></pre> 
+<h4>生成并保存指定的Excel文档内容：</h4> 
+<pre><code class="language-cs">using System;
+using System.IO;
+using Microsoft.AspNetCore.Hosting;
+using NPOI.HSSF.UserModel;
+using NPOI.HSSF.Util;
+using NPOI.SS.UserModel;
+using NPOI.SS.Util;
+using YY_Utility;
+
+namespace YY_Services
+{
+    /// &lt;summary&gt;
+    /// Excel文档生成并保存操作类
+    /// &lt;/summary&gt;
+    public class NpoiExcelOperationService
+    {
+        private static IHostingEnvironment _environment;
+
+        public NpoiExcelOperationService(IHostingEnvironment iEnvironment)
+        {
+            _environment = iEnvironment;
+        }
+
+        /// &lt;summary&gt;
+        /// Excel数据导出简单示例
+        /// &lt;/summary&gt;
+        /// &lt;param name="resultMsg"&gt;导出结果&lt;/param&gt;
+        /// &lt;param name="excelFilePath"&gt;保存excel文件路径&lt;/param&gt;
+        /// &lt;returns&gt;&lt;/returns&gt;
+        public bool ExcelDataExport(out string resultMsg, out string excelFilePath)
+        {
+            var result = true;
+            excelFilePath = "";
+            resultMsg = "successfully";
+            //Excel导出名称
+            string excelName = "人才培训课程表";
+            try
+            {
+                //首先创建Excel文件对象
+                var workbook = new HSSFWorkbook();
+
+                //创建工作表，也就是Excel中的sheet，给工作表赋一个名称(Excel底部名称)
+                var sheet = workbook.CreateSheet("人才培训课程表");
+
+                //sheet.DefaultColumnWidth = 20;//默认列宽
+
+                sheet.ForceFormulaRecalculation = true;//TODO:是否开始Excel导出后公式仍然有效（非必须）
+
+                #region table 表格内容设置
+
+                #region 标题样式
+
+                //设置顶部大标题样式
+                var cellStyleFont = NpoiExcelExportHelper._.CreateStyle(workbook, HorizontalAlignment.Center, VerticalAlignment.Center, 20, true, 700, "楷体", true, false, false, true, FillPattern.SolidForeground, HSSFColor.Coral.Index, HSSFColor.White.Index,
+                    FontUnderlineType.None, FontSuperScript.None, false);
+
+                //第一行表单
+                var row = NpoiExcelExportHelper._.CreateRow(sheet, 0, 28);
+
+                var cell = row.CreateCell(0);
+                //合并单元格 例： 第1行到第2行 第3列到第4列围成的矩形区域
+
+                //TODO:关于Excel行列单元格合并问题
+                /**
+                  第一个参数：从第几行开始合并
+                  第二个参数：到第几行结束合并
+                  第三个参数：从第几列开始合并
+                  第四个参数：到第几列结束合并
+                **/
+                CellRangeAddress region = new CellRangeAddress(0, 0, 0, 5);
+                sheet.AddMergedRegion(region);
+
+                cell.SetCellValue("人才培训课程表");//合并单元格后，只需对第一个位置赋值即可（TODO:顶部标题）
+                cell.CellStyle = cellStyleFont;
+
+                //二级标题列样式设置
+                var headTopStyle = NpoiExcelExportHelper._.CreateStyle(workbook, HorizontalAlignment.Center, VerticalAlignment.Center, 15, true, 700, "楷体", true, false, false, true, FillPattern.SolidForeground, HSSFColor.Grey25Percent.Index, HSSFColor.Black.Index,
+                FontUnderlineType.None, FontSuperScript.None, false);
+
+                //表头名称
+                var headerName = new[] { "课程类型", "序号", "日期", "课程名称", "内容概要", "讲师简介" };
+
+                row = NpoiExcelExportHelper._.CreateRow(sheet, 1, 24);//第二行
+                for (var i = 0; i &lt; headerName.Length; i++)
+                {
+                    cell = NpoiExcelExportHelper._.CreateCells(row, headTopStyle, i, headerName[i]);
+
+                    //设置单元格宽度
+                    if (headerName[i] == "讲师简介" || headerName[i] == "内容概要")
+                    {
+                        sheet.SetColumnWidth(i, 10000);
+                    }
+                    else
+
+                    {
+                        sheet.SetColumnWidth(i, 5000);
+                    }
+
+                }
+                #endregion
+
+
+                #region 单元格内容信息
+
+                //单元格边框样式
+                var cellStyle = NpoiExcelExportHelper._.CreateStyle(workbook, HorizontalAlignment.Center, VerticalAlignment.Center, 10, true, 400);
+
+                //左侧列单元格合并 begin
+                //TODO:关于Excel行列单元格合并问题（合并单元格后，只需对第一个位置赋值即可）
+                /**
+                  第一个参数：从第几行开始合并
+                  第二个参数：到第几行结束合并
+                  第三个参数：从第几列开始合并
+                  第四个参数：到第几列结束合并
+                **/
+                CellRangeAddress leftOne = new CellRangeAddress(2, 7, 0, 0);
+
+                sheet.AddMergedRegion(leftOne);
+
+                CellRangeAddress leftTwo = new CellRangeAddress(8, 11, 0, 0);
+
+                sheet.AddMergedRegion(leftTwo);
+
+                //左侧列单元格合并 end
+
+                var currentDate = DateTime.Now;
+
+                string[] curriculumList = new[] { "艺术学", "设计学", "材料学", "美学", "心理学", "中国近代史", "管理人员的情绪修炼", "高效时间管理", "有效的目标管理", "沟通与协调" };
+
+                int number = 1;
+
+                for (var i = 0; i &lt; 10; i++)
+                {
+                    row = NpoiExcelExportHelper._.CreateRow(sheet, i + 2, 20); //sheet.CreateRow(i+2);//在上面表头的基础上创建行
+                    switch (number)
+                    {
+                        case 1:
+                            cell = NpoiExcelExportHelper._.CreateCells(row, cellStyle, 0, "公共类课程");
+                            break;
+                        case 7:
+                            cell = NpoiExcelExportHelper._.CreateCells(row, cellStyle, 0, "管理类课程");
+                            break;
+                    }
+
+                    //创建单元格列公众类课程
+                    cell = NpoiExcelExportHelper._.CreateCells(row, cellStyle, 1, number.ToString());
+                    cell = NpoiExcelExportHelper._.CreateCells(row, cellStyle, 2, currentDate.AddDays(number).ToString("yyyy-MM-dd"));
+                    cell = NpoiExcelExportHelper._.CreateCells(row, cellStyle, 3, curriculumList[i]);
+                    cell = NpoiExcelExportHelper._.CreateCells(row, cellStyle, 4, "提升，充实，拓展自己综合实力");
+                    cell = NpoiExcelExportHelper._.CreateCells(row, cellStyle, 5, "追逐时光_" + number + "号金牌讲师！");
+
+                    number++;
+                }
+                #endregion
+
+                #endregion
+
+                string folder = DateTime.Now.ToString("yyyyMMdd");
+
+
+                //保存文件到静态资源文件夹中（wwwroot）,使用绝对路径
+                var uploadPath = _environment.WebRootPath + "/UploadFile/" + folder + "/";
+
+                //excel保存文件名
+                string excelFileName = excelName + "_" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".xls";
+
+                //创建目录文件夹
+                if (!Directory.Exists(uploadPath))
+                {
+                    Directory.CreateDirectory(uploadPath);
+                }
+
+                //Excel的路径及名称
+                string excelPath = uploadPath + excelFileName;
+
+                //使用FileStream文件流来写入数据（传入参数为：文件所在路径，对文件的操作方式，对文件内数据的操作）
+                var fileStream = new FileStream(excelPath, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+
+                //向Excel文件对象写入文件流，生成Excel文件
+                workbook.Write(fileStream);
+
+                //关闭文件流
+                fileStream.Close();
+
+                //释放流所占用的资源
+                fileStream.Dispose();
+
+                //excel文件保存的相对路径，提供前端下载
+                var relativePositioning = "/UploadFile/" + folder + "/" + excelFileName;
+
+                excelFilePath = relativePositioning;
+            }
+            catch (Exception e)
+            {
+                result = false;
+                resultMsg = e.Message;
+            }
+            return result;
+        }
+
+    }
+}</code></pre> 
+<h3>总结：</h3> 
+<p>学习，工作，生活都一样，很多东西都需要我们自己动手去尝试我们才能真正的品尝到其中的味道，收获不一样的惊喜。本文主要是个人在工作和学习中的一些总结，希望能够帮助有需要的同学，别忘了给我star哟。</p> 
+<h3>相关实例链接地址：</h3> 
+<h4><strong>GitHub完整实例地址：</strong></h4> 
+<blockquote> 
+ <p><strong><a href="https://github.com/YSGStudyHards/NPOI-ExportWordAndExcel-ImportExcelData" title="https://github.com/YSGStudyHards/NPOI-ExportWordAndExcel-ImportExcelData">https://github.com/YSGStudyHards/NPOI-ExportWordAndExcel-ImportExcelData</a></strong></p> 
+</blockquote> 
+<h4>.NET Core使用NPOI导出复杂，美观的Excel详解：</h4> 
+<blockquote> 
+ <p><a href="https://www.cnblogs.com/Can-daydayup/p/12501400.html" rel="nofollow" title="https://www.cnblogs.com/Can-daydayup/p/12501400.html">https://www.cnblogs.com/Can-daydayup/p/12501400.html</a></p> 
+</blockquote> 
+<h4>.NET Core使用NPOI导出复杂Word详解：</h4> 
+<blockquote> 
+ <p><a href="https://www.cnblogs.com/Can-daydayup/p/11588531.html" rel="nofollow" title="https://www.cnblogs.com/Can-daydayup/p/11588531.html">https://www.cnblogs.com/Can-daydayup/p/11588531.html</a></p> 
+</blockquote> 
+<h4>.NET Core使用NPOI将Excel中的数据批量导入到MySQL：</h4> 
+<blockquote> 
+ <p><a href="https://www.cnblogs.com/Can-daydayup/p/12593165.html" rel="nofollow" title="https://www.cnblogs.com/Can-daydayup/p/12593165.html">https://www.cnblogs.com/Can-daydayup/p/12593165.html</a></p> 
+</blockquote>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/08abd5f8e36259464fad1a6d7f6680a9/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Docker安装MS SQL Server并使用Navicat远程连接</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/91cda1423115b3188e85232b97351b3c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">hashMap知识点梳理</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

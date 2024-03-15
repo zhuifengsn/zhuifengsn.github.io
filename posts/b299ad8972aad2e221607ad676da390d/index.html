@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>HarmonyOS-ArkTS卡片运行机制和相关模块 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="HarmonyOS-ArkTS卡片运行机制和相关模块" />
+<meta property="og:description" content=" ArkTS卡片运行机制 实现原理 图1 ArkTS卡片实现原理
+卡片使用方：显示卡片内容的宿主应用，控制卡片在宿主中展示的位置，当前仅系统应用可以作为卡片使用方。卡片提供方：提供卡片显示内容的应用，控制卡片的显示内容、控件布局以及控件点击事件。卡片管理服务：用于管理系统中所添加卡片的常驻代理服务，提供formProvider接口能力，同时提供卡片对象的管理与使用以及卡片周期性刷新等能力。卡片渲染服务：用于管理卡片渲染实例，渲染实例与卡片使用方上的卡片组件一一绑定。卡片渲染服务运行卡片页面代码widgets.abc进行渲染，并将渲染后的数据发送至卡片使用方对应的卡片组件。 图2 ArkTS卡片渲染服务运行原理
+与JS卡片相比，ArkTS卡片支持在卡片中运行逻辑代码，为确保ArkTS卡片发生问题后不影响卡片使用方应用的使用，ArkTS卡片新增了卡片渲染服务用于运行卡片页面代码widgets.abc，卡片渲染服务由卡片管理服务管理。卡片使用方的每个卡片组件都对应了卡片渲染服务里的一个渲染实例，同一应用提供方的渲染实例运行在同一个虚拟机运行环境中，不同应用提供方的渲染实例运行在不同的虚拟机运行环境中，通过虚拟机运行环境隔离不同应用提供方卡片之间的资源与状态。开发过程中需要注意的是globalThis对象的使用，相同应用提供方的卡片globalThis对象是同一个，不同应用提供方的卡片globalThis对象是不同的。
+ArkTS卡片的优势 卡片作为应用的一个快捷入口，ArkTS卡片相较于JS卡片具备如下几点优势：
+统一开发范式，提升开发体验和开发效率。
+OpenHarmony在2022年发布了声明式范式的UI开发框架，而卡片还延续了css/hml/json三段式类Web范式的开发方式，提高了开发者的学习成本，提供ArkTS卡片能力后，统一了卡片和页面的开发范式，页面的布局可以直接复用到卡片布局中，提升开发体验和开发效率。
+图3 卡片工程结构对比
+增强了卡片的能力，使卡片更加万能。
+新增了动效的能力：ArkTS卡片开放了属性动画和显式动画的能力，使卡片的交互更加友好。新增了自定义绘制的能力：ArkTS卡片开放了Canvas画布组件，卡片可以使用自定义绘制的能力构建更多样的显示和交互效果。允许卡片中运行逻辑代码：开放逻辑代码运行后很多业务逻辑可以在卡片内部自闭环，拓宽了卡片的业务适用场景。 ArkTS卡片的约束 ArkTS卡片相较于JS卡片具备了更加丰富的能力，但也增加了使用卡片进行恶意行为的风险。由于ArkTS卡片显示在使用方应用中，使用方应用一般为桌面应用，为确保桌面的使用体验以及功耗相关考虑，对ArkTS卡片的能力做了以下约束：
+不支持加载so。不支持使用native语言开发。仅支持声明式范式的部分组件、事件、动效、数据管理、状态管理和API能力。卡片的事件处理和使用方的事件处理是独立的，建议在使用方支持左右滑动的场景下卡片内容不要使用左右滑动功能的组件，以防手势冲突影响交互体验。 除此之外，当前ArkTS卡片还存在如下约束：
+暂不支持导入模块。暂不支持极速预览。暂不支持断点调试能力。暂不支持Hot Reload热重载。 ArkTS卡片相关模块 图1 ArkTS卡片相关模块
+FormExtensionAbility：卡片扩展模块，提供卡片创建、销毁、刷新等生命周期回调。
+FormExtensionContext：FormExtensionAbility的上下文环境，提供FormExtensionAbility具有的接口和能力。
+formProvider：提供卡片提供方相关的接口能力，可通过该模块提供接口实现更新卡片、设置卡片更新时间、获取卡片信息、请求发布卡片等。
+formInfo：提供了卡片信息和状态等相关类型和枚举。
+formBindingData：提供卡片数据绑定的能力，包括FormBindingData对象的创建、相关信息的描述。
+页面布局（Card.ets）
+：提供声明式范式的UI接口能力。
+ArkTS卡片特有能力：postCardAction用于卡片内部和提供方应用间的交互，仅在卡片中可以调用。ArkTS卡片能力列表：列举了能在ArkTS卡片中使用的API、组件、事件、属性和生命周期调度。 卡片配置
+：包含FormExtensionAbility的配置和卡片的配置
+在module.json5配置文件中的extensionAbilities标签下，配置FormExtensionAbility相关信息。
+ion-file-0000001427744540-V2)中的extensionAbilities标签下，配置FormExtensionAbility相关信息。在resources/base/profile/目录下的form_config.json配置文件中，配置卡片（WidgetCard.ets）相关信息。 " />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/b299ad8972aad2e221607ad676da390d/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-23T09:50:50+08:00" />
+<meta property="article:modified_time" content="2024-02-23T09:50:50+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">HarmonyOS-ArkTS卡片运行机制和相关模块</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="ArkTS_0"></a>ArkTS卡片运行机制</h2> 
+<h3><a id="_4"></a>实现原理</h3> 
+<p><strong>图1</strong> ArkTS卡片实现原理<br> <img src="https://images2.imgbox.com/96/51/6fNaRdeT_o.png" alt="点击放大"></p> 
+<ul><li>卡片使用方：显示卡片内容的宿主应用，控制卡片在宿主中展示的位置，当前仅系统应用可以作为卡片使用方。</li><li>卡片提供方：提供卡片显示内容的应用，控制卡片的显示内容、控件布局以及控件点击事件。</li><li>卡片管理服务：用于管理系统中所添加卡片的常驻代理服务，提供<a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V2/js-apis-app-form-formprovider-0000001544464081-V2" rel="nofollow">formProvider</a>接口能力，同时提供卡片对象的管理与使用以及卡片周期性刷新等能力。</li><li>卡片渲染服务：用于管理卡片渲染实例，渲染实例与卡片使用方上的卡片组件一一绑定。卡片渲染服务运行卡片页面代码widgets.abc进行渲染，并将渲染后的数据发送至卡片使用方对应的卡片组件。</li></ul> 
+<p><strong>图2</strong> ArkTS卡片渲染服务运行原理<br> <img src="https://images2.imgbox.com/c3/c9/osh5nuBe_o.png" alt="点击放大"></p> 
+<p>与JS卡片相比，ArkTS卡片支持在卡片中运行逻辑代码，为确保ArkTS卡片发生问题后不影响卡片使用方应用的使用，ArkTS卡片新增了卡片渲染服务用于运行卡片页面代码widgets.abc，卡片渲染服务由卡片管理服务管理。卡片使用方的每个卡片组件都对应了卡片渲染服务里的一个渲染实例，同一应用提供方的渲染实例运行在同一个虚拟机运行环境中，不同应用提供方的渲染实例运行在不同的虚拟机运行环境中，通过虚拟机运行环境隔离不同应用提供方卡片之间的资源与状态。开发过程中需要注意的是globalThis对象的使用，相同应用提供方的卡片globalThis对象是同一个，不同应用提供方的卡片globalThis对象是不同的。</p> 
+<h3><a id="ArkTS_19"></a>ArkTS卡片的优势</h3> 
+<p>卡片作为应用的一个快捷入口，ArkTS卡片相较于JS卡片具备如下几点优势：</p> 
+<ul><li> <p>统一开发范式，提升开发体验和开发效率。</p> <p>OpenHarmony在2022年发布了声明式范式的UI开发框架，而卡片还延续了css/hml/json三段式类Web范式的开发方式，提高了开发者的学习成本，提供ArkTS卡片能力后，统一了卡片和页面的开发范式，页面的布局可以直接复用到卡片布局中，提升开发体验和开发效率。</p> <p><strong>图3</strong> 卡片工程结构对比<br> <img src="https://images2.imgbox.com/b0/cc/3IrmmGXE_o.png" alt="点击放大"></p> </li><li> <p>增强了卡片的能力，使卡片更加万能。</p> 
+  <ul><li>新增了动效的能力：ArkTS卡片开放了<a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V2/ts-animatorproperty-0000001478181445-V2" rel="nofollow">属性动画</a>和<a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V2/ts-explicit-animation-0000001478341181-V2" rel="nofollow">显式动画</a>的能力，使卡片的交互更加友好。</li><li>新增了自定义绘制的能力：ArkTS卡片开放了Canvas画布组件，卡片可以使用自定义绘制的能力构建更多样的显示和交互效果。</li><li>允许卡片中运行逻辑代码：开放逻辑代码运行后很多业务逻辑可以在卡片内部自闭环，拓宽了卡片的业务适用场景。</li></ul> </li></ul> 
+<h3><a id="ArkTS_36"></a>ArkTS卡片的约束</h3> 
+<p>ArkTS卡片相较于JS卡片具备了更加丰富的能力，但也增加了使用卡片进行恶意行为的风险。由于ArkTS卡片显示在使用方应用中，使用方应用一般为桌面应用，为确保桌面的使用体验以及功耗相关考虑，对ArkTS卡片的能力做了以下约束：</p> 
+<ul><li>不支持加载so。</li><li>不支持使用native语言开发。</li><li>仅支持声明式范式的<a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V2/arkts-ui-widget-page-overview-0000001553173049-V2" rel="nofollow">部分</a>组件、事件、动效、数据管理、状态管理和API能力。</li><li>卡片的事件处理和使用方的事件处理是独立的，建议在使用方支持左右滑动的场景下卡片内容不要使用左右滑动功能的组件，以防手势冲突影响交互体验。</li></ul> 
+<p>除此之外，当前ArkTS卡片还存在如下约束：</p> 
+<ul><li>暂不支持导入模块。</li><li>暂不支持极速预览。</li><li>暂不支持断点调试能力。</li><li>暂不支持Hot Reload热重载。</li></ul> 
+<h2><a id="ArkTS_52"></a>ArkTS卡片相关模块</h2> 
+<p><strong>图1</strong> ArkTS卡片相关模块<br> <img src="https://images2.imgbox.com/78/15/Z0xg0Zgd_o.png" alt="点击放大"></p> 
+<ul><li> <p><a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V2/js-apis-app-form-formextensionability-0000001493424316-V2" rel="nofollow">FormExtensionAbility</a>：卡片扩展模块，提供卡片创建、销毁、刷新等生命周期回调。</p> </li><li> <p>FormExtensionContext：FormExtensionAbility的上下文环境，提供FormExtensionAbility具有的接口和能力。</p> </li><li> <p><a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V2/js-apis-app-form-formprovider-0000001544464081-V2" rel="nofollow">formProvider</a>：提供卡片提供方相关的接口能力，可通过该模块提供接口实现更新卡片、设置卡片更新时间、获取卡片信息、请求发布卡片等。</p> </li><li> <p><a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V2/js-apis-app-form-forminfo-0000001493903980-V2" rel="nofollow">formInfo</a>：提供了卡片信息和状态等相关类型和枚举。</p> </li><li> <p><a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V2/js-apis-app-form-formbindingdata-0000001544703921-V2" rel="nofollow">formBindingData</a>：提供卡片数据绑定的能力，包括FormBindingData对象的创建、相关信息的描述。</p> </li><li> <p>页面布局（Card.ets）</p> <p>：提供声明式范式的UI接口能力。</p> 
+  <ul><li><a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V2/arkts-ui-widget-event-overview-0000001553069581-V2" rel="nofollow">ArkTS卡片特有能力</a>：postCardAction用于卡片内部和提供方应用间的交互，仅在卡片中可以调用。</li><li><a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V2/arkts-ui-widget-page-overview-0000001553173049-V2#section17744162145013" rel="nofollow">ArkTS卡片能力列表</a>：列举了能在ArkTS卡片中使用的API、组件、事件、属性和生命周期调度。</li></ul> </li><li> <p>卡片配置</p> <p>：包含FormExtensionAbility的配置和卡片的配置</p> 
+  <ul><li>在<a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V2/module-configuration-file-0000001427744540-V2" rel="nofollow">module.json5配置文件</a>中的extensionAbilities标签下，配置FormExtensionAbility相关信息。<br> ion-file-0000001427744540-V2)中的extensionAbilities标签下，配置FormExtensionAbility相关信息。</li><li>在resources/base/profile/目录下的<a href="https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V2/arkts-ui-widget-configuration-0000001502333060-V2#ZH-CN_TOPIC_0000001523808634__table959386016151722" rel="nofollow">form_config.json配置文件</a>中，配置卡片（WidgetCard.ets）相关信息。</li></ul> </li></ul>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3f86b8f4e1102c853083e97a53c43940/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Excel面试题及答案（1）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e5229dede94693e8b5f55b8f439634c9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C语言K&amp;R圣经笔记 8.3 open,creat,close,unlink 8.4随机访问-lseek</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

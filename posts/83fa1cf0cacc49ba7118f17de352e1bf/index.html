@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>django搭建一个小型的服务器运维网站 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="django搭建一个小型的服务器运维网站" />
+<meta property="og:description" content="前言 不管是运维还是开发抑或是测试，工作中不免会和Linux服务器打交道，常见的操作譬如：查看CPU或内存状态、查看和修改服务器时间、查看或者修改服务器配置文件、实时查看或回看系统的日志、重启服务器中某个进程等。如果不在服务器旁，一般会选择利用Xshell这样的远程SSH工具登陆到服务器去执行所需操作。如果有一个Web工具，该工具将会很方便的给目标用户提供服务，对于开发来说，可以更注重自己代码本身，对于运维而言可以方便直接的知道服务器的状态，对于测试人员而言，提高测试的效率。
+本人在开发这个基于django的Web工具前并没有网站开发经验，都是摸着石头过河，所以在开发过程中遇到很多的问题，并且逐个解决并达成需求，其中也直接拿来一些代码复用。这些文章中会包含一些前端的技术(websocket、ajax、路由)和一些后端的小模块(paramiko、openid、webserver、MySQL)，在这些小零件的拼凑中又会衍生很多小的细节和方法。此篇文章会做一个回顾，虽然很多功能有更好的实现方法，里面涉及的技术难度也不大，但是也希望能够帮助到有需求的童鞋。
+内容介绍 文章默认读者已经具备了django的开发经验，文章直接略过了纷繁的初学内容，直接开始小项目，主要内容包括：
+拿来即用的bootstrap模板； 服务器SSH服务配置与python中paramiko的使用； 用户登陆与session; 最简单的实践之修改服务器时间； 查看和修改服务器配置与数据库的路由； 基于websocket的实时日志实现； 查看服务器中的日志与前端的datatable的利用； 重启服务器进程。 这些功能其实都很简单，就像搭积木一样，关键是遇到和解决的问题是否可以让需要的童鞋少走一点弯路。网站风格如下图1和图2所示(这里是主页面，没有截登陆界面和其他功能界面):
+源码 环境 python版本：python2.7
+django版本：python-django-1.11
+数据库：Mysql
+MySQL_python连接库：https://pan.baidu.com/s/14WpD... 密码：0h5h
+源码 网站的源码链接：https://pan.baidu.com/s/1uix-... 密码：j4sw
+DASHGUM前端模板：https://pan.baidu.com/s/1FHCX... 密码：bo8d
+用法 本地把网站跑起来需要改改下列这些地方。
+settings中的服务器登陆配置：
+有私钥的需要把私钥放在WebTool/WebTool下面：
+在functions中修改一些服务器路径和命令行：
+结语 这个小项目用到的技术并不多，但是基本上可以实现和服务器的交互，都是通过网站调用python中的paramiko模块和服务器交互。虽然网站的功能不多，但是其中的交互思路可以举一反三写出更多的功能页(例如：CPU，内存预警等等)，有些复杂的服务器功能最好是在服务器中写好shell脚本供给网站后台调用，前端的部件基本都可以在DASHGUM中找到适合的。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/83fa1cf0cacc49ba7118f17de352e1bf/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-04-02T10:24:51+08:00" />
+<meta property="article:modified_time" content="2018-04-02T10:24:51+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">django搭建一个小型的服务器运维网站</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div class="article fmt article__content"> 
+ <h3>前言</h3> 
+ <p>  不管是运维还是开发抑或是测试，工作中不免会和Linux服务器打交道，常见的操作譬如：查看CPU或内存状态、查看和修改服务器时间、查看或者修改服务器配置文件、实时查看或回看系统的日志、重启服务器中某个进程等。如果不在服务器旁，一般会选择利用Xshell这样的远程SSH工具登陆到服务器去执行所需操作。如果有一个Web工具，该工具将会很方便的给目标用户提供服务，对于开发来说，可以更注重自己代码本身，对于运维而言可以方便直接的知道服务器的状态，对于测试人员而言，提高测试的效率。<br>  本人在开发这个基于django的Web工具前并没有网站开发经验，都是摸着石头过河，所以在开发过程中遇到很多的问题，并且逐个解决并达成需求，其中也直接拿来一些代码复用。这些文章中会包含一些前端的技术(websocket、ajax、路由)和一些后端的小模块(paramiko、openid、webserver、MySQL)，在这些小零件的拼凑中又会衍生很多小的细节和方法。此篇文章会做一个回顾，虽然很多功能有更好的实现方法，里面涉及的技术难度也不大，但是也希望能够帮助到有需求的童鞋。</p> 
+ <h3>内容介绍</h3> 
+ <p>  文章默认读者已经具备了django的开发经验，文章直接略过了纷繁的初学内容，直接开始小项目，主要内容包括：</p> 
+ <ol><li> <a href="https://segmentfault.com/a/1190000014172572" rel="nofollow">拿来即用的bootstrap模板</a>；</li><li> <a href="https://segmentfault.com/a/1190000014325026" rel="nofollow">服务器SSH服务配置与python中paramiko的使用</a>；</li><li> <a href="https://segmentfault.com/a/1190000014662366" rel="nofollow">用户登陆与session</a>;</li><li> <a href="https://segmentfault.com/a/1190000014700186" rel="nofollow">最简单的实践之修改服务器时间</a>；</li><li> <a href="https://segmentfault.com/a/1190000014733288" rel="nofollow">查看和修改服务器配置与数据库的路由</a>；</li><li> <a href="https://segmentfault.com/a/1190000014750145" rel="nofollow">基于websocket的实时日志实现</a>；</li><li> <a href="https://segmentfault.com/a/1190000014767630" rel="nofollow">查看服务器中的日志与前端的datatable的利用</a>；</li><li> <a href="https://segmentfault.com/a/1190000014784830" rel="nofollow">重启服务器进程</a>。</li></ol> 
+ <p>  这些功能其实都很简单，就像搭积木一样，关键是遇到和解决的问题是否可以让需要的童鞋少走一点弯路。网站风格如下图1和图2所示(这里是主页面，没有截登陆界面和其他功能界面):</p> 
+ <p><span class="img-wrap"><img src="https://images2.imgbox.com/0a/4c/r5kUCFQI_o.png" alt="图1 登陆界面" title="图1 登陆界面"></span></p> 
+ <p><span class="img-wrap"><img src="https://images2.imgbox.com/35/e1/rVBNpGjJ_o.png" alt="图2 服务器Web工具.png" title="图2 服务器Web工具.png"></span></p> 
+ <h4>源码</h4> 
+ <h4>环境</h4> 
+ <p>  python版本：python2.7<br>  django版本：python-django-1.11<br>  数据库：Mysql<br>  MySQL_python连接库：<a href="https://pan.baidu.com/s/14WpDM33s-IRrKFnQLcCRTQ" rel="nofollow">https://pan.baidu.com/s/14WpD...</a> 密码：0h5h</p> 
+ <h4>源码</h4> 
+ <p>  网站的源码链接：<a href="https://pan.baidu.com/s/1uix-1jZZ64zVd6zTHaiTDw" rel="nofollow">https://pan.baidu.com/s/1uix-...</a> 密码：j4sw<br>  DASHGUM前端模板：<a href="https://pan.baidu.com/s/1FHCXUDTDC-sC68JKoisR2g" rel="nofollow">https://pan.baidu.com/s/1FHCX...</a> 密码：bo8d</p> 
+ <h4>用法</h4> 
+ <p>  本地把网站跑起来需要改改下列这些地方。</p> 
+ <p>  <strong>settings中的服务器登陆配置：</strong></p> 
+ <p><span class="img-wrap"><img src="https://images2.imgbox.com/74/ed/buXITJPg_o.png" alt="服务器登陆配置" title="服务器登陆配置"></span></p> 
+ <p>  <strong>有私钥的需要把私钥放在WebTool/WebTool下面：</strong></p> 
+ <p><span class="img-wrap"><img src="https://images2.imgbox.com/48/a4/8I1FB3Q9_o.png" alt="私钥" title="私钥"></span></p> 
+ <p>  <strong>在functions中修改一些服务器路径和命令行：</strong></p> 
+ <p><span class="img-wrap"><img src="https://images2.imgbox.com/7e/0b/hzXoS7ES_o.png" alt="修改路径、命令行" title="修改路径、命令行"></span></p> 
+ <h3>结语</h3> 
+ <p>  这个小项目用到的技术并不多，但是基本上可以实现和服务器的交互，都是通过网站调用python中的paramiko模块和服务器交互。虽然网站的功能不多，但是其中的交互思路可以举一反三写出更多的功能页(例如：CPU，内存预警等等)，有些复杂的服务器功能最好是在服务器中写好shell脚本供给网站后台调用，前端的部件基本都可以在DASHGUM中找到适合的。</p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/0c6f30992cad3f7588e2583428f6f507/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">C#子类重写父类函数的两种方法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/91e097994378152edd48eb5fbac99317/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">TreeSize Free 软件简介</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

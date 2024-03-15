@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>关于树莓派3B&#43;内核配置遇到的一个问题——nl80211 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="关于树莓派3B&#43;内核配置遇到的一个问题——nl80211" />
+<meta property="og:description" content="咱先看我配置好之后用mobaxterm串口打开后遇到问题的情况吧
+我也是在发现无法用SSH登录树莓派的时候，被告知无法连接，于是重新用串口连接，使用指令ifconfig发现我的wlan0不见了，一开始我以为是无线射频被锁起来了
+然后用sudo ifconfig -a指令发现依旧没有，是将截图发给朋友看了之后，给了我上面这个提示，告诉我我的内核驱动没拷贝进去
+于是我回到vmware去将拷贝配置相关文件步骤重新拷贝一遍，然后直接将读卡器给拔出了
+回到mobaxterm串口继续登录，发现问题依旧没解决，于是上网查找了很多资料，最后定格在了两个可能
+第一个可能：挂载过多
+我回到vmware，等待TF卡接到linux交叉编译的主机上之后，先用dmesg查看设备时候存在
+然后用lsblk指令查看识别到的TF卡设备节点，正常情况下TF卡设备会自动挂载到/media/{当前用户目录}/下的boot和rootfs目录下，这个时候就没必要在自己重新创建目录进行挂载了
+linux@ubuntu:~/linux$ lsblk
+NAME MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
+sda 8:0 0 20G 0 disk └─sda1 8:1 0 20G 0 part /
+sdb 8:16 1 14.6G 0 disk ├─sdb1 8:17 1 256M 0 part /media/wbw/boot
+└─sdb2 8:18 1 3.3G 0 part /media/wbw/rootfs
+第二个可能，在完成一切操作之后，没有做卸载操作
+也就是指令
+umount /home/wbw/data1
+umount /home/wbw/data2
+当然，如果是自动挂载，那就执行
+umount /media/wbw/boot
+umount /media/wbw/boot
+基于以上两种可能性，重新拷贝一遍应该就能解决问题了" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/5882ba836457dbff58183445257e74bd/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-01-20T13:12:59+08:00" />
+<meta property="article:modified_time" content="2024-01-20T13:12:59+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">关于树莓派3B&#43;内核配置遇到的一个问题——nl80211</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>咱先看我配置好之后用mobaxterm串口打开后遇到问题的情况吧</p> 
+<p><img alt="" height="526" src="https://images2.imgbox.com/5a/bc/OlSLGJXG_o.png" width="974"></p> 
+<p>我也是在发现无法用SSH登录树莓派的时候，被告知无法连接，于是重新用串口连接，使用指令ifconfig发现我的wlan0不见了，一开始我以为是无线射频被锁起来了</p> 
+<p>然后用sudo ifconfig -a指令发现依旧没有，是将截图发给朋友看了之后，给了我上面这个提示，告诉我我的内核驱动没拷贝进去</p> 
+<p>于是我回到vmware去将拷贝配置相关文件步骤重新拷贝一遍，然后<strong>直接将读卡器给拔出了</strong></p> 
+<p>回到mobaxterm串口继续登录，发现问题依旧没解决，于是上网查找了很多资料，最后定格在了两个可能</p> 
+<p>第一个可能：挂载过多</p> 
+<p>我回到vmware，等待TF卡接到linux交叉编译的主机上之后，先用<strong>dmesg</strong>查看设备时候存在</p> 
+<p>然后用<strong>lsblk</strong>指令查看识别到的TF卡设备节点，正常情况下TF卡设备会自动挂载到/media/{当前用户目录}/下的boot和rootfs目录下，这个时候就没必要在自己重新创建目录进行挂载了</p> 
+<blockquote> 
+ <p>linux@ubuntu:~/linux$ lsblk<br> NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT<br> sda      8:0    0   20G  0 disk <br> └─sda1   8:1    0   20G  0 part /<br> sdb      8:16   1 14.6G  0 disk <br> ├─sdb1   8:17   1  256M  0 part /media/wbw/boot<br> └─sdb2   8:18   1  3.3G  0 part /media/wbw/rootfs</p> 
+</blockquote> 
+<p>第二个可能，在完成一切操作之后，没有做卸载操作</p> 
+<p>也就是指令</p> 
+<blockquote> 
+ <p>umount /home/wbw/data1</p> 
+ <p>umount /home/wbw/data2</p> 
+</blockquote> 
+<p>当然，如果是自动挂载，那就执行</p> 
+<blockquote> 
+ <p>umount /media/wbw/boot</p> 
+ <p>umount /media/wbw/boot</p> 
+</blockquote> 
+<p>基于以上两种可能性，重新拷贝一遍应该就能解决问题了</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/6861613a96213bf795659c65c3678801/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">linux 完全卸载docker</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/a780a39552a99234dfd157a50d072df9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">linux内核配置——树莓派3B&#43;</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

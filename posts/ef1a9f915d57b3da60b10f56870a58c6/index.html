@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>ARM的BX指令 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="ARM的BX指令" />
+<meta property="og:description" content="bx的语法格式BX{&lt;cond&gt;} ＜Rm＞＜cond＞为指令执行的条件码。当＜cond＞忽略时指令为无条件执行。＜Rm＞该寄存器中为跳转的目标地址。当&lt;Rm&gt;寄存器的bit[0]为0时，目标地址处的指令为ARM指令；当&lt;Rm&gt;寄存器的bit[0]为1时，目标地址处的指令为Thumb指令。看一段简单程序的片段，不用考虑省略号的内容，看框架就可以了！ EXPORT LEDTEST AREA testasm,CODE,READONLY CODE32LEDTEST 。。。。。。。。。。 。。。。。。。。。 。。。。。。。。 。。。。。。。。。 。。。。。。。。。。。ledon ............... ............... 。。。。。。。。。。。。 。。。。。。。。。。。 adr r4,delay1&#43;1 bx r4ledoff .............. ............... ............. ............. ............. .............. AREA testasm,CODE,READONLY CODE16delay1 ............ ........... ............. ldr r1,＝ledoff bx r1 ........ ............. .............END关于delay1＋1：ARM指令是字对齐（指令的地址后两位为［1:0]=0b00），Thumb是半字对齐（指令的地址后两位为［1:0]=0bx0,x为0或1）。指令的地址的最后一位必为0。因此bx（不管往ARM还是往Thumb跳转）的跳转指令必须保证指令地址的最后一位为0，上例中bx指令能自动地将目标地址值置为r4的值和0xFFFFFFFE的与后的结果，就会使指令地址的最后一位必为0了。那么delay＋1的这个1不就被0与掉了么，就没有什么作用了？其实，在执行bx指令时，它是首先判断指令地址的后一位为0或1（这样就知道要跳转的地方是ARM还是Thumb指令。0跳转arm，1跳转thumb。），然后再PC＝r4 AND 0xFFFFFFFE。这样，当我们需要要跳转到Thumb指令处执行时，必须将指令地址的最后以为置1。而bx再跳转到ARM指令时就无需考虑这些了，就不用像上面的&#43;1处理了。
+关于字对齐和半字对齐
+什么叫对齐。如果一个数据是从偶地址开始的连续存储，那么它就是半字对齐，否则就是非半字对齐；半字对齐的特征是bit0=0,其他位为任意值。字对齐的特征是bit1=0,bit0=0 其他位为任意值。如果一个数据是以能被4 整除的地址开始的连续存储，那么它就是字对齐，否则就是非字对齐。举例说明四字节对齐： 对内存进行操作时，被访问的地址必须为4的倍数。如果分配到的地址不是4的倍数时，CPU实际访问的地址还是按照字对齐的方式来操作。也就是自动屏蔽bit1和bit0. 什么是对齐，以及为什么要对齐： 现代计算机中内存空间都是按照byte划分的，从理论上讲似乎对任何类型的变量的访问可以从任何地址开始，但实际情况是在访问特定变量的时候经常在特定的内存地址访问，这就需要各类型数据按照一定的规则在空间上排列，而不是顺序的一个接一个的排放，这就是对齐。
+对齐的作用和原因：
+各个硬件平台对存储空间的处理上有很大的不同。一些平台对某些特定类型的数据只能从某些特定地址开始存取。其他平台可能没有这种情况，但是最常见的是如果不按照适合其平台要求对数据存放进行对齐，会在存取效率上带来损失。比如有些平台每次读都是从偶地址开始，如果一个int型（假设为32位系统）如果存放在偶地址开始的地方，那么一个读周期就可以读出，而如果存放在奇地址开始的地方，就可能会需要2个读周期，并对两次读出的结果的高低字节进行拼凑才能得到该int数据。显然在读取效率上下降很多。这也是空间和时间的博弈。对齐的实现 通常，写程序的时候，不需要考虑对齐问题。编译器会替我们选择适合目标平台的对齐策略。可以给编译器传递预编译指令而改变对指定数据的对齐方法。
+char a char a
+short b char c
+char c short b
+int d int d
+ARM体系中对齐的使用:1.__align(num) 这个用于修改最高级别对象的字节边界。在汇编中使用LDRD或者STRD时 就要用到此命令__align(8)进行修饰限制。来保证数据对象是相应对齐。 这个修饰对象的命令最大是8个字节限制,可以让2字节的对象进行4字节 对齐,但是不能让4字节的对象2字节对齐。 __align是存储类修改,他只修饰最高级类型对象不能用于结构或者函数对象。 2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ef1a9f915d57b3da60b10f56870a58c6/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2011-06-12T17:49:00+08:00" />
+<meta property="article:modified_time" content="2011-06-12T17:49:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">ARM的BX指令</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><span class="Apple-style-span" style="word-spacing: 0px; font: medium 'times new roman'; text-transform: none; color: #000000; text-indent: 0px; white-space: normal; letter-spacing: normal; border-collapse: separate; orphans: 2; widows: 2; webkit-border-horizontal-spacing: 0px; webkit-border-vertical-spacing: 0px; webkit-text-decorations-in-effect: none; webkit-text-size-adjust: auto; webkit-text-stroke-width: 0px;"><span class="Apple-style-span" style="font-size: 12px; color: #4b5446; line-height: 20px; font-family: Georgia; letter-spacing: 2px; webkit-border-horizontal-spacing: 2px; webkit-border-vertical-spacing: 2px;"> </span></span></p> 
+<p style="line-height: normal;">bx的语法格式<br style="line-height: normal;">BX{&lt;cond&gt;} ＜Rm＞<br style="line-height: normal;">＜cond＞为指令执行的条件码。当＜cond＞忽略时指令为无条件执行。<br style="line-height: normal;">＜Rm＞该寄存器中为跳转的目标地址。当&lt;Rm&gt;寄存器的bit[0]为0时，目标地址处的指令为ARM指令；<br style="line-height: normal;">当&lt;Rm&gt;寄存器的bit[0]为1时，目标地址处的指令为Thumb指令。<br style="line-height: normal;"><br style="line-height: normal;">看一段简单程序的片段，不用考虑省略号的内容，看框架就可以了！<br style="line-height: normal;"><br style="line-height: normal;">   <span class="Apple-converted-space"> </span><span style="color: #0000ff; line-height: normal;">EXPORT LEDTEST<br style="line-height: normal;">    AREA testasm,CODE,READONLY<br style="line-height: normal;">    CODE32</span><br style="line-height: normal;">LEDTEST<br style="line-height: normal;">    。。。。。。。。。。<br style="line-height: normal;">    。。。。。。。。。<br style="line-height: normal;">    。。。。。。。。<br style="line-height: normal;">    。。。。。。。。。<br style="line-height: normal;">    。。。。。。。。。。。<br style="line-height: normal;"><span style="color: #ff0000; line-height: normal;">ledon</span><br style="line-height: normal;">    ...............<br style="line-height: normal;">    ...............<br style="line-height: normal;">    。。。。。。。。。。。。<br style="line-height: normal;">    。。。。。。。。。。。<br style="line-height: normal;">   <span class="Apple-converted-space"> </span><span style="color: #ff0000; line-height: normal;">adr r4,delay1+1<br style="line-height: normal;">    bx r4</span><br style="line-height: normal;"><br style="line-height: normal;"><span style="color: #ff0000; line-height: normal;">ledoff</span><br style="line-height: normal;">    ..............<br style="line-height: normal;">    ...............<br style="line-height: normal;">    .............<br style="line-height: normal;">    .............<br style="line-height: normal;">    .............<br style="line-height: normal;">    ..............<br style="line-height: normal;"><br style="line-height: normal;">   <span class="Apple-converted-space"> </span><span style="color: #0000ff; line-height: normal;">AREA testasm,CODE,READONLY<br style="line-height: normal;">    CODE16</span><br style="line-height: normal;"><span style="color: #ff0000; line-height: normal;">delay1</span><br style="line-height: normal;">    ............<br style="line-height: normal;">    ...........<br style="line-height: normal;">    .............<br style="line-height: normal;">   <span class="Apple-converted-space"> </span><span style="color: #ff0000; line-height: normal;">ldr r1,＝ledoff<br style="line-height: normal;">    bx   r1</span><br style="line-height: normal;">    ........<br style="line-height: normal;">    .............<br style="line-height: normal;">    .............<br style="line-height: normal;">END<br style="line-height: normal;"><br style="line-height: normal;">关于delay1＋1：<br style="line-height: normal;">ARM指令是字对齐（指令的地址后两位为［1:0]=0b00），Thumb是半字对齐（指令的地址后两位为［1:0]=0bx0,x为0或1）。指令的地址的最后一位必为0。<br style="line-height: normal;">因此bx（不管往ARM还是往Thumb跳转）的跳转指令必须保证指令地址的最后一位为0，上例中bx指令能自<br style="line-height: normal;">动地将目标地址值置为<span style="color: #ff0000; line-height: normal;">r4的值和0xFFFFFFFE</span>的与后的结果，就会使指令地址的最后一位必为0了。<br style="line-height: normal;">那么delay＋1的这个1不就被0与掉了么，就没有什么作用了？其实，在执行bx指令时，它是<span style="color: #ff0000; line-height: normal;">首先判<br style="line-height: normal;">断指令地址的后一位为0或1</span>（这样就知道要跳转的地方是ARM还是Thumb指令。0跳转arm，1跳转thumb。），然后再PC＝r4 AND 0xFFFFFFFE。这样，当我们需要要跳转到Thumb指令处执行时，必须将指令地址的最后以为置1。<br style="line-height: normal;">而bx再跳转到ARM指令时就无需考虑这些了，就不用像上面的+1处理了。</p> 
+<p style="line-height: normal;"> </p> 
+<p style="line-height: normal;">关于字对齐和半字对齐</p> 
+<p style="line-height: normal;">什么叫对齐。如果一个数据是从偶地址开始的连续存储，那么它就是<span style="line-height: normal; background-color: #00ffff;">半字对齐</span>，否则就是非<span style="line-height: normal; background-color: #00ffff;">半字对齐</span>；<span style="line-height: normal; background-color: #00ffff;">半字对齐</span>的特征是bit0=0,其他位为任意值。字对齐的特征是bit1=0,bit0=0 其他位为任意值。如果一个数据是以能被4 整除的地址开始的连续存储，那么它就是字对齐，否则就是非字对齐。举例说明四字节对齐： 对内存进行操作时，被访问的地址必须为4的倍数。<span style="color: #ff0000;">如果分配到的地址不是4的倍数时，CPU实际访问的地址还是按照字对齐的方式来操作。也就是自动屏蔽bit1和bit0.   </span></p> 
+<p style="line-height: normal;"> </p> 
+<p style="line-height: normal;"><span style="font-size: 16px; color: #ff6600; line-height: normal;">什么是对齐，以及为什么要对齐：<br style="line-height: normal;"></span>   <span style="font-size: 12px; line-height: normal;">    现代计算机中内存空间都是按照byte划分的，从理论上讲似乎对任何类型的变量的访问可以从任何地址开始，但实际情况是在访问特定变量的时候经常<span style="color: #ff0000;">在特定的内存地址访问</span>，这就需要各类型数据按照一定的规则在空间上排列，而不是顺序的一个接一个的排放，这就是对齐。</span></p> 
+<p style="line-height: normal;"><span style="font-size: 16px; color: #ff6600; line-height: normal;">对齐的作用和原因：</span></p> 
+<p style="line-height: normal;"><span style="font-size: 12px; line-height: normal;">        各个硬件平台对存储空间的处理上有很大的不同。一些平台对某些特定类型的数据只能从某些特定地址开始存取。其他平台可能没有这种情况，但是最常见的是如果不按照适合其平台要求对数据存放进行对齐，会在<span style="color: #ff0000;">存取效率上</span>带来损失。比如<span style="color: #ff0000;">有些平台每次读都是从偶地址开始</span>，如果一个int型（假设为32位系统）如果存放在<span style="color: #ff0000;">偶地址开始的地方，那么一个读周期就可以读出，而如果存放在奇地址开始的地方，就可能会需要2个读周期，</span>并对两次读出的结果的高低字节进行拼凑才能得到该int数据。显然在读取效率上下降很多。这也是空间和时间的博弈。<br style="line-height: normal;"></span><span style="font-size: 16px; line-height: normal;"><span style="color: #ff6600; line-height: normal;">对齐的实现</span><br style="line-height: normal;"></span>       <span style="font-size: 12px; line-height: normal;">通常，写程序的时候，不需要考虑对齐问题。编译器会替我们选择适合目标平台的对齐策略。可以给编译器传递预编译指令而改变对指定数据的对齐方法。</span></p> 
+<p style="line-height: normal;"><span style="font-size: 12px; line-height: normal;">       char   a                       char   a</span></p> 
+<p style="line-height: normal;"><span style="font-size: 12px; line-height: normal;">       short b                        char    c</span></p> 
+<p style="line-height: normal;"><span style="font-size: 12px; line-height: normal;">       char   c                        short b</span></p> 
+<p style="line-height: normal;"><span style="font-size: 12px; line-height: normal;">     </span>int      d                         int     d</p> 
+<p style="text-indent: 2em; line-height: normal;"><a style="font-size: 12px; color: #4b5446; line-height: 20px; font-family: Georgia; text-decoration: none;" href="http://img.bimg.126.net/photo/hp3zMUiCmaK8ShOemVjflQ==/4546665298808661822.jpg" rel="nofollow"><img style="line-height: normal;" title="ARM字,半字,字节对齐 - Howard - Howard" src="https://images2.imgbox.com/f1/20/BZJ1ZLGq_o.jpg" border="0" alt="ARM字,半字,字节对齐 - Howard - Howard"></a></p> 
+<p style="text-indent: 2em; line-height: normal;"><span style="font-size: 16px; color: #ff6600; line-height: normal;">ARM体系中对齐的使用:</span><br style="line-height: normal;">1.__align(num)<br style="line-height: normal;">           这个用于修改最高级别对象的字节边界。在汇编中使用LDRD或者STRD时<br style="line-height: normal;">   就要用到此命令__align(8)进行修饰限制。来保证数据对象是相应对齐。<br style="line-height: normal;">   这个修饰对象的命令最大是8个字节限制,可以让2字节的对象进行4字节<br style="line-height: normal;">   对齐,但是不能让4字节的对象2字节对齐。<br style="line-height: normal;">   __align是存储类修改,他只修饰最高级类型对象不能用于结构或者函数对象。<br style="line-height: normal;">  <span class="Apple-converted-space"> </span><br style="line-height: normal;">2.__packed<span class="Apple-converted-space"> </span><br style="line-height: normal;">__packed是进行一字节对齐<br style="line-height: normal;">(1).不能对packed的对象进行对齐<br style="line-height: normal;">(2).所有对象的读写访问都进行非对齐访问<br style="line-height: normal;">(3).float及包含float的结构联合及未用__packed的对象将不能字节对齐<br style="line-height: normal;">(4).__packed对局部整形变量无影响<br style="line-height: normal;">(5).强制由unpacked对象向packed对象转化是未定义,整形指针可以合法定义为packed。<br style="line-height: normal;">     __packed int* p; //__packed int 则没有意义<br style="line-height: normal;">(6).对齐或非对齐读写访问带来问题<br style="line-height: normal;">_packed struct STRUCT_TEST<br style="line-height: normal;">{<!-- --><br style="line-height: normal;">   char a;<br style="line-height: normal;">   int b;<br style="line-height: normal;">   char c;<br style="line-height: normal;">} ;      //定义如下结构此时b的起始地址一定是不对齐的<br style="line-height: normal;">         //在栈中访问b可能有问题,因为栈上数据肯定是对齐访问[from CL]<br style="line-height: normal;">//将下面变量定义成全局静态不在栈上<span class="Apple-converted-space"> </span><br style="line-height: normal;">static char* p;<br style="line-height: normal;">static struct STRUCT_TEST a;<br style="line-height: normal;">void Main()<br style="line-height: normal;">{<!-- --><br style="line-height: normal;">         __packed int* q;   //此时定义成__packed来修饰当前q指向为非对齐的数据地址下面的访问则可以</p> 
+<p style="line-height: normal;">          p = (char*)&amp;a;          <br style="line-height: normal;">          q = (int*)(p+1);      <br style="line-height: normal;">   /*<br style="line-height: normal;">         *q = 0x87654321;<br style="line-height: normal;">          ldr      r5,0x20001590 ; = #0x12345678<br style="line-height: normal;">         [0xe1a00005]   mov      r0,r5<br style="line-height: normal;">          [0xeb0000b0]   bl       __rt_uwrite4   //在此处调用一个写4byte的操作函数<span class="Apple-converted-space"> </span><br style="line-height: normal;">      <br style="line-height: normal;">         [0xe5c10000]   strb     r0,[r1,#0]    //函数进行4次strb操作然后返回保证了数据正确的访问<br style="line-height: normal;">         [0xe1a02420]   mov      r2,r0,lsr #8<br style="line-height: normal;">         [0xe5c12001]   strb     r2,[r1,#1]<br style="line-height: normal;">         [0xe1a02820]   mov      r2,r0,lsr #16<br style="line-height: normal;">         [0xe5c12002]   strb     r2,[r1,#2]<br style="line-height: normal;">         [0xe1a02c20]   mov      r2,r0,lsr #24<br style="line-height: normal;">         [0xe5c12003]   strb     r2,[r1,#3]<br style="line-height: normal;">         [0xe1a0f00e]   mov      pc,r14<br style="line-height: normal;">*/</p> 
+<p style="line-height: normal;">/*<br style="line-height: normal;">         //如果q没有加__packed修饰则汇编出来指令是这样直接会导致奇地址处访问失败<br style="line-height: normal;">          [0xe59f2018]   ldr      r2,0x20001594 ; = #0x87654321<br style="line-height: normal;">         [0xe5812000]   str      r2,[r1,#0]<br style="line-height: normal;">*/</p> 
+<p style="line-height: normal;">         //这样可以很清楚的看到非对齐访问是如何产生错误的<br style="line-height: normal;">          //以及如何消除非对齐访问带来问题<br style="line-height: normal;">         //也可以看到非对齐访问和对齐访问的指令差异导致效率问题</p> 
+<p style="line-height: normal;"> </p> 
+<p style="line-height: normal;"> </p> 
+<p style="line-height: normal;">先看一个小程序<br style="line-height: normal;">#include&lt;stdio.h&gt;<br style="line-height: normal;">struct t1<br style="line-height: normal;">{<!-- --><br style="line-height: normal;">    char a;<br style="line-height: normal;">    int b;<br style="line-height: normal;">    char c;<br style="line-height: normal;">};</p> 
+<p style="line-height: normal;">struct t2<br style="line-height: normal;">{<!-- --><br style="line-height: normal;">    char a;<br style="line-height: normal;">    char b;<br style="line-height: normal;">    int c;<br style="line-height: normal;">};</p> 
+<p style="line-height: normal;">void main()<br style="line-height: normal;">{<!-- --><br style="line-height: normal;">    printf("%d/n",sizeof(struct t1));<br style="line-height: normal;">    printf("%d",sizeof(struct t2));<br style="line-height: normal;">}</p> 
+<p style="line-height: normal;">按一般来说，结构体t1和t2的大小应该是一样的，但在很多编译器中，显示出的结果是不一样的，如我用的VS 2010，t1的大小为12字节，t2 为8字节，为什么会出现这样的结果呢？这其中有个东西就叫字对齐。<br style="line-height: normal;">据说很多公司在面试中都考过这个问题，有一年威盛也考过。。。<br style="line-height: normal;">字对齐，是昨天在看ARM的时候看到的，一般是4个字节为一个单位进行对齐，怎样对齐的呢？有点像平时我们写文档用的右对齐之类的，不一样的就是，句子可以换行写，但一个变量的存储，不是那种本身很长的，一般是不换行的，例如上面的例子，将空的内存看作<br style="line-height: normal;">oooo<br style="line-height: normal;">oooo<br style="line-height: normal;">oooo<br style="line-height: normal;">t1中为a分配内存，用一个字节，内存变为<br style="line-height: normal;">xooo<br style="line-height: normal;">oooo<br style="line-height: normal;">oooo<br style="line-height: normal;">然后进行b的内存分配，在VS中，int占4个字节，但第一行只有3个字节空的了，所以就换行对齐，内存变为<br style="line-height: normal;">xooo<br style="line-height: normal;">xxxx<br style="line-height: normal;">oooo<br style="line-height: normal;">最后为c分配，变成<br style="line-height: normal;">xooo<br style="line-height: normal;">xxxx<br style="line-height: normal;">xooo<br style="line-height: normal;">总共占用内存就是每行4个字节x3行=12字节。<br style="line-height: normal;">在t2中<br style="line-height: normal;">内存同样为<br style="line-height: normal;">oooo<br style="line-height: normal;">oooo<br style="line-height: normal;">oooo<br style="line-height: normal;">为a分配时，同样是<br style="line-height: normal;">xooo<br style="line-height: normal;">为b分配时，由于第一行的长度能满足b所以b还是在第一行，内存为<br style="line-height: normal;">xxoo<br style="line-height: normal;">oooo<br style="line-height: normal;">oooo<br style="line-height: normal;">为c分配时，第一行已经不够，就换到第二行，<br style="line-height: normal;">xxoo<br style="line-height: normal;">xxxx<br style="line-height: normal;">oooo<br style="line-height: normal;">这样第三行就没用到，所占的内存就是每行4个字节x2行=8个字节。</p> 
+<p style="line-height: normal;">这就是我所理解的字对齐，至于为什么，我想，应该是方便32位机操作吧，32位刚好就是4个字节，这样可以尽量使数据的读取用一次总线操作就完成，int是4个字节，32位，如果不用字对齐，读取一个int，可能第一次就只能读出高位那部分，然后通过移位将数据的高位移到寄存器的高位，再读出低位，再对第二次读取的高位屏蔽，再进行或操作，效率不高。同样，类似于char型和short型数据，读取了后还是会进行寄存器移位操作，这一点可以通过编译生成的汇编语句得到证实，这也就是为什么在某些系统，如嵌入式系统中，char的效率不如int高的原因了。<br style="line-height: normal;">另外，半字对齐和字对齐差不多，只是它的单位是2个字节吧，因为有的嵌入式系统是16位的。</p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4df216859181af7d9f34c897203cf7d4/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">笔记--高级Bash脚本编程指南</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e32687056156b0a673acca0cd50e9406/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">VLDR,VSTR</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

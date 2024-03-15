@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【按键】短按，长按，按键释放，三种模式的按键扫描程序（软件消抖动）--- 矩阵键盘 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【按键】短按，长按，按键释放，三种模式的按键扫描程序（软件消抖动）--- 矩阵键盘" />
+<meta property="og:description" content="请先阅读上篇： 短按，长按，按键释放，三种模式的按键扫描程序（软件消抖动）
+上面的程序适用于单个按键，那是不是也可以适用于矩阵键盘呢？ 答案是肯定的。
+接下来在这里做一个简单的扩展，具体框架不用改变，所以具体的框架内容和思路在这里不详述了，自行参考上篇文章，这里就说说扩展矩阵键盘的需要改动的地方。
+重点： 对于此按键盘函数的框架来说，其实单个按键与矩阵键盘程序的差别仅仅在于读取按键的方式不同。所以这里的程序只需要更改读取按键值的部分即可。
+1.单个按键的读取按键值程序
+CurrReadKey = P0 &amp; 0x00ff; //获取当前的键值 2.矩阵键盘的读取按键值程序 这里以4*4键盘为例 原理图如下：
+将原理图中的P1看成是P0（由于赖所以直接从度娘那里盗的图），下面程序是以P0为例。
+//读取按键的行数 P0 = 0xf0; KeyRow = P0; //读取按键的列数 P0 = 0x0f; KeyColumn = P0; //读取行列数，就是当前键值了 CurrReadKey = Key_Row|Key_Column; 3.只需要将单个按键的读取键值程序改为矩阵键盘的读取键值的程序即可，程序如下：
+KeyScan.c文件如下：
+//====================================================== //KeyScan.c //====================================================== //注意：该宏定义，定义在keyscan.h文件中 //#define KEYDEBOUNCE 0x05 //消抖动，按键扫描次数。如果连续5次都是扫描的都是相同键值，则认为是有效键值，否则是误触发 unsigned int g_uiCurrKey; //当前按键值 unsigned int g_uiLastKey; //上次按键值 unsigned int g_uiKeyScanCount; //按键扫描计数，作用：消抖动 unsigned int g_uiKeyDown; //键被按下，返回的键值。 作用：单次按键，单次返回有效键值；按住不放，也只返回被按下的一个键值 unsigned int g_uiKeyRelease; //键被释放后，返回的键值。 作用：只有按下的按键被释放后，才返回按下的键值 unsigned int g_uiKeyContinue; //键连续按键，重复返回的键值。 作用：只要按住不放，就会重复地返回相同键值 //P0口的低八位作为按键 //没有按键时，返回的是0xff， void Int_Key_Scan(void) { static unsigned short LastReadKey; //上次从IO口读取的键值 ,注意是静态变量 unsigned short CurrReadKey; //当前从IO口读取的键值 //---------------------- 需要修改的地方 --------------------------------------// unsigned short KeyRow,KeyColumn; //读取按键的行数 P0 = 0xf0; KeyRow = P0; //读取按键的列数 P0 = 0x0f; KeyColumn = P0; //读取行列数，就是当前键值了 CurrReadKey = Key_Row|Key_Column; //获取当前的键值 //-----------------------------------------------------------------------// if(CurrReadKey == LastReadKey) //如果当前读取的键值与上次从IO口读取的键值相同 { if(g_uiKeyScanCount &gt;= KEYDEBOUNCE) //首先判断是否大于等于debounce的设定值(即是，是否大于等于设定的采样次数) { //按住不放,多次响应 g_uiCurrKey = CurrReadKey; //如果是,将当前的读取值判定为有效按键值(如果是，在采样周期中，都是这个值，则判定为有效按键值) //按住不放只响应一次 if(g_uiPreKeyValue == g_uiCurrKey) { g_uiKeyDown = 0xff; //没有键值 } else { g_uiKeyDown = g_uiCurrKey; //如果不同，按键有效,(就是第一次有效值时) } //按键释放时，按键值才有效 if(g_uiCurrKey == 0xff) //当有效按键值从非0到0的状态时(即是，从有按键到无按键，表示已经释放了)，表示之前按键已经释放了 { g_uiKeyRelease = g_uiPreKeyValue; } g_uiLastKey = g_uiCurrKey; //记录上次有效按键值 } else //如果否，则debounce加一(如果否，则继续采样键值) { g_uiKeyScanCount&#43;&#43;; } } else //如果当前读取的键值与上次从IO口读取的键值不同，说明按键已经变化 { g_uiKeyDown = 0xff; //放开按键后第一次进入扫描程序，清零g_uiKeyDown." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/4663ff2b84a89fff4e90d418fc82534e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2016-02-26T11:50:01+08:00" />
+<meta property="article:modified_time" content="2016-02-26T11:50:01+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【按键】短按，长按，按键释放，三种模式的按键扫描程序（软件消抖动）--- 矩阵键盘</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>请先阅读上篇： <br> <a href="http://blog.csdn.net/pillarpeng/article/details/45972213">短按，长按，按键释放，三种模式的按键扫描程序（软件消抖动）</a></p> 
+<p>上面的程序适用于单个按键，那是不是也可以适用于矩阵键盘呢？ <br> 答案是肯定的。</p> 
+<p>接下来在这里做一个简单的扩展，具体框架不用改变，所以具体的框架内容和思路在这里不详述了，自行参考上篇文章，这里就说说扩展矩阵键盘的需要改动的地方。</p> 
+<p><strong>重点：</strong> <br> <strong>对于此按键盘函数的框架来说，其实单个按键与矩阵键盘程序的差别仅仅在于读取按键的方式不同。所以这里的程序只需要更改读取按键值的部分即可。</strong></p> 
+<p><strong>1.单个按键的读取按键值程序</strong></p> 
+<pre class="prettyprint"><code class=" hljs fix"><span class="hljs-attribute">CurrReadKey </span>=<span class="hljs-string"> P0 &amp; 0x00ff;                //获取当前的键值</span></code></pre> 
+<p><strong>2.矩阵键盘的读取按键值程序</strong> <br> 这里以4*4键盘为例 <br> 原理图如下：</p> 
+<p><img src="https://images2.imgbox.com/16/23/6PUkRIfj_o.gif" alt="矩阵键盘原理图" title=""> <br> 将原理图中的P1看成是P0（由于赖所以直接从度娘那里盗的图），下面程序是以P0为例。</p> 
+<pre class="prettyprint"><code class=" hljs makefile">//读取按键的行数
+<span class="hljs-constant">P0</span> = 0xf0;
+<span class="hljs-constant">KeyRow</span> = P0;
+
+//读取按键的列数
+<span class="hljs-constant">P0</span> = 0x0f;
+<span class="hljs-constant">KeyColumn</span> = P0;
+
+//读取行列数，就是当前键值了
+<span class="hljs-constant">CurrReadKey</span> = Key_Row|Key_Column;</code></pre> 
+<p><strong>3.只需要将单个按键的读取键值程序改为矩阵键盘的读取键值的程序即可，程序如下：</strong></p> 
+<p>KeyScan.c文件如下：</p> 
+<pre class="prettyprint"><code class=" hljs objectivec"><span class="hljs-comment">//======================================================</span>
+<span class="hljs-comment">//KeyScan.c</span>
+<span class="hljs-comment">//======================================================</span>
+<span class="hljs-comment">//注意：该宏定义，定义在keyscan.h文件中</span>
+<span class="hljs-comment">//#define KEYDEBOUNCE 0x05             //消抖动，按键扫描次数。如果连续5次都是扫描的都是相同键值，则认为是有效键值，否则是误触发</span>
+
+<span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiCurrKey;            <span class="hljs-comment">//当前按键值</span>
+<span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiLastKey;            <span class="hljs-comment">//上次按键值</span>
+<span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyScanCount;       <span class="hljs-comment">//按键扫描计数，作用：消抖动</span>
+
+<span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyDown;            <span class="hljs-comment">//键被按下，返回的键值。       作用：单次按键，单次返回有效键值；按住不放，也只返回被按下的一个键值</span>
+<span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyRelease;         <span class="hljs-comment">//键被释放后，返回的键值。     作用：只有按下的按键被释放后，才返回按下的键值</span>
+<span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyContinue;        <span class="hljs-comment">//键连续按键，重复返回的键值。 作用：只要按住不放，就会重复地返回相同键值</span>
+
+<span class="hljs-comment">//P0口的低八位作为按键</span>
+<span class="hljs-comment">//没有按键时，返回的是0xff，</span>
+<span class="hljs-keyword">void</span> Int_Key_Scan(<span class="hljs-keyword">void</span>)
+{
+    <span class="hljs-keyword">static</span> <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">short</span> LastReadKey;        <span class="hljs-comment">//上次从IO口读取的键值 ,注意是静态变量</span>
+    <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">short</span> CurrReadKey;               <span class="hljs-comment">//当前从IO口读取的键值</span>
+
+<span class="hljs-comment">//---------------------- 需要修改的地方 --------------------------------------//</span>
+    <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">short</span> KeyRow,KeyColumn;
+
+    <span class="hljs-comment">//读取按键的行数</span>
+    P0 = <span class="hljs-number">0xf0</span>;
+    KeyRow = P0;
+
+    <span class="hljs-comment">//读取按键的列数</span>
+    P0 = <span class="hljs-number">0x0f</span>;
+    KeyColumn = P0;
+
+    <span class="hljs-comment">//读取行列数，就是当前键值了</span>
+    CurrReadKey = Key_Row|Key_Column;         <span class="hljs-comment">//获取当前的键值        </span>
+<span class="hljs-comment">//-----------------------------------------------------------------------//</span>
+
+    <span class="hljs-keyword">if</span>(CurrReadKey == LastReadKey)            <span class="hljs-comment">//如果当前读取的键值与上次从IO口读取的键值相同</span>
+    {
+        <span class="hljs-keyword">if</span>(g_uiKeyScanCount &gt;= KEYDEBOUNCE)   <span class="hljs-comment">//首先判断是否大于等于debounce的设定值(即是，是否大于等于设定的采样次数)</span>
+        {
+            <span class="hljs-comment">//按住不放,多次响应</span>
+            g_uiCurrKey = CurrReadKey;                <span class="hljs-comment">//如果是,将当前的读取值判定为有效按键值(如果是，在采样周期中，都是这个值，则判定为有效按键值)</span>
+
+            <span class="hljs-comment">//按住不放只响应一次</span>
+            <span class="hljs-keyword">if</span>(g_uiPreKeyValue == g_uiCurrKey)
+            {
+                g_uiKeyDown = <span class="hljs-number">0xff</span>;                    <span class="hljs-comment">//没有键值</span>
+            }
+            <span class="hljs-keyword">else</span>
+            {
+                g_uiKeyDown = g_uiCurrKey;             <span class="hljs-comment">//如果不同，按键有效,(就是第一次有效值时)</span>
+            }
+
+            <span class="hljs-comment">//按键释放时，按键值才有效     </span>
+            <span class="hljs-keyword">if</span>(g_uiCurrKey == <span class="hljs-number">0xff</span>)                  <span class="hljs-comment">//当有效按键值从非0到0的状态时(即是，从有按键到无按键，表示已经释放了)，表示之前按键已经释放了</span>
+            {
+                g_uiKeyRelease = g_uiPreKeyValue;
+            }
+
+            g_uiLastKey = g_uiCurrKey;               <span class="hljs-comment">//记录上次有效按键值</span>
+        }
+        <span class="hljs-keyword">else</span>                                       <span class="hljs-comment">//如果否，则debounce加一(如果否，则继续采样键值)</span>
+        {
+            g_uiKeyScanCount++;
+        }
+    }
+    <span class="hljs-keyword">else</span>                                          <span class="hljs-comment">//如果当前读取的键值与上次从IO口读取的键值不同，说明按键已经变化</span>
+    {
+        g_uiKeyDown = <span class="hljs-number">0xff</span>;                       <span class="hljs-comment">//放开按键后第一次进入扫描程序，清零g_uiKeyDown.作用：消除一个BUG（你猜BUG是什么？）</span>
+        g_uiKeyScanCount = <span class="hljs-number">0</span>;                     <span class="hljs-comment">//清零之前的按键的debounce计数</span>
+        LastReadKey = CurrReadKey;                <span class="hljs-comment">//将当前读取的键值记录为上次读取的按键值</span>
+    }   
+}
+</code></pre> 
+<p>KeyScan.h文件如下：</p> 
+<pre class="prettyprint"><code class=" hljs cpp"><span class="hljs-comment">//======================================================</span>
+<span class="hljs-comment">//KeyScan.h</span>
+<span class="hljs-comment">//======================================================</span>
+
+<span class="hljs-comment">//宏定义</span>
+<span class="hljs-preprocessor">#define KEYDEBOUNCE 0x05             <span class="hljs-comment">//消抖动，按键扫描次数。如果连续5次都是扫描的都是相同键值，则认为是有效键值，否则是误触发</span></span>
+
+<span class="hljs-comment">//声明变量</span>
+<span class="hljs-keyword">extern</span> <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiCurrKey;            <span class="hljs-comment">//当前按键值</span>
+<span class="hljs-keyword">extern</span> <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiLastKey;            <span class="hljs-comment">//上次按键值</span>
+<span class="hljs-keyword">extern</span> <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyScanCount;       <span class="hljs-comment">//按键扫描计数，作用：消抖动</span>
+
+<span class="hljs-keyword">extern</span> <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyDown;            <span class="hljs-comment">//键被按下，返回的键值。       作用：单次按键，单次返回有效键值；按住不放，也只返回被按下的一个键值</span>
+<span class="hljs-keyword">extern</span> <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyRelease;         <span class="hljs-comment">//键被释放后，返回的键值。     作用：只有按下的按键被释放后，才返回按下的键值</span>
+<span class="hljs-keyword">extern</span> <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">int</span> g_uiKeyContinue;        <span class="hljs-comment">//键连续按键，重复返回的键值。 作用：只要按住不放，就会重复地返回相同键值</span>
+
+<span class="hljs-comment">//函数声明</span>
+<span class="hljs-keyword">void</span> Int_Key_Scan(<span class="hljs-keyword">void</span>);</code></pre> 
+<p><strong>4.实例程序</strong> <br> 这里就以单次按键有效为例，按键释放有效与长按多次有效 写法一样。 <br> <strong>仅仅修改switch中的case值即可。</strong></p> 
+<p>main.c如下所示：</p> 
+<pre class="prettyprint"><code class=" hljs vala"><span class="hljs-comment">//======================================================</span>
+<span class="hljs-comment">//main.c</span>
+<span class="hljs-comment">//======================================================</span>
+<span class="hljs-preprocessor">#include "reg51.h"</span>
+<span class="hljs-preprocessor">#include "KeyScan.h"</span>
+
+sbit<span class="hljs-constant"> LED </span>= P1<span class="hljs-number">.0</span>;       <span class="hljs-comment">//定义LEDIO口</span>
+
+<span class="hljs-keyword">void</span> main(<span class="hljs-keyword">void</span>)
+{
+    P0 = <span class="hljs-number">0xff</span>;
+   <span class="hljs-constant"> LED </span>= <span class="hljs-number">0</span>;           <span class="hljs-comment">//点亮LED</span>
+
+    <span class="hljs-keyword">while</span>(<span class="hljs-number">1</span>)
+    {
+        Int_Key_Scan();      <span class="hljs-comment">//按键扫描程序</span>
+
+        <span class="hljs-comment">//第一种：KeyDown的使</span>
+        <span class="hljs-comment">//单按时和长按时，都只返回一次有效键值（无需等到按键释放，就可以返回有效键值）</span>
+        <span class="hljs-keyword">switch</span>(g_uiKeyDown)
+        {
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xEE</span>:
+                        <span class="hljs-comment">//P0.0按键程序</span>
+                       <span class="hljs-constant"> LED </span>= !LED; 
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xED</span>:
+                        <span class="hljs-comment">//P0.1按键程序 </span>
+                        <span class="hljs-comment">//...</span>
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xEB</span>:
+                        <span class="hljs-comment">//P0.2按键程序 </span>
+                        <span class="hljs-comment">//...</span>
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xE7</span>:
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xDE</span>:
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xDD</span>:
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xDB</span>:
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xD7</span>:
+                        <span class="hljs-keyword">break</span>;   
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xBE</span>:
+                       <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xBD</span>:
+                       <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xBB</span>:
+                       <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xB7</span>:
+                       <span class="hljs-keyword">break</span>; 
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0x7E</span>:
+                       <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0x7D</span>:
+                       <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0x7B</span>:
+                        <span class="hljs-keyword">break</span>;
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0x77</span>:
+                        <span class="hljs-keyword">break</span>;        
+
+            <span class="hljs-keyword">case</span> <span class="hljs-number">0xFF</span>:
+                        <span class="hljs-comment">//没有按键程序</span>
+                        <span class="hljs-comment">//...</span>
+                        <span class="hljs-keyword">break</span>;
+        }
+    }
+}</code></pre> 
+<blockquote> 
+ <p>Pillar Peng <br> Friday, February 26, 2016 11:48</p> 
+</blockquote> 
+<hr> 
+<p>友情链接：</p> 
+<p><a href="http://blog.csdn.net/pillarpeng/article/details/45972213">【按键】短按，长按，按键释放，三种模式的按键扫描程序（软件消抖动）</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d8f9bd1a9125b211f323aaf574c4ddd1/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Linux内核配置和编译</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/74325c6713a6ed4809313b2181690e12/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">DatabaseError:database disk image is malformed的解决方法</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

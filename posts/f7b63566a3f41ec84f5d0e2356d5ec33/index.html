@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【R语言-20行代码】牛顿迭代法求伽马函数极大似然估计法的参数估计 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【R语言-20行代码】牛顿迭代法求伽马函数极大似然估计法的参数估计" />
+<meta property="og:description" content="简述 研究了下计算公式，简化了一下，用r语言实现了。
+算法解释 牛顿迭代法
+x k &#43; 1 = x k − f ( x k ) f ′ ( x k ) x_{k&#43;1} = x_k - \frac{f(x_k)}{f&amp;#x27;(x_k)} xk&#43;1​=xk​−f′(xk​)f(xk​)​
+求解的方程是
+f ( x ) = 0 f(x) = 0 f(x)=0
+通过极大似然估计，构造对数似然方程，之后再关于 α \alpha α和 β \beta β 求偏导数。之后，得到关于 α \alpha α的非线性对数似然方程。然后， β \beta β可以用 α \alpha α表示。
+再进一步的简化（去掉无关的项，再整理相关的项）
+得到需要求解的方程为
+l o g ( α ) &#43; d i g a m m a ( α ) = 0 log(\alpha) &#43; digamma(\alpha) = 0 log(α)&#43;digamma(α)=0" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f7b63566a3f41ec84f5d0e2356d5ec33/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-10-31T18:58:45+08:00" />
+<meta property="article:modified_time" content="2018-10-31T18:58:45+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【R语言-20行代码】牛顿迭代法求伽马函数极大似然估计法的参数估计</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="_0"></a>简述</h3> 
+<p>研究了下计算公式，简化了一下，用r语言实现了。</p> 
+<h3><a id="_4"></a>算法解释</h3> 
+<ul><li> <p>牛顿迭代法<br> <span class="katex--display"><span class="katex-display"><span class="katex"><span class="katex-mathml"> 
+        
+         
+          
+           
+           
+             x 
+            
+            
+            
+              k 
+             
+            
+              + 
+             
+            
+              1 
+             
+            
+           
+          
+            = 
+           
+           
+           
+             x 
+            
+           
+             k 
+            
+           
+          
+            − 
+           
+           
+            
+            
+              f 
+             
+            
+              ( 
+             
+             
+             
+               x 
+              
+             
+               k 
+              
+             
+            
+              ) 
+             
+            
+            
+             
+             
+               f 
+              
+             
+               ′ 
+              
+             
+            
+              ( 
+             
+             
+             
+               x 
+              
+             
+               k 
+              
+             
+            
+              ) 
+             
+            
+           
+          
+         
+           x_{k+1} = x_k - \frac{f(x_k)}{f&amp;#x27;(x_k)} 
+          
+         
+       </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.638891em; vertical-align: -0.208331em;"></span><span class="mord"><span class="mord mathit">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.336108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathit mtight" style="margin-right: 0.03148em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.208331em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.73333em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathit">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.336108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathit mtight" style="margin-right: 0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 2.363em; vertical-align: -0.936em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 1.427em;"><span class="" style="top: -2.314em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord"><span class="mord mathit" style="margin-right: 0.10764em;">f</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height: 0.677892em;"><span class="" style="top: -2.989em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathit">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.336108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathit mtight" style="margin-right: 0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mclose">)</span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.677em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathit" style="margin-right: 0.10764em;">f</span><span class="mopen">(</span><span class="mord"><span class="mord mathit">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.336108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathit mtight" style="margin-right: 0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.936em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></span><br> 求解的方程是<br> <span class="katex--display"><span class="katex-display"><span class="katex"><span class="katex-mathml"> 
+        
+         
+          
+          
+            f 
+           
+          
+            ( 
+           
+          
+            x 
+           
+          
+            ) 
+           
+          
+            = 
+           
+          
+            0 
+           
+          
+         
+           f(x) = 0 
+          
+         
+       </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathit" style="margin-right: 0.10764em;">f</span><span class="mopen">(</span><span class="mord mathit">x</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">0</span></span></span></span></span></span></p> </li><li> <p>通过极大似然估计，构造对数似然方程，之后再关于<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           α 
+          
+         
+        
+          \alpha 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.43056em; vertical-align: 0em;"></span><span class="mord mathit" style="margin-right: 0.0037em;">α</span></span></span></span></span>和<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           β 
+          
+         
+        
+          \beta 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.88888em; vertical-align: -0.19444em;"></span><span class="mord mathit" style="margin-right: 0.05278em;">β</span></span></span></span></span> 求偏导数。之后，得到关于<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           α 
+          
+         
+        
+          \alpha 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.43056em; vertical-align: 0em;"></span><span class="mord mathit" style="margin-right: 0.0037em;">α</span></span></span></span></span>的非线性对数似然方程。然后，<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           β 
+          
+         
+        
+          \beta 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.88888em; vertical-align: -0.19444em;"></span><span class="mord mathit" style="margin-right: 0.05278em;">β</span></span></span></span></span>可以用<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           α 
+          
+         
+        
+          \alpha 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.43056em; vertical-align: 0em;"></span><span class="mord mathit" style="margin-right: 0.0037em;">α</span></span></span></span></span>表示。</p> </li><li> <p>再进一步的简化（去掉无关的项，再整理相关的项）<br> 得到需要求解的方程为<br> <span class="katex--display"><span class="katex-display"><span class="katex"><span class="katex-mathml"> 
+        
+         
+          
+          
+            l 
+           
+          
+            o 
+           
+          
+            g 
+           
+          
+            ( 
+           
+          
+            α 
+           
+          
+            ) 
+           
+          
+            + 
+           
+          
+            d 
+           
+          
+            i 
+           
+          
+            g 
+           
+          
+            a 
+           
+          
+            m 
+           
+          
+            m 
+           
+          
+            a 
+           
+          
+            ( 
+           
+          
+            α 
+           
+          
+            ) 
+           
+          
+            = 
+           
+          
+            0 
+           
+          
+         
+           log(\alpha) + digamma(\alpha) = 0 
+          
+         
+       </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathit" style="margin-right: 0.01968em;">l</span><span class="mord mathit">o</span><span class="mord mathit" style="margin-right: 0.03588em;">g</span><span class="mopen">(</span><span class="mord mathit" style="margin-right: 0.0037em;">α</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathit">d</span><span class="mord mathit">i</span><span class="mord mathit" style="margin-right: 0.03588em;">g</span><span class="mord mathit">a</span><span class="mord mathit">m</span><span class="mord mathit">m</span><span class="mord mathit">a</span><span class="mopen">(</span><span class="mord mathit" style="margin-right: 0.0037em;">α</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">0</span></span></span></span></span></span></p> </li><li> <p>再求一下这个方程左边的导数<br> <span class="katex--display"><span class="katex-display"><span class="katex"><span class="katex-mathml"> 
+        
+         
+          
+           
+           
+             1 
+            
+           
+             α 
+            
+           
+          
+            + 
+           
+          
+            t 
+           
+          
+            r 
+           
+          
+            i 
+           
+          
+            g 
+           
+          
+            a 
+           
+          
+            m 
+           
+          
+            m 
+           
+          
+            a 
+           
+          
+            ( 
+           
+          
+            α 
+           
+          
+            ) 
+           
+          
+         
+           \frac{1}{\alpha} + trigamma(\alpha) 
+          
+         
+       </span><span class="katex-html"><span class="base"><span class="strut" style="height: 2.00744em; vertical-align: -0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 1.32144em;"><span class="" style="top: -2.314em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathit" style="margin-right: 0.0037em;">α</span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.677em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.686em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathit">t</span><span class="mord mathit" style="margin-right: 0.02778em;">r</span><span class="mord mathit">i</span><span class="mord mathit" style="margin-right: 0.03588em;">g</span><span class="mord mathit">a</span><span class="mord mathit">m</span><span class="mord mathit">m</span><span class="mord mathit">a</span><span class="mopen">(</span><span class="mord mathit" style="margin-right: 0.0037em;">α</span><span class="mclose">)</span></span></span></span></span></span></p> </li><li> <p>初始值，使用通过矩估计得到的参数。</p> </li></ul> 
+<h3><a id="_20"></a>代码部分</h3> 
+<p>除掉前面的读取数据加一行的空格，不就是小于20行咩</p> 
+<ul><li>TIMES 的是迭代次数</li><li>1e-5 表示的是最小的变动精度</li></ul> 
+<p>讲真，我用这个精度，我算了4次迭代，就得到正确结果了。</p> 
+<pre><code>library(xlsx)
+ray = read.xlsx('D:/Code/R/Data in Excel/Chapter 8/gamma-arrivals.xls',1)
+mean_ray = mean(ray[,1])
+var_ray = var(ray[,1])
+
+alpha = mean_ray**2 / var_ray
+origin_X = alpha
+f = function(a){
+  log(a)+ digamma(a)
+}
+ff = function(a){
+  1. / a + trigamma(a)
+}
+TIMES = 10
+for (i in 1:TIMES){
+  x = origin_X -f(origin_X) / (ff(origin_X))
+  if (abs(x -  origin_X) &lt; 1e-5) {
+    print(i)
+    break
+  } else {
+    origin_X = x
+  }
+}
+print(x)
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2a41709f835cca51dd802850b4bc56fb/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">ajax的简单表单登录异步验证</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/d0d3e5a1232ec71a0fd5e3cd11bdf3d6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Android WebView嵌套H5下载失效</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

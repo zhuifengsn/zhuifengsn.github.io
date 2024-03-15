@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>STM32采用串口DMA方式，用115200bps或更高速率向上位机连续发送数据 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="STM32采用串口DMA方式，用115200bps或更高速率向上位机连续发送数据" />
+<meta property="og:description" content="文章目录 一、DMA的基本介绍1.DMA的定义2.DMA传输方式3.DMA传输参数4.DMA的主要特征5.DMA库函数配置过程6.STM32中的DMA7.DMA中断8.DMA方式的接口函数 二、DMA方式实现串口通信1.STM32CubeMX工程创建2.程序编写3.程序编译及hex文件创建4.电路连接5.程序烧录6.串口调试7.运行结果 三、总结四、参考链接 一、DMA的基本介绍 1.DMA的定义 DMA，全称Direct Memory Access，即直接存储器访问。DMA用来提供在外设和存储器之间或者存储器和存储器之间的高速数据传输。无须CPU的干预，通过DMA数据可以快速地移动。这就节省了CPU的资源来做其他操作。
+2.DMA传输方式 ◉DMA的作用就是实现数据的直接传输，而去掉了传统数据传输需要CPU寄存器参与的环节，主要涉及四种情况的数据传输，但本质上是一样的，都是从内存的某一区域传输到内存的另一区域（外设的数据寄存器本质上就是内存的一个存储单元）。四种情况的数据传输如下：外设到内存、内存到外设、内存到内存、外设到外设
+◉（1）方法1：DMA_Mode_Normal，正常模式，
+当一次DMA数据传输完后，停止DMA传送 ，也就是只传输一次　（2）方法2：DMA_Mode_Circular ，循环传输模式
+当传输结束时，硬件自动会将传输数据量寄存器进行重装，进行下一轮的数据传输。 也就是多次传输模式
+3.DMA传输参数 我们知道，数据传输，首先需要的是1 数据的源地址 2 数据传输位置的目标地址 ，3 传递数据多少的数据传输量 ，4 进行多少次传输的传输模式 DMA所需要的核心参数，便是这四个。当用户将参数设置好，主要涉及源地址、目标地址、传输数据量这三个，DMA控制器就会启动数据传输，当剩余传输数据量为0时 ，达到传输终点，结束DMA传输 ，当然，DMA 还有循环传输模式 ，当到达传输终点时会重新启动DMA传输。也就是说只要剩余传输数据量不是0，而且DMA是启动状态，那么就会发生数据传输。
+4.DMA的主要特征 每个通道都直接连接专用的硬件DMA请求，每个通道都同样支持软件触发。这些功能通过软件来配置；
+◉在同一个DMA模块上，多个请求间的优先权可以通过软件编程设置（共有四级：很高、高、中等和低），优先权设置相等时由硬件决定（请求0优先于请求1，依此类推）；
+◉独立数据源和目标数据区的传输宽度（字节、半字、全字），模拟打包和拆包的过程。源和目标地址必须按数据传输宽度对齐；
+◉支持循环的缓冲器管理；
+◉每个通道都有3个事件标志（DMA半传输、DMA传输完成和DMA传输出错），这3个事件标志逻辑或成为一个单独的中断请求；
+◉存储器和存储器间的传输、外设和存储器、存储器和外设之间的传输；
+◉闪存、SRAM、外设的SRAM、APB1、APB2和AHB外设均可作为访问的源和目标；
+◉可编程的数据传输数目：最大为65535。
+5.DMA库函数配置过程 （1）使能DMA时钟：RCC_AHBPeriphClockCmd();
+（2）初始化DMA通道：DMA_Init();
+//设置通道；传输地址；传输方向；传输数据的数目；传输数据宽度；传输模式；优先级；是否开启存储器到存储器。
+（3）使能外设DMA；
+（4）使能DMA通道传输；
+（5）查询DMA传输状态。
+6.STM32中的DMA 对于大容量的STM32芯片有2个DMA控制器 两个DMA控制器，DMA1有7个通道，DMA2有5个通道。每个通道都可以配置一些外设的地址。
+上方的框图，我们可以看到STM32内核，存储器，外设及DMA的连接，这些硬件最终通过各种各样的线连接到总线矩阵中，硬件结构之间的数据转移都经过总线矩阵的协调，使各个外设和谐的使用总线来传输数据。
+7.DMA中断 每个DMA通道都可以在DMA传输过半、传输完成和传输错误时产生中断。为应用的灵活性考虑，通过设置寄存器的不同位来打开这些中断。
+使没开启，我们也可以通过查询这些位来获得当前 DMA 传输的状态。这里我们常用的是 TCIFx位，即数据流 x 的 DMA 传输完成与否标志。
+可编程的数据传输宽度、对齐方式和数据大小端
+当PSIZE和MSIZE不相同时，DMA模块按照下图进行数据对齐。
+注意：在大容量产品中， DMA2 通道 4 和 DMA2 通道 5 的中断被映射在同一个中断向量上。在互联型产品 中， DMA2 通道 4 和 DMA2 通道 5 的中断分别有独立的中断向量。所有其他的 DMA 通道都有自己的中断向量。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/495551d6ce0e2c2d9da16e0218e6c78a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-10-23T20:57:27+08:00" />
+<meta property="article:modified_time" content="2022-10-23T20:57:27+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">STM32采用串口DMA方式，用115200bps或更高速率向上位机连续发送数据</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#DMA_1" rel="nofollow">一、DMA的基本介绍</a></li><li><ul><li><a href="#1DMA_2" rel="nofollow">1.DMA的定义</a></li><li><a href="#2DMA_4" rel="nofollow">2.DMA传输方式</a></li><li><a href="#3DMA_10" rel="nofollow">3.DMA传输参数</a></li><li><a href="#4DMA_13" rel="nofollow">4.DMA的主要特征</a></li><li><a href="#5DMA_22" rel="nofollow">5.DMA库函数配置过程</a></li><li><a href="#6STM32DMA_29" rel="nofollow">6.STM32中的DMA</a></li><li><a href="#7DMA_33" rel="nofollow">7.DMA中断</a></li><li><a href="#8DMA_40" rel="nofollow">8.DMA方式的接口函数</a></li></ul> 
+  </li><li><a href="#DMA_45" rel="nofollow">二、DMA方式实现串口通信</a></li><li><ul><li><a href="#1STM32CubeMX_46" rel="nofollow">1.STM32CubeMX工程创建</a></li><li><a href="#2_64" rel="nofollow">2.程序编写</a></li><li><a href="#3hex_82" rel="nofollow">3.程序编译及hex文件创建</a></li><li><a href="#4_85" rel="nofollow">4.电路连接</a></li><li><a href="#5_92" rel="nofollow">5.程序烧录</a></li><li><a href="#6_100" rel="nofollow">6.串口调试</a></li><li><a href="#7_103" rel="nofollow">7.运行结果</a></li></ul> 
+  </li><li><a href="#_106" rel="nofollow">三、总结</a></li><li><a href="#_109" rel="nofollow">四、参考链接</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="DMA_1"></a>一、DMA的基本介绍</h2> 
+<h3><a id="1DMA_2"></a>1.DMA的定义</h3> 
+<p>DMA，全称Direct Memory Access，即直接存储器访问。DMA用来提供在外设和存储器之间或者存储器和存储器之间的高速数据传输。无须CPU的干预，通过DMA数据可以快速地移动。这就节省了CPU的资源来做其他操作。</p> 
+<h3><a id="2DMA_4"></a>2.DMA传输方式</h3> 
+<p>◉<strong>DMA的作用就是实现数据的直接传输，而去掉了传统数据传输需要CPU寄存器参与的环节</strong>，主要涉及四种情况的数据传输，但本质上是一样的，都是从内存的某一区域传输到内存的另一区域（外设的数据寄存器本质上就是内存的一个存储单元）。四种情况的数据传输如下：<code>外设到内存</code>、<code>内存到外设</code>、<code>内存到内存</code>、<code>外设到外设</code><br> ◉（1）方法1：DMA_Mode_Normal，正常模式，<br> 当一次DMA数据传输完后，停止DMA传送 ，也就是只传输一次　　<br> （2）方法2：DMA_Mode_Circular ，循环传输模式<br> 当传输结束时，硬件自动会将传输数据量寄存器进行重装，进行下一轮的数据传输。 也就是多次传输模式</p> 
+<h3><a id="3DMA_10"></a>3.DMA传输参数</h3> 
+<p>我们知道，数据传输，首先需要的是1 数据的<code>源地址</code> 2 数据传输位置的<code>目标地址</code> ，3 传递数据多少的<code>数据传输量</code> ，4 进行多少次传输的传输模式 DMA所需要的核心参数，便是这四个。当用户将参数设置好，主要涉及源地址、目标地址、传输数据量这三个，DMA控制器就会启动数据传输，当剩余传输数据量为0时 ，达到传输终点，结束DMA传输 ，当然，DMA 还有循环传输模式 ，当到达传输终点时会重新启动DMA传输。也就是说只要剩余传输数据量不是0，而且DMA是启动状态，那么就会发生数据传输。<br> <img src="https://images2.imgbox.com/4c/be/3g7AvbDz_o.png" alt=""></p> 
+<h3><a id="4DMA_13"></a>4.DMA的主要特征</h3> 
+<p>每个通道都直接连接专用的硬件DMA请求，每个通道都同样支持软件触发。这些功能通过软件来配置；<br> ◉在同一个DMA模块上，多个请求间的优先权可以通过软件编程设置（共有四级：很高、高、中等和低），优先权设置相等时由硬件决定（请求0优先于请求1，依此类推）；<br> ◉独立数据源和目标数据区的传输宽度（字节、半字、全字），模拟打包和拆包的过程。源和目标地址必须按数据传输宽度对齐；<br> ◉支持循环的缓冲器管理；<br> ◉每个通道都有3个事件标志（DMA半传输、DMA传输完成和DMA传输出错），这3个事件标志逻辑或成为一个单独的中断请求；<br> ◉存储器和存储器间的传输、外设和存储器、存储器和外设之间的传输；<br> ◉闪存、SRAM、外设的SRAM、APB1、APB2和AHB外设均可作为访问的源和目标；<br> ◉可编程的数据传输数目：最大为65535。</p> 
+<h3><a id="5DMA_22"></a>5.DMA库函数配置过程</h3> 
+<p>（1）使能DMA时钟：RCC_AHBPeriphClockCmd();<br> （2）初始化DMA通道：DMA_Init();<br> //设置通道；传输地址；传输方向；传输数据的数目；传输数据宽度；传输模式；优先级；是否开启存储器到存储器。<br> （3）使能外设DMA；<br> （4）使能DMA通道传输；<br> （5）查询DMA传输状态。</p> 
+<h3><a id="6STM32DMA_29"></a>6.STM32中的DMA</h3> 
+<p>对于大容量的STM32芯片有2个DMA控制器 两个DMA控制器，DMA1有7个通道，DMA2有5个通道。每个通道都可以配置一些外设的地址。<br> <img src="https://images2.imgbox.com/cd/90/mOk5fBzb_o.png" alt=""><br> 上方的框图，我们可以看到STM32内核，存储器，外设及DMA的连接，这些硬件最终通过各种各样的线连接到总线矩阵中，硬件结构之间的数据转移都经过总线矩阵的协调，使各个外设和谐的使用总线来传输数据。</p> 
+<h3><a id="7DMA_33"></a>7.DMA中断</h3> 
+<p>每个DMA通道都可以在DMA传输过半、传输完成和传输错误时产生中断。为应用的灵活性考虑，通过设置寄存器的不同位来打开这些中断。<br> <img src="https://images2.imgbox.com/88/af/9UBGW8id_o.png" alt=""><br> 使没开启，我们也可以通过查询这些位来获得当前 DMA 传输的状态。这里我们常用的是 TCIFx位，即数据流 x 的 DMA 传输完成与否标志。<br> 可编程的数据传输宽度、对齐方式和数据大小端<br> 当PSIZE和MSIZE不相同时，DMA模块按照下图进行数据对齐。<br> 注意：在大容量产品中， DMA2 通道 4 和 DMA2 通道 5 的中断被映射在同一个中断向量上。在互联型产品 中， DMA2 通道 4 和 DMA2 通道 5 的中断分别有独立的中断向量。所有其他的 DMA 通道都有自己的中断向量。</p> 
+<h3><a id="8DMA_40"></a>8.DMA方式的接口函数</h3> 
+<p><img src="https://images2.imgbox.com/57/2b/qdnQ0A8w_o.png" alt=""><br> <img src="https://images2.imgbox.com/84/3a/mrH07oj9_o.png" alt=""><br> <img src="https://images2.imgbox.com/a1/d9/vD8hfLJn_o.png" alt=""></p> 
+<h2><a id="DMA_45"></a>二、DMA方式实现串口通信</h2> 
+<h3><a id="1STM32CubeMX_46"></a>1.STM32CubeMX工程创建</h3> 
+<p>（1）打开STM32CubeMX主界面，点击“ACCESS TO MCU SELECTOR”,创建新项目<br> <img src="https://images2.imgbox.com/c0/9a/NDslbb1U_o.png" alt=""><br> （2）在“Commerical Part Number”里面选择自己需要的芯片，点击信息栏中的具体芯片信息选中，再点击“Start Project”<br> <img src="https://images2.imgbox.com/35/b2/n2GHzuBs_o.png" alt=""><br> （3）先点击System Core将其展开，再点击RCC，将HSE设置为Crystal/Ceramic Resonator<br> <img src="https://images2.imgbox.com/0d/1f/ncfSY8l1_o.png" alt=""><br> （4）点击SYS，将Debug设置为Serial Wire<img src="https://images2.imgbox.com/c5/08/z3113kGR_o.png" alt=""><br> （5）先点击Connectivity将其展开，再点击USART1，将Mode设置为Asynchronous<br> <img src="https://images2.imgbox.com/4a/5c/hdw4HD6j_o.png" alt=""><br> （6）点击NVIC，勾选USART1 global interrupt<br> <img src="https://images2.imgbox.com/c2/5b/IgfBa2Jp_o.png" alt=""><br> （7）点击Clock Configuration勾选PLLCLK和HSE，将晶振频率设置为最大值72MHz<br> <img src="https://images2.imgbox.com/0f/4a/aTSYK2zA_o.png" alt=""><br> （8）点击Project Manager→Project，配置好自己的项目名和项目存放路径，然后将Application Structure设置为Basic，将IDE设置为MDK-ARM<br> <img src="https://images2.imgbox.com/ff/f6/DyOcBXAm_o.png" alt=""><br> （9）点击Code Generate界面，选择生成初始化文件.c/.h，之后再点击GENERATE CODE即可成功创建工程<br> <img src="https://images2.imgbox.com/89/29/xGhPg14S_o.png" alt=""></p> 
+<h3><a id="2_64"></a>2.程序编写</h3> 
+<p>（1）在点击GENERATE CODE之后弹出来的界面点击Open Project即可跳转到Keil5进行程序编写<br> <img src="https://images2.imgbox.com/f4/96/rnhf2N3W_o.png" alt=""><img src="https://images2.imgbox.com/28/d1/dsPx3rAh_o.png" alt=""><br> （2）打开main.c文件<br> ◉在main函数加入如下代码</p> 
+<pre><code class="prism language-c"><span class="token class-name">uint8_t</span> Senbuff<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token string">"Hello world！"</span><span class="token punctuation">;</span>  <span class="token comment">//定义数据发送数组</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/61/44/WBSO1Kkp_o.png" alt=""><br> ◉在while循环中添加如下代码：</p> 
+<pre><code class="prism language-c">  <span class="token function">HAL_UART_Transmit_DMA</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span>Senbuff<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>Senbuff<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">HAL_Delay</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/28/fd/37WLf3cL_o.png" alt=""></p> 
+<h3><a id="3hex_82"></a>3.程序编译及hex文件创建</h3> 
+<p>点击Rebuild编译程序，若没有错误即可成功创建hex文件<br> <img src="https://images2.imgbox.com/84/8b/yYN1ZN8q_o.png" alt=""></p> 
+<h3><a id="4_85"></a>4.电路连接</h3> 
+<table><thead><tr><th>USB转TTL</th><th>STM32F103C8T6</th></tr></thead><tbody><tr><td>GND</td><td>GND</td></tr><tr><td>3v3</td><td>3v3</td></tr><tr><td>TXD</td><td>A10</td></tr><tr><td>RXD</td><td>A9</td></tr></tbody></table> 
+<h3><a id="5_92"></a>5.程序烧录</h3> 
+<p>置BOOT0为0，BOOT1为1<br> （1）打开mcuisp，选择串口为COM5，并选择生成的hex文件<br> <img src="https://images2.imgbox.com/e2/5e/AzA5SZ2W_o.png" alt=""><br> （2）点击读器件信息，若显示一切正常则进行下一步<br> <img src="https://images2.imgbox.com/e9/84/PA6yIfvW_o.png" alt=""><br> （3）点击开始编程，若显示一切正常则说明烧录成功<br> <img src="https://images2.imgbox.com/fd/29/3RbPbyAZ_o.png" alt=""></p> 
+<h3><a id="6_100"></a>6.串口调试</h3> 
+<p>打开野火串口调试助手，将波特率设置为115200，数据位设置为8，停止位设置为1，校验位设置为None，然后点击打开串口<br> <img src="https://images2.imgbox.com/47/ac/RviIanQO_o.png" alt=""></p> 
+<h3><a id="7_103"></a>7.运行结果</h3> 
+<p><img src="https://images2.imgbox.com/56/21/BB43IeFf_o.png" alt=""><br> 可以看到接收区不断显示Hello world!</p> 
+<h2><a id="_106"></a>三、总结</h2> 
+<p>DMA是一个好的搬运工，将数据从一个地址空间复制到另一个地址空间，提供在外设和存储器之间或者存储器和存储器之间的高速数据传输。总的来说，用DMA实现串口收发数据，进行数据收发过程中，不需要MCU的干预，由DMA独立完成数据的收发，接收或者发送完成后才进入中断做后续处理，因此MCU使用效率更高。但是我对于DMA的认识还不够，还需要查阅更多相关资料，进行深入学习。</p> 
+<h2><a id="_109"></a>四、参考链接</h2> 
+<p><a href="https://blog.csdn.net/as480133937/article/details/104827639/">https://blog.csdn.net/as480133937/article/details/104827639/</a><br> <a href="https://blog.csdn.net/qq_57611233/article/details/121169192?spm=1001.2014.3001.5502">https://blog.csdn.net/qq_57611233/article/details/121169192?spm=1001.2014.3001.5502</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/89715876c5ba756f1f39d86f16f01d40/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">采用串口中断方式实现串口通信：停止/持续发送“hello windows!”</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/90f02276dce946f2fc28de930e25e432/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">一文看懂自编码器、堆叠自编码器、稀疏自编码器、降噪自编码器</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

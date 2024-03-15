@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>springboot整合shiro实现简单权限控制 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="springboot整合shiro实现简单权限控制" />
+<meta property="og:description" content="目录
+一、为什么要了解权限框架
+二、shiro介绍
+三、环境准备
+3.1 数据库表以及相关数据
+3.2、shiro环境准备
+四、自定义登录
+第一步：需要先完成一些简单的配置：
+第二步： 自定义登录方法
+第三步：页面按钮隐藏
+五、MD5加密算法加密解密过程
+过程中的一个报错：
+传送门：
+一、为什么要了解权限框架 权限管理框架属于系统安全的范畴，权限管理实现对用户访问系统的控制，按照安全规则用户可以访问而且只能访问自己被授权的资源。
+目前常见的权限框架有Shiro和Spring Security，本篇文章记录springboot整合shiro，实现简单的权限控制。
+二、shiro介绍 Shiro全称是Apache Shiro，是一款灵活、强大的安全框架。方便简洁的处理身份认证、授权、加密等。
+shiro的三个组件：
+Subject 【主体】：指代当前用户【人、爬虫等】
+SecurityManager【安全管理器】：管理所有的Subject、具体安全操作的真正执行者。
+Reamls：本质是一个安全的DTO,用于进行权限、认证信息；
+通过Subject来进行认证和授权，而Subject又委托给SecurityManager； 需要给Shrio的SecurityManager注入Realm，从而让SecurityManager能得到合法的用户及其权限进行判断。
+三、环境准备 模拟场景【基于权限】：
+1、可以跳转到add页面，说明拥有add权限。
+2、可以跳转到update页面，说明拥有update权限。
+3、拥有add权限只展示add的链接、拥有update权限只展示update的链接；
+模拟场景【基于角色】：
+1、拥有admin身份进入add、update，select页面，
+2、拥有user身份只可以进入select页面。
+实现效果：
+环境：
+jdk 17
+Maven 3.8.6
+Mysql 8.x
+IDEA2021
+springboot 2.7.0
+3.1 数据库表以及相关数据 一共五张表：用户表、角色表、权限表、用户角色表、角色权限表。初始化SQL脚本在最后的传送门。
+当前数据库数据:【用户-&gt;身份-&gt;权限】
+张三，角色是admin 拥有权限有add
+李四，角色是user,拥有权限有update
+3.2、shiro环境准备 1、导入必要依赖、导入springboot-shiro的整合相关依赖依赖
+&lt;!-- boot-shiro整合依赖--&gt; &lt;dependency&gt; &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt; &lt;artifactId&gt;shiro-spring-boot-starter&lt;/artifactId&gt; &lt;version&gt;1.10.0&lt;/version&gt; &lt;/dependency&gt; &lt;!--shiro缓存--&gt; &lt;dependency&gt; &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt; &lt;artifactId&gt;shiro-ehcache&lt;/artifactId&gt; &lt;version&gt;1.7.1&lt;/version&gt; &lt;/dependency&gt; &lt;!" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f8bb037197044eea15e6c3f895fd5f71/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-12-04T22:47:06+08:00" />
+<meta property="article:modified_time" content="2022-12-04T22:47:06+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">springboot整合shiro实现简单权限控制</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p id="%E4%B8%80%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BA%86%E8%A7%A3%E6%9D%83%E9%99%90%E6%A1%86%E6%9E%B6-toc" style="margin-left:40px;"><a href="#%E4%B8%80%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BA%86%E8%A7%A3%E6%9D%83%E9%99%90%E6%A1%86%E6%9E%B6" rel="nofollow">一、为什么要了解权限框架</a></p> 
+<p id="%E4%BA%8C%E3%80%81shiro%E4%BB%8B%E7%BB%8D-toc" style="margin-left:40px;"><a href="#%E4%BA%8C%E3%80%81shiro%E4%BB%8B%E7%BB%8D" rel="nofollow">二、shiro介绍</a></p> 
+<p id="%E4%B8%89%E3%80%81%E4%BD%BF%E7%94%A8-toc" style="margin-left:40px;"><a href="#%E4%B8%89%E3%80%81%E4%BD%BF%E7%94%A8" rel="nofollow">三、环境准备</a></p> 
+<p id="3.2%20%E6%95%B0%E6%8D%AE%E5%BA%93%E8%A1%A8%E4%BB%A5%E5%8F%8A%E7%9B%B8%E5%85%B3%E6%95%B0%E6%8D%AE-toc" style="margin-left:80px;"><a href="#3.2%20%E6%95%B0%E6%8D%AE%E5%BA%93%E8%A1%A8%E4%BB%A5%E5%8F%8A%E7%9B%B8%E5%85%B3%E6%95%B0%E6%8D%AE" rel="nofollow">3.1 数据库表以及相关数据</a></p> 
+<p id="3.1%E3%80%81shiro%E7%8E%AF%E5%A2%83%E5%87%86%E5%A4%87-toc" style="margin-left:80px;"><a href="#3.1%E3%80%81shiro%E7%8E%AF%E5%A2%83%E5%87%86%E5%A4%87" rel="nofollow">3.2、shiro环境准备</a></p> 
+<p id="%E5%9B%9B%E3%80%81%E5%9F%BA%E4%BA%8E%E8%B7%AF%E5%BE%84%E6%8B%A6%E6%88%AA-toc" style="margin-left:40px;"><a href="#%E5%9B%9B%E3%80%81%E5%9F%BA%E4%BA%8E%E8%B7%AF%E5%BE%84%E6%8B%A6%E6%88%AA" rel="nofollow">四、自定义登录</a></p> 
+<p id="%E7%AC%AC%E4%B8%80%E6%AD%A5%EF%BC%9A%E9%9C%80%E8%A6%81%E5%85%88%E5%AE%8C%E6%88%90%E4%B8%80%E4%BA%9B%E7%AE%80%E5%8D%95%E7%9A%84%E6%8B%A6%E6%88%AA%EF%BC%9A-toc" style="margin-left:80px;"><a href="#%E7%AC%AC%E4%B8%80%E6%AD%A5%EF%BC%9A%E9%9C%80%E8%A6%81%E5%85%88%E5%AE%8C%E6%88%90%E4%B8%80%E4%BA%9B%E7%AE%80%E5%8D%95%E7%9A%84%E6%8B%A6%E6%88%AA%EF%BC%9A" rel="nofollow">第一步：需要先完成一些简单的配置：</a></p> 
+<p id="%E7%AC%AC%E4%BA%8C%E6%AD%A5%EF%BC%9A%20%E8%87%AA%E5%AE%9A%E4%B9%89%E7%99%BB%E5%BD%95%E6%96%B9%E6%B3%95-toc" style="margin-left:80px;"><a href="#%E7%AC%AC%E4%BA%8C%E6%AD%A5%EF%BC%9A%20%E8%87%AA%E5%AE%9A%E4%B9%89%E7%99%BB%E5%BD%95%E6%96%B9%E6%B3%95" rel="nofollow">第二步： 自定义登录方法</a></p> 
+<p id="%E7%AC%AC%E4%B8%89%E6%AD%A5%EF%BC%9A%E9%A1%B5%E9%9D%A2%E6%8C%89%E9%92%AE%E9%9A%90%E8%97%8F-toc" style="margin-left:80px;"><a href="#%E7%AC%AC%E4%B8%89%E6%AD%A5%EF%BC%9A%E9%A1%B5%E9%9D%A2%E6%8C%89%E9%92%AE%E9%9A%90%E8%97%8F" rel="nofollow">第三步：页面按钮隐藏</a></p> 
+<p id="%E4%BA%94%E3%80%81MD5%E5%8A%A0%E5%AF%86%E7%AE%97%E6%B3%95%E5%8A%A0%E5%AF%86%E8%A7%A3%E5%AF%86%E8%BF%87%E7%A8%8B-toc" style="margin-left:40px;"><a href="#%E4%BA%94%E3%80%81MD5%E5%8A%A0%E5%AF%86%E7%AE%97%E6%B3%95%E5%8A%A0%E5%AF%86%E8%A7%A3%E5%AF%86%E8%BF%87%E7%A8%8B" rel="nofollow">五、MD5加密算法加密解密过程</a></p> 
+<p id="%C2%A0%E4%BC%A0%E9%80%81%E9%97%A8%EF%BC%9A-toc" style="margin-left:80px;"><a href="#%C2%A0%E4%BC%A0%E9%80%81%E9%97%A8%EF%BC%9A" rel="nofollow"> 过程中的一个报错：</a></p> 
+<p id="%E4%BC%A0%E9%80%81%E9%97%A8%EF%BC%9A-toc" style="margin-left:80px;"><a href="#%E4%BC%A0%E9%80%81%E9%97%A8%EF%BC%9A" rel="nofollow">传送门：</a></p> 
+<hr id="hr-toc"> 
+<p></p> 
+<h3 id="%E4%B8%80%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BA%86%E8%A7%A3%E6%9D%83%E9%99%90%E6%A1%86%E6%9E%B6">一、为什么要了解权限框架</h3> 
+<p>        权限管理框架属于系统安全的范畴，权限管理实现对用户访问系统的控制，按照安全规则用户可以访问而且只能访问自己被授权的资源。</p> 
+<p>        目前常见的权限框架有Shiro和Spring Security，本篇文章记录springboot整合shiro，实现简单的权限控制。</p> 
+<h3 id="%E4%BA%8C%E3%80%81shiro%E4%BB%8B%E7%BB%8D">二、shiro介绍</h3> 
+<p>        Shiro全称是Apache Shiro，是一款灵活、强大的安全框架。方便简洁的处理身份认证、授权、加密等。</p> 
+<p>        shiro的三个组件：</p> 
+<p>        Subject 【主体】：指代当前用户【人、爬虫等】</p> 
+<p>        SecurityManager【安全管理器】：管理所有的Subject、具体安全操作的真正执行者。</p> 
+<p>        Reamls：本质是一个安全的DTO,用于进行权限、认证信息；</p> 
+<p>        通过Subject来进行认证和授权，而Subject又委托给SecurityManager； 需要给Shrio的SecurityManager注入Realm，从而让SecurityManager能得到合法的用户及其权限进行判断。</p> 
+<h3 id="%E4%B8%89%E3%80%81%E4%BD%BF%E7%94%A8">三、环境准备</h3> 
+<p>模拟场景【基于权限】：</p> 
+<p>                1、可以跳转到add页面，说明拥有add权限。</p> 
+<p>                2、可以跳转到update页面，说明拥有update权限。</p> 
+<p>                3、拥有add权限只展示add的链接、拥有update权限只展示update的链接；</p> 
+<p>模拟场景【基于角色】：</p> 
+<p>               1、拥有admin身份进入add、update，select页面，</p> 
+<p>               2、拥有user身份只可以进入select页面。</p> 
+<p>实现效果：</p> 
+<p><img alt="" height="480" src="https://images2.imgbox.com/da/6c/IYzMgh4i_o.png" width="725"></p> 
+<p></p> 
+<p>环境：</p> 
+<blockquote> 
+ <p>jdk 17</p> 
+ <p>Maven 3.8.6</p> 
+ <p>Mysql 8.x</p> 
+ <p>IDEA2021</p> 
+ <p>springboot 2.7.0</p> 
+</blockquote> 
+<p></p> 
+<h4 id="3.2%20%E6%95%B0%E6%8D%AE%E5%BA%93%E8%A1%A8%E4%BB%A5%E5%8F%8A%E7%9B%B8%E5%85%B3%E6%95%B0%E6%8D%AE">3.1 数据库表以及相关数据</h4> 
+<p>        一共五张表：用户表、角色表、权限表、用户角色表、角色权限表。初始化SQL脚本在最后的传送门。<img alt="" height="451" src="https://images2.imgbox.com/03/8b/8j0o0gAx_o.png" width="692"></p> 
+<p>当前数据库数据:【用户-&gt;身份-&gt;权限】</p> 
+<p>        张三，角色是admin 拥有权限有add</p> 
+<p>        李四，角色是user,拥有权限有update</p> 
+<h4 id="3.1%E3%80%81shiro%E7%8E%AF%E5%A2%83%E5%87%86%E5%A4%87">3.2、shiro环境准备</h4> 
+<p>1、导入必要依赖、导入springboot-shiro的整合相关依赖依赖</p> 
+<pre><code class="language-XML">        &lt;!--  boot-shiro整合依赖--&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+            &lt;artifactId&gt;shiro-spring-boot-starter&lt;/artifactId&gt;
+            &lt;version&gt;1.10.0&lt;/version&gt;
+        &lt;/dependency&gt;
+
+        &lt;!--shiro缓存--&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+            &lt;artifactId&gt;shiro-ehcache&lt;/artifactId&gt;
+            &lt;version&gt;1.7.1&lt;/version&gt;
+        &lt;/dependency&gt;
+
+        &lt;!--   mybatis--&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.mybatis.spring.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;mybatis-spring-boot-starter&lt;/artifactId&gt;
+            &lt;version&gt;2.1.4&lt;/version&gt;
+        &lt;/dependency&gt;
+    &lt;!--        mysql--&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;mysql&lt;/groupId&gt;
+            &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+    &lt;!-- hutool工具包--&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;cn.hutool&lt;/groupId&gt;
+            &lt;artifactId&gt;hutool-all&lt;/artifactId&gt;
+            &lt;version&gt;5.7.11&lt;/version&gt;
+        &lt;/dependency&gt;
+    &lt;!--thymeleaf模板引擎--&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-thymeleaf&lt;/artifactId&gt;
+            &lt;version&gt;2.6.4&lt;/version&gt;
+        &lt;/dependency&gt;
+    &lt;!--    thymeleaf-shiro整合依赖    --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;com.github.theborakompanioni&lt;/groupId&gt;
+            &lt;artifactId&gt;thymeleaf-extras-shiro&lt;/artifactId&gt;
+            &lt;version&gt;2.0.0&lt;/version&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-devtools&lt;/artifactId&gt;
+            &lt;scope&gt;runtime&lt;/scope&gt;
+            &lt;optional&gt;true&lt;/optional&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
+            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
+            &lt;optional&gt;true&lt;/optional&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
+            &lt;scope&gt;test&lt;/scope&gt;
+        &lt;/dependency&gt;</code></pre> 
+<p>2、配置文件的一一些必要参数</p> 
+<pre><code class="language-XML">server:
+  port: 8080
+spring:
+  thymeleaf:
+    mode: HTML
+    cache: false
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3308/boot_mybatis?serverTimezone=UTC&amp;useUnicode=true&amp;characterEncoding=utf-8&amp;AllowPublicKeyRetrieval=True
+    username: root
+    password: root
+
+debug: true
+
+mybatis:
+  mapperLocations: mapper/*.xml
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  #日志输出
+    map-underscore-to-camel-case: true  #开启驼峰映射
+</code></pre> 
+<p></p> 
+<p id="3.3%20%E9%A1%B5%E9%9D%A2%E8%B5%84%E6%BA%90">3、 页面资源</p> 
+<p>         准备页面资源：index.html、login.html。启动项目来到首页、不用登录登录情况下可以访问任意页。</p> 
+<p class="img-center"><img alt="" height="242" src="https://images2.imgbox.com/09/54/sQfB5hVM_o.png" width="371"></p> 
+<p></p> 
+<p> 项目目录结构：</p> 
+<p><img alt="" height="806" src="https://images2.imgbox.com/6c/40/W1bAeFqY_o.png" width="863"></p> 
+<p></p> 
+<h3 id="%E5%9B%9B%E3%80%81%E5%9F%BA%E4%BA%8E%E8%B7%AF%E5%BE%84%E6%8B%A6%E6%88%AA">四、自定义登录</h3> 
+<h4 id="%E7%AC%AC%E4%B8%80%E6%AD%A5%EF%BC%9A%E9%9C%80%E8%A6%81%E5%85%88%E5%AE%8C%E6%88%90%E4%B8%80%E4%BA%9B%E7%AE%80%E5%8D%95%E7%9A%84%E6%8B%A6%E6%88%AA%EF%BC%9A">第一步：需要先完成一些简单的配置：</h4> 
+<blockquote> 
+ <p>1、新建UserReam类，继承AuthorizingRealm ，并重写他的认证和授权方法、实现自定义授权认证。</p> 
+ <pre><code class="language-java">/**
+ * 自定义UserRealm，用户认证授权登录
+ * @author Alex
+ */
+public class UserRealm extends AuthorizingRealm {
+
+    @Autowired
+    private UserService userService;
+
+
+
+
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token ) throws AuthenticationException {
+        System.err.println("执行了+==========&gt;认证AuthenticationInfo");
+        // 用户名密码数据库里取
+        UsernamePasswordToken userToken =(UsernamePasswordToken) token;
+        IUser queryUser = new IUser();
+        queryUser.setUserName(userToken.getUsername());
+
+        List&lt;IUser&gt; userList = userService.selectUser(queryUser);
+
+
+        if(CollectionUtils.isEmpty(userList)){
+            return null;
+        }else {
+            IUser user = userList.get(0);
+            System.err.println("user:"+user);
+
+            // 密码认证 简单的equals比较
+            return new SimpleAuthenticationInfo(user.getUserName(), user.getPassWord(),"");
+        }
+
+    }
+
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        System.err.println("执行了+==========&gt;授权doGetAuthenticationInfo");
+        String username = (String)principals.getPrimaryPrincipal();
+        System.err.println("username"+username);
+        IUser queryUser = new IUser();
+        queryUser.setUserName(username);
+//        根据用户名获取身份、再由身份获取权限
+        List&lt;IRole&gt; roles = userService.selectRolesByUser(queryUser);
+        if(CollectionUtils.isEmpty(roles)){
+            return null;
+        }else {
+            SimpleAuthorizationInfo simpleAuthorizationInfo = new SimpleAuthorizationInfo();
+            roles.forEach(role -&gt; {
+                simpleAuthorizationInfo.addRole(role.getName());
+                //权限信息
+                List&lt;IPermission&gt; perms = userService.selectPermsByRole(role);
+                if (!CollectionUtils.isEmpty(perms)) {
+                    perms.forEach(permission -&gt; {
+                        simpleAuthorizationInfo.addStringPermission(permission.getPermission());
+                    });
+                }
+            });
+            return simpleAuthorizationInfo;
+        }
+    }
+}</code></pre> 
+ <p></p> 
+ <p>2、新建ShiroConfiguration配置类，</p> 
+ <p>        配置类里创建了工厂对象、安全对象、自定Ream等bean对象、  shiro内置了五个过滤器，可对资源、请求接口等进行拦截</p> 
+ <pre><code class="language-java">/**
+ * shiro配置类
+ * @author Alex
+ */
+@Configuration
+public class ShiroConfiguration {
+
+    /**
+     * 工厂对象3
+     */
+    @Bean
+    public ShiroFilterFactoryBean shiroFilterFactoryBean(DefaultWebSecurityManager defaultWebSecurityManager){
+        ShiroFilterFactoryBean bean = new ShiroFilterFactoryBean();
+        //给filter设置安全管理
+        bean.setSecurityManager(defaultWebSecurityManager);
+
+
+        /**
+         *
+         * 基于路径拦截资源
+         *   anon 无需认证
+         *   authc 必须认证
+         *   user 记住我功能
+         *   perms 拥有对某个资源
+         *   roles 用某个角色权限
+         */
+
+
+        Map&lt;String,String&gt; map = new HashMap&lt;&gt;();
+        map.put("/index","authc");
+        map.put("/toLogin","anon");
+        map.put("/","authc");
+        map.put("/toAdd","perms[add]");
+        map.put("/toUpdate","perms[update]");
+        map.put("/toSelect", "roles[admin]");
+        //更改默认的登录请求路径
+        bean.setLoginUrl("/toLogin");
+        //未授权请求路径
+        bean.setUnauthorizedUrl("/unauthorized");
+        bean.setFilterChainDefinitionMap(map);
+        return bean;
+    }
+    /**
+     * 安全对象2
+     */
+    @Bean(name = "securityManager")
+    public DefaultWebSecurityManager getDefaultWebSecurityManager(@Qualifier("userRealm") UserRealm userRealm){
+        DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager();
+        // 管理realm
+        securityManager.setRealm(userRealm);
+        return securityManager;
+
+    }
+
+
+
+    /**
+     * 创建realm对象，先创建，再接管1
+     */
+    @Bean(name = "userRealm")
+    public UserRealm userRealm(){
+        return new UserRealm();
+    }
+
+
+    /**
+     * 页面的Shiro标签生效
+     * @return
+     */
+    @Bean
+    public ShiroDialect shiroDialect(){
+        return new ShiroDialect();
+    }
+
+}
+</code></pre> 
+ <p></p> 
+</blockquote> 
+<p>        shiro登录过程</p> 
+<p>                传统登录功能：</p> 
+<p><img alt="" height="416" src="https://images2.imgbox.com/14/c9/eBGp8I2W_o.png" width="1146"></p> 
+<p>shiro拿到用户信息后。不是直接调用业务逻辑层的方法。现由SecurityUtils拿到登录对象、由对象取执行login方法，由于UserRealm 继承了AuthorizingRealm、所以登录操作被拦截、完成认证操作。login方法会抛出需要认证失败的异常。根据异常信息可以给前端对应的提示。</p> 
+<p class="img-center"><img alt="" height="311" src="https://images2.imgbox.com/a9/c6/JNQKd8nP_o.png" width="349"></p> 
+<p></p> 
+<p><img alt="" height="416" src="https://images2.imgbox.com/6c/88/ztiUvLwi_o.png" width="1137"></p> 
+<h4 id="%E7%AC%AC%E4%BA%8C%E6%AD%A5%EF%BC%9A%20%E8%87%AA%E5%AE%9A%E4%B9%89%E7%99%BB%E5%BD%95%E6%96%B9%E6%B3%95">第二步： 自定义登录方法</h4> 
+<blockquote> 
+ <p></p> 
+ <pre><code class="language-java"> @PostMapping("/login")
+    public String login(String username, String password, Model model){
+        //获取用户主体对象
+        Subject subject = SecurityUtils.getSubject();
+        // 将输入的用户名+密码封装成一个token
+        UsernamePasswordToken token = new UsernamePasswordToken(username, password);
+        try {
+            subject.login(token);
+            model.addAttribute("userName",username);
+
+
+            IUser user = new IUser();
+            user.setUserName(username);
+            List&lt;IRole&gt; roles = userService.selectRolesByUser(user);
+            List&lt;IPermission&gt; perms = userService.selectPermsByRole(roles.get(0));
+            model.addAttribute("role",roles.get(0).getName());
+            model.addAttribute("perms",perms);
+
+            return "index";
+        }catch (UnknownAccountException e){
+            e.printStackTrace();
+            model.addAttribute("msg","用户名错误");
+        }catch (IncorrectCredentialsException e){
+            e.printStackTrace();
+            model.addAttribute("msg","密码错误");
+        }
+        return "login";
+    }</code></pre> 
+ <p></p> 
+</blockquote> 
+<blockquote> 
+ <p></p> 
+ <pre><code class="language-java">/**
+ * 自定义UserRealm，用户认证授权登录
+ * @author Alex
+ */
+public class UserRealm extends AuthorizingRealm {
+
+    @Autowired
+    private UserService userService;
+
+
+
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token ) throws AuthenticationException {
+        System.err.println("执行了+==========&gt;认证AuthenticationInfo");
+        SimpleAuthenticationInfo info =null;
+        String username = token.getPrincipal().toString();
+        IUser queryUser = new IUser();
+        queryUser.setUserName(username);
+        List&lt;IUser&gt; dbUserList = userService.selectUser(queryUser);
+        if(CollectionUtils.isNotEmpty(dbUserList)){
+            IUser dbUser = dbUserList.get(0);
+                // 将注册时保存的随机盐构造ByteSource对象
+             info = new SimpleAuthenticationInfo(dbUser.getUserName(),dbUser.getPassWord(),this.getName());
+//             info = new SimpleAuthenticationInfo(dbUser.getUserName(),dbUser.getPassWord(),new SimpleByteSource(dbUser.getSalt()),this.getName());
+        }
+        return info;
+    }
+
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        System.err.println("执行了+==========&gt;授权doGetAuthenticationInfo");
+        String username = (String)principals.getPrimaryPrincipal();
+        System.err.println("username"+username);
+        IUser queryUser = new IUser();
+        queryUser.setUserName(username);
+//        根据用户名获取身份、再由身份获取权限
+        List&lt;IRole&gt; roles = userService.selectRolesByUser(queryUser);
+        if(CollectionUtils.isEmpty(roles)){
+            return null;
+        }else {
+            SimpleAuthorizationInfo simpleAuthorizationInfo = new SimpleAuthorizationInfo();
+            roles.forEach(role -&gt; {
+                simpleAuthorizationInfo.addRole(role.getName());
+                //权限信息
+                List&lt;IPermission&gt; perms = userService.selectPermsByRole(role);
+                if (!CollectionUtils.isEmpty(perms)) {
+                    perms.forEach(permission -&gt; {
+                        simpleAuthorizationInfo.addStringPermission(permission.getPermission());
+                    });
+                }
+            });
+            return simpleAuthorizationInfo;
+        }
+    }
+}
+</code></pre> 
+ <p></p> 
+</blockquote> 
+<p></p> 
+<p>完成了简单资源授权，为了前端展示，把对应的数据存到model</p> 
+<blockquote> 
+ <pre><code class="language-java">            IUser user = new IUser();
+            user.setUserName(username);
+            List&lt;IRole&gt; roles = userService.selectRolesByUser(user);
+            List&lt;IPermission&gt; perms = userService.selectPermsByRole(roles.get(0));
+            model.addAttribute("role",roles.get(0).getName());
+            model.addAttribute("perms",perms);</code></pre> 
+</blockquote> 
+<p> 效果如下：</p> 
+<p>用户访问首页会被拦截、并跳转至登录页。</p> 
+<p><img alt="" height="159" src="https://images2.imgbox.com/a7/93/L5I0ZiuC_o.png" width="395"></p> 
+<p> <img alt="" height="495" src="https://images2.imgbox.com/c3/f7/S2oC6F2F_o.png" width="823"></p> 
+<p> 以李四的账户登录情况也类似；</p> 
+<p>使用注解检查用户是否有可访问此接口</p> 
+<p id="requiresroles">        @RequiresRoles</p> 
+<blockquote> 
+ <p><code>@RequiresRoles</code>注解用于配置接口要求用户拥有某（些）角色才可访问，它拥有两个参数</p> 
+ <table><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>value</td><td>String[]</td><td>角色列表</td></tr><tr><td>logical</td><td>Logical</td><td>角色之间的判断关系，默认为Logical.AND</td></tr></tbody></table> 
+</blockquote> 
+<p id="requirespermissions">        @RequiresPermissions</p> 
+<blockquote> 
+ <p><code>@RequiresPermissions</code>注解用于配置接口要求用户拥有某（些）权限才可访问，它拥有两个参数</p> 
+ <table><thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead><tbody><tr><td>value</td><td>String[]</td><td>权限列表</td></tr><tr><td>logical</td><td>Logical</td><td>权限之间的判断关系，默认为Logical.AND</td></tr></tbody></table> 
+</blockquote> 
+<p>可单独使用、也可组合使用</p> 
+<p>比如：只有拥有add权限、拥有admin身份的主体才可以访问toAdd方法；</p> 
+<pre><code class="language-java">    @GetMapping("/toAdd")
+    @RequiresPermissions("add")
+    @RequiresRoles("admin")
+    public String toAdd(){
+        return "user/add";
+    }
+</code></pre> 
+<h4 id="%E7%AC%AC%E4%B8%89%E6%AD%A5%EF%BC%9A%E9%A1%B5%E9%9D%A2%E6%8C%89%E9%92%AE%E9%9A%90%E8%97%8F">第三步：页面按钮隐藏</h4> 
+<p>shiroConfig中创建bean对象</p> 
+<pre><code class="language-java">    /**
+     * 页面的Shiro标签生效
+     * @return
+     */
+    @Bean
+    public ShiroDialect shiroDialect(){
+        return new ShiroDialect();
+    }</code></pre> 
+<p>页面引入头文件 </p> 
+<blockquote> 
+ <p>xmlns:shiro="http://www.pollix.at/thymeleaf/shiro"</p> 
+</blockquote> 
+<p>使用</p> 
+<blockquote> 
+ <pre>shiro:hasRole</pre> 
+ <pre>shiro:hasPermission</pre> 
+</blockquote> 
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:shiro="http://www.pollix.at/thymeleaf/shiro"&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;title&gt;首页&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;hello,shiro,我是&lt;span th:text="${userName}"&gt;&lt;/span&gt;&lt;/h1&gt;
+&lt;h1&gt;权限有：&lt;/h1&gt;
+&lt;div th:each="perm:${perms}"&gt;
+    &lt;div th:text="${perm.permission}"&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;hr&gt;
+&lt;h1&gt;身份是：&lt;/h1&gt;
+&lt;h1 th:text="${role}"&gt;&lt;/h1&gt;
+&lt;hr&gt;
+
+&lt;h1&gt;基于角色展示&lt;/h1&gt;
+&lt;div shiro:hasRole="admin" &gt;
+    &lt;a th:href="@{/toAdd}"&gt;新增&lt;/a&gt;&lt;br&gt;
+    &lt;a th:href="@{/toUpdate}"&gt;修改&lt;/a&gt;&lt;br&gt;
+    &lt;a th:href="@{/toSelect}"&gt;查询&lt;/a&gt;&lt;br&gt;
+&lt;/div&gt;
+
+&lt;div shiro:hasRole="user" &gt;
+    &lt;a th:href="@{/toSelect}"&gt;&lt;h1&gt;查询&lt;/h1&gt;&lt;/a&gt;&lt;br&gt;
+&lt;/div&gt;
+
+
+&lt;h1&gt;基于权限展示：&lt;/h1&gt;
+
+&lt;div shiro:hasPermission="add"&gt;
+    &lt;a th:href="@{/toAdd}"&gt;新增&lt;/a&gt;&lt;br&gt;
+&lt;/div&gt;
+
+
+&lt;div shiro:hasPermission="update"&gt;
+    &lt;a th:href="@{/toUpdate}"&gt;修改&lt;/a&gt;&lt;br&gt;
+&lt;/div&gt;
+
+&lt;hr&gt;
+&lt;a th:href="@{/toLogin}"&gt;登录&lt;/a&gt;&lt;br&gt;
+&lt;a th:href="@{/logout}"&gt;退出&lt;/a&gt;&lt;br&gt;
+
+
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre> 
+<p>效果；</p> 
+<p> <img alt="" height="480" src="https://images2.imgbox.com/18/67/1onawdNt_o.png" width="725"></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p> 以上本篇主体内容了</p> 
+<p>补充：为了用户信息安全、一般情况下都不会将 密码明文存入数据库，二是通过加密算法将明文加密后的字符串存入数据库、常见的加密算法有：</p> 
+<p>        单向散列加密算法：MD5；</p> 
+<p>        对称加密：</p> 
+<p>        非对称加密：</p> 
+<h3 id="%E4%BA%94%E3%80%81MD5%E5%8A%A0%E5%AF%86%E7%AE%97%E6%B3%95%E5%8A%A0%E5%AF%86%E8%A7%A3%E5%AF%86%E8%BF%87%E7%A8%8B">五、MD5加密算法加密解密过程</h3> 
+<p>下面是对MD5+随机盐加密及解密过程的叙述。</p> 
+<p><img alt="" height="392" src="https://images2.imgbox.com/94/c4/CliGSzjT_o.png" width="1155"></p> 
+<p></p> 
+<p>MD5加密算法是hash算法的一种，原理是通过字符串通过MD5加密后得到一个消息摘要。</p> 
+<p>        通过MD5算法加密后的字符串本身是不可逆的，但是对同一个字符串加密后得到的密文是一致的、所以许多简单的密码可以用枚举实现解密。故加密时将明文+随机盐达到新的字符串尽量唯一从而增加安全性；</p> 
+<p>这里使用了一了开源hutools工具包生成随机数。hutools可以生成二维码、验证码等等，当然也可以自己实现。</p> 
+<pre><code class="language-java">    @Test
+    public void testSlat(){
+
+        //生成6位随机盐
+        String salt = RandomUtil.randomString(6);
+        System.err.println("salt："+salt);
+        //加密密码：原始密码+盐+Hash散列
+        String MdsPwd = new Md5Hash("123", salt, 1024).toHex();
+        //设置加密后的密码
+        System.err.println(MdsPwd);
+
+    }</code></pre> 
+<p> 效果：<img alt="" class="left" height="453" src="https://images2.imgbox.com/22/5a/ApIbRTjV_o.png" width="620"></p> 
+<p></p> 
+<h3>执行认证方法的时候把查到的随机盐带上：</h3> 
+<p>将注册时保存的随机盐一并带上</p> 
+<blockquote> 
+ <pre><code class="language-java">    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token ) throws AuthenticationException {
+        System.err.println("执行了+==========&gt;认证AuthenticationInfo");
+        SimpleAuthenticationInfo info =null;
+        String username = token.getPrincipal().toString();
+        IUser queryUser = new IUser();
+        queryUser.setUserName(username);
+        List&lt;IUser&gt; dbUserList = userService.selectUser(queryUser);
+        if(CollectionUtils.isNotEmpty(dbUserList)){
+            IUser dbUser = dbUserList.get(0);
+                // 将注册时保存的随机盐构造ByteSource对象
+             info = new SimpleAuthenticationInfo(dbUser.getUserName(),dbUser.getPassWord(),new SimpleByteSource(dbUser.getSalt()),this.getName());
+        }
+        return info;
+    }</code></pre> 
+ <p></p> 
+</blockquote> 
+<p></p> 
+<h4 id="%C2%A0%E4%BC%A0%E9%80%81%E9%97%A8%EF%BC%9A"> 过程中的一个报错：</h4> 
+<blockquote> 
+ <p>     </p> 
+ <pre><code class="language-java">Submitted credentials for token [org.apache.shiro.authc.UsernamePasswordToken - 张三, rememberMe=false] did not match the expected credentials.
+	at org.apache.shiro.realm.AuthenticatingRealm.assertCredentialsMatch(AuthenticatingRealm.java:603)</code></pre> 
+ <p>整体大意就是密码错误。</p> 
+ <p></p> 
+ <p>原因：是因为修改了shiro的认证策略后、获取UserRealm对象的方式还是以前的  </p> 
+ <p>  new UserRealm()，这种方式比较密码是将输入的密码和数据库中密码进行简单的equals比较。而不是盐加+哈希散列的认证方式。所以只需要在获取userRealm对象的时候添加一下加密设置就好了。</p> 
+ <p>1、配置类中注入CredentialsMatcher 对象。</p> 
+ <pre><code class="language-java">    /**
+     * 进行加密的设置
+     */
+    @Bean
+    public CredentialsMatcher credentialsMatcher(){
+        HashedCredentialsMatcher matcher = new HashedCredentialsMatcher();
+        // 指定加密算法
+        matcher.setHashAlgorithmName("md5");
+        // 迭代次数
+        matcher.setHashIterations(1024);
+        return matcher;
+    }</code></pre> 
+ <p>2、</p> 
+ <pre><code class="language-java">    /**
+     * 创建realm对象，先创建，再接管1
+     */
+    @Bean(name = "userRealm")
+    public UserRealm userRealm(){
+        UserRealm userRealm = new UserRealm();
+        // 加密设置
+        userRealm.setCredentialsMatcher(credentialsMatcher());;
+        return userRealm;
+    }</code></pre> 
+ <p>3、测试方法：</p> 
+ <pre><code class="language-java">    @Autowired
+    ShiroConfiguration configuration;
+    
+    @Test
+    public void test(){
+        // 创建安全管理器
+        DefaultSecurityManager defaultSecurityManager = new DefaultSecurityManager();
+        defaultSecurityManager.setRealm(configuration.userRealm());
+        // 注入安全工具类
+        SecurityUtils.setSecurityManager(defaultSecurityManager);
+        // 拿到登录主体
+        Subject subject = SecurityUtils.getSubject();
+
+        UsernamePasswordToken token = new UsernamePasswordToken("张三", "123");
+
+        try{
+            subject.login(token);
+            System.err.println("登录成功");
+        }  catch (Exception e){
+            System.err.println("登录失败");
+            e.printStackTrace();
+
+        }
+
+
+    }</code></pre> 
+ <p></p> 
+</blockquote> 
+<p></p> 
+<p></p> 
+<h4 id="%E4%BC%A0%E9%80%81%E9%97%A8%EF%BC%9A">传送门：</h4> 
+<p><a href="https://blog.csdn.net/chenyunjiangNN/article/details/128072764" title="初始化SQL脚本">初始化SQL脚本</a></p> 
+<p><a href="https://blog.csdn.net/chenyunjiangNN/article/details/127135123" title="使用IDEA新建一个springboot项目">使用IDEA新建一个springboot项目</a></p> 
+<p><a href="https://blog.csdn.net/chenyunjiangNN/article/details/127141633" title="springboot整合thymeleaf">springboot整合thymeleaf</a></p> 
+<p><a href="https://blog.csdn.net/chenyunjiangNN/article/details/127138662" title="springboot整合mybatis">springboot整合mybatis</a></p> 
+<p><a href="https://blog.csdn.net/chenyunjiangNN/article/details/127249244?csdn_share_tail=%7B%22type%22%3A%22blog%22%2C%22rType%22%3A%22article%22%2C%22rId%22%3A%22127249244%22%2C%22source%22%3A%22chenyunjiangNN%22%7D" title="springboot整合SpringSecurity并实现简单权限控制">springboot整合SpringSecurity并实现简单权限控制</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/6fb41e7401010e30d1b9ac7ed26782c2/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">C&#43;&#43;-vector：vector最值【*max_element(v.begin(), v.end())】【下标：max_element(v.begin(),v.end()) - v.begin()】</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/63e691a52454d4ae49b629109c8d8d20/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Linux 下 chmod 777 修改权限</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

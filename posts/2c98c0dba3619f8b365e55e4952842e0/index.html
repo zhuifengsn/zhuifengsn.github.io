@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【Spring Cloud Feign】超时重试总结 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【Spring Cloud Feign】超时重试总结" />
+<meta property="og:description" content="最近在生产环境中出现配置了ribbon的重试参数，但是没有生效，表现就是下游服务上线的过程中，上游服务总是拿到超时降级的错误码，配置如下：
+hystrix: threadpool: group: coreSize: 20 maximumSize: 100 allowMaximumSizeToDivergeFromCoreSize: true maxQueueSize: 200 queueSizeRejectionThreshold: 200 command: key: execution: timeout: enabled: true isolation: strategy: THREAD thread: timeoutInMilliseconds: 500 interruptOnTimeout: true interruptOnFutureCancel: false semaphore: maxConcurrentRequests: 5000 feign: client: config: default: connectTimeout: 500 readTimeout: 3000 hystrix: enabled: true ribbon: eager-load: enable: true MaxAutoRetries: 0 MaxAutoRetriesNextServer: 2 retryableStatusCodes: 500,502,504 OkToRetryOnAllOperations: true 先说明一下ribbon的配置：
+MaxAutoRetries：同一台服务器上的最大重试次数（不包括第一次尝试），默认值0；
+MaxAutoRetriesNextServer：要重试的下一个服务器的最大数量（不包括第一个服务器），默认值1；
+retryableStatusCodes：可以根据接口返回的状态码判断是否重试其他服务
+OkToRetryOnAllOperations：每个操作都开启重试机制，默认false（只有GET请求才会重试，true：GET、POST、PUT等所有请求都会重试）
+经过一番排查和搜索，查到如下结论：
+1.feign的读超时时间readTimeout必须要小于hystrix的超时时间timeoutInMilliseconds，才会重试。上面的配置前者是3000，后者是500，一旦触发超时降级，就不会重试，hystrix的超时是最高优先级，如果在重试期间，时间超过了hystrix的超时时间，会立即熔断。
+2.feign底层是ribbon，但feign优先级高于ribbon。
+将feign的readTimeout设置为500，hystrix的timeoutInMilliseconds设置成1000即可。
+Author：忆之独秀
+Email：leaguenew@qq.com
+转载注明出处：https://blog.csdn.net/lavorange/article/details/105895764" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2c98c0dba3619f8b365e55e4952842e0/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-05-02T22:03:36+08:00" />
+<meta property="article:modified_time" content="2020-05-02T22:03:36+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【Spring Cloud Feign】超时重试总结</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>       最近在生产环境中出现配置了ribbon的重试参数，但是没有生效，表现就是下游服务上线的过程中，上游服务总是拿到超时降级的错误码，配置如下：</p> 
+<pre><code>hystrix:
+  threadpool:
+    group:
+      coreSize: 20
+      maximumSize: 100
+      allowMaximumSizeToDivergeFromCoreSize: true
+      maxQueueSize: 200
+      queueSizeRejectionThreshold: 200
+  command:
+    key:
+      execution:
+        timeout:
+          enabled: true
+        isolation:
+          strategy: THREAD
+          thread:
+            timeoutInMilliseconds: 500
+            interruptOnTimeout: true
+            interruptOnFutureCancel: false
+          semaphore:
+            maxConcurrentRequests: 5000
+
+feign:
+  client:
+    config:
+      default:
+          connectTimeout: 500
+          readTimeout: 3000
+  hystrix:
+    enabled: true
+
+ribbon:
+  eager-load:
+      enable: true
+  MaxAutoRetries: 0
+  MaxAutoRetriesNextServer: 2
+  retryableStatusCodes: 500,502,504
+  OkToRetryOnAllOperations: true</code></pre> 
+<p><strong>先说明一下ribbon的配置：</strong></p> 
+<p><strong>MaxAutoRetries：</strong>同一台服务器上的最大重试次数（不包括第一次尝试），默认值0；</p> 
+<p><strong>MaxAutoRetriesNextServer：</strong>要重试的下一个服务器的最大数量（不包括第一个服务器），默认值1；</p> 
+<p><strong>retryableStatusCodes：</strong>可以根据接口返回的状态码判断是否重试其他服务</p> 
+<p>OkToRetryOnAllOperations：每个操作都开启重试机制，默认false（只有GET请求才会重试，true：GET、POST、PUT等所有请求都会重试）</p> 
+<p><strong>经过一番排查和搜索，查到如下结论：</strong></p> 
+<p>1.feign的读超时时间readTimeout必须要小于hystrix的超时时间timeoutInMilliseconds，才会重试。上面的配置前者是3000，后者是500，一旦触发超时降级，就不会重试，hystrix的超时是最高优先级，如果在重试期间，时间超过了hystrix的超时时间，会立即熔断。</p> 
+<p>2.feign底层是ribbon，但feign优先级高于ribbon。</p> 
+<p>将feign的readTimeout设置为500，hystrix的timeoutInMilliseconds设置成1000即可。</p> 
+<p> </p> 
+<p>Author：忆之独秀</p> 
+<p>Email：leaguenew@qq.com</p> 
+<p>转载注明出处：<a href="https://blog.csdn.net/lavorange/article/details/105895764">https://blog.csdn.net/lavorange/article/details/105895764</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/ec47e2e3755c4715f3be01fae1fb9b93/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Java JDK安装与配置</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/79f3bcbe29b7c9906899367558cdacbf/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">openCV图像处理常用算法总结</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

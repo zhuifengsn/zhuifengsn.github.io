@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>1.2MySQL-InnoDB-READ COMMITTED（读已提交） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="1.2MySQL-InnoDB-READ COMMITTED（读已提交）" />
+<meta property="og:description" content="1.设置为读已提交
+SET GLOBAL TRANSACTION ISOLATION LEVEL READ COMMITTED;
+2.此时TA执行插入，并查询，可以查询到结果
+3.TB不能查到结果
+证明已经不能读到未提交的数据
+但是仍然存在不可重复读问题 （同一事务内两次读的数据不一致）
+4.为了演示效果，把用户数据插入数据库并提交，此时表中有一条id为1的 name为aaa的记录
+TB开启一个事务 并进行查询
+5.此时TA进行数据修改，并提交
+6.B再次查询可以看到A事务已经提交的结果
+根据测试可以发现，先开启的事务TA在事务TB提交之前进行的查询和TB提交之后进行的第二次查询，两次查询结果不一致，出现不可重复读情况。
+如果要避免不可重复读，至少要把事务隔离级别设为：1.3 MySQL-InnoDB-REPEATABLE READ（可重复读）
+InnoDB采用了MVCC(Multiversion Concurrency Control)多版本并发控制，避免不可重复读。MVCC只在 READ COMMITTED 和 REPEATABLE READ 2个隔离级别下工作。MVCC会建立多个ReadView，RC是语句级多版本(事务的多条只读语句，创建不同的ReadView，代价更高)，RR是事务级多版本(一个事务有一个ReadView)。由于RC中未提交的事务，不允许其他事务看到，但是本身事务需要看到，所以执行多条语句时，都需要建立新的ReadView，以支持本事务后面的查询。
+注：
+MVCC本意应该是下面的样子：
+每行数据都存在一个版本，每次数据更新时都更新该版本
+修改时Copy出当前版本随意修改（类似于Java并发包中的CopyOnWrie操作），各个事务之间无干扰
+保存时比较版本号，如果成功（commit），则覆盖原记录；失败则放弃copy（rollback）
+但是InnoDB的实现有一些差别：
+事务以排他锁的形式修改原始数据
+把修改前的数据存放于Undo log，通过回滚指针与主数据关联
+修改成功（commit）啥都不做，失败则恢复Undo log中的数据（rollback）" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/7ee0930a94f88fcfdd8d89ae44d8f1cd/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-01-05T18:00:56+08:00" />
+<meta property="article:modified_time" content="2018-01-05T18:00:56+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">1.2MySQL-InnoDB-READ COMMITTED（读已提交）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>1.设置为读已提交</p> 
+<p>SET GLOBAL TRANSACTION ISOLATION LEVEL READ COMMITTED;</p> 
+<p>2.此时TA执行插入，并查询，可以查询到结果</p> 
+<p><img src="https://images2.imgbox.com/4b/03/LJJgEWS3_o.png" alt="" title=""></p> 
+<p>3.TB不能查到结果</p> 
+<p><img src="https://images2.imgbox.com/89/ca/xqtPHgRi_o.png" alt="" title=""></p> 
+<p>证明已经不能读到未提交的数据</p> 
+<p>但是仍然存在不可重复读问题 （同一事务内两次读的数据不一致）</p> 
+<p>4.为了演示效果，把用户数据插入数据库并提交，此时表中有一条id为1的 name为aaa的记录</p> 
+<p>TB开启一个事务 并进行查询</p> 
+<p><img src="https://images2.imgbox.com/9c/b5/Ukc0KpAn_o.png" alt="" title=""></p> 
+<p>5.此时TA进行数据修改，并提交</p> 
+<p><img src="https://images2.imgbox.com/6f/4e/yXEqxoXc_o.png" alt="" title=""></p> 
+<p>6.B再次查询可以看到A事务已经提交的结果</p> 
+<p><img src="https://images2.imgbox.com/d6/bb/jsoYzGZY_o.png" alt="" title=""></p> 
+<p>根据测试可以发现，先开启的事务TA在事务TB提交之前进行的查询和TB提交之后进行的第二次查询，两次查询结果不一致，出现不可重复读情况。</p> 
+<p>如果要避免不可重复读，至少要把事务隔离级别设为：1.3 MySQL-InnoDB-REPEATABLE READ（可重复读）</p> 
+<p>InnoDB采用了MVCC(Multiversion Concurrency Control)多版本并发控制，避免不可重复读。MVCC只在 READ COMMITTED 和 REPEATABLE READ 2个隔离级别下工作。MVCC会建立多个ReadView，RC是语句级多版本(事务的多条只读语句，创建不同的ReadView，代价更高)，RR是事务级多版本(一个事务有一个ReadView)。由于RC中未提交的事务，不允许其他事务看到，但是本身事务需要看到，所以执行多条语句时，都需要建立新的ReadView，以支持本事务后面的查询。</p> 
+<p>注：</p> 
+<p>MVCC本意应该是下面的样子：</p> 
+<p>每行数据都存在一个版本，每次数据更新时都更新该版本</p> 
+<p>修改时Copy出当前版本随意修改（类似于Java并发包中的CopyOnWrie操作），各个事务之间无干扰</p> 
+<p>保存时比较版本号，如果成功（commit），则覆盖原记录；失败则放弃copy（rollback）</p> 
+<p>但是InnoDB的实现有一些差别：</p> 
+<p>事务以排他锁的形式修改原始数据</p> 
+<p>把修改前的数据存放于Undo log，通过回滚指针与主数据关联</p> 
+<p>修改成功（commit）啥都不做，失败则恢复Undo log中的数据（rollback）</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/c70abefd7266c4dd677e88f618b919ba/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">基于状态机的按键检测</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/776385cf2bfbe9b5d9b02caad908516c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Android自定义半圆进度条  半圆渐变色进度条带指示  半圆开口大小可自由修改</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

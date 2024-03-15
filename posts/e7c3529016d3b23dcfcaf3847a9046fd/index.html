@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>网络安全传输系统(3)—OpenSSL加密传输 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="网络安全传输系统(3)—OpenSSL加密传输" />
+<meta property="og:description" content="1.基本介绍
+1.1 未加密传输的安全弊端
+如果在网络传输中没有加密，就是以明文传输。传输的数据可以被抓包软件直接截获，并能读取里面的数据。 1.2 加密基本原理
+对称加密：对称加密指的就是加密和解密使用同一个秘钥，所以叫做对称加密。对称加密只有一个秘钥，作为私钥。常见的对称加密算法：DES，AES，3DES等等。非对称加密：加密和解密使用不同的秘钥，一把作为公开的公钥，另一把作为私钥。公钥加密的信息，只有私钥才能解密。私钥加密的信息，只有公钥才能解密。 常见的非对称加密算法：RSA，ECC公钥私钥：公钥和私密要配对。公钥加密的数据用私钥来解密，私钥加密的数据用公钥来解密。 1.3 数字证书
+当公钥被替换成别的公钥之后，替换前对应的私钥就不能解密了，只能用替换后对应的私钥解密，但是并不能判断公钥是否被替换，所以引入数据证书的概念。数字证书由权威机构发布，所以无法伪造。并且数字证书里面包含公钥和对应所有者信息，所以就可以判断公钥是否属于自己。 1.4 SSL协议
+网络传输中有很多加密技术，有DES、AES、RSA、SSL等，我们这里采用OpenSSL的开源加密算法。 SSL协议位于TCP/IP协议与各种应用层协议之间，利用数据加密技术，可以确保数据在网络上传输过程中不会被截取及窃听。SSL协议可分为两层： SSL记录协议(SSL Record Protocol)：它建立在可靠的传输协议(TCP)之上，为高层协议提供数据封装、压缩、加密等基本功能的支持。SSL握手协议(SSL Handshake Protocol)：它建立在SSL记录协议之上，用于实际的数据传输开始前，通讯双方进行身份认证、协商加密算法、交换加密密钥等。OpenSSL：OpenSSL 是一个强大的安全套接字层密码库，囊括主要的密码算法、常用的密钥和证书封装管理功能及SSL协议，并提供丰富的应用程序供测试或其它目的使用。 2.OpenSSL移植
+移植OpenSSL库到开发板 2.1 解压
+tar zxvf openssl-1.0.0s.tar.gz 2.2 配置
+mkdir _install./config no-asm shared –prefix=${PWD}/_install （no-asm表示在编译过程中不要使用汇编代码加快编译过程） 2.3 修改Makefile
+CC = arm-linux-gccAR = arm-linux-arRANLIB = arm-linux-ranlib 2.4 编译
+make 2.5 安装
+make install 生成的库文件在_install/lib中，拷贝到开发根目录/lib中。
+3.OpenSSL编程
+在TCP传输文件框架上，增加OpenSSL加密系统，需要遵循如下的编程步骤客户端模型：1.初始化；2.创建SSL；3.数据收发；4.关闭 服务器模型：1.初始化；2.载入数字证书和私钥；3.创建SSL；4.数据收发；5.关闭 创建私钥：# openssl genrsa -out privkey.pem 2048，genrsa表示创建私钥，privkey.pem输出私钥文件名，2048表示位数创建公钥：# openssl req -new -x509 -key privkey.pem -out cacert." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e7c3529016d3b23dcfcaf3847a9046fd/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-09-02T10:04:07+08:00" />
+<meta property="article:modified_time" content="2019-09-02T10:04:07+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">网络安全传输系统(3)—OpenSSL加密传输</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>1.基本介绍</strong></p> 
+<p><strong>1.1 未加密传输的安全弊端</strong></p> 
+<ul><li>如果在网络传输中没有加密，就是以明文传输。传输的数据可以被抓包软件直接截获，并能读取里面的数据。</li></ul> 
+<p><strong>1.2 加密基本原理</strong></p> 
+<ul><li>对称加密：对称加密指的就是加密和解密使用同一个秘钥，所以叫做对称加密。对称加密只有一个秘钥，作为私钥。常见的对称加密算法：DES，AES，3DES等等。</li><li>非对称加密：加密和解密使用不同的秘钥，一把作为公开的公钥，另一把作为私钥。公钥加密的信息，只有私钥才能解密。私钥加密的信息，只有公钥才能解密。 常见的非对称加密算法：RSA，ECC</li><li>公钥私钥：公钥和私密要配对。公钥加密的数据用私钥来解密，私钥加密的数据用公钥来解密。</li></ul> 
+<p><strong>1.3 数字证书</strong></p> 
+<ul><li>当公钥被替换成别的公钥之后，替换前对应的私钥就不能解密了，只能用替换后对应的私钥解密，但是并不能判断公钥是否被替换，所以引入数据证书的概念。<span style="color:#f33b45;"><strong>数字证书由权威机构发布，所以无法伪造</strong></span>。<span style="color:#f33b45;"><strong>并且数字证书里面包含公钥和对应所有者信息，所以就可以判断公钥是否属于自己。</strong></span></li></ul> 
+<p><strong>1.4 SSL协议</strong></p> 
+<ul><li>网络传输中有很多加密技术，有DES、AES、RSA、SSL等，我们这里采用OpenSSL的开源加密算法。</li></ul> 
+<p style="text-align:center;"><img alt="" class="has" height="153" src="https://images2.imgbox.com/28/45/mUMTI6GW_o.png" width="640"></p> 
+<ul><li>SSL协议位于TCP/IP协议与各种应用层协议之间，利用数据加密技术，可以确保数据在网络上传输过程中不会被截取及窃听。</li><li>SSL协议可分为两层： 
+  <ul><li><span style="color:#f33b45;"><strong>SSL记录协议(SSL Record Protocol)：</strong></span>它建立在可靠的传输协议(TCP)之上，为高层协议提供数据封装、压缩、加密等基本功能的支持。</li><li><strong><span style="color:#f33b45;">SSL握手协议(SSL Handshake Protocol)：</span></strong>它建立在SSL记录协议之上，用于实际的数据传输开始前，通讯双方进行身份认证、协商加密算法、交换加密密钥等。</li></ul></li><li>OpenSSL：OpenSSL 是一个强大的安全套接字层密码库，囊括主要的密码算法、常用的密钥和证书封装管理功能及SSL协议，并提供丰富的应用程序供测试或其它目的使用。</li></ul> 
+<p><strong>2.OpenSSL移植</strong></p> 
+<ul><li>移植OpenSSL库到开发板</li></ul> 
+<p><strong>2.1 解压</strong></p> 
+<ul><li>tar zxvf openssl-1.0.0s.tar.gz</li></ul> 
+<p><strong>2.2 配置</strong></p> 
+<ul><li>mkdir _install</li><li>./config no-asm shared –prefix=${PWD}/_install （<span style="color:#f33b45;"><strong>no-asm表示在编译过程中不要使用汇编代码加快编译过程</strong></span>）</li></ul> 
+<p><strong>2.3 修改Makefile</strong></p> 
+<ul><li>CC = arm-linux-gcc</li><li>AR = arm-linux-ar</li><li>RANLIB = arm-linux-ranlib</li></ul> 
+<p><strong>2.4 编译</strong></p> 
+<ul><li>make</li></ul> 
+<p><strong>2.5 安装</strong></p> 
+<ul><li>make install</li></ul> 
+<p><strong>生成的库文件在_install/lib中，拷贝到开发根目录/lib中。</strong></p> 
+<p><strong>3.OpenSSL编程</strong></p> 
+<ul><li>在TCP传输文件框架上，增加OpenSSL加密系统，需要遵循如下的编程步骤</li><li>客户端模型：<strong>1.初始化；</strong><strong>2.创建SSL；</strong><strong>3.数据收发；</strong><strong>4.关闭</strong></li></ul> 
+<p style="text-align:center;"><img alt="" class="has" height="373" src="https://images2.imgbox.com/4b/aa/GRuPRlke_o.png" width="426"></p> 
+<ul><li>服务器模型：<strong>1.初始化；2.载入数字证书和私钥；3.创建SSL；4.数据收发；5.关闭</strong></li></ul> 
+<p style="text-align:center;"><img alt="" class="has" height="461" src="https://images2.imgbox.com/a1/3f/DsS0vyLy_o.png" width="482"></p> 
+<ul><li>创建私钥：<strong><span style="color:#f33b45;"># openssl genrsa -out privkey.pem 2048</span></strong>，genrsa表示创建私钥，privkey.pem输出私钥文件名，2048表示位数</li><li>创建公钥：<span style="color:#f33b45;"><strong># openssl req -new -x509 -key privkey.pem -out cacert.pem -days 1095</strong></span></li><li>客户端代码：</li></ul> 
+<pre class="has"><code class="language-cpp">#include&lt;stdio.h&gt;
+#include&lt;string.h&gt;
+#include&lt;sys/socket.h&gt;
+#include&lt;sys/types.h&gt;
+#include&lt;netinet/in.h&gt;
+#include &lt;sys/stat.h&gt;
+#include&lt;errno.h&gt;
+#include&lt;fcntl.h&gt;
+#include&lt;unistd.h&gt;
+
+#include &lt;openssl/err.h&gt;
+#include &lt;openssl/ssl.h&gt;
+
+#define port 3333
+
+char ipaddr[15];
+int sockfd;
+struct sockaddr_in sockaddr;
+SSL_CTX *ctx;//SSL套接字
+SSL *ssl;
+
+void linkS()
+{
+	//创建socket
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	{
+		perror("socket");
+		_exit(0);
+	}
+	//连接
+	memset(&amp;sockaddr, 0, sizeof(sockaddr));
+	sockaddr.sin_family = AF_INET;
+	sockaddr.sin_port = htons(port);
+	sockaddr.sin_addr.s_addr = inet_addr(ipaddr);
+	if (connect(sockfd, (struct sockaddr *)&amp;sockaddr, sizeof(sockaddr)) == -1)
+	{
+		perror("connect");
+		_exit(0);
+	}
+
+	ssl = SSL_new(ctx);
+	SSL_set_fd(ssl, sockfd);
+	if (SSL_connect(ssl) == -1)
+	{
+		printf("SSL connect successful!");
+	}
+	else
+	{
+		printf("SSL connect error!");
+	}
+}
+
+void upload_file(char *filename)
+{
+	int fd;
+	char cmd = 'U';
+	int FileNameSize = strlen(filename);
+	char buf[1024];
+	int count = 0;
+	struct stat fstat;
+
+	//打开文件
+	fd = open(filename, O_RDONLY);
+	//发送命令
+	SSL_write(ssl, &amp;cmd, 1);
+
+	//发送文件名
+	SSL_write(ssl, (void *)&amp;FileNameSize, 4);
+	SSL_write(ssl, filename, FileNameSize);
+	//发送文件长度
+	if ((stat(filename, &amp;fstat)) == -1)
+		return;
+	SSL_write(ssl, (void *)&amp;fstat.st_size, 4);
+
+	//发送文件数据
+	while ((count = read(fd, (void *)buf, 1024)) &gt; 0)
+	{
+		SSL_write(ssl, buf, count);
+	}
+	//关闭文件
+	close(fd);
+}
+
+void download_file(char *filename)
+{
+	int fd;
+	char cmd = 'D';
+	char buf[1024];
+	int FileNameSize = strlen(filename);
+	int filesize = 0, count = 0, totalrecv = 0;
+
+	//发送命令
+	SSL_write(ssl, &amp;cmd, 1);
+
+	//发送文件名
+	SSL_write(ssl, (void *)&amp;FileNameSize, 4);
+	SSL_write(ssl, filename, FileNameSize);
+
+	//打开并创建文件
+	if ((fd = open(filename, O_RDWR | O_CREAT)) == -1)
+	{
+		perror("open:");
+		_exit(0);
+	}
+
+	//接收数据
+	SSL_read(ssl, &amp;filesize, 4);
+	while ((count = SSL_read(ssl, (void *)buf, 1024)) &gt; 0)
+	{
+		write(fd, buf, count);
+		totalrecv += count;
+		if (totalrecv == filesize)
+			break;
+	}
+
+	//关闭文件
+	close(fd);
+}
+
+void quit()
+{
+	char cmd = 'Q';
+	//发送命令
+	SSL_write(ssl, (void *)&amp;cmd, 1);
+	//关闭及释放SSL连接
+	SSL_shutdown(ssl);
+	SSL_free(ssl);
+	//清屏
+	system("clear");
+	//退出
+	_exit(0);
+}
+void menu()
+{
+	char cmd;
+	char c;
+	char file_u[30];
+	char file_d[30];
+	while (1)
+	{
+		printf("\n------------------------------  1.Upload Files  ------------------------------\n");
+		printf("------------------------------  2.Download Files  ------------------------------\n");
+		printf("------------------------------      3.Exit   ------------------------------------\n");
+		printf("Please input the Client command:");
+		cmd = getchar();
+
+		switch (cmd)
+		{
+		case '1':
+		{
+			printf("Upload Files:");
+			//输入文件名
+			while ((c = getchar()) != '\n' &amp;&amp; c != EOF);
+			fgets(file_u, 30, stdin);
+			file_u[strlen(file_u) - 1] = '\0';
+			//上传文件
+			upload_file(file_u);
+		}
+		break;
+		case '2':
+		{
+			printf("Download Files:");
+			//输入文件名
+			while ((c = getchar()) != '\n' &amp;&amp; c != EOF);
+			fgets(file_d, 30, stdin);
+			file_d[strlen(file_d) - 1] = '\0';
+			//下载文件
+			download_file(file_d);
+		}
+		break;
+		case '3':
+		{
+			//退出
+			quit();
+			break;
+		}
+		break;
+		default:
+		{
+			printf("Please input right command!");
+		}
+		break;
+		}
+	}
+}
+int main(int argc, char *args[])
+{
+	if (argc != 2)
+	{
+		printf("format error: you mast enter ipaddr like this : client 192.168.0.6\n");
+		_exit(0);
+	}
+	strcpy(ipaddr, args[1]);
+
+	//初始化SSl
+	SSL_library_init();
+	OpenSSL_add_all_algorithms();
+	SSL_load_error_strings();
+	ctx = SSL_CTX_new(SSLv23_client_method());//创建SSL套接字，参数表明支持版本和客户机
+	if (ctx == NULL)
+	{
+		printf("Creat CTX error!!!");
+	}
+
+	//建立连接
+	linkS();
+	//打印菜单
+	menu();
+	//结尾操作
+	close(sockfd);
+	//释放CTX
+	SSL_CTX_free(ctx);
+	
+	return 0;
+}</code></pre> 
+<ul><li>编译程序 
+  <ul><li><strong>gcc -lssl client.c -o client   </strong>编译PC版</li><li><strong>arm-linux-gcc -L .../_install/lib/ -lssl -lcrypto -I .../_install/include/ client.c -o client </strong>编译ARM版</li></ul></li><li>服务器端代码：</li></ul> 
+<pre class="has"><code class="language-cpp">#include&lt;stdio.h&gt;
+#include&lt;string.h&gt;
+#include&lt;sys/socket.h&gt;
+#include&lt;sys/types.h&gt;
+#include&lt;netinet/in.h&gt;
+#include&lt;errno.h&gt;
+#include&lt;fcntl.h&gt;
+#include&lt;unistd.h&gt;
+
+#include &lt;openssl/err.h&gt;
+#include &lt;openssl/ssl.h&gt;
+
+#define port 3333
+
+int sockfd, newfd;
+struct sockaddr_in sockaddr;
+struct sockaddr_in client_addr;
+int sin_size;
+SSL_CTX *ctx;
+SSL *ssl;
+
+void handle(char cmd)
+{
+	char filename[30] = { 0 };
+	int FileNameSize = 0;
+	int fd;
+	int filesize = 0;
+	int count = 0, totalrecv = 0;
+	char buf[1024];
+	struct stat fstat;
+	switch (cmd)
+	{
+	case 'U':
+	{
+		//接收文件名
+		SSL_read(ssl, &amp;FileNameSize, 4);
+		SSL_read(ssl, (void *)filename, FileNameSize);
+		filename[FileNameSize] = '\0';
+		//创建文件
+		if ((fd = open(filename, O_RDWR | O_CREAT)) == -1)
+		{
+			perror("creat:");
+			_exit(0);
+		}
+		//接收文件长度
+		SSL_read(ssl, &amp;filesize, 4);
+
+		//接收文件
+		while ((count = SSL_read(ssl, (void *)buf, 1024)) &gt; 0)
+		{
+			write(fd, &amp;buf, count);
+			totalrecv += count;
+			if (totalrecv == filesize)
+				break;
+		}
+		//关闭文件
+		close(fd);
+	}
+	break;
+
+	case 'D':
+	{
+		//接收文件名
+		SSL_read(ssl, &amp;FileNameSize, 4);
+		SSL_read(ssl, filename, FileNameSize);
+		filename[FileNameSize] = '\0';
+		//打开文件
+		if ((fd = open(filename, O_RDONLY)) == -1)
+		{
+			perror("creat:");
+			_exit(0);
+		}
+		//发送文件包括文件长度
+		if ((stat(filename, &amp;fstat)) == -1)
+			return;
+		SSL_write(ssl, &amp;fstat.st_size, 4);
+
+		while ((count = read(fd, (void *)buf, 1024)) &gt; 0)
+		{
+			SSL_write(ssl, &amp;buf, count);
+		}
+		close(fd);
+	}
+	break;
+	}
+}
+int main()
+{
+	char cmd;
+
+
+	//建立连接
+
+	// SSL初始化
+	SSL_library_init();
+	OpenSSL_add_all_algorithms();
+	SSL_load_error_strings();
+	ctx = SSL_CTX_new(SSLv23_server_method());
+	
+	// 载入数字证书
+	SSL_CTX_use_certificate_file(ctx, "./cacert.pem", SSL_FILETYPE_PEM);
+	// 载入并检查私钥
+	SSL_CTX_use_PrivateKey_file(ctx, "./privkey.pem", SSL_FILETYPE_PEM);
+	// 检查用户私钥
+	SSL_CTX_check_private_key(ctx);
+	// 创建socket
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	{
+		perror("socket:");
+		_exit(0);
+	}
+
+	memset(&amp;sockaddr, 0, sizeof(sockaddr));
+	sockaddr.sin_family = AF_INET;
+	sockaddr.sin_port = htons(port);
+	sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	// 绑定地址
+	if (bind(sockfd, (struct sockaddr *)&amp;sockaddr, sizeof(sockaddr)) == -1)
+	{
+		perror("bind:");
+		_exit(0);
+	}
+	// 监听
+	if (listen(sockfd, 10) == -1)
+	{
+		perror("listen");
+	}
+
+	while (1)
+	{
+		// 连接
+		if ((newfd = accept(sockfd, (struct sockaddr *)(&amp;client_addr), &amp;sin_size)) == -1)
+		{
+			perror("accept:");
+			_exit(0);
+		}
+		ssl = SSL_new(ctx);// 产生新的SSL
+		SSL_set_fd(ssl, newfd);
+		SSL_accept(ssl);
+		// 处理事件
+		while (1)
+		{
+			SSL_read(ssl, &amp;cmd, 1);
+
+			if (cmd == 'Q')
+			{
+				break;
+			}
+			else
+			{
+				handle(cmd);
+			}
+		}
+		SSL_shutdown(ssl);
+		SSL_free(ssl);
+		close(newfd);
+	}
+	
+	close(sockfd);
+	SSL_CTX_free(ctx);
+	
+	return 0;
+}</code></pre> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2d266d752cb0bb36c32577b44852185c/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">C&#43;&#43; sizeof(struct)计算结构体大小</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/6d93784bfc372942312b764e784866f3/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">动态规划（最长公共序列，最长上升序列）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

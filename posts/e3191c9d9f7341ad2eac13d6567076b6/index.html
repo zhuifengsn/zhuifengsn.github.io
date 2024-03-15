@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>mysql主从复制与分库分表 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="mysql主从复制与分库分表" />
+<meta property="og:description" content="一、主从复制的概念 1、什么是主从复制？
+主从复制，是用来建立若干个和主库完全一样的数据库环境，称为从库；
+2、主从复制的好处？
+1）做数据的热备：主库发生故障后，可切换到从库提供服务。
+2）数据量越来越大，导致单机TPS、内存、I/O访问频率越来越高，单机性能越来越差，此时增加多个从库，可以降低单机磁盘I/O访问的频率，提高单机的I/O性能。
+3）读写分离，使数据库能支撑更大的并发。
+读写分离对于报表系统中尤其重要，由于部分报表sql语句非常的慢，会导致锁表，影响读请求的速度。
+3、主从复制的原理（三个线程）
+1）主库的更新事件(update、insert、delete)被写到binlog
+2）从库创建一个I/O线程连接到主库
+3）主库创建一个binlog dump 线程，把binlog的内容发送到从库
+4）从库读取主库传过来的binlog内容并写入到relay log
+5）从库创建一个SQL线程，从relay log里面读取内容，更新到从库
+由于mysql实现的主从复制是异步复制，所以主从库之间数据有一定差异，在从库上的查询操作需要考虑到这些数据的差异，一般只有更新不频繁的数据或者对实时性要求不高的数据，可以通过从库查询，实时性要求高的数据仍然需要从主库获得。
+二、配置主库 假如有两台服务器，172.23.29.111和172.23.21.112，前者为主服务器，后者为从服务器
+1、172.23.29.111上创建从服务器的用户changhf（该用户在从服务器上已存在），需要先用root登录，先后执行sql:
+mysql&gt;CREATE USER &#39;changhf&#39;@&#39;172.23.29.112&#39; IDENTIFIED BY &#39;123456&#39;; mysql&gt;GRANT REPLICATION SLAVE ON *.* TO &#39;changhf&#39;@&#39;172.23.29.112&#39; IDENTIFIED BY &#39;123456&#39;; 不要用其他正在使用着的用户，建立主从关系后，会改变该用户的权限，我在这里掉到坑里了。用的已经存在的用户cms，导致该用户怎么也登录不上了。
+2、vi my.cnf 在[mysqld]下面添加
+binlog-do-db=zy_mycat1 binlog-do-db=zy_mycat2 binlog-do-db=zy_mycat3 binlog_ignore_db=mysql 3、先在主服务器上锁定所有的表，以免在复制过程中数据发生变化。
+mysql&gt;FLUSH TABLES WITH READ LOCK; 4、退出mysql
+mysql&gt;quit mysqldump -uroot -p123456 --databases zy_mycat1 zy_mycat2 zy_mycat3 --lock-tables=false -- &gt; /root/mycat_backup.sql 5、从当前服务器传递文件到另一台服务器
+scp /root/all.sql root@172.23.21.222:/root 6、再次连接数据库进入mysql命令行查看master状态" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e3191c9d9f7341ad2eac13d6567076b6/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2017-04-08T17:39:04+08:00" />
+<meta property="article:modified_time" content="2017-04-08T17:39:04+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">mysql主从复制与分库分表</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h4>一、主从复制的概念</h4> 
+<p>1、什么是主从复制？<br> 主从复制，是用来建立若干个和主库完全一样的数据库环境，称为从库；<br> 2、主从复制的好处？<br> 1）做数据的热备：主库发生故障后，可切换到从库提供服务。<br> 2）数据量越来越大，导致单机TPS、内存、I/O访问频率越来越高，单机性能越来越差，此时增加多个从库，可以降低单机磁盘I/O访问的频率，提高单机的I/O性能。<br> 3）读写分离，使数据库能支撑更大的并发。</p> 
+<p>读写分离对于报表系统中尤其重要，由于部分报表sql语句非常的慢，会导致锁表，影响读请求的速度。<br> 3、主从复制的原理（三个线程）<br> 1）主库的更新事件(update、insert、delete)被写到binlog<br> 2）从库创建一个I/O线程连接到主库<br> 3）主库创建一个binlog dump 线程，把binlog的内容发送到从库<br> 4）从库读取主库传过来的binlog内容并写入到relay log<br> 5）从库创建一个SQL线程，从relay log里面读取内容，更新到从库</p> 
+<p>由于mysql实现的主从复制是异步复制，所以主从库之间数据有一定差异，在从库上的查询操作需要考虑到这些数据的差异，一般只有更新不频繁的数据或者对实时性要求不高的数据，可以通过从库查询，实时性要求高的数据仍然需要从主库获得。</p> 
+<h4>二、配置主库</h4> 
+<p>假如有两台服务器，172.23.29.111和172.23.21.112，前者为主服务器，后者为从服务器</p> 
+<p>1、172.23.29.111上创建从服务器的用户changhf（该用户在从服务器上已存在），需要先用root登录，先后执行sql:</p> 
+<pre class="has"><code class="language-sql">mysql&gt;CREATE USER 'changhf'@'172.23.29.112' IDENTIFIED BY '123456';
+mysql&gt;GRANT REPLICATION SLAVE ON *.* TO 'changhf'@'172.23.29.112' IDENTIFIED BY '123456';</code></pre> 
+<p>不要用其他正在使用着的用户，建立主从关系后，会改变该用户的权限，我在这里掉到坑里了。用的已经存在的用户cms，导致该用户怎么也登录不上了。<br><br> 2、vi my.cnf 在[mysqld]下面添加</p> 
+<pre class="has"><code class="language-sql">binlog-do-db=zy_mycat1
+binlog-do-db=zy_mycat2
+binlog-do-db=zy_mycat3
+binlog_ignore_db=mysql</code></pre> 
+<p>3、先在主服务器上锁定所有的表，以免在复制过程中数据发生变化。</p> 
+<pre class="has"><code class="language-java">mysql&gt;FLUSH TABLES WITH READ LOCK;</code></pre> 
+<p>4、退出mysql</p> 
+<pre class="has"><code class="language-java">mysql&gt;quit
+mysqldump -uroot -p123456 --databases zy_mycat1 zy_mycat2 zy_mycat3  --lock-tables=false  -- &gt; /root/mycat_backup.sql</code></pre> 
+<p>5、从当前服务器传递文件到另一台服务器</p> 
+<pre class="has"><code class="language-java">scp /root/all.sql root@172.23.21.222:/root</code></pre> 
+<p>6、再次连接数据库进入mysql命令行查看master状态</p> 
+<pre class="has"><code class="language-sql">mysql&gt;SHOW MASTER STATUS;</code></pre> 
+<p>需要记住这个状态，配置从服务器时有用：<img alt="" class="has" src="https://images2.imgbox.com/dc/7c/8ldZRdWF_o.png"></p> 
+<p>7、解锁数据表</p> 
+<pre class="has"><code class="language-sql">mysql&gt;UNLOCK TABLES;</code></pre> 
+<h4> </h4> 
+<h4>三、配置从库</h4> 
+<p>1、导入主服务器的数据库</p> 
+<pre class="has"><code class="language-sql">mysql -uchanghf -pcms &lt; /root/all.sql</code></pre> 
+<p>2、vi my.cnf</p> 
+<p>在[mysqld]下面添加</p> 
+<pre class="has"><code class="language-java">replicate-do-db=zy_mycat1
+replicate-do-db=zy_mycat2
+replicate-do-db=zy_mycat3</code></pre> 
+<p>3、从服务器只能是指定的用户名密码机器来登录： </p> 
+<pre class="has"><code class="language-sql">mysql -uchanghf -p123456 -h172.23.29.112</code></pre> 
+<p>4、需要使用root用户登录执行以下命令，并开启slave</p> 
+<pre class="has"><code class="language-sql">mysql&gt;change master to master_host='172.23.29.111',master_user='root',master_password='123456',master_log_file='mysql-bin.000020',master_log_pos=930;
+mysql&gt;start slave;</code></pre> 
+<p>5、检查从服务器复制功能</p> 
+<pre class="has"><code class="language-sql">mysql&gt;show slave status\G</code></pre> 
+<p>6、最后一步，在主服务器创建表并插入数据，然后观察从服务器是否同步。</p> 
+<pre class="has"><code class="language-sql">mysql&gt;create table food (id bigint not null primary key,user_id varchar(100),traveldate DATE, fee decimal,days int);
+mysql&gt;insert into food (id,user_id,traveldate,fee,days)  values(1,@@hostname,20160101,100,10),(5000001,@@hostname,20160102,100,10),(10000001,@@hostname,20160103,100,10);</code></pre> 
+<h4>四、mysqldump用法</h4> 
+<p>mysqldump常用于mysql数据备份，适用于数据量较小的情况下，否则太慢。</p> 
+<p>1、最简单的备份：</p> 
+<pre class="has"><code class="language-sql">mysqldump -uroot -p123456 cms &gt; /root/cms.sql</code></pre> 
+<p>2、备份全部数据库</p> 
+<pre class="has"><code class="language-sql">mysqldump -uroot -p123456 --all-databases  --lock-tables=false  -- &gt; /root/all.sql</code></pre> 
+<h4>五、为什么要分库分表为什么要分库分表？如何实现分库分表？</h4> 
+<p>分库分表原因一般是：1、单库并发过高；2、单库数据量过大</p> 
+<p>1、数据量只增不减，历史数据又必须要留存，非常容易成为性能的瓶颈，而要解决这样的数据库瓶颈问题，“读写分离”和缓存往往都不合适，目前比较普遍的方案就是使用NoSQL/NewSQL或者采用分库分表。<br> 2、使用分库分表时，主要有垂直拆分和水平拆分两种拆分模式，都属于物理空间的拆分。<br> 分库分表方案：只分库、只分表、分库又分表。</p> 
+<p>1）垂直拆分：由于表数量多导致的单个库大。将表拆分到多个库中。<br> 2）水平拆分：由于表记录多导致的单个库大。将表记录拆分到多个表中。<br> 水平拆分时，需要确定分片键和分片策略，然后使用中间件（ShardingSphere、Mycat 等）操作，还需要考虑分布式主键、分布式事务等。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/0b6587a1e2b0fcafd0eba1880e814275/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Gauss Laplacian Pyramid</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/7330c72d4d7506e7cb5fdb39addea23b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C&#43;&#43;11新特性</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

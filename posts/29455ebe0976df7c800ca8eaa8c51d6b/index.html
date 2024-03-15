@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>mysql数据库物理备份_MySQL数据库之xtrabackup物理备份(一) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="mysql数据库物理备份_MySQL数据库之xtrabackup物理备份(一)" />
+<meta property="og:description" content="(1)备份开始时会开启一个后台检测进程，实时检测mysql redo(已提交的事务)的变化，一旦发现redo中有新日志写入，立刻将日志记入后台日志文件xtrabackup_log中，
+(2)复制InnoDB的数据文件和系统表空间文件ibdata1，
+(3)待复制结束后，执行flush tables with read lock操作，复制.frm、.MYI、.MY等文件
+(4)执行flush tables with read lock的目的是为了防止数据表发生DML操作，并且在这一时刻获得binlog的位置，
+(5)最后会发出unlock tables，把表设置为可读写状态，
+(6)最终停止xtrabackup_log。
+4.为什么要用XtraBackup
+因为当数据库超过100G的话，用mysqldump就没有XtraBackup有优势，工作中mysqldump备份大的数据还会出现卡住，断开的可能性，XtraBackup支持完整备份，增量备份，完整恢复，增量恢复，对于innodb引擎备份时不锁表进行热备份。
+二、XtraBackup安装
+1.xtrabackup官网有很多个版本，有1.6、2.0-2.4和8.0，每个版本都有不同，根据自己需要下载安装，如：
+xtrabackup1.6版本支持MySQL 5.0、5.1和5.5。
+xtrabackup2.2和2.3版本支持备份MySQL 5.1 、5.5和5.6。
+xtrabackup2.4版本支持MySQL 5.1、5.5、5.6和5.7。
+xtrabackup8.0版本只支持MySQL8.0，不支持8.0之前的。
+本文章使用xtrabackup2.3。
+2.下载安装
+官网有源码包下载，二进制包、还有存储库，官网推荐存储库下载，我这里环境用Centos7，所以用yum安装,这里选择安装yum install -y percona-xtrabackup.x86_64
+1 yum install http://www.percona.com/downloads/percona-release/redhat/0.1-4/percona-release-0.1-4.noarch.rpm
+2 yum list | grep percona
+3 percona-xtrabackup.x86_64 2.3.10-1.el7 percona-release-x86_64
+4 percona-xtrabackup-22.x86_64 2.2.13-1.el7 percona-release-x86_64
+5 percona-xtrabackup-22-debuginfo.x86_64 2.2.13-1.el7 percona-release-x86_64
+6 percona-xtrabackup-24.x86_64 2.4.18-1.el7 percona-release-x86_64
+7 percona-xtrabackup-24-debuginfo.x86_64 2.4.18-1.el7 percona-release-x86_64
+8 percona-xtrabackup-80.x86_64 8.0.9-1.el7 percona-release-x86_64
+9 percona-xtrabackup-80-debuginfo." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/29455ebe0976df7c800ca8eaa8c51d6b/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-02-28T06:52:18+08:00" />
+<meta property="article:modified_time" content="2021-02-28T06:52:18+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">mysql数据库物理备份_MySQL数据库之xtrabackup物理备份(一)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div style="font-size:16px;"> 
+ <p align="center"><img src="https://images2.imgbox.com/e7/c6/IUPfYuLC_o.png" alt="65141a7c4446f55da28eb17c32d8be4d.png"></p> 
+ <p>(1)备份开始时会开启一个后台检测进程，实时检测mysql redo(已提交的事务)的变化，一旦发现redo中有新日志写入，立刻将日志记入后台日志文件xtrabackup_log中，</p> 
+ <p>(2)复制InnoDB的数据文件和系统表空间文件ibdata1，</p> 
+ <p>(3)待复制结束后，执行flush tables with read lock操作，复制.frm、.MYI、.MY等文件</p> 
+ <p>(4)执行flush tables with read lock的目的是为了防止数据表发生DML操作，并且在这一时刻获得binlog的位置，</p> 
+ <p>(5)最后会发出unlock tables，把表设置为可读写状态，</p> 
+ <p>(6)最终停止xtrabackup_log。</p> 
+ <p>4.为什么要用XtraBackup</p> 
+ <p>因为当数据库超过100G的话，用mysqldump就没有XtraBackup有优势，工作中mysqldump备份大的数据还会出现卡住，断开的可能性，XtraBackup支持完整备份，增量备份，完整恢复，增量恢复，对于innodb引擎备份时不锁表进行热备份。</p> 
+ <p>二、XtraBackup安装</p> 
+ <p>1.xtrabackup官网有很多个版本，有1.6、2.0-2.4和8.0，每个版本都有不同，根据自己需要下载安装，如：</p> 
+ <p>xtrabackup1.6版本支持MySQL 5.0、5.1和5.5。</p> 
+ <p>xtrabackup2.2和2.3版本支持备份MySQL 5.1 、5.5和5.6。</p> 
+ <p>xtrabackup2.4版本支持MySQL 5.1、5.5、5.6和5.7。</p> 
+ <p>xtrabackup8.0版本只支持MySQL8.0，不支持8.0之前的。</p> 
+ <p>本文章使用xtrabackup2.3。</p> 
+ <p>2.下载安装</p> 
+ <p>官网有源码包下载，二进制包、还有存储库，官网推荐存储库下载，我这里环境用Centos7，所以用yum安装,这里选择安装yum install -y percona-xtrabackup.x86_64</p> 
+ <p align="center"><img src="https://images2.imgbox.com/14/24/d18ZmRAK_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>1 yum install http://www.percona.com/downloads/percona-release/redhat/0.1-4/percona-release-0.1-4.noarch.rpm</p> 
+ <p>2 yum list | grep percona</p> 
+ <p>3 percona-xtrabackup.x86_64 2.3.10-1.el7 percona-release-x86_64</p> 
+ <p>4 percona-xtrabackup-22.x86_64 2.2.13-1.el7 percona-release-x86_64</p> 
+ <p>5 percona-xtrabackup-22-debuginfo.x86_64 2.2.13-1.el7 percona-release-x86_64</p> 
+ <p>6 percona-xtrabackup-24.x86_64 2.4.18-1.el7 percona-release-x86_64</p> 
+ <p>7 percona-xtrabackup-24-debuginfo.x86_64 2.4.18-1.el7 percona-release-x86_64</p> 
+ <p>8 percona-xtrabackup-80.x86_64 8.0.9-1.el7 percona-release-x86_64</p> 
+ <p>9 percona-xtrabackup-80-debuginfo.x86_64 8.0.9-1.el7 percona-release-x86_64</p> 
+ <p>10 percona-xtrabackup-debuginfo.x86_64 2.3.10-1.el7 percona-release-x86_64</p> 
+ <p>11 percona-xtrabackup-test.x86_64 2.3.10-1.el7 percona-release-x86_64</p> 
+ <p>12 percona-xtrabackup-test-22.x86_64 2.2.13-1.el7 percona-release-x86_64</p> 
+ <p>13 percona-xtrabackup-test-24.x86_64 2.4.18-1.el7 percona-release-x86_64</p> 
+ <p>14 percona-xtrabackup-test-80.x86_64 8.0.9-1.el7 percona-release-x86_64</p> 
+ <p align="center"><img src="https://images2.imgbox.com/c5/2e/Be6WF2HV_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>安装之后，可以检查xtrabackup版本，我本地的数据库版本是5.6</p> 
+ <p>1 xtrabackup --version</p> 
+ <p>2 xtrabackup version 2.3.6 based on MySQL server 5.6.24 Linux (x86_64) (revision id: )</p> 
+ <p>3.工具介绍</p> 
+ <p>Xtrabackup安装完成后有4个可执行文件，其中2个比较重要的备份工具是innobackupex、xtrabackup</p> 
+ <p>innobackupex</p> 
+ <p>innobackupex是一个封装xtrabackup的Perl脚本。。</p> 
+ <p>xtrabackup</p> 
+ <p>编译后的C二进制文件，提供了使用MyISAM，InnoDB和XtraDB表备份整个MySQL数据库实例的功能。</p> 
+ <p>xbcrypt加密</p> 
+ <p>用于加密和解密备份文件的实用程序。</p> 
+ <p>xbstream</p> 
+ <p>允许以流的形式从xbstream格式提取文件，类似tar。</p> 
+ <p>xbcloud</p> 
+ <p>用于从云中下载xbstream归档的全部或部分或将其上传到云。</p> 
+ <p>官网说明：innobackupex仍然像2.2版本一样支持所有功能和语法，但是现在已弃用，并且将在下一个主要版本中删除，Percona XtraBackup 2.3版本的推荐方式采取的备份是使用xtrabackup脚本，这篇文章介绍innobackupex脚本，差别不大。</p> 
+ <p>4.innobackupex命令参数</p> 
+ <p align="center"><img src="https://images2.imgbox.com/fb/e9/4AeG85E0_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>--user= 　　　　　　　　#指定数据库备份用户</p> 
+ <p>--password= 　　　　　　　 #指定数据库备份用户密码</p> 
+ <p>--port= 　　　　　　　　#指定数据库端口</p> 
+ <p>--host= 　　　　　　　　#指定备份主机</p> 
+ <p>--socket= 　　　　　　　 #指定socket文件路径</p> 
+ <p>--databases= 　　　　　　　#备份指定数据库,多个空格隔开，如--databases="dbname1 dbname2",不加备份所有库</p> 
+ <p>--defaults-file= 　 #指定my.cnf配置文件</p> 
+ <p>--apply-log 　　　 #日志回滚</p> 
+ <p>--incremental= #增量备份，后跟增量备份路径</p> 
+ <p>--incremental-basedir= #增量备份，指上次增量备份路径</p> 
+ <p>--redo-only 　　　 #合并全备和增量备份数据文件</p> 
+ <p>--copy-back 　　　 #将备份数据复制到数据库，数据库目录要为空</p> 
+ <p>--no-timestamp #生成备份文件不以时间戳为目录名</p> 
+ <p>--stream= 　　#指定流的格式做备份,--stream=tar,将备份文件归档，--stream=xbstream</p> 
+ <p>--remote-host=user@ip DST_DIR #备份到远程主机</p> 
+ <p>--use-memory= 　　　　 #该参数在prepare的时候使用，控制prepare时innodb实例使用的内存量</p> 
+ <p>--parallel 　　　　　　 #用于复制数据文件的线程数。配合-stream=xbstream</p> 
+ <p>--compress 　　　　　　 #压缩功能，配合-stream=xbstream</p> 
+ <p>--compress-threads=4 　　　#用于并行数据压缩的线程数。此选项的默认值为1。配合-stream=xbstream</p> 
+ <p>--throttle= 　　　　　　　 #限制innobackupex读写InnoDB数据的速率</p> 
+ <p align="center"><img src="https://images2.imgbox.com/6d/e1/sjcSwjGS_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>三、用innobackupex进行完整备份1.执行完整备份命令</p> 
+ <p align="center"><img src="https://images2.imgbox.com/77/d8/UexAw7pi_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>innobackupex –defaults-file=/usr/local/mysql/my.cnf –user=root –password=”123456″ –socket=/tmp/mysql.sock –no-timestamp /data/backup/$(date +%F)/full</p> 
+ <p>最后输出下面信息表示成功备份</p> 
+ <p>xtrabackup: Transaction log of lsn (42677124128) to (42677124128) was copied.</p> 
+ <p>200127 13:21:18 completed OK!</p> 
+ <p align="center"><img src="https://images2.imgbox.com/b5/cc/3oucfNNg_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>在/data/backup目录下面生成一个当前日期命名的目录，时间目录下面的full目录里面存放着备份出来的文件</p> 
+ <p>1 [root@devops 13:17:24/data/backup/]# ll</p> 
+ <p>2 total 2535576</p> 
+ <p>3 drwx------ 3 root root 4096 Jan 27 13:17 2020-01-27</p> 
+ <p>介绍一下目录的文件信息</p> 
+ <p align="center"><img src="https://images2.imgbox.com/c5/fe/hFtCL5JH_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>1 [root@devops 13:21:18/data/backup/]# ll 2020-01-27/full/</p> 
+ <p>2 total 141364</p> 
+ <p>3 -rw-r----- 1 root root 388 Jan 27 13:21 backup-my.cnf #备份命令用到的配置信息</p> 
+ <p>4 -rw-r----- 1 root root 144703488 Jan 27 13:17 ibdata1　　　　　 #备份的表空间的文件</p> 
+ <p>5 drwx------ 2 root root 4096 Jan 27 13:21 mysql #备份出来的mysql、performance_schema、test数据库</p> 
+ <p>6 drwx------ 2 root root 4096 Jan 27 13:21 performance_schema</p> 
+ <p>7 drwx------ 2 root root 4096 Jan 27 13:21 test</p> 
+ <p>8 -rw-r----- 1 root root 21 Jan 27 13:21 xtrabackup_binlog_info #binlog日志信息</p> 
+ <p>9 -rw-r----- 1 root root 121 Jan 27 13:21 xtrabackup_checkpoints #这个比较重要，里面存放着lsn(日志序列号)</p> 
+ <p>10 -rw-r----- 1 root root 602 Jan 27 13:21 xtrabackup_info #存放一些工具版本、数据库版本、执行开始结束时间等信息</p> 
+ <p>11 -rw-r----- 1 root root 2560 Jan 27 13:21 xtrabackup_logfile #重做日志文件</p> 
+ <p align="center"><img src="https://images2.imgbox.com/1b/7b/xpGgbQtA_o.png" alt="48304ba5e6f9fe08f3fa1abda7d326ab.png"></p> 
+ <p>2.模拟删除整个数据目录</p> 
+ <p>cd /data/ &amp;&amp; rm -rf mysqldata</p> 
+ <p>3.kill掉mysql进程</p> 
+ <p>pgrep mysql | xargs kill</p> 
+ <p>4.准备</p> 
+ <p>准备(prepare)一个完全备份</p> 
+ <p>一般情况下，在备份完成后，数据尚且不能用于恢复操作，因为备份的数据中可能会包含尚未提交的事务或已经提交但尚未同步至数据文件中的事务。因此，此时数据文件仍处理不一致状态。“准备”的主要作用正是通过回滚未提交的事务及同步已经提交的事务至数据文件也使得数据文件处于一致性状态。</p> 
+ <p>innobackupex命令的-apply-log选项可用于实现上述功能</p> 
+ <p>不建议在准备时中断xtrabackup过程，因为这可能会导致数据文件损坏并且备份将变得不可用。如果准备过程中断，则不能保证备份的有效性。</p> 
+ <p>innobackupex --apply /data/backup/2020-01-27/full/</p> 
+ <p>最后输出：200127 13:44:47 completed OK!</p> 
+ <p>5.查看xtrabackup_checkpoints文件</p> 
+ <p>查看合并后的 checkpoints 其中的类型变为 full-prepared 即为可恢复。</p> 
+ <p>backup_type = full-prepared</p> 
+ <p>6.执行恢复之前要在my.cnf指定数据目录</p> 
+ <p>恢复备份之前，datadir必须为空。要注意在执行还原之前需要关闭MySQL服务器。不能还原到正在运行的mysqld实例的数据目录(导入部分备份时除外)</p> 
+ <p>1 cat /usr/local/mysql/my.cnf | grep datadir</p> 
+ <p>2 datadir = /data/mysqldata</p> 
+ <p>7.执行恢复命令</p> 
+ <p>innobackupex --defaults-file=/usr/local/mysql/my.cnf --copy-back /data/backup/2020-01-27/full</p> 
+ <p>200127 13:56:37 completed OK!</p> 
+ <p>如果恢复最后输出OK就没问题</p> 
+ <p>8.修改权限</p> 
+ <p>由于将保留文件的属性，因此在大多数情况下，mysql在启动数据库服务器之前，需要将文件的所有权更改为mysql</p> 
+ <p>chown -R mysql.mysql /data/mysqldata</p> 
+ <p>9.启动</p> 
+ <p>service mysqld start</p> 
+ <p>10.检查数据</p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/91d119437cb66f16433576d3abc534ce/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【建议收藏】产品经理面试真题大全</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/5800cd9ac4021785aa34b17dc37bfc62/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">ffmpeg多种码率控制方式的实现</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

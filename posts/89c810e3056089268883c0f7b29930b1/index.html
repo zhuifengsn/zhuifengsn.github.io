@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>WPF中实现图像的缩放 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="WPF中实现图像的缩放" />
+<meta property="og:description" content="XAML:
+&lt;Window xmlns=&#34;http://schemas.microsoft.com/winfx/2006/xaml/presentation&#34; xmlns:x=&#34;http://schemas.microsoft.com/winfx/2006/xaml&#34; x:Class=&#34;MapTest.Window1&#34; x:Name=&#34;Window&#34; Title=&#34;Window1&#34; Width=&#34;1950&#34; Height=&#34;1546&#34; xmlns:d=&#34;http://schemas.microsoft.com/expression/blend/2008&#34; xmlns:mc=&#34;http://schemas.openxmlformats.org/markup-compatibility/2006&#34; xmlns:Controls=&#34;clr-namespace:WPFExtensions.Controls;assembly=WPFExtensions&#34; mc:Ignorable=&#34;d&#34; Background=&#34;#FF000000&#34;&gt; &lt;Grid x:Name=&#34;LayoutRoot&#34;&gt; &lt;Grid.RowDefinitions&gt; &lt;RowDefinition Height=&#34;52.92&#34;/&gt; &lt;RowDefinition Height=&#34;*&#34;/&gt; &lt;/Grid.RowDefinitions&gt; &lt;Border Grid.Row=&#34;1&#34; Name=&#34;border&#34;&gt; &lt;Image Name=&#34;image&#34; Source=&#34;map3-2.png&#34; Opacity=&#34;1&#34; RenderTransformOrigin=&#34;0.5,0.5&#34; /&gt; &lt;/Border&gt; &lt;/Grid&gt; 代码
+using System.Linq; using System.Windows; using System.Windows.Input; using System.Windows.Media; namespace MapTest { public partial class Window1 : Window { private Point origin; private Point start; public Window1() { InitializeComponent(); TransformGroup group = new TransformGroup(); ScaleTransform xform = new ScaleTransform(); group." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/89c810e3056089268883c0f7b29930b1/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-02-10T12:03:42+08:00" />
+<meta property="article:modified_time" content="2023-02-10T12:03:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">WPF中实现图像的缩放</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>XAML:</p> 
+<pre><code class="language-XML">&lt;Window
+xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+x:Class="MapTest.Window1"
+x:Name="Window"
+Title="Window1"
+Width="1950" Height="1546" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:Controls="clr-namespace:WPFExtensions.Controls;assembly=WPFExtensions" mc:Ignorable="d" Background="#FF000000"&gt;
+
+&lt;Grid x:Name="LayoutRoot"&gt;
+    &lt;Grid.RowDefinitions&gt;
+        &lt;RowDefinition Height="52.92"/&gt;
+        &lt;RowDefinition Height="*"/&gt;
+    &lt;/Grid.RowDefinitions&gt;
+
+    &lt;Border Grid.Row="1" Name="border"&gt;
+        &lt;Image Name="image" Source="map3-2.png" Opacity="1" RenderTransformOrigin="0.5,0.5"  /&gt;
+    &lt;/Border&gt;
+
+&lt;/Grid&gt;</code></pre> 
+<p><strong>代码</strong></p> 
+<pre><code class="language-cs">
+using System.Linq;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+
+namespace MapTest
+{
+    public partial class Window1 : Window
+    {
+        private Point origin;
+        private Point start;
+
+        public Window1()
+        {
+            InitializeComponent();
+
+            TransformGroup group = new TransformGroup();
+
+            ScaleTransform xform = new ScaleTransform();
+            group.Children.Add(xform);
+
+            TranslateTransform tt = new TranslateTransform();
+            group.Children.Add(tt);
+
+            image.RenderTransform = group;
+
+            image.MouseWheel += image_MouseWheel;
+            image.MouseLeftButtonDown += image_MouseLeftButtonDown;
+            image.MouseLeftButtonUp += image_MouseLeftButtonUp;
+            image.MouseMove += image_MouseMove;
+        }
+
+        private void image_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            image.ReleaseMouseCapture();
+        }
+
+        private void image_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!image.IsMouseCaptured) return;
+
+            var tt = (TranslateTransform) ((TransformGroup) image.RenderTransform).Children.First(tr =&gt; tr is TranslateTransform);
+            Vector v = start - e.GetPosition(border);
+            tt.X = origin.X - v.X;
+            tt.Y = origin.Y - v.Y;
+        }
+
+        private void image_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            image.CaptureMouse();
+            var tt = (TranslateTransform) ((TransformGroup) image.RenderTransform).Children.First(tr =&gt; tr is TranslateTransform);
+            start = e.GetPosition(border);
+            origin = new Point(tt.X, tt.Y);
+        }
+
+        private void image_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            TransformGroup transformGroup = (TransformGroup) image.RenderTransform;
+            ScaleTransform transform = (ScaleTransform) transformGroup.Children[0];
+
+            double zoom = e.Delta &gt; 0 ? .2 : -.2;
+            transform.ScaleX += zoom;
+            transform.ScaleY += zoom;
+        }
+    }
+}</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/bdd41c94d78eb1299f375c5482a10cec/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">学会Python之后可以从事哪些工作？有哪些岗位可以选择？</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/7d9a97af09711138496edc61e8908c78/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">OpenCV中的Mat类</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

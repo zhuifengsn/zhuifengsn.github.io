@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>嵌入式编程—按键扫描程序总结 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="嵌入式编程—按键扫描程序总结" />
+<meta property="og:description" content="按键扫描程序，包含的东西很多。
+——————
+1：硬件原理上面来说，涉及到按键IO口的输出方式，输入还是输出，是推挽还是开漏输出。
+行键设置为输出，开漏输出，初值为0；
+列键设置为输入，浮空输入，外部有上拉电阻，初值为0，所以读取IDR，会读到1。
+行键设置为输出是为了便于控制，列键设置为输入是为了便于读取。
+行键设置为开漏输出是为了在ODR被置1的时候，多键同时按键时，不至于短路。
+具体原理图如下：
+行线k10，k11，k12对应的IO口，设置为输出，初值设置为000；
+列线k02，k01，k00对应的IO口，设置为输入，初值设置为000，因为外部的上拉电阻，所以读取到是111。
+——————
+当按键按下的时候，k02，k01，k00的IDR其中一个会被拉到0，这样就读取到了按键的列值，接下来就是想办法去读行值。
+——————
+采用的方法是：按键扫描：k10，k11，k12先通过程序置1然后依次置零，然后再读取列值。比如：k10，k11，k12对应的值是110，也就是k12输出为0，这个时候如果k9是被按下的，我们读取到的列值就是110，但是如果k4是被按下的，那么我们读取到的列值就是111。
+——————
+所以程序上面，我们就是通过判断读取到的列值是不是111，来确定行值。这样，我们知道了行列值，就能确定这个按键矩阵中是哪一个按键被按下了。
+2：除了硬件原理之外，还要考虑延时消抖的问题
+什么是消抖：
+这个是考虑外部干扰的时候，我们检测到外部列线的值有变化，不立马做出反应，而是延时一段时间再去处理这个变化，这个时间一般是10到20ms。
+——————
+我们要添加按下延时和释放延时
+程序上面我们添加延时，是通过定时器来进行，定时器设置为1ms进入一次中断服务函数，我们在程序中设定一个值来，决定我们这个程序多长时间执行一次。
+比如：我们在源文件a.c中定义了一个b这个变量，这个变量会在中断服务函数中1ms自减一次，那么，我们在需要加延时的地方，加上一条if语句判断。
+if(b == 0) { b = 10; …… } 上面写的就是每10ms进入一次这个程序当中。然后再进行赋初值。
+——————
+那么消抖就是，当检测到列值变化的时候，首先加一个20ms的延时，如果到时间了，然后再进行处理。释放也一样，确认完行值之后，我们延时20ms之后再执行后面的操作。
+后面的操作指的是点亮led或者控制蜂鸣器等。
+——————
+而且我们在设计的时候不仅仅只要单一的一种功能，还想使某一个按键，长按实现其他功能。比如k1到k8键都是按下就能点亮一个led灯，k9键长按2s可以把led灯都给灭掉。
+——————
+这样在写程序的时候，就要考虑整个程序的架构了。不能一条路写到黑。
+要考虑普通按键和长按按键的延时时间区别，这里肯定要分成2个部分来进行写。
+具体程序不放了，简单描述一下：
+用switch函数来分步骤
+第一步：判断是否有按键按下，如果有就就行初始化，并且让步骤变量指向下一步。
+第二步：判断按下延时是否到了，如果到了就进行处理，获取行列值，最后让步骤变量指向下一步。
+第三步：判断按键是否松开，这里会做做2个判断：
+如果没松开，再判断是不是特殊按键9，如果不是则直接退出，如果是按键9则初始化延时变量，使延时2s。
+如果按键松开了，就填加释放延时变量，
+第四步：判断20ms或者2s释放延时是否到了，如果到了则去点亮或者熄灭led灯。
+——————
+这个程序的妙处就在于：
+引用了一个处理步骤变量tKeyScanf.Index，通过这个变量，进行switch跳转和延时变量tKeyScanf.Count的幅值，最会还将，按键确认程序和按键处理程序分开，使整个程序层次分明。
+——————
+本人第一次接触这样的程序，感觉太妙了。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3f19a9e7d51bf13e3b09482626ccc62b/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-03-07T11:16:42+08:00" />
+<meta property="article:modified_time" content="2022-03-07T11:16:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">嵌入式编程—按键扫描程序总结</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>按键扫描程序，包含的东西很多。<br> ——————<br> 1：硬件原理上面来说，涉及到按键IO口的输出方式，输入还是输出，是推挽还是开漏输出。<br> 行键设置为输出，开漏输出，初值为0；<br> 列键设置为输入，浮空输入，外部有上拉电阻，初值为0，所以读取IDR，会读到1。<br> 行键设置为输出是为了便于控制，列键设置为输入是为了便于读取。<br> 行键设置为开漏输出是为了在ODR被置1的时候，多键同时按键时，不至于短路。<br> 具体原理图如下：<br> <img src="https://images2.imgbox.com/1a/87/zqskFQT1_o.png" alt="在这里插入图片描述"><br> 行线k10，k11，k12对应的IO口，设置为输出，初值设置为000；<br> 列线k02，k01，k00对应的IO口，设置为输入，初值设置为000，因为外部的上拉电阻，所以读取到是111。<br> ——————<br> 当按键按下的时候，k02，k01，k00的IDR其中一个会被拉到0，这样就读取到了按键的列值，接下来就是想办法去读行值。<br> ——————<br> 采用的方法是：按键扫描：k10，k11，k12先通过程序置1然后依次置零，然后再读取列值。比如：k10，k11，k12对应的值是110，也就是k12输出为0，这个时候如果k9是被按下的，我们读取到的列值就是110，但是如果k4是被按下的，那么我们读取到的列值就是111。<br> ——————<br> 所以程序上面，我们就是通过判断读取到的列值是不是111，来确定行值。这样，我们知道了行列值，就能确定这个按键矩阵中是哪一个按键被按下了。</p> 
+<p>2：除了硬件原理之外，还要考虑延时消抖的问题<br> <img src="https://images2.imgbox.com/40/d2/lCLZTm8c_o.png" alt="在这里插入图片描述"><br> 什么是消抖：<br> 这个是考虑外部干扰的时候，我们检测到外部列线的值有变化，不立马做出反应，而是延时一段时间再去处理这个变化，这个时间一般是10到20ms。<br> ——————<br> 我们要添加按下延时和释放延时<br> 程序上面我们添加延时，是通过定时器来进行，定时器设置为1ms进入一次中断服务函数，我们在程序中设定一个值来，决定我们这个程序多长时间执行一次。<br> 比如：我们在源文件a.c中定义了一个b这个变量，这个变量会在中断服务函数中1ms自减一次，那么，我们在需要加延时的地方，加上一条if语句判断。</p> 
+<pre><code class="prism language-c"><span class="token keyword">if</span><span class="token punctuation">(</span>b <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	b <span class="token operator">=</span> <span class="token number">10</span><span class="token punctuation">;</span>
+	…… 
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>上面写的就是每10ms进入一次这个程序当中。然后再进行赋初值。<br> ——————<br> 那么消抖就是，当检测到列值变化的时候，首先加一个20ms的延时，如果到时间了，然后再进行处理。释放也一样，确认完行值之后，我们延时20ms之后再执行后面的操作。<br> 后面的操作指的是点亮led或者控制蜂鸣器等。<br> ——————<br> 而且我们在设计的时候不仅仅只要单一的一种功能，还想使某一个按键，长按实现其他功能。比如k1到k8键都是按下就能点亮一个led灯，k9键长按2s可以把led灯都给灭掉。<br> ——————<br> 这样在写程序的时候，就要考虑整个程序的架构了。不能一条路写到黑。<br> 要考虑普通按键和长按按键的延时时间区别，这里肯定要分成2个部分来进行写。<br> 具体程序不放了，简单描述一下：<br> 用switch函数来分步骤<br> 第一步：判断是否有按键按下，如果有就就行初始化，并且让步骤变量指向下一步。</p> 
+<p>第二步：判断按下延时是否到了，如果到了就进行处理，获取行列值，最后让步骤变量指向下一步。</p> 
+<p>第三步：判断按键是否松开，这里会做做2个判断：<br> 如果没松开，再判断是不是特殊按键9，如果不是则直接退出，如果是按键9则初始化延时变量，使延时2s。<br> 如果按键松开了，就填加释放延时变量，</p> 
+<p>第四步：判断20ms或者2s释放延时是否到了，如果到了则去点亮或者熄灭led灯。<br> ——————<br> 这个程序的妙处就在于：<br> 引用了一个处理步骤变量tKeyScanf.Index，通过这个变量，进行switch跳转和延时变量tKeyScanf.Count的幅值，最会还将，按键确认程序和按键处理程序分开，使整个程序层次分明。<br> ——————<br> 本人第一次接触这样的程序，感觉太妙了。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/e71c654f4af196d85b1e8d0f6b728cf3/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Redis源码解析：Redis持久化策略详解（一）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/8c7aff8362453170a57da9604118e2e8/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">SpringBoot项目 HTTP转HTTPS一直提示端口占用的问题</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

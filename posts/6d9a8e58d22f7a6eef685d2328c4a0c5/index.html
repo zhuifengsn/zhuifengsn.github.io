@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【C#】多线程处理 --《C#本质论》 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【C#】多线程处理 --《C#本质论》" />
+<meta property="og:description" content="目录
+一、多线程基础知识
+二、System.Threading
+（一）线程管理
+（二）Thread.Sleep()
+（三）Thread.Abort()
+（四）线程池处理
+三、异步任务
+（一）从Thread到Task
+（二）任务延续
+（三）异常处理 AggregateException
+（四）未处理异常
+（五）取消任务
+1、Task.Run()
+2、长时间运行的任务
+3、对任务进行资源清理
+（六）C# 5.0基于任务的异步模式
+1、通过async和await实现基于任务的异步模式
+2、异步Lambda
+3、自定义异步方法
+(七)并行迭代
+取消并行循环
+四、设计规范
+一、多线程基础知识 任务是可能出现高延迟的工作单元，作用是产生结果值或者希望的副作用。任务和线程的区别是：任务代表需要执行的一件工作，而线程代表做这件工作的工作者。
+多线程处理主要用于两个方面：实现多任务和解决延迟。
+操作系统通过时间分片机制模拟多个线程并发运行。处理器执行一个线程的时间周期称为时间片或量子，在某个核心上更改执行线程的行动称为上下文切换。（上下文切换是有代价的）
+无论是真正的多核并行运行，还是使用时间分片技术模拟，我们说“一起”进行的两个操作是并发。实现并发操作需要异步调用，被调用的操作的执行和完成都独立于调用它的控制流。异步分配的工作与当前控制流并行执行就实现了并发性。
+并行编程是指将一个问题分解成较小的部分，异步发起对每一部分的处理，最终使它们全部并发执行。
+多线程程序比单线程复杂的根本原因在于单线程程序中一些成立的假设在多线程中变得不成立了，问题包括缺乏原子性、竞态条件、复杂的内存模型以及死锁。
+竞态条件：当两个或多个线程竞争同一资源时，如果对资源的访问顺序敏感，就称存在竞态条件。
+死锁：假如不同线程以不同顺序获取锁，线程就会被冻结，彼此等待对方释放它们的锁，就可能发生死锁
+线程A线程B获得A上的锁获得B上的锁请求B上的锁请求A上的锁死锁，等待B死锁，等待A 二、System.Threading public const int Repetition = 500; public static void Main(string[] args) { ThreadStart threadStart = DoWork; Thread thread = new Thread(threadStart); thread.Start(); for (int i = 0; i &lt; Repetition; i&#43;&#43;) { Console.Write(&#34;-&#34;); } thread." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/6d9a8e58d22f7a6eef685d2328c4a0c5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-04-14T16:47:22+08:00" />
+<meta property="article:modified_time" content="2023-04-14T16:47:22+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【C#】多线程处理 --《C#本质论》</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p id="%E4%B8%80%E3%80%81%E5%A4%9A%E7%BA%BF%E7%A8%8B%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86-toc" style="margin-left:0px;"><a href="#%E4%B8%80%E3%80%81%E5%A4%9A%E7%BA%BF%E7%A8%8B%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86" rel="nofollow">一、多线程基础知识</a></p> 
+<p id="%E4%BA%8C%E3%80%81System.Threading-toc" style="margin-left:0px;"><a href="#%E4%BA%8C%E3%80%81System.Threading" rel="nofollow">二、System.Threading</a></p> 
+<p id="%C2%A0%EF%BC%88%E4%B8%80%EF%BC%89%E7%BA%BF%E7%A8%8B%E7%AE%A1%E7%90%86-toc" style="margin-left:40px;"><a href="#%C2%A0%EF%BC%88%E4%B8%80%EF%BC%89%E7%BA%BF%E7%A8%8B%E7%AE%A1%E7%90%86" rel="nofollow"> （一）线程管理</a></p> 
+<p id="%EF%BC%88%E4%BA%8C%EF%BC%89Thread.Sleep()-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E4%BA%8C%EF%BC%89Thread.Sleep%28%29" rel="nofollow">（二）Thread.Sleep()</a></p> 
+<p id="%EF%BC%88%E4%B8%89%EF%BC%89Thread.Abort()-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E4%B8%89%EF%BC%89Thread.Abort%28%29" rel="nofollow">（三）Thread.Abort()</a></p> 
+<p id="%EF%BC%88%E5%9B%9B%EF%BC%89%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%A4%84%E7%90%86-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E5%9B%9B%EF%BC%89%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%A4%84%E7%90%86" rel="nofollow">（四）线程池处理</a></p> 
+<p id="%E4%B8%89%E3%80%81%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1-toc" style="margin-left:0px;"><a href="#%E4%B8%89%E3%80%81%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1" rel="nofollow">三、异步任务</a></p> 
+<p id="%EF%BC%88%E4%B8%80%EF%BC%89%E4%BB%8EThread%E5%88%B0Task-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E4%B8%80%EF%BC%89%E4%BB%8EThread%E5%88%B0Task" rel="nofollow">（一）从Thread到Task</a></p> 
+<p id="%EF%BC%88%E4%BA%8C%EF%BC%89%E4%BB%BB%E5%8A%A1%E5%BB%B6%E7%BB%AD-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E4%BA%8C%EF%BC%89%E4%BB%BB%E5%8A%A1%E5%BB%B6%E7%BB%AD" rel="nofollow">（二）任务延续</a></p> 
+<p id="%C2%A0%EF%BC%88%E4%B8%89%EF%BC%89%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86%20AggregateException-toc" style="margin-left:40px;"><a href="#%C2%A0%EF%BC%88%E4%B8%89%EF%BC%89%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86%20AggregateException" rel="nofollow"> （三）异常处理 AggregateException</a></p> 
+<p id="%EF%BC%88%E5%9B%9B%EF%BC%89%E6%9C%AA%E5%A4%84%E7%90%86%E5%BC%82%E5%B8%B8-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E5%9B%9B%EF%BC%89%E6%9C%AA%E5%A4%84%E7%90%86%E5%BC%82%E5%B8%B8" rel="nofollow">（四）未处理异常</a></p> 
+<p id="%EF%BC%88%E4%BA%94%EF%BC%89%E5%8F%96%E6%B6%88%E4%BB%BB%E5%8A%A1-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E4%BA%94%EF%BC%89%E5%8F%96%E6%B6%88%E4%BB%BB%E5%8A%A1" rel="nofollow">（五）取消任务</a></p> 
+<p id="1%E3%80%81Task.Run()-toc" style="margin-left:80px;"><a href="#1%E3%80%81Task.Run%28%29" rel="nofollow">1、Task.Run()</a></p> 
+<p id="2%E3%80%81%E9%95%BF%E6%97%B6%E9%97%B4%E8%BF%90%E8%A1%8C%E7%9A%84%E4%BB%BB%E5%8A%A1-toc" style="margin-left:80px;"><a href="#2%E3%80%81%E9%95%BF%E6%97%B6%E9%97%B4%E8%BF%90%E8%A1%8C%E7%9A%84%E4%BB%BB%E5%8A%A1" rel="nofollow">2、长时间运行的任务</a></p> 
+<p id="3%E3%80%81%E5%AF%B9%E4%BB%BB%E5%8A%A1%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%B8%85%E7%90%86-toc" style="margin-left:80px;"><a href="#3%E3%80%81%E5%AF%B9%E4%BB%BB%E5%8A%A1%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%B8%85%E7%90%86" rel="nofollow">3、对任务进行资源清理</a></p> 
+<p id="%EF%BC%88%E5%85%AD%EF%BC%89C%23%205.0%E5%9F%BA%E4%BA%8E%E4%BB%BB%E5%8A%A1%E7%9A%84%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%BC%8F-toc" style="margin-left:40px;"><a href="#%EF%BC%88%E5%85%AD%EF%BC%89C%23%205.0%E5%9F%BA%E4%BA%8E%E4%BB%BB%E5%8A%A1%E7%9A%84%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%BC%8F" rel="nofollow">（六）C# 5.0基于任务的异步模式</a></p> 
+<p id="1%E3%80%81%E9%80%9A%E8%BF%87async%E5%92%8Cawait%E5%AE%9E%E7%8E%B0%E5%9F%BA%E4%BA%8E%E4%BB%BB%E5%8A%A1%E7%9A%84%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%BC%8F-toc" style="margin-left:80px;"><a href="#1%E3%80%81%E9%80%9A%E8%BF%87async%E5%92%8Cawait%E5%AE%9E%E7%8E%B0%E5%9F%BA%E4%BA%8E%E4%BB%BB%E5%8A%A1%E7%9A%84%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%BC%8F" rel="nofollow">1、通过async和await实现基于任务的异步模式</a></p> 
+<p id="2%E3%80%81%E5%BC%82%E6%AD%A5Lambda-toc" style="margin-left:80px;"><a href="#2%E3%80%81%E5%BC%82%E6%AD%A5Lambda" rel="nofollow">2、异步Lambda</a></p> 
+<p id="3%E3%80%81%E8%87%AA%E5%AE%9A%E4%B9%89%E5%BC%82%E6%AD%A5%E6%96%B9%E6%B3%95-toc" style="margin-left:80px;"><a href="#3%E3%80%81%E8%87%AA%E5%AE%9A%E4%B9%89%E5%BC%82%E6%AD%A5%E6%96%B9%E6%B3%95" rel="nofollow">3、自定义异步方法</a></p> 
+<p id="(%E4%B8%83)%E5%B9%B6%E8%A1%8C%E8%BF%AD%E4%BB%A3-toc" style="margin-left:40px;"><a href="#%28%E4%B8%83%29%E5%B9%B6%E8%A1%8C%E8%BF%AD%E4%BB%A3" rel="nofollow">(七)并行迭代</a></p> 
+<p id="%E5%8F%96%E6%B6%88%E5%B9%B6%E8%A1%8C%E5%BE%AA%E7%8E%AF-toc" style="margin-left:80px;"><a href="#%E5%8F%96%E6%B6%88%E5%B9%B6%E8%A1%8C%E5%BE%AA%E7%8E%AF" rel="nofollow">取消并行循环</a></p> 
+<p id="%E8%AE%BE%E8%AE%A1%E8%A7%84%E8%8C%83-toc" style="margin-left:0px;"><a href="#%E8%AE%BE%E8%AE%A1%E8%A7%84%E8%8C%83" rel="nofollow">四、设计规范</a></p> 
+<p id="-toc" style="margin-left:80px;"></p> 
+<hr id="hr-toc"> 
+<p></p> 
+<h2><img alt="" height="258" src="https://images2.imgbox.com/37/e1/XOuVPxf4_o.png" width="677"></h2> 
+<p></p> 
+<h2>一、多线程基础知识</h2> 
+<p><strong><span style="color:#0d0016;">任务</span></strong>是可能出现高延迟的工作单元，作用是产生结果值或者希望的副作用。任务和线程的区别是：任务代表需要执行的一件工作，而线程代表做这件工作的工作者。</p> 
+<p>多线程处理主要用于两个方面：实现多任务和解决延迟。</p> 
+<p>操作系统通过<strong>时间分片</strong>机制模拟多个线程并发运行。处理器执行一个线程的时间周期称为时间片或量子，在某个核心上更改执行线程的行动称为<strong>上下文切换</strong>。（上下文切换是有代价的）</p> 
+<p>无论是真正的多核并行运行，还是使用时间分片技术模拟，我们说“一起”进行的两个操作是<strong>并发</strong>。实现并发操作需要<strong>异步调用</strong>，被调用的操作的执行和完成都独立于调用它的控制流。异步分配的工作与当前控制流并行执行就实现了并发性。</p> 
+<p><strong>并行编程</strong>是指将一个问题分解成较小的部分，异步发起对每一部分的处理，最终使它们全部并发执行。<br> 多线程程序比单线程复杂的根本原因在于单线程程序中一些成立的假设在多线程中变得不成立了，问题包括缺乏原子性、竞态条件、复杂的内存模型以及死锁。</p> 
+<p>竞态条件：当两个或多个线程竞争同一资源时，如果对资源的访问顺序敏感，就称存在竞态条件。</p> 
+<p>死锁：假如不同线程以不同顺序获取锁，线程就会被冻结，彼此等待对方释放它们的锁，就可能发生死锁</p> 
+<table border="1" cellpadding="1" cellspacing="1" style="width:500px;"><tbody><tr><td>线程A</td><td>线程B</td></tr><tr><td>获得A上的锁</td><td>获得B上的锁</td></tr><tr><td>请求B上的锁</td><td>请求A上的锁</td></tr><tr><td>死锁，等待B</td><td>死锁，等待A</td></tr></tbody></table> 
+<h2 id="%E4%BA%8C%E3%80%81System.Threading">二、System.Threading</h2> 
+<pre><code class="language-cs">   public const int Repetition = 500;
+   public static void Main(string[] args)
+   {
+        ThreadStart threadStart = DoWork;
+        Thread thread = new Thread(threadStart);
+        thread.Start();
+        for (int i = 0; i &lt; Repetition; i++)
+        {
+            Console.Write("-");
+        }
+        thread.Join(); //告诉主线程等待工作者线程完成
+    }
+
+    private static void DoWork()
+    {
+        for(int i = 0; i &lt; Repetition; i++)
+        {
+            Console.Write('+');
+        }
+    }
+</code></pre> 
+<p><img alt="" height="186" src="https://images2.imgbox.com/38/ce/5NliOyLp_o.png" width="990"></p> 
+<h3 id="%C2%A0%EF%BC%88%E4%B8%80%EF%BC%89%E7%BA%BF%E7%A8%8B%E7%AE%A1%E7%90%86"> （一）线程管理</h3> 
+<p>Thread包含大量的方法和属性来管理线程的执行：</p> 
+<p>Join：使一个线程等待另一个线程。它会告诉操作系统暂停当前线程，直到另一个线程终止。重载版本可以指定等待的最长时间。</p> 
+<p>IsBackground:新线程默认为“前台”线程，操作系统将在进行的所有前台线程完成后终止进程。可将线程的IsBackground属性设置为true，从而将线程标记为“后台”线程。后台线程运行时，操作系统允许进程终止。不过，最好不要半路中断任何线程，而是在进程退出前显示终止每个线程。</p> 
+<p>Priority：为线程设置优先级（Lowest、BelowNormal、Normal、AboveNormal、Highest）。操作系统倾向于将时间片调拨给高优先级的线程。如果线程优先级设置不当，可能会出现“饥饿”情况，即高优先级线程一直允许，低优先级线程一直等待。</p> 
+<p>ThreadState：包含全面的线程状态。也可以通过IsAlive了解一个线程是否还“活着”。</p> 
+<h3 id="%EF%BC%88%E4%BA%8C%EF%BC%89Thread.Sleep()">（二）Thread.Sleep()</h3> 
+<p>Thread.Sleep()使当前线程进入睡眠——告诉操作系统在指定的时间内不要为该线程调度任何时间片。</p> 
+<p>Thread.Sleep()不能作为高精度的计时器使用。</p> 
+<p>将睡眠时间设置为0，相当于告诉操作系统“当前线程剩下的时间片就送给其他线程了”，然后，该线程会被正常调度，不会发生更多延迟。</p> 
+<h3 id="%EF%BC%88%E4%B8%89%EF%BC%89Thread.Abort()">（三）Thread.Abort()</h3> 
+<p>Thread.Abort()一旦执行，就会尝试销毁线程，会导致“运行时”在线程中抛出“ThreadAbortExeception”异常。该异常可被捕获，但即使被捕获并被忽略，还是会自动重新抛出以确保线程事实上被销毁。</p> 
+<p>尽量不要试图中断线程，原因如下：</p> 
+<p>Thread.Abort()方法只尝试中断，不保证成功。例如，线程控制点在finally块中，运行时不会抛出ThreadAbortExeception，因为当前可能在允许关键的清理代码，不应该被打断。在非托管代码中也不会被抛出，否则会破坏CLR本身。CLR会推迟到控制离开finally块或回到托管代码后才抛出异常。但这也是无法保证的，被中断的线程可能在finally块中包含无限循环。</p> 
+<p>中断的线程可能正在执行由lock语句 保护的关键代码，lock阻止不了异常，关键代码会因异常中断，lock对象自动释放，允许正在等待这个锁的其他代码进入关键区域。所以，中断线程可能会造成危险和不正确。</p> 
+<p>线程中断时，CLR保证自己的内部数据结构不会损坏,但BCL没有做出这个保证。在错误的时候抛出异常，中断线程可能会使数据或者BCL的数据结构处于损坏状态。在其他线程或者中断线程的finally块中运行的代码可能看到损坏的状态，最后要么崩溃，要么行为错误。</p> 
+<h3 id="%EF%BC%88%E5%9B%9B%EF%BC%89%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%A4%84%E7%90%86">（四）线程池处理</h3> 
+<p>线程池：开发者不直接分配线程，而是告诉线程池想要执行上面工作，工作完成后，线程不是终止，而是回到线程池中，从而节省更多工作来临时分配新线程的开销。</p> 
+<p>线程池的效率通过重用线程来获得。</p> 
+<pre><code class="language-cs">    public const int Repetition = 500;
+    public static void Main(string[] args)
+    {
+        //将方法排入队列以便执行。 此方法在有线程池线程变得可用时执行。
+        ThreadPool.QueueUserWorkItem(DoWork, '+');
+
+        for(int i = 0; i &lt; Repetition; i++)
+        {
+            Console.Write("-");
+        }
+        Thread.Sleep(1000);
+    }
+
+    private static void DoWork(object state)
+    {
+        for(int i = 0; i &lt; Repetition; i++)
+        {
+            Console.Write(state);
+        }
+    }</code></pre> 
+<h2 id="%E4%B8%89%E3%80%81%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1">三、异步任务</h2> 
+<p>多线程编程的复杂性主要来自一下几个方面：</p> 
+<ul><li>监视异步操作的状态，知道它于何时完成</li><li>线程池。避免启动和终止线程的巨大开销，避免创建太多线程，防止系统将太多时间花在线程的切换而不是运行上</li><li>避免死锁</li><li>为不同的操作提供原子性并同步数据访问</li></ul> 
+<h3 id="%EF%BC%88%E4%B8%80%EF%BC%89%E4%BB%8EThread%E5%88%B0Task">（一）从Thread到Task</h3> 
+<p>在.Net Framework 4和后续版本中，TPL（任务并行库）不是每次开始异步工作时都创建一个线程，而是创建一个Task，并告诉任务调度器有异步工作要执行。此时任务调度器可能采取多种策略，但默认是从线程池请求一个工作者线程。线程池会自行判断怎么做最高效--可能在当前任务结束后再运行新任务，或者将新任务的工作者线程调度给特定处理器，线程池还会判断是创建全新线程还是重用之前已结束运行的现有线程。</p> 
+<p>调用Task.Run()，作为实参传递的Action几乎立刻开始执行，这称为“热任务”，“冷任务” 则需要显式触发之后才开始异步工作。</p> 
+<p>调用Run()之后无法确定“热”任务的确切状态。</p> 
+<p>调用Wait()将强迫主线程等待分配给任务的所有工作完成。一个常见的情况是等待一组任务完成，或等待其中一个完成，当前线程才能继续，分别使用Task.WaitAll() 和Task.WaitAny()。</p> 
+<p>假如任务执行的工作要返回结果，可用Task&lt;T&gt;类型来异步运行一个Func&lt;T&gt;，然后从一个线程轮询它，看它是否完成，完成就获取结果。</p> 
+<p><img alt="" height="536" src="https://images2.imgbox.com/b4/89/BzME2l6b_o.png" width="628"></p> 
+<p> 使用轮询需要谨慎，任务被调度给一个工作者线程，意味着当前线程会一直循环，直到工作者线程上的工作结束，但可能会无谓地消耗CPU资源。如果不将任务调度给工作者线程，而是将任务调度给当前线程，在某个未来的时间执行，这样的轮询就会变得非常危险。当前线程将一直处于对任务的轮询中。之所以会成为无限循环，是因为除非当前线程退出循环，否则任务不会结束。</p> 
+<p>Task&lt;TResult&gt; 包含一个Result属性，可用从中获取由Task&lt;TResult&gt;执行的Func&lt;TResult&gt;返回值。</p> 
+<p>Task&lt;T&gt;除了IsCompleted和 Result 属性，还有几个其他地方需要注意：<br> 任务完成后，IsCompleted 属性被设为 true——不管是正常结束还是出错。更详细的任务状态信息可用通过读取Status属性来获得。但，只有RanToCompletion、Canceled 和 Faulted可被视为最终状态，不会再变。</p> 
+<p>任务可用Id属性的值作为唯一的标识。静态Task.CurrentId属性返回当前正在执行的Task的标识符</p> 
+<p>可用AsyncState为任务关联额外的数据（？）</p> 
+<h3 id="%EF%BC%88%E4%BA%8C%EF%BC%89%E4%BB%BB%E5%8A%A1%E5%BB%B6%E7%BB%AD">（二）任务延续</h3> 
+<p>控制流决定接下来要发生什么。C#编程其实就是在延续的基础上构造延续，直至整个程序的控制流结束。</p> 
+<p>在普通的C#程序中，给定代码的延续会在该代码完成后立即执行。任何给定的代码实际上都有两个可能的延续：正常延续和异常延续。</p> 
+<p>而异步方法调用（比如开始一个Task）会为控制流添加一个新维度。换句话说，，在涉及异步任务的时候，“接着发生的事情”是多维的。</p> 
+<p>异步任务使我们能将较小的任务合并成较大的任务，只需要描述好异步延续就可以了。</p> 
+<p>用任务异步修改集合需谨慎，任务可能在不同的工作者线程上运行，而集合可能不是线程安全的。更安全的做法是完成后在主线程填充集合。</p> 
+<pre><code class="language-cs">Task taskA = Task.Run(() =&gt; Console.WriteLine("Start...")).ContinueWith(t =&gt; Console.WriteLine("Continuing A..."));
+Task taskB=taskA.ContinueWith(t =&gt; Console.WriteLine("Continuing B..."));
+Task taskC=taskA.ContinueWith(t =&gt; Console.WriteLine("Continuing C..."));
+Task.WaitAll(taskB, taskC);
+Console.WriteLine("Finished!");</code></pre> 
+<blockquote> 
+ <p>Start...<br> Continuing A...<br> Continuing C...<br> Continuing B...</p> 
+ <p>Finished!</p> 
+</blockquote> 
+<p>用ContinueWith链接两个任务，这样，当先驱任务完成后，后面的任务自动以异步方式开始。延续任务获取一个Task作为实参，这样才能访问先驱任务的完成状态。</p> 
+<p>同一个先驱任务的多个延续任务无法在编译时确定执行顺序。</p> 
+<p><img alt="" height="833" src="https://images2.imgbox.com/48/c2/MeUTl6Si_o.png" width="854"></p> 
+<p> <img alt="" height="211" src="https://images2.imgbox.com/43/05/WqugBRRF_o.png" width="790"></p> 
+<h3 id="%C2%A0%EF%BC%88%E4%B8%89%EF%BC%89%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86%20AggregateException"> （三）异常处理 AggregateException</h3> 
+<p>同步调用的方法可以包装到try块中，用catch子句告诉编译器发生异常时应该执行什么代码，但异步调用不能那么做，因为控制会立刻从调用返回，工作者线程发生异常时，控制可能已经离开try块了。</p> 
+<p>自CLR2.0起，任何线程上的未处理异常都会被视为严重错误，会触发“Windows 错误报告"，并造成应用程序异常中止。所有线程上的异常都必须被捕捉！</p> 
+<p>为处理出错的任务，一个技术是<strong>显式创建延续任务作为那个任务的错误处理程序</strong>，但是，如果没有这种处理程序，调试在出错的任务上执行Wait()或其他试图获取Result的动作，就会引发一个AggregateException。</p> 
+<pre><code class="language-cs">        Task task = Task.Run(() =&gt; throw new InvalidOperationException());
+        try
+        {
+            task.Wait();
+        }
+        catch(AggregateException ex)
+        {
+            ex.Handle(eachEx =&gt;
+            {
+                Console.WriteLine($"Error:{eachEx.Message}");
+                return true;
+            });
+        }</code></pre> 
+<blockquote> 
+ <p>Error:Operation is not valid due to the current state of the object.</p> 
+</blockquote> 
+<p>之所以叫AggregateException（集合异常），是因为它可能包含从一个或多个出错的任务收集到的异常，并把它们当作一个异常来报告。除此之外，由于编译时不知道工作者任务将会引发一个还是多个异常，所以未处理的出错任务总是引发一个AggregateException。</p> 
+<p>如上示例，虽然工作者线程引发的未处理异常是InvalidOperationException，主线程捕捉到的仍是一个AggregateException。另外，<strong>捕捉异常需要一个AggregateException  catch块</strong>。</p> 
+<p>AggregateException 包含的列表通过 InnerException属性来获取，可用遍历该属性来检查每个异常并采取相应的对策。</p> 
+<p>可以使用AggregateException.Handle() 方法，为每个异常都指定一个要执行的表达式。Handle() 方法是一个断言，经过Handle()委托成功处理的异常，断言应返回true，若返回false，将会引发新的AggregateException。</p> 
+<p>可查看任务的Exception属性来了解出错任务的状态，这样不会造成在当前线程上重新引发异常。</p> 
+<p>使用ContinueWith（）观察未处理的异常：</p> 
+<pre><code class="language-cs">    public static void Main()
+    {
+        bool parentFalut=false;
+        bool antecedentTaskIsFaulted = false;
+        Task task=new Task(()=&gt;throw new InvalidOperationException());
+        Task continueTask = task.ContinueWith(antecedentTask =&gt; { antecedentTaskIsFaulted = antecedentTask.IsFaulted; }, TaskContinuationOptions.OnlyOnFaulted);
+        task.Start();
+        continueTask.Wait();
+        Trace.Assert(antecedentTaskIsFaulted);
+
+        if(!task.IsFaulted) task.Wait();
+        else
+        {
+            task.Exception.Handle(eachException =&gt;
+            {
+                Console.WriteLine($"Error:{eachException.Message}");
+                return true;
+            });
+        }
+    }</code></pre> 
+<blockquote> 
+ <p>Error:Operation is not valid due to the current state of the object.</p> 
+</blockquote> 
+<p>如果任务中的异常完全没被观察到，那么它不会在任务中被捕捉到，永远观察不到任务完成，出错的ContinueWith（）永远观察不到。可能会造成异常完全未被处理，最终成为进程级别的未处理异常。在.Net 4.0中，这样的异常会由终结器线程重新引发并可能造成进程崩溃。但在.Net4.5中，这个崩溃被阻止了。</p> 
+<p>（一般都不会等待有错的延续，因为大多数时候都不会安排它运行，以上代码仅供演示）</p> 
+<p>无论哪种情况，都可以通过TaskScheduler.UnobseredTaskException事件来登记未处理的任务异常。</p> 
+<h3 id="%EF%BC%88%E5%9B%9B%EF%BC%89%E6%9C%AA%E5%A4%84%E7%90%86%E5%BC%82%E5%B8%B8">（四）未处理异常</h3> 
+<p>任何线程上的未处理异常默认都造成应用程序终止。未处理异常代表严重的、事先没有注意的bug，而且异常可能因为关键数据结构损坏而发生。由于不知道程序在发生异常后可能做什么，所以最安全的对策是立即关闭整个程序。</p> 
+<p>理想情况是程序在任何线程上都不引发未处理的异常。但是发生未处理异常时，有时需要在关闭程序前及时保存完好数据，并且/或者记录异常以便进行错误报告和调试。这要求用一个机制来<strong>登记未处理异常通知</strong>。</p> 
+<p>每个AppDomain都提供了这样的一个机制，为了观察AppDomain中发生的未处理异常，必须添加一个<strong>UnhandledException</strong>事件来处理程序。无论主线程还是工作者线程AppDomain中的线程发生的所有未处理异常都会触发UnhandledException事件。</p> 
+<p>注意，这个机制的目的是<strong>通知，不允许应用程序从未处理异常中恢复并继续执行</strong>。事件处理程序运行完毕，应用程序会显示“Windows错误报告”对话框并退出。(如果是控制台应用程序，异常详细信息还会在控制合上显示。)<br>  </p> 
+<pre><code class="language-cs">public class Program
+{
+    public static Stopwatch clock = new Stopwatch();
+    public static void Main()
+    {
+        try
+        {
+            clock.Start();
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =&gt;
+            {
+                Message("Event handler starting");
+                Delay(4000);
+            };
+
+            Thread thread = new Thread(() =&gt;
+            {
+                Message("Throwing exception");
+                throw new Exception();
+            });
+            thread.Start();
+            Delay(2000);
+        }
+        finally
+        {
+            Message("Finally block running");
+        }
+    }
+
+    private static void Delay(int v)
+    {
+        Message(string.Format($"Sleeping for{v}"));
+        Thread.Sleep(v);
+        Message("Awake");
+    }
+
+    private static void Message(string v)
+    {
+        Console.WriteLine($"{Thread.CurrentThread.ManagedThreadId}:{clock.ElapsedMilliseconds:0000}:{v}");
+    }
+}</code></pre> 
+<p><img alt="" height="460" src="https://images2.imgbox.com/ac/01/Yg2gWuXt_o.png" width="1200"></p> 
+<p> 如上图所示，新线程被赋予线程ID9，主线程被赋予线程ID 1。9运行一会儿后，未处理异常被引发，调用事件来处理程序，然后进入睡眠。很快，操作系统意识到线程1可以调度了，但它的代码是立即睡眠。线程1先醒来并运行finally块，两秒钟后线程9醒来，未处理线程使进程崩溃。</p> 
+<p>执行事件处理程序，进程会等到处理程序完成后再崩溃，这是很典型的一个顺序但却无法保证。一旦程序发生未处理异常，程序就处于一种未知的、不稳定的状态，一切都会变得难以预料。</p> 
+<p>在这个例子中，CLR允许主线程继续运行并执行它的finally块，即使它知道当控制进入finally块时，另一个线程正处于AppDomain的未处理异常事件处理程序中。为了更深刻地理解这个事实，可试着修改延迟，使主线程睡眠得比事件处理程序长一些。这样finally块将不会运行，因为线程1被唤醒之前，进程就会因为未处理的异常而销毁了。引发异常的线程是不是由线程池创建的，还可能得到不同的结果，最佳实践是避免所有未处理异常，不管在工作者线程中，还是在主线程中。</p> 
+<h3 id="%EF%BC%88%E4%BA%94%EF%BC%89%E5%8F%96%E6%B6%88%E4%BB%BB%E5%8A%A1">（五）取消任务</h3> 
+<p>TPL使用的是<strong>协作式取消(cooperative cancellation)</strong>，一种得体的、健壮的和可靠的技术来安全地取消不再需要的任务。<strong>支持取消的任务要监视一个CancellationToken对象(位于system.Threading命名空间)</strong>。任务定期轮询它，检查是否发出了取消请求。</p> 
+<pre><code class="language-cs">    public static void Main()
+    {
+        string stars = "*".PadRight(Console.WindowWidth - 1, '*');
+        Console.WriteLine("Push Enter to exit");
+
+        CancellationTokenSource cts = new CancellationTokenSource();
+        Task task = Task.Run(() =&gt; WritePi(cts.Token));
+        Console.ReadLine();
+
+        cts.Cancel();
+        Console.WriteLine(stars);
+        task.Wait();
+        Console.WriteLine();
+    }
+
+    private static void WritePi(CancellationToken token)
+    {
+        const int batchSize = 1;
+        string piSection=string.Empty;
+        int i = 0;
+
+        while(!token.IsCancellationRequested||i==int.MaxValue)
+        {
+            piSection=(i++ *batchSize).ToString();
+            Console.WriteLine(piSection);
+        }
+    }</code></pre> 
+<p>CancellationTokenSource.Cancel()不是“野蛮”地中止正在执行的Task。任务会继续运行，直到它检查标志，发现标志的所有者已请求取消任务，这时才会得体地关闭任务。</p> 
+<p>调用Cancel()实际会在从CancellationTokenSource.Token复制的所有取消标志上设置IsCancellationRequested属性。在这一句话中，有以下几个地方需要注意。<br> 提供给异步任务的是CancellationToken(而不是CancellationTokenSource),<strong>CancellationToken使我们能轮询取消请求，而CancellationTokenSource负责提供标志，并在取消时发出通知</strong>。</p> 
+<p>CancellationToken是结构，所以能复制值。CancellationTokenSource.Token返回的是标志的副本。</p> 
+<p>关于CancellationToken，要注意的另一个要点是重载的Register()方法。通过这个方法，可以登记一个操作，在标志为已取消时调用。换言之，调用Register()方法将登记对应CancellationTokenSource的Cancel()上的一个侦听器委托。</p> 
+<p><img alt="" height="116" src="https://images2.imgbox.com/53/fc/t5JeHogO_o.png" width="1167"><br> 在上面程序中，由于在任务完成前取消任务是预料之中的行为，所以没有引发System.Threading.Tasks.TaskCanceledException。task.Status会返回TaskStatus. RanToCompletion，不报告任务的工作实际已经取消。本例不需要这样的报告，但需要的话TPL也能提供。<strong>如果取消任务会在某些方面造成破坏(例如，造成无法返回一个有效的结果)，那么TPL为了报告这个问题，采用的模式就是引发一个TaskCanceledException</strong>(派生自System.OperationCanceledException)。不是显式引发异常，而是由CancellationToken包含一个ThrowIfCancellationRequested()方法，从而更容易地报告异常，前提是有一个可用的CancellationToken的实例。</p> 
+<p>在引发TaskCanceledException的任务上调用wait()(或获取Result)，结果和在任务中引发其他任何异常一样。这个调用会引发AggregateException。该异常标志着任务的执行状态可能不完整。在成功完成的任务中，所有预期的工作都成功执行。相反，被取消的任务可能有工作只是部分完成一一工作的状态不可信。</p> 
+<h4 id="1%E3%80%81Task.Run()">1、Task.Run()</h4> 
+<p>Task.Run()是Task.Factory.StartNew()的简化形式。</p> 
+<p>Task.Factory.StartNew()用于调用一个要求创建额外线程的CPU密集型方法（）。而在NET 4.5中，应该默认使用Task,Run()，除非它满足不了一些特殊要求。例如，<strong>要用TaskCreationoptions控制任务，要指定其他调度器，或者出于性能的考虑要传递对象状态</strong>，就可以考虑Task.Factory.StartNew()。只有需要将创建和调度分开(这种情况很少见)，才可考虑在构造器调用之后添加一个Start()调用。</p> 
+<h4 id="2%E3%80%81%E9%95%BF%E6%97%B6%E9%97%B4%E8%BF%90%E8%A1%8C%E7%9A%84%E4%BB%BB%E5%8A%A1">2、长时间运行的任务</h4> 
+<p>线程池假定所有工作都是处理器受限的，而且运行时间都比较短。这些假设的目的是<strong>控制创建的线程数量，防止因为过多分配昂贵的线程资源以及超额预订处理器而造成过于频繁的上下文切换和时间分片</strong>。<br> 但是，如果开发人员知道一个任务要长时间运行，会长时间“霸占”一个底层线程资源，就可以通知调度器任务不会太快结束工作。这个通知有两方面的作用。首先，<strong>它提醒调度器或许应该为该任务创建专用线程</strong>(而不是使用来自线程池的)。其次，<strong>它提醒调度器可能应该调度比平时更多的线程</strong>。这会造成更多的时间分片，但这是一件好事。我们不希望长时间运行的任务霸占整个处理器，让其他短时间的任务没法运行。短时间运行的任务利用分配到的时间片，能在短时间内完成大部分工作，而长时间运行的任务基本注意不到因为和其他任务共享处理器而产生的些许延迟。为此要在调用StartNew()时使用TaskCreationOptions.LongRunning选项(Task.Run()不支持TaskCreationOptions参数）</p> 
+<pre><code class="language-cs">Task task = Task.Factory.StartNew(() =&gt; Console.WriteLine("..."),TaskCreationOptions.LongRunning);</code></pre> 
+<h4 id="3%E3%80%81%E5%AF%B9%E4%BB%BB%E5%8A%A1%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%B8%85%E7%90%86">3、对任务进行资源清理</h4> 
+<p>Task还支持IDisposable。因为Task可能在等待完成时分配一个WaitHandle。由于WaitHandle支持IDisposable，所以Task根据最佳实践也要支持IDisposable（.NET Framework设计指南中指出：一个类型如果持有其它实现过IDisposable接口的资源时，其自身也应该实现IDisposable接口）。然而，前面的代码示例中，既没有包含一个Dispose()调用，也没有通过using语句来隐式调用。代码是依赖程序退出时的一个自动的WaitHandle终结器调用。</p> 
+<p>这造成了两个结果。首先，句柄存活时间变长了，会消耗更多资源。其次，垃圾回收器的效率变低了，因为被终结的对象存活到了下一代。但在Task的情况下，除非要终结大量任务，否则这两方面的问题都不大。</p> 
+<p>虽然从技术上说所有代码都应该对任务进行dispose(资源清理)，但除非对性能的要求极为严格，而且做起来很容易(换言之确定任务已经结束，而且没有其他代码在使用它们)，否则就不必麻烦了。在.NET 4.0中，一个Task一旦被释放，它的大多数成员访问都会抛出ObjectDisposedExceptions异常，这使得完成的任务很难被安全的缓存。而且，当使用Task的延续任务时，很难判断它什么时候完成以及什么时候没有人使用。</p> 
+<h3 id="%EF%BC%88%E5%85%AD%EF%BC%89C%23%205.0%E5%9F%BA%E4%BA%8E%E4%BB%BB%E5%8A%A1%E7%9A%84%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%BC%8F">（六）C# 5.0基于任务的异步模式</h3> 
+<p>处理异步工作时，任务提供了比线程更好的抽象。任务自动调度为恰当数量的线程，而且，大型任务可由多个小任务组成。</p> 
+<p>但任务有自己的缺点。其中最麻烦的是它“颠倒”了程序逻辑。2</p> 
+<h4 id="1%E3%80%81%E9%80%9A%E8%BF%87async%E5%92%8Cawait%E5%AE%9E%E7%8E%B0%E5%9F%BA%E4%BA%8E%E4%BB%BB%E5%8A%A1%E7%9A%84%E5%BC%82%E6%AD%A5%E6%A8%A1%E5%BC%8F">1、通过async和await实现基于任务的异步模式</h4> 
+<pre><code class="language-cs">   public static void Main()
+    {
+        string url = "http://www.IntelliTect.com";
+        Task task=WriteWebRequestSizeArray(url);
+        while(!task.Wait(100))
+        {
+            Console.Write(".");
+        }
+    }
+
+    public static async Task WriteWebRequestSizeArray(string url)
+    {
+        try
+        {
+            WebRequest webRequest = WebRequest.Create(url);
+            //使用async关键字修饰的方法实现如果不等待任何未完成的、可等待的任务，就会与调用方法同步进行
+            //await关键字对它后面的表达式求值，该表达式一般是Task或Task&lt;T&gt;类型，为最终的任务添加延续，然后立即将控制返回给调用者
+            WebResponse webResponse = await webRequest.GetResponseAsync();
+            using (StreamReader reader = new StreamReader(webResponse.GetResponseStream()))
+            {
+                string text=await reader.ReadToEndAsync();
+                Console.WriteLine(text.Length);
+            }
+        }
+        catch(WebException)
+        {
+
+        }
+    }</code></pre> 
+<p>async上下文关键字指示编译器将表达式重写为一个状态机来全部控制流(以及更多)。</p> 
+<p>async关键字的作用：</p> 
+<ul><li>向阅读代码的人清楚说明它所修饰的方法将自动由编译器重写;</li><li>告诉编译器方法中的上下文关键字await要被视为异步控制流，不能当成普通的标识符。</li></ul> 
+<p>控制抵达await关键字时，后面的表达式会生成一个任务，控制随机返回调用者。任务完成后，控制从await之后的位置恢复，如果等待的任务生成结果，就获取结果，出错则引发异常。async方法中的return语句造成与方法调用关联的任务变成“已完成”状态。</p> 
+<h4 id="2%E3%80%81%E5%BC%82%E6%AD%A5Lambda">2、异步Lambda</h4> 
+<pre><code class="language-cs">    public static void Main()
+    {
+        string url = "http://www.IntelliTect.com";
+
+        Func&lt;string, Task&gt; write = async (string webUrl) =&gt;
+        {
+            WebRequest webRequest = WebRequest.Create(url);
+            WebResponse webResponse =await webRequest.GetResponseAsync();
+            using(StreamReader reader = new StreamReader(webResponse.GetResponseStream()))
+            {
+                string json = await reader.ReadToEndAsync();
+                Console.WriteLine(json.Length);
+            }
+        };
+
+        Task task=write(url);
+        while(!task.Wait(100))
+        {
+            Console.Write(".");
+        }
+    }</code></pre> 
+<p>await之后的指令作为被调用异步方法所返回的任务的延续而执行。但假如可等待任务已经完成，就以同步方式执行而不是作为延续。</p> 
+<h4 id="3%E3%80%81%E8%87%AA%E5%AE%9A%E4%B9%89%E5%BC%82%E6%AD%A5%E6%96%B9%E6%B3%95">3、自定义异步方法</h4> 
+<pre><code class="language-cs">    static public Task&lt;Process&gt; RunProcessAsync(string fileName,string arguments=null,CancellationToken token=default(CancellationToken))
+    {
+        //TaskCompletionSource 用于封装一个不带委托的任务实例，可以在其它线程控制该任务实例什么时候结束、取消、错误
+        //TaskCompletionSource 原理和使用时机 https://zhuanlan.zhihu.com/p/443088995
+        TaskCompletionSource&lt;Process&gt; taskCS = new TaskCompletionSource&lt;Process&gt;();
+        Process process = new Process()
+        {
+            StartInfo = new ProcessStartInfo(fileName)
+            {
+                UseShellExecute = false,
+                Arguments = arguments,
+            },
+            EnableRaisingEvents = true     
+        };
+        //通过事件获取进程结束的通知
+        process.Exited += (s, e) =&gt; taskCS.SetResult(process);
+        //支持取消，进程开始后注册取消，防止少数情况下，进程还未开始就出发了取消
+        token.ThrowIfCancellationRequested();
+        process.Start();
+        token.Register(() =&gt; process.CloseMainWindow());
+        return taskCS.Task;
+    }</code></pre> 
+<p>尽量不要编写返回类型为void的异步方法，<code>void</code>的异步方法发生异常时，开发者得不到任何通知，程序既不会触发普通的异常处理程序，也不会把这些异常记录下来，而是让相关的线程默默的终止掉。</p> 
+<p>正常的异步方法是通过它返回的Task对象来汇报异常的。如果执行过程中发生了异常，那么<code>Task</code>对象就进入了<code>faulted</code>（故障）状态。主调方在对异步方法所返回的Task对象做await操作时，该对象若已处在<code>faulted</code>状态，系统则会将执行异步方法的过程中所发生的异常抛出，反之，若<code>Task</code>尚未执行到抛出异常的那个地方，则主调方的执行进度会暂停在<code>await</code>语句这里，等系统稍后安排某个线程继续执行该语句下方的那些代码时，异常才会抛出。</p> 
+<h3 id="(%E4%B8%83)%E5%B9%B6%E8%A1%8C%E8%BF%AD%E4%BB%A3">(七)并行迭代</h3> 
+<p>容易分解成任意数量的小任务，而且所有小任务都可并行运行的大型任务非常适合通过并行来进行计算。</p> 
+<p>每个处理器都负责一个迭代，并和正在执行其它迭代的处理器并行执行这个迭代。如果迭代能够同时执行，那么执行时间将依据处理器的数量成比例减少。前提是有多个cpu，如果没有，速度可能会更慢。</p> 
+<pre><code class="language-cs">    public static void Main()
+    {
+        string pi = null;
+        int TotalDigits = 100;
+        int BatchSize = 10;
+        int iterations=TotalDigits/BatchSize;
+
+        //同步顺序迭代
+        for(int i=0;i&lt;iterations;i++)
+        {
+            pi += Calculate(BatchSize, i * BatchSize);
+        }
+        Console.WriteLine(pi);
+
+        //并行迭代
+        string[] sections=new string[iterations];
+        Parallel.For(0, iterations, (i) =&gt; sections[i] = Calculate(BatchSize, i * BatchSize));
+        pi=string.Join("", sections);
+
+    }</code></pre> 
+<p>除非迭代结束，否则 Parallel.For 调用不会结束。由于是并行执行，pi区段的计算可能不是顺序完成的，且+=操作符不是原子性的，所以，pi的每个区段都要存储到一个数组中，而且，不能有两个或多个迭代同时访问一个数组元素。</p> 
+<h4 id="%E5%8F%96%E6%B6%88%E5%B9%B6%E8%A1%8C%E5%BE%AA%E7%8E%AF">取消并行循环</h4> 
+<p>任务需要显式调用才能阻塞直至完成。而并行循环以并行方式执行迭代，但除非整个并行循环完成(全部迭代都完成)，否则它本身不会返回。所以，为了取消并行循环，调用取消请求的那个线程通常不能是正在执行并行循环的那个线程。</p> 
+<pre><code class="language-cs">    public static void EncryptFiles(string directoryPath,string searchPattern)
+    {
+        string stars="*".PadRight(Console.WindowWidth, '*');
+        IEnumerable&lt;string&gt; files = Directory.GetFiles(directoryPath, searchPattern,SearchOption.AllDirectories);
+
+        //CancellationTokenSource是用来生产CancellationToken的，支持定时取消、关联取消、判断取消
+        CancellationTokenSource cts =new CancellationTokenSource();
+        /**ParallelOptions对象：
+        CancellationToken 包含取消标志，
+        MaxDegreeOfParallelism 可设置并行度上限，上限为1时循环迭代不会并发运行
+        TaskScheduler 支持用户自定义调度器来指定一个任务如何相对于其它任务执行，如优先最近创建而不是等待时间最久的任务**/
+        ParallelOptions options = new ParallelOptions { CancellationToken = cts.Token };
+        cts.Token.Register(() =&gt; Console.WriteLine("Cancelling..."));
+
+        Console.WriteLine("Push Enter to Exit.");
+
+        Task task = Task.Run(() =&gt;
+        {
+            try
+            {
+                //委托传入ParallelLoopState对象后循环支持break（中断）和stop（停止）
+                Parallel.ForEach(files, options, (fileName, loopState) =&gt; { Encrypt(fileName); });
+            }
+            catch(OperationCanceledException)
+            {
+                //取消会抛出OperationCanceledException异常，由于本例中的异常是意料之中的，所以捕捉但不处理
+            }
+        });
+
+        Console.Read();
+        cts.Cancel();
+        Console.Write(stars);
+        task.Wait();
+    }</code></pre> 
+<h2 id="%E8%AE%BE%E8%AE%A1%E8%A7%84%E8%8C%83">四、设计规范</h2> 
+<ol><li>不要以为多线程必然使代码更快</li><li>要在通过多线程来加快解决处理器受限问题时谨慎衡量性能</li><li>不要以为普通代码中的原子性操作在多线程代码中也是原子性的</li><li>不要以为所有线程看到的都是一致的共享内容</li><li>要确保同时拥有多个锁的代码总是以相同的顺序来获取它们</li><li>避免所有的竞态条件，程序行为不能受操作系统调度线程的方式受影响</li><li>避免在生产代码中使用Thread.Sleep()</li><li>避免在生产代码中中断Abort() 线程，因为可能发生不可预测的后果，使程序不稳定</li><li>避免程序在任务线程上产生未处理异常</li><li>考虑登记“未处理异常”事件处理程序以进行调试、记录和紧急关闭</li><li>要取消未完成的任务而不要在程序关闭期间允许其运行</li></ol> 
+<p>【推荐阅读】</p> 
+<p><a href="https://zhuanlan.zhihu.com/p/443088995" rel="nofollow" title="C# TaskCompletionSource - 知乎">C# TaskCompletionSource - 知乎</a></p> 
+<p><a href="https://zhuanlan.zhihu.com/p/465119797" rel="nofollow" title="C#异步编程6个最佳实践 - 知乎 (zhihu.com)">C#异步编程6个最佳实践 - 知乎 (zhihu.com)</a></p> 
+<h4></h4> 
+<p></p> 
+<p></p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/66c209be341aa6a43001fd56a9f380af/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">视频存储对公安行业有什么影响</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/5f2e08f3a2149b52b6ab289c0a4be26e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">王道oj训练总结day4</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

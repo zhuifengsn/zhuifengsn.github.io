@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>安装arm-linux-gdb - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="安装arm-linux-gdb" />
+<meta property="og:description" content="1、解压arm-linux-gdb-7.5.tar.gz 包：
+tar -xvzf arm-linux-gdb-7.5.tar.gz
+2、进入arm-linux-gdb-7.5目录并执行./build-all (记得此处需要切换到root权限)
+3、 待安装成功之后检查安装的文件并将环境变量添加到.bashrc中
+检查目录/opt/arm-linux-gdb/bin/下是否存在可执行文件arm-linux-gdb：ls /opt/arm-linux-gdb/bin/
+如果存在就将/opt/arm-linux-gdb/bin/添加到.bashrc中：
+export PATH=$PATH:/opt/arm-linux-gdb/bin/
+4、执行arm-linux-gdb：结果出现下面的打印信息：
+错误提示的意思是：加载共享库出错:libncurses.so.5:不能打开共享对象文件:没有这样的文件或目录
+通过在网上搜索资料得到总结之后发现有下面三个原因可能会导致上述的错误出现：
+a)、不存在libncurses.so.5这个动态库文件，改原因可以通过locate libncurses.so.5来排除，执行命令之后可以找到libncurses.so.5这个动态库文件，所以这个原因不是导致我现在的问题的情况。
+b)、发现存在libncurses.so.5这个文件，但是可能没有将动态库的路径包含到查找目录下，通过cat /etc/ld.so.conf和ls /etc/ld.so.conf.d/目录发现确实不存在/usr/lib64/这个目录（该目录就是libncurses.so.5所在目录），然后添加lib64.conf来包含路径并执行ldconfig来是配置生效，结果还是不行。说明这个不一定是原因，为什么不一定后面再解释。
+c)、动态库文件存在32位和64位的差异性导致的，通过file命令发现libncurses.so.5是一个链接文件，链接的文件是libncurses.so.5.9，而这个文件是一个64位的elf文件。
+那这时我的arm-linux-gdb是什么文件类型呢？
+如上图所示存在两个arm-linux-gdb文件，但是一个是/opt/目录下的事64位的文件，而/usr/目录下的是32位文件。最开始的时候我是没有执行上图中的操作而是直接以为没有安装32位的库导致的。所以通过yum list ncurses*查找到我需要安装的文件并安装。结果安装完成之后执行arm-linux-gdb是成功的。
+但是这时我发现我运行的gdb版本不是我安装的版本，我安装的是7.5，但运行的确实 6.8.50.20080821-cvs，也就是说运行的查找路径出现错误了
+这时我就怀疑是不是我的PATH路径不对呢？于是我echo $PATH之后是下面的结果
+从上面的结果中明显可以看到直接运行arm-linux-gdb实际上是运行/usr/local/arm/4.3.2/bin/这个目录下的gdb文件，而不是/opt/arm-linux-gdb/bin/这个目录下，同时出现了好几个上述的两个路径，这又是什么原因呢？
+原来是我添加的路径所在文件引起的，我在第三步中加arm-linux-gdb加入到了PATH中，但是.bashrc这个文件是bash shell的用户执行文件，也就是每运行一个bash shell就会把bash shell读取一次，而且PATH目录会增加一次，从而导致了多次出现两个路径，而且不会去除开始的路径，因为开始的路径/usr/local/arm/4.3.2/bin/是我上次添加交叉编译工具时添加的，这次重启之后已经自动添加了/usr/local/arm/4.3.2/bin/路径，而source /root/.bashrc只会在PATH后面添加路径，所以导致了上述的结果，于是我将PATH中的上述两个路径都删除掉，之后重新执行source /root/.bashrc，然后再执行arm-linux-gdb发现这时运行的就是7.5的版本。
+然后问题就来了，第一、怎么来配置PATH的路径比较好呢？而不会导致路径的重复。第二、上述两个路径中的arm-linux-gdb有什么差别呢？第三、在ld.so.conf.d中的lib64.conf是否有必要呢？
+第一、怎么来配置PATH的路径比较好呢？而不会导致路径的重复。
+在解答之前先来比较一下几个添加路径文件的差异性吧。
+.bashrc：这个文件是在用户每次进入bash shell时就会执行一次的，而且目录会被重复。
+.bash_profile：这个目录也是设置PATH路径的，但这个文件只会在用户登录时执行一次。
+/etc/profile：这个目录重要是为系统的每一个用户设置环境信息，当用户第一次登录时会被执行并从/etc/profile.d目录的配置文件中搜索shell的设置。
+首先第一个已经排除，至于第二个和第三个，如果是只对当前的用户设置就推荐第二种，但是如果是对所有的用户都设置就推荐第三种方式。
+第二、上述两个路径中的arm-linux-gdb有什么差别呢？
+如下图所示
+/opt目录下的事64位，/usr/目录下的事32位，但是我们一开始能够找到64的lib，所以如果运行的事/opt目录下的话就没有必要再重新安装32的lib呢？不过现在已经安装了，而且两个gdb都能够支持了。
+第三、在ld.so.conf.d中的lib64.conf是否有必要呢？
+我通过将lib64.conf移除并ldconfig之后重新执行arm-linux-gdb的7.5版也能够成功，所以个人认为没有必要添加上述文件。
+上面就是这个安装过程中遇到的情况总结，一来可以记录自己的思路，同时也和大家一同分享，希望对大家能够有帮助！" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/b21afdf5f4a44617e5b31def48839578/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2016-04-12T00:05:47+08:00" />
+<meta property="article:modified_time" content="2016-04-12T00:05:47+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">安装arm-linux-gdb</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>1、解压arm-linux-gdb-7.5.tar.gz 包：</p> 
+<p>tar -xvzf arm-linux-gdb-7.5.tar.gz</p> 
+<p>2、进入arm-linux-gdb-7.5目录并执行./build-all (记得此处需要切换到root权限)</p> 
+<p>3、 待安装成功之后检查安装的文件并将环境变量添加到.bashrc中</p> 
+<p>检查目录/opt/arm-linux-gdb/bin/下是否存在可执行文件arm-linux-gdb：ls /opt/arm-linux-gdb/bin/</p> 
+<p>如果存在就将/opt/arm-linux-gdb/bin/添加到.bashrc中：</p> 
+<p>export PATH=$PATH:/opt/arm-linux-gdb/bin/<br> </p> 
+<p>4、执行arm-linux-gdb：结果出现下面的打印信息：</p> 
+<p><img src="https://images2.imgbox.com/f8/fe/ZAEDrr16_o.png" alt=""><br> </p> 
+<p>错误提示的意思是：<span style="color:rgb(51,51,51); font-size:14px; line-height:26px; white-space:pre-wrap">加载共享库出错:libncurses.so.5:不能打开共享对象文件:没有这样的文件或目录</span></p> 
+<p>通过在网上搜索资料得到总结之后发现有下面三个原因可能会导致上述的错误出现：</p> 
+<p>a)、不存在libncurses.so.5这个动态库文件，改原因可以通过<span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">locate libncurses.so.5来排除，执行命令之后可以找到libncurses.so.5这个动态库文件，所以这个原因不是导致我现在的问题的情况。</span></p> 
+<p><span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">b)、发现存在libncurses.so.5这个文件，但是可能没有将动态库的路径包含到查找目录下，通过cat /etc/ld.so.conf和ls /etc/ld.so.conf.d/目录发现确实不存在/usr/lib64/这个目录（该目录就是<span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">libncurses.so.5所在目录</span>），然后添加lib64.conf来包含路径并执行ldconfig来是配置生效，结果还是不行。说明这个不一定是原因，为什么不一定后面再解释。</span></p> 
+<p><span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px"><img src="https://images2.imgbox.com/df/cf/K5F3zh5l_o.png" alt=""><br> </span></p> 
+<p><span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">c)、动态库文件存在32位和64位的差异性导致的，通过file命令发现libncurses.so.5是一个链接文件，链接的文件是libncurses.so.5.9，而这个文件是一个64位的elf文件。</span></p> 
+<p><span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px"><img src="https://images2.imgbox.com/23/11/DHf9kseS_o.png" alt=""><br> </span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">那这时我的arm-linux-gdb是什么文件类型呢？</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px"><img src="https://images2.imgbox.com/01/e7/DENHAwXp_o.png" alt=""><br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">如上图所示存在两个arm-linux-gdb文件，但是一个是/opt/目录下的事64位的文件，而/usr/目录下的是32位文件。最开始的时候我是没有执行上图中的操作而是直接以为没有安装32位的库导致的。所以通过yum list ncurses*查找到我需要安装的文件并安装。结果安装完成之后执行arm-linux-gdb是成功的。</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px"><img src="https://images2.imgbox.com/19/1e/b1ZhPAoa_o.png" alt=""><br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">但是这时我发现我运行的gdb版本不是我安装的版本，我安装的是7.5，但运行的确实 6.8.50.20080821-cvs，也就是说运行的查找路径出现错误了</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px"><img src="https://images2.imgbox.com/c6/a8/wcgdPNJ3_o.png" alt=""><br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px"><img src="https://images2.imgbox.com/c0/3a/Cz6sv4zo_o.png" alt=""><br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">这时我就怀疑是不是我的PATH路径不对呢？于是我echo $PATH之后是下面的结果</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px"><img src="https://images2.imgbox.com/45/6b/bAsTVwVi_o.png" alt=""><br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">从上面的结果中明显可以看到直接运行arm-linux-gdb实际上是运行/usr/local/arm/4.3.2/bin/这个目录下的gdb文件，而不是/opt/arm-linux-gdb/bin/这个目录下，同时出现了好几个上述的两个路径，这又是什么原因呢？</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">原来是我添加的路径所在文件引起的，我在第三步中加arm-linux-gdb加入到了PATH中，但是.bashrc这个文件是bash shell的用户执行文件，也就是每运行一个bash shell就会把bash shell读取一次，而且PATH目录会增加一次，从而导致了多次出现两个路径，而且不会去除开始的路径，因为开始的路径<span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">/usr/local/arm/4.3.2/bin/</span>是我上次添加交叉编译工具时添加的，这次重启之后已经自动添加了<span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">/usr/local/arm/4.3.2/bin/路径，而source /root/.bashrc只会在PATH后面添加路径，所以导致了上述的结果，于是我将PATH中的上述两个路径都删除掉，之后重新执行source /root/.bashrc，然后再执行arm-linux-gdb发现这时运行的就是7.5的版本。</span></span></span></p> 
+<p>然后问题就来了，第一、怎么来配置PATH的路径比较好呢？而不会导致路径的重复。第二、上述两个路径中的arm-linux-gdb有什么差别呢？第三、在<span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">ld.so.conf.d中的lib64.conf是否有必要呢？</span></p> 
+<p><span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">第一、怎么来配置PATH的路径比较好呢？而不会导致路径的重复。<br> </span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">在解答之前先来比较一下几个添加路径文件的差异性吧。</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">.bashrc：这个文件是在用户每次进入bash shell时就会执行一次的，而且目录会被重复。</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">.bash_profile：这个目录也是设置PATH路径的，但这个文件只会在用户登录时执行一次。</span></span></p> 
+<p><span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">/etc/profile：这个目录重要是为系统的每一个用户设置环境信息，当用户第一次登录时会被执行并从/etc/profile.d目录的配置文件中搜索shell的设置。</span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">首先第一个已经排除，至于第二个和第三个，如果是只对当前的用户设置就推荐第二种，但是如果是对所有的用户都设置就推荐第三种方式。</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">第二、上述两个路径中的arm-linux-gdb有什么差别呢？<br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">如下图所示<img src="https://images2.imgbox.com/b3/bb/6h9fOlMz_o.png" alt=""></span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">/opt目录下的事64位，/usr/目录下的事32位，但是我们一开始能够找到64的lib，所以如果运行的事/opt目录下的话就没有必要再重新安装32的lib呢？不过现在已经安装了，而且两个gdb都能够支持了。</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">第三、在<span style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px">ld.so.conf.d中的lib64.conf是否有必要呢？</span><br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">我通过将lib64.conf移除并ldconfig之后重新执行arm-linux-gdb的7.5版也能够成功，所以个人认为没有必要添加上述文件。</span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px"><br> </span></span></p> 
+<p><span style="font-family:Arial; color:#333333"><span style="font-size:14px; line-height:26px">上面就是这个安装过程中遇到的情况总结，一来可以记录自己的思路，同时也和大家一同分享，希望对大家能够有帮助！</span></span></p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/ac4a06fb3c4700c244d7090a9bbe28f4/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">vnc服务器的搭建</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/4b5e2637a112f7390f5da4e2e427c289/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【C#dynamic 类型】</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

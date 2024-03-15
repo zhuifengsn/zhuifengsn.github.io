@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>基于STM32的USART串口通讯程序 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="基于STM32的USART串口通讯程序" />
+<meta property="og:description" content="文章目录 一、串口协议和RS-232、485标准，以及RS232、485电平与TTL电平的区别，USB/TTL转232模块的工作原理1.串口协议2.RS-232、RS-485标准3.RS232、485电平与TTL电平的区别4.&#34;USB/TTL转232&#34;模块（以CH340芯片模块为例）的工作原理 二、使用HAL库&amp;寄存器完成3只LED红绿灯的周期闪烁三、使用HAL库串口输出&#34;hello windows!&#34;1.新建项目2.编写程序3.连接电路4.程序烧录5.串口调试6.运行结果7.观察串口输出波形 四、用寄存器方式串口输出&#34;hello windows!&#34;1.新建项目2.编写程序3.连接电路4.程序烧录5.串口调试6.运行结果7.观察串口输出波形 五、总结六、参考链接 一、串口协议和RS-232、485标准，以及RS232、485电平与TTL电平的区别，USB/TTL转232模块的工作原理 1.串口协议 串口通信指串口按位（bit）发送和接收字节。尽管比特字节（byte）的串行通信慢，但是串口可以在使用一根线发送数据的同时用另一根线接收数据。串口通信协议是指规定了数据包的内容，内容包含了起始位、主体数据、校验位及停止位，双方需要约定一致的数据包格式才能正常收发数据的有关规范。在串口通信中，常用的协议包括RS-232、RS-422和RS-485。
+2.RS-232、RS-485标准 （1）RS-232标准
+①介绍
+RS-232-C是美国电子工业协会EIA（Electronic Industry Association）制定的一种串行物理接口标准。RS（Recommended Standard）是英文“推荐标准”的缩写，232为标识号，C表示修改次数。RS-232-C总线标准设有25条信号线，包括一个主通道和一个辅助通道。
+RS-232-C标准规定，驱动器允许有2500pF的电容负载，通信距离将受此电容限制。例如，采用150pF/m的通信电缆时，最大通信距离为15m；若每米电缆的电容量减小，通信距离可以增加。传输距离短的另一原因是RS-232属单端信号传送，存在共地噪声和不能抑制共模干扰等问题，因此一般用于20m以内的通信。
+②电气特性
+在TxD和RxD上：
+逻辑“1”：-3V～-15V
+逻辑“0”：&#43;3～&#43;15V
+③信号和管脚定义
+④设置
+串行通信在软件设置里需要做多项设置，最常见的设置包括波特率（Baud Rate）、奇偶校验（Parity Check）和停止位（Stop Bit）。
+1）波特率（Baud Rate）：
+是指从一设备发到另一设备的波特率，即每秒钟多少比特bits per second (bit/s)。典型的波特率是300, 1200, 2400, 9600, 19200, 115200 等bit/s。一般通信两端设备都要设为相同的波特率，但有些设备也可以设置为自动检测波特率。
+2）奇偶校验（Parity Check）：
+是用来验证数据正确性的。奇偶校验一般不使用，如果使用，那么既可以做奇校验（Odd Parity）也可以做偶校验（Even Parity）。
+3）停止位（Stop Bit）：
+是在每个字节数据传输之后发送的，它用来帮助接收信号方硬件重同步。
+（2）RS-485标准
+①介绍
+电子工业协会(EIA)于 1983 年制订并发布 RS-485 标准，并经通讯工业协会(TIA)修订后命名为 TIA/EIA-485-A，习惯地称之为 RS-485 标准。
+RS-485 标准是为弥补 RS-232 通信距离短、速率低等缺点而产生的。RS-485 标准只规定了平衡发送器和接收器的电特性，而没有规定接插件、传输电缆和应用层通信协议。
+RS-485 标准通常被用作为一种相对经济、具有相当高噪声抑制、相对高的传输速率、传输距离远、宽共模范围的通信平台。同时，RS-485 电路具有控制方便、成本低廉等优点。
+②性能
+RS-485 标准的数据信号采用差分传输方式(Differential Driver Mode)，也称作平衡传输,它使用一对双绞线，将其中一线定义为 A，另一线定义为 B。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/7b57d9bd3b2cb6c5137c280d74a5096e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-10-21T21:26:39+08:00" />
+<meta property="article:modified_time" content="2022-10-21T21:26:39+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">基于STM32的USART串口通讯程序</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#RS232485RS232485TTLUSBTTL232_1" rel="nofollow">一、串口协议和RS-232、485标准，以及RS232、485电平与TTL电平的区别，USB/TTL转232模块的工作原理</a></li><li><ul><li><a href="#1_2" rel="nofollow">1.串口协议</a></li><li><a href="#2RS232RS485_5" rel="nofollow">2.RS-232、RS-485标准</a></li><li><a href="#3RS232485TTL_42" rel="nofollow">3.RS232、485电平与TTL电平的区别</a></li><li><a href="#4USBTTL232CH340_50" rel="nofollow">4."USB/TTL转232"模块（以CH340芯片模块为例）的工作原理</a></li></ul> 
+  </li><li><a href="#HAL3LED_58" rel="nofollow">二、使用HAL库&amp;寄存器完成3只LED红绿灯的周期闪烁</a></li><li><a href="#HALhello_windows_61" rel="nofollow">三、使用HAL库串口输出"hello windows!"</a></li><li><ul><li><a href="#1_62" rel="nofollow">1.新建项目</a></li><li><a href="#2_77" rel="nofollow">2.编写程序</a></li><li><a href="#3_93" rel="nofollow">3.连接电路</a></li><li><a href="#4_100" rel="nofollow">4.程序烧录</a></li><li><a href="#5_108" rel="nofollow">5.串口调试</a></li><li><a href="#6_111" rel="nofollow">6.运行结果</a></li><li><a href="#7_113" rel="nofollow">7.观察串口输出波形</a></li></ul> 
+  </li><li><a href="#hello_windows_128" rel="nofollow">四、用寄存器方式串口输出"hello windows!"</a></li><li><ul><li><a href="#1_129" rel="nofollow">1.新建项目</a></li><li><a href="#2_140" rel="nofollow">2.编写程序</a></li><li><a href="#3_574" rel="nofollow">3.连接电路</a></li><li><a href="#4_576" rel="nofollow">4.程序烧录</a></li><li><a href="#5_584" rel="nofollow">5.串口调试</a></li><li><a href="#6_587" rel="nofollow">6.运行结果</a></li><li><a href="#7_591" rel="nofollow">7.观察串口输出波形</a></li></ul> 
+  </li><li><a href="#_595" rel="nofollow">五、总结</a></li><li><a href="#_598" rel="nofollow">六、参考链接</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="RS232485RS232485TTLUSBTTL232_1"></a>一、串口协议和RS-232、485标准，以及RS232、485电平与TTL电平的区别，USB/TTL转232模块的工作原理</h2> 
+<h3><a id="1_2"></a>1.串口协议</h3> 
+<p>串口通信指串口按位（bit）发送和接收字节。尽管比特字节（byte）的串行通信慢，但是串口可以在使用一根线发送数据的同时用另一根线接收数据。串口通信协议是指规定了数据包的内容，内容包含了起始位、主体数据、校验位及停止位，双方需要约定一致的数据包格式才能正常收发数据的有关规范。在串口通信中，常用的协议包括RS-232、RS-422和RS-485。</p> 
+<h3><a id="2RS232RS485_5"></a>2.RS-232、RS-485标准</h3> 
+<p>（1）RS-232标准<br> ①介绍<br> RS-232-C是美国电子工业协会EIA（Electronic Industry Association）制定的一种串行物理接口标准。RS（Recommended Standard）是英文“推荐标准”的缩写，232为标识号，C表示修改次数。RS-232-C总线标准设有25条信号线，包括一个主通道和一个辅助通道。<br> RS-232-C标准规定，驱动器允许有2500pF的电容负载，通信距离将受此电容限制。例如，采用150pF/m的通信电缆时，最大通信距离为15m；若每米电缆的电容量减小，通信距离可以增加。传输距离短的另一原因是RS-232属单端信号传送，存在共地噪声和不能抑制共模干扰等问题，因此一般用于20m以内的通信。<br> ②电气特性<br> 在TxD和RxD上：<br> 逻辑“1”：-3V～-15V<br> 逻辑“0”：+3～+15V<br> ③信号和管脚定义<br> <img src="https://images2.imgbox.com/38/a3/uXDSgJuu_o.png" alt=""><br> <img src="https://images2.imgbox.com/c4/f8/3ZvPd4sJ_o.png" alt=""><br> <img src="https://images2.imgbox.com/9f/53/URewUNUF_o.png" alt=""><br> ④设置<br> 串行通信在软件设置里需要做多项设置，最常见的设置包括波特率（Baud Rate）、奇偶校验（Parity Check）和停止位（Stop Bit）。<br> 1）波特率（Baud Rate）：<br> 是指从一设备发到另一设备的波特率，即每秒钟多少比特bits per second (bit/s)。典型的波特率是300, 1200, 2400, 9600, 19200, 115200 等bit/s。一般通信两端设备都要设为相同的波特率，但有些设备也可以设置为自动检测波特率。<br> 2）奇偶校验（Parity Check）：<br> 是用来验证数据正确性的。奇偶校验一般不使用，如果使用，那么既可以做奇校验（Odd Parity）也可以做偶校验（Even Parity）。<br> 3）停止位（Stop Bit）：<br> 是在每个字节数据传输之后发送的，它用来帮助接收信号方硬件重同步。<br> （2）RS-485标准<br> ①介绍<br> 电子工业协会(EIA)于 1983 年制订并发布 RS-485 标准，并经通讯工业协会(TIA)修订后命名为 TIA/EIA-485-A，习惯地称之为 RS-485 标准。<br> RS-485 标准是为弥补 RS-232 通信距离短、速率低等缺点而产生的。RS-485 标准只规定了平衡发送器和接收器的电特性，而没有规定接插件、传输电缆和应用层通信协议。<br> RS-485 标准通常被用作为一种相对经济、具有相当高噪声抑制、相对高的传输速率、传输距离远、宽共模范围的通信平台。同时，RS-485 电路具有控制方便、成本低廉等优点。<br> ②性能<br> RS-485 标准的数据信号采用差分传输方式(Differential Driver Mode)，也称作平衡传输,它使用一对双绞线，将其中一线定义为 A，另一线定义为 B。<br> 通常情况下，发送发送器 A、B 之间的正电平在+2<sub>+6V，是一个逻辑状态；负电平在-2</sub>-6V，是另一个逻辑状态。另有一个信号地 C。在 RS-485 器件中，一般还有一个“使能”控制信号。“使能”信号用于控制发送发送器与传输线的切断与连接，当“使能”端起作用时，发送发送器处于高阻状态，称作“第三态”，它是有别于逻辑“1”与“0”的第三种状态。<br> 对于接收发送器，也作出与发送发送器相对的规定，收、发端通过平衡双绞线将 A-A与 B-B 对应相连。当在接收端 A-B 之间有大于+200mV 的电平时，输出为正逻辑电平；小于-200mV 时，输出为负逻辑电平。在接收发送器的接收平衡线上，电平范围通常在 200mV至 6V 之间。<br> 定义逻辑 1(正逻辑电平)为 B&gt;A 的状态，逻辑 0(负逻辑电平)为 A&gt;B 的状态，A、B 之间的压差不小于200mV。<br> TIA/EIA-485 串行通讯标准的性能如下表所示:<br> <img src="https://images2.imgbox.com/ed/c8/vUalDinr_o.png" alt=""><br> RS-485 标准的最大传输距离约为 1219 米，最大传输速率为 10Mbps。<br> 通常，RS-485 网络采用平衡双绞线作为传输媒体。平衡双绞线的长度与传输速率成反比，只有在 20kbps 速率以下，才可能使用规定最长的电缆长度。只有在很短的距离下才能获得最高速率传输。一般来说，15 米长双绞线最大传输速率仅为 1Mbps。<br> 注意：并不是所有的 RS-485 收发器都能够支持高达 10Mbps 的通讯速率。如果采用光电隔离方式，则通讯速率一般还会受到光电隔离器件响应速度的限制。<br> RS-485 网络采用直线拓朴结构，需要安装 2 个终端匹配电阻，其阻值要求等于传输电缆的特性阻抗(一般取值为 120Ω)。在矩距离、或低波特率数据传输时可不需终端匹配电阻，即一般在 300 米以下、19200bps 不需终端匹配电阻。终端匹配电阻安装在 RS-485 传输网络的两个端点，并联连接在 A-B 引脚之间。</p> 
+<h3><a id="3RS232485TTL_42"></a>3.RS232、485电平与TTL电平的区别</h3> 
+<table><thead><tr><th>通讯标准</th><th>RS-232</th><th>RS-485</th><th>TTL</th></tr></thead><tbody><tr><td>电平标准（发送端）</td><td>逻辑 1：-15V ~ -3V<br>逻辑 0：+3V ~ +15V</td><td>逻辑 1：-6V ~ -2V<br> 逻辑 0：+2V ~ +6V</td><td>逻辑 1：2.4V ~ 5V<br>逻辑 0：0 ~ 0.5V</td></tr><tr><td>传输方式</td><td>采用不平衡传输方式，即所谓单端通讯</td><td>采用平衡传输，即差分传输方式(使用两根线的电压差表示数据)</td><td>计算机处理器控制的设备内部各部分之间通信的标准技术</td></tr><tr><td>传输距离</td><td>适合本地设备之间的通信，传输距离一般不超过20m</td><td>传输距离为几十米到上千米</td><td></td></tr><tr><td>传输速度</td><td>传输速率较低，最高波特率为19200bps</td><td>数据最高传输速率为10Mbps</td><td></td></tr><tr><td>实用性</td><td>接口电路只允许一对一通信，信号电平较高，容易损坏接口电路的芯片；与TTL电路的电平也不兼容，影响其通用性；使用三线</td><td>接口接口电平低，不易损坏器件，且该平与 TTL 电平兼容，可方便与TTL 电平兼容；RS-485接口是采用平衡驱动器和差分接收器的组合，抗共模干能力增强，即抗噪声干扰性好；RS-485 接口在总线上是允许连接多达128个收发器。使用两线</td><td></td></tr></tbody></table> 
+<h3><a id="4USBTTL232CH340_50"></a>4."USB/TTL转232"模块（以CH340芯片模块为例）的工作原理</h3> 
+<p>TXD：发送端，一般表示为自己的发送端，正常通信必须接另一个设备的RXD。<br> RXD：接收端，一般表示为自己的接收端，正常通信必须接另一个设备的TXD。<br> 正常通信时候本身的TXD永远接设备的RXD！<br> 自收自发：正常通信时RXD接其他设备的TXD，因此如果要接收自己发送的数据顾名思义，也就是自己接收自己发送的数据，即自身的TXD直接连接到RXD，用来测试本身的发送和接收是否正常，是最快最简单的测试方法，当出现问题时首先做该测试确定是否产品故障。也称回环测试。<br> 电平逻辑：<br> TTL电平：通常数据表示采用二进制，规定+5V等价于逻辑“1”，0V等价于逻辑“0”，称作TTL信号系统，是正逻辑<br> RS232电平：采用-12V到-3V，等价于逻辑“0”，+3V到+12V的逻辑电平，等价于逻辑“1”，是负逻辑的。</p> 
+<h2><a id="HAL3LED_58"></a>二、使用HAL库&amp;寄存器完成3只LED红绿灯的周期闪烁</h2> 
+<p>参照上一篇博客<a href="http://t.csdn.cn/ohX2N" rel="nofollow">使用HAL库&amp;寄存器完成LED流水灯程序</a></p> 
+<h2><a id="HALhello_windows_61"></a>三、使用HAL库串口输出"hello windows!"</h2> 
+<h3><a id="1_62"></a>1.新建项目</h3> 
+<p>（1）打开STM32CubeMX主界面，点击“ACCESS TO MCU SELECTOR”,创建新项目<br> <img src="https://images2.imgbox.com/e2/e3/B0cL4rsa_o.png" alt=""><br> （2）在“Commerical Part Number”里面选择自己需要的芯片，点击信息栏中的具体芯片信息选中，再点击“Start Project”<br> <img src="https://images2.imgbox.com/b9/85/1uY8n5wr_o.png" alt=""><br> （3）先点击System Core将其展开，再点击RCC，将HSE设置为Crystal/Ceramic Resonator<br> <img src="https://images2.imgbox.com/5d/7d/3odl7HXO_o.png" alt=""><br> （4）先点击Connectivity将其展开，再点击USART1，将Mode设置为Asynchronous，然后点击Parameter Settings，设置波特率为115200，1位停止位，无校验位<br> <img src="https://images2.imgbox.com/52/34/GcCfbmFW_o.png" alt=""><br> （5）点击“Clock Configuration”，勾选PLLCLK和HSE，并将*PLLMul设置为×4<br> <img src="https://images2.imgbox.com/d8/13/Fuz9Nqdb_o.png" alt=""><br> （6）点击Project Manager 配置好自己的项目名和项目存放路径，然后将Application Structure设置为Basic，将IDE设置为MDK-ARM<br> <img src="https://images2.imgbox.com/ef/ad/HYSsdn8Z_o.png" alt=""><br> （7）点击Code Generate界面，选择生成初始化文件.c/.h，之后再点击GENERATE CODE即可成功创建项目<br> <img src="https://images2.imgbox.com/3b/8b/9zJpUwMy_o.png" alt=""></p> 
+<h3><a id="2_77"></a>2.编写程序</h3> 
+<p>（1）在点击GENERATE CODE之后弹出来的界面点击Open Project即可跳转到Keil5进行程序编写<br> <img src="https://images2.imgbox.com/a3/f4/EPymRYUR_o.png" alt=""><br> <img src="https://images2.imgbox.com/b9/15/iEC3xGcJ_o.png" alt=""><br> （2）打开main.c文件，滑到主函数的while循环那一部分<br> <img src="https://images2.imgbox.com/77/2f/gYp1uFli_o.png" alt=""><br> （3）在main.c的while循环中添加如下代码：</p> 
+<pre><code class="prism language-c">    <span class="token keyword">char</span> data<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"hello windows!\n"</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span>data<span class="token punctuation">,</span> <span class="token number">15</span><span class="token punctuation">,</span> <span class="token number">0xffff</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_Delay</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<p>（4）编译程序并创建hex文件<br> <img src="https://images2.imgbox.com/c4/ad/YDIF1PNa_o.png" alt=""></p> 
+<h3><a id="3_93"></a>3.连接电路</h3> 
+<table><thead><tr><th>USB转TTL</th><th>STM32F103C8T6</th></tr></thead><tbody><tr><td>GND</td><td>GND</td></tr><tr><td>3v3</td><td>3v3</td></tr><tr><td>TXD</td><td>A10</td></tr><tr><td>RXD</td><td>A9</td></tr></tbody></table> 
+<h3><a id="4_100"></a>4.程序烧录</h3> 
+<p>置BOOT0为0，BOOT1为1<br> （1）打开mcuisp，选择串口为COM5，并选择生成的Hello.hex文件<br> <img src="https://images2.imgbox.com/ab/64/d71nKxxC_o.png" alt=""><br> （2）点击读器件信息，若显示一切正常则进行下一步<br> <img src="https://images2.imgbox.com/1c/1c/wkYABRq2_o.png" alt=""><br> （3）点击开始编程，若显示一切正常则说明烧录成功<br> <img src="https://images2.imgbox.com/81/2f/obVCbKVg_o.png" alt=""></p> 
+<h3><a id="5_108"></a>5.串口调试</h3> 
+<p>打开野火串口调试助手，将波特率设置为115200，数据位设置为8，停止位设置为1，校验位设置为None，然后点击打开串口<br> <img src="https://images2.imgbox.com/a6/68/chIToyyw_o.png" alt=""></p> 
+<h3><a id="6_111"></a>6.运行结果</h3> 
+<p><img src="https://images2.imgbox.com/22/f9/CwFkkiow_o.png" alt=""></p> 
+<h3><a id="7_113"></a>7.观察串口输出波形</h3> 
+<p>（1）先点击魔术棒，再点击Debug，进行如下设置：<br> <img src="https://images2.imgbox.com/bd/53/mp6nuqhU_o.png" alt=""><br> （2）点击Start/Stop Debug Session进行调试<br> <img src="https://images2.imgbox.com/d4/5c/8QkYMg6g_o.png" alt=""><br> （3）选择逻辑分析仪<br> <img src="https://images2.imgbox.com/86/3f/2XI4VA5I_o.png" alt=""><br> （4）点击Setup Logic Analyzer，然后添加自己需要观察引脚并将Display Type设置为Bit，设置完成后点击Close<br> <img src="https://images2.imgbox.com/b2/ae/NyJz2CfC_o.png" alt=""><br> （5）点击In/Out将Grid的大小调为1s，勾选Signal info和Cursor能设置显示起始线并能看到相关信息<br> <img src="https://images2.imgbox.com/41/d0/05hbdYfw_o.png" alt=""><br> （6）点击Run即可开始运行，运行一段时间后点击Stop停止运行并观察输出波形<br> <img src="https://images2.imgbox.com/7a/87/gtvI6Zu4_o.png" alt=""><br> 由串口输出波形图及其显示的相关信息可知，时序状态正确。</p> 
+<h2><a id="hello_windows_128"></a>四、用寄存器方式串口输出"hello windows!"</h2> 
+<h3><a id="1_129"></a>1.新建项目</h3> 
+<p>（1）打开Keil5，点击Project，选择第一项新建工程，并设置好工程名和路径，不要有中文<br> <img src="https://images2.imgbox.com/b5/ba/s68ZFTQY_o.png" alt=""><br> （2）设置工程的目标环境，即选择芯片STM32F103C8，然后点击OK，将弹出来的页面直接叉掉<br> <img src="https://images2.imgbox.com/05/2d/14o8ECff_o.png" alt=""><br> <img src="https://images2.imgbox.com/5e/c5/s7QIaazV_o.png" alt=""><br> （3）点击“Add New Item to Group ‘Source Group1’”，添加一个.s文件，并设置好名称，我这里设置的是hello，然后选择路径，设置完成后点击Add<br> <img src="https://images2.imgbox.com/f2/d9/x66syaIZ_o.png" alt=""><br> <img src="https://images2.imgbox.com/f1/3b/JZH12YJL_o.png" alt=""><br> （4）点击魔术棒→Output→勾选Create HEX File→OK<br> <img src="https://images2.imgbox.com/8f/87/ohW0clXG_o.png" alt=""></p> 
+<h3><a id="2_140"></a>2.编写程序</h3> 
+<p>（1）在hello.s文件中写入如下代码：</p> 
+<pre><code class="prism language-c"><span class="token punctuation">;</span>RCC寄存器地址映像             
+RCC_BASE            EQU    <span class="token number">0x40021000</span> 
+RCC_CR              <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x00</span><span class="token punctuation">)</span> 
+RCC_CFGR            <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x04</span><span class="token punctuation">)</span> 
+RCC_CIR             <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x08</span><span class="token punctuation">)</span> 
+RCC_APB2RSTR        <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x0C</span><span class="token punctuation">)</span> 
+RCC_APB1RSTR        <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x10</span><span class="token punctuation">)</span> 
+RCC_AHBENR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x14</span><span class="token punctuation">)</span> 
+RCC_APB2ENR         <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x18</span><span class="token punctuation">)</span> 
+RCC_APB1ENR         <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x1C</span><span class="token punctuation">)</span> 
+RCC_BDCR            <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x20</span><span class="token punctuation">)</span> 
+RCC_CSR             <span class="token function">EQU</span>    <span class="token punctuation">(</span>RCC_BASE <span class="token operator">+</span> <span class="token number">0x24</span><span class="token punctuation">)</span> 
+                              
+<span class="token punctuation">;</span>AFIO寄存器地址映像            
+AFIO_BASE           EQU    <span class="token number">0x40010000</span> 
+AFIO_EVCR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>AFIO_BASE <span class="token operator">+</span> <span class="token number">0x00</span><span class="token punctuation">)</span> 
+AFIO_MAPR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>AFIO_BASE <span class="token operator">+</span> <span class="token number">0x04</span><span class="token punctuation">)</span> 
+AFIO_EXTICR1        <span class="token function">EQU</span>    <span class="token punctuation">(</span>AFIO_BASE <span class="token operator">+</span> <span class="token number">0x08</span><span class="token punctuation">)</span> 
+AFIO_EXTICR2        <span class="token function">EQU</span>    <span class="token punctuation">(</span>AFIO_BASE <span class="token operator">+</span> <span class="token number">0x0C</span><span class="token punctuation">)</span> 
+AFIO_EXTICR3        <span class="token function">EQU</span>    <span class="token punctuation">(</span>AFIO_BASE <span class="token operator">+</span> <span class="token number">0x10</span><span class="token punctuation">)</span> 
+AFIO_EXTICR4        <span class="token function">EQU</span>    <span class="token punctuation">(</span>AFIO_BASE <span class="token operator">+</span> <span class="token number">0x14</span><span class="token punctuation">)</span> 
+                                                           
+<span class="token punctuation">;</span>GPIOA寄存器地址映像              
+GPIOA_BASE          EQU    <span class="token number">0x40010800</span> 
+GPIOA_CRL           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOA_BASE <span class="token operator">+</span> <span class="token number">0x00</span><span class="token punctuation">)</span> 
+GPIOA_CRH           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOA_BASE <span class="token operator">+</span> <span class="token number">0x04</span><span class="token punctuation">)</span> 
+GPIOA_IDR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOA_BASE <span class="token operator">+</span> <span class="token number">0x08</span><span class="token punctuation">)</span> 
+GPIOA_ODR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOA_BASE <span class="token operator">+</span> <span class="token number">0x0C</span><span class="token punctuation">)</span> 
+GPIOA_BSRR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOA_BASE <span class="token operator">+</span> <span class="token number">0x10</span><span class="token punctuation">)</span> 
+GPIOA_BRR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOA_BASE <span class="token operator">+</span> <span class="token number">0x14</span><span class="token punctuation">)</span> 
+GPIOA_LCKR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOA_BASE <span class="token operator">+</span> <span class="token number">0x18</span><span class="token punctuation">)</span> 
+                                                       
+<span class="token punctuation">;</span>GPIO C口控制                   
+GPIOC_BASE          EQU    <span class="token number">0x40011000</span> 
+GPIOC_CRL           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOC_BASE <span class="token operator">+</span> <span class="token number">0x00</span><span class="token punctuation">)</span> 
+GPIOC_CRH           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOC_BASE <span class="token operator">+</span> <span class="token number">0x04</span><span class="token punctuation">)</span> 
+GPIOC_IDR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOC_BASE <span class="token operator">+</span> <span class="token number">0x08</span><span class="token punctuation">)</span> 
+GPIOC_ODR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOC_BASE <span class="token operator">+</span> <span class="token number">0x0C</span><span class="token punctuation">)</span> 
+GPIOC_BSRR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOC_BASE <span class="token operator">+</span> <span class="token number">0x10</span><span class="token punctuation">)</span> 
+GPIOC_BRR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOC_BASE <span class="token operator">+</span> <span class="token number">0x14</span><span class="token punctuation">)</span> 
+GPIOC_LCKR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>GPIOC_BASE <span class="token operator">+</span> <span class="token number">0x18</span><span class="token punctuation">)</span> 
+                                                           
+<span class="token punctuation">;</span>串口<span class="token number">1</span>控制                       
+USART1_BASE         EQU    <span class="token number">0x40013800</span> 
+USART1_SR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>USART1_BASE <span class="token operator">+</span> <span class="token number">0x00</span><span class="token punctuation">)</span> 
+USART1_DR           <span class="token function">EQU</span>    <span class="token punctuation">(</span>USART1_BASE <span class="token operator">+</span> <span class="token number">0x04</span><span class="token punctuation">)</span> 
+USART1_BRR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>USART1_BASE <span class="token operator">+</span> <span class="token number">0x08</span><span class="token punctuation">)</span> 
+USART1_CR1          <span class="token function">EQU</span>    <span class="token punctuation">(</span>USART1_BASE <span class="token operator">+</span> <span class="token number">0x0c</span><span class="token punctuation">)</span> 
+USART1_CR2          <span class="token function">EQU</span>    <span class="token punctuation">(</span>USART1_BASE <span class="token operator">+</span> <span class="token number">0x10</span><span class="token punctuation">)</span> 
+USART1_CR3          <span class="token function">EQU</span>    <span class="token punctuation">(</span>USART1_BASE <span class="token operator">+</span> <span class="token number">0x14</span><span class="token punctuation">)</span> 
+USART1_GTPR         <span class="token function">EQU</span>    <span class="token punctuation">(</span>USART1_BASE <span class="token operator">+</span> <span class="token number">0x18</span><span class="token punctuation">)</span> 
+                            
+<span class="token punctuation">;</span>NVIC寄存器地址                
+NVIC_BASE           EQU    <span class="token number">0xE000E000</span> 
+NVIC_SETEN          <span class="token function">EQU</span>    <span class="token punctuation">(</span>NVIC_BASE <span class="token operator">+</span> <span class="token number">0x0010</span><span class="token punctuation">)</span>     
+<span class="token punctuation">;</span>SETENA寄存器阵列的起始地址 
+NVIC_IRQPRI         <span class="token function">EQU</span>    <span class="token punctuation">(</span>NVIC_BASE <span class="token operator">+</span> <span class="token number">0x0400</span><span class="token punctuation">)</span>     
+<span class="token punctuation">;</span>中断优先级寄存器阵列的起始地址 
+NVIC_VECTTBL        <span class="token function">EQU</span>    <span class="token punctuation">(</span>NVIC_BASE <span class="token operator">+</span> <span class="token number">0x0D08</span><span class="token punctuation">)</span>     
+<span class="token punctuation">;</span>向量表偏移寄存器的地址     
+NVIC_AIRCR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>NVIC_BASE <span class="token operator">+</span> <span class="token number">0x0D0C</span><span class="token punctuation">)</span>     
+<span class="token punctuation">;</span>应用程序中断及复位控制寄存器的地址                                                
+SETENA0             EQU    <span class="token number">0xE000E100</span> 
+SETENA1             EQU    <span class="token number">0xE000E104</span> 
+                            
+                              
+<span class="token punctuation">;</span>SysTick寄存器地址            
+SysTick_BASE        EQU    <span class="token number">0xE000E010</span> 
+SYSTICKCSR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>SysTick_BASE <span class="token operator">+</span> <span class="token number">0x00</span><span class="token punctuation">)</span> 
+SYSTICKRVR          <span class="token function">EQU</span>    <span class="token punctuation">(</span>SysTick_BASE <span class="token operator">+</span> <span class="token number">0x04</span><span class="token punctuation">)</span> 
+                              
+<span class="token punctuation">;</span>FLASH缓冲寄存器地址映像     
+FLASH_ACR           EQU    <span class="token number">0x40022000</span> 
+                             
+<span class="token punctuation">;</span>SCB_BASE           <span class="token function">EQU</span>    <span class="token punctuation">(</span>SCS_BASE <span class="token operator">+</span> <span class="token number">0x0D00</span><span class="token punctuation">)</span> 
+                             
+MSP_TOP             EQU    <span class="token number">0x20005000</span>               
+<span class="token punctuation">;</span>主堆栈起始值                
+PSP_TOP             EQU    <span class="token number">0x20004E00</span>               
+<span class="token punctuation">;</span>进程堆栈起始值             
+                            
+BitAlias_BASE       EQU    <span class="token number">0x22000000</span>               
+<span class="token punctuation">;</span>位带别名区起始地址         
+Flag1               EQU    <span class="token number">0x20000200</span> 
+b_flas              <span class="token function">EQU</span>    <span class="token punctuation">(</span>BitAlias_BASE <span class="token operator">+</span> <span class="token punctuation">(</span><span class="token number">0x200</span><span class="token operator">*</span><span class="token number">32</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token punctuation">(</span><span class="token number">0</span><span class="token operator">*</span><span class="token number">4</span><span class="token punctuation">)</span><span class="token punctuation">)</span>               
+<span class="token punctuation">;</span>位地址 
+b_05s               <span class="token function">EQU</span>    <span class="token punctuation">(</span>BitAlias_BASE <span class="token operator">+</span> <span class="token punctuation">(</span><span class="token number">0x200</span><span class="token operator">*</span><span class="token number">32</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token operator">*</span><span class="token number">4</span><span class="token punctuation">)</span><span class="token punctuation">)</span>               
+<span class="token punctuation">;</span>位地址 
+DlyI                EQU    <span class="token number">0x20000204</span> 
+DlyJ                EQU    <span class="token number">0x20000208</span> 
+DlyK                EQU    <span class="token number">0x2000020C</span> 
+SysTim              EQU    <span class="token number">0x20000210</span> 
+
+
+<span class="token punctuation">;</span>常数定义 
+Bit0                EQU    <span class="token number">0x00000001</span> 
+Bit1                EQU    <span class="token number">0x00000002</span> 
+Bit2                EQU    <span class="token number">0x00000004</span> 
+Bit3                EQU    <span class="token number">0x00000008</span> 
+Bit4                EQU    <span class="token number">0x00000010</span> 
+Bit5                EQU    <span class="token number">0x00000020</span> 
+Bit6                EQU    <span class="token number">0x00000040</span> 
+Bit7                EQU    <span class="token number">0x00000080</span> 
+Bit8                EQU    <span class="token number">0x00000100</span> 
+Bit9                EQU    <span class="token number">0x00000200</span> 
+Bit10               EQU    <span class="token number">0x00000400</span> 
+Bit11               EQU    <span class="token number">0x00000800</span> 
+Bit12               EQU    <span class="token number">0x00001000</span> 
+Bit13               EQU    <span class="token number">0x00002000</span> 
+Bit14               EQU    <span class="token number">0x00004000</span> 
+Bit15               EQU    <span class="token number">0x00008000</span> 
+Bit16               EQU    <span class="token number">0x00010000</span> 
+Bit17               EQU    <span class="token number">0x00020000</span> 
+Bit18               EQU    <span class="token number">0x00040000</span> 
+Bit19               EQU    <span class="token number">0x00080000</span> 
+Bit20               EQU    <span class="token number">0x00100000</span> 
+Bit21               EQU    <span class="token number">0x00200000</span> 
+Bit22               EQU    <span class="token number">0x00400000</span> 
+Bit23               EQU    <span class="token number">0x00800000</span> 
+Bit24               EQU    <span class="token number">0x01000000</span> 
+Bit25               EQU    <span class="token number">0x02000000</span> 
+Bit26               EQU    <span class="token number">0x04000000</span> 
+Bit27               EQU    <span class="token number">0x08000000</span> 
+Bit28               EQU    <span class="token number">0x10000000</span> 
+Bit29               EQU    <span class="token number">0x20000000</span> 
+Bit30               EQU    <span class="token number">0x40000000</span> 
+Bit31               EQU    <span class="token number">0x80000000</span> 
+
+
+<span class="token punctuation">;</span>向量表 
+    AREA RESET<span class="token punctuation">,</span> DATA<span class="token punctuation">,</span> READONLY 
+    DCD    MSP_TOP            <span class="token punctuation">;</span>初始化主堆栈 
+    DCD    Start              <span class="token punctuation">;</span>复位向量 
+    DCD    NMI_Handler        <span class="token punctuation">;</span>NMI Handler 
+    DCD    HardFault_Handler  <span class="token punctuation">;</span>Hard Fault Handler 
+    DCD    <span class="token number">0</span>                   
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    <span class="token number">0</span> 
+    DCD    SysTick_Handler    <span class="token punctuation">;</span>SysTick Handler 
+    SPACE  <span class="token number">20</span>                 <span class="token punctuation">;</span>预留空间<span class="token number">20</span>字节 
+
+
+
+
+
+
+
+
+                 
+<span class="token punctuation">;</span>代码段 
+    AREA <span class="token operator">|</span><span class="token punctuation">.</span>text<span class="token operator">|</span><span class="token punctuation">,</span> CODE<span class="token punctuation">,</span> READONLY 
+    <span class="token punctuation">;</span>主程序开始 
+    ENTRY                            
+    <span class="token punctuation">;</span>指示程序从这里开始执行 
+Start 
+    <span class="token punctuation">;</span>时钟系统设置 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>RCC_CR 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #Bit16 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>开启外部晶振使能  
+    <span class="token punctuation">;</span>启动外部<span class="token number">8</span>M晶振 
+                                            
+ClkOk           
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ands   r1<span class="token punctuation">,</span> #Bit17 
+    beq    ClkOk 
+    <span class="token punctuation">;</span>等待外部晶振就绪 
+    ldr    r1<span class="token punctuation">,</span><span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span>#Bit17 
+    str    r1<span class="token punctuation">,</span><span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>FLASH缓冲器 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>FLASH_ACR 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0x00000032</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+            
+    <span class="token punctuation">;</span>设置PLL锁相环倍率为<span class="token number">7</span><span class="token punctuation">,</span>HSE输入不分频 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>RCC_CFGR 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #<span class="token punctuation">(</span>Bit18 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit19 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit20 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit16 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit14<span class="token punctuation">)</span> 
+    orr    r1<span class="token punctuation">,</span> #Bit10 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>启动PLL锁相环 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>RCC_CR 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #Bit24 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+PllOk 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ands   r1<span class="token punctuation">,</span> #Bit25 
+    beq    PllOk 
+    <span class="token punctuation">;</span>选择PLL时钟作为系统时钟 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>RCC_CFGR 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #<span class="token punctuation">(</span>Bit18 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit19 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit20 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit16 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit14<span class="token punctuation">)</span> 
+    orr    r1<span class="token punctuation">,</span> #Bit10 
+    orr    r1<span class="token punctuation">,</span> #Bit1 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>其它RCC相关设置 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>RCC_APB2ENR 
+    mov    r1<span class="token punctuation">,</span> #<span class="token punctuation">(</span>Bit14 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit4 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit2<span class="token punctuation">)</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span>      
+
+
+    <span class="token punctuation">;</span>IO端口设置 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>GPIOC_CRL 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #<span class="token punctuation">(</span>Bit28 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit29<span class="token punctuation">)</span>          
+    <span class="token punctuation">;</span>PC<span class="token punctuation">.</span><span class="token number">7</span>输出模式<span class="token punctuation">,</span>最大速度<span class="token number">50</span>MHz  
+    and    r1<span class="token punctuation">,</span> #<span class="token punctuation">(</span><span class="token operator">~</span>Bit30 <span class="token operator">&amp;</span> <span class="token operator">~</span>Bit31<span class="token punctuation">)</span>   
+    <span class="token punctuation">;</span>PC<span class="token punctuation">.</span><span class="token number">7</span>通用推挽输出模式 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+            
+    <span class="token punctuation">;</span>PA9串口<span class="token number">0</span>发射脚 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>GPIOA_CRH 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #<span class="token punctuation">(</span>Bit4 <span class="token operator">:</span>OR<span class="token operator">:</span> Bit5<span class="token punctuation">)</span>          
+    <span class="token punctuation">;</span>PA<span class="token punctuation">.</span><span class="token number">9</span>输出模式<span class="token punctuation">,</span>最大速度<span class="token number">50</span>MHz  
+    orr    r1<span class="token punctuation">,</span> #Bit7 
+    and    r1<span class="token punctuation">,</span> #<span class="token operator">~</span>Bit6 
+    <span class="token punctuation">;</span><span class="token number">10</span>：复用功能推挽输出模式 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span>    
+
+
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>USART1_BRR   
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0x271</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>配置波特率<span class="token operator">-&gt;</span> <span class="token number">115200</span> 
+                   
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>USART1_CR1   
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0x200c</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>USART模块总使能 发送与接收使能 
+    <span class="token punctuation">;</span><span class="token number">71</span> <span class="token number">02</span> <span class="token number">00</span> <span class="token number">00</span>   <span class="token number">2</span>c <span class="token number">20</span> <span class="token number">00</span> <span class="token number">00</span> 
+             
+    <span class="token punctuation">;</span>AFIO 参数设置             
+    <span class="token punctuation">;</span>Systick 参数设置 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>SYSTICKRVR           
+    <span class="token punctuation">;</span>Systick装初值 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">9000</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>SYSTICKCSR           
+    <span class="token punctuation">;</span>设定<span class="token punctuation">,</span>启动Systick 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0x03</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+            
+    <span class="token punctuation">;</span>NVIC                     
+    <span class="token punctuation">;</span>ldr   r0<span class="token punctuation">,</span> <span class="token operator">=</span>SETENA0 
+    <span class="token punctuation">;</span>mov   r1<span class="token punctuation">,</span> <span class="token number">0x00800000</span> 
+    <span class="token punctuation">;</span>str   r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>ldr   r0<span class="token punctuation">,</span> <span class="token operator">=</span>SETENA1 
+    <span class="token punctuation">;</span>mov   r1<span class="token punctuation">,</span> #<span class="token number">0x00000100</span> 
+    <span class="token punctuation">;</span>str   r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+              
+    <span class="token punctuation">;</span>切换成用户级线程序模式 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>PSP_TOP                   
+    <span class="token punctuation">;</span>初始化线程堆栈 
+    msr    psp<span class="token punctuation">,</span> r0 
+    mov    r0<span class="token punctuation">,</span> #<span class="token number">3</span> 
+    msr    control<span class="token punctuation">,</span> r0 
+              
+    <span class="token punctuation">;</span>初始化SRAM寄存器 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>Flag1 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>DlyI 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>DlyJ 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>DlyK 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>SysTim 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+               
+<span class="token punctuation">;</span>主循环            
+main            
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>Flag1 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    tst    r1<span class="token punctuation">,</span> #Bit1                 
+    <span class="token punctuation">;</span>SysTick产生<span class="token number">0.5</span>s<span class="token punctuation">,</span>置位bit <span class="token number">1</span> 
+    beq    main                  <span class="token punctuation">;</span><span class="token number">0.5</span>s标志还没有置位       
+     
+    <span class="token punctuation">;</span><span class="token number">0.5</span>s标志已经置位 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>b_05s                
+    <span class="token punctuation">;</span>位带操作清零<span class="token number">0.5</span>s标志 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    bl     LedFlas 
+
+
+    mov    r0<span class="token punctuation">,</span> #<span class="token char">'H'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'e'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'l'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'l'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'o'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">' '</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'w'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'i'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'n'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'d'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'o'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'w'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'s'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'!'</span> 
+    bl     send_a_char
+	
+	mov    r0<span class="token punctuation">,</span> #<span class="token char">'\n'</span> 
+    bl     send_a_char
+	
+	b      main
+            
+              
+            
+<span class="token punctuation">;</span>子程序 串口<span class="token number">1</span>发送一个字符 
+send_a_char 
+    push   <span class="token punctuation">{<!-- --></span>r0 <span class="token operator">-</span> r3<span class="token punctuation">}</span> 
+    ldr    r2<span class="token punctuation">,</span> <span class="token operator">=</span>USART1_DR   
+    str    r0<span class="token punctuation">,</span> <span class="token punctuation">[</span>r2<span class="token punctuation">]</span> 
+b1 
+    ldr    r2<span class="token punctuation">,</span> <span class="token operator">=</span>USART1_SR  
+    ldr    r2<span class="token punctuation">,</span> <span class="token punctuation">[</span>r2<span class="token punctuation">]</span> 
+    tst    r2<span class="token punctuation">,</span> #<span class="token number">0x40</span> 
+    beq    b1 
+    <span class="token punctuation">;</span>发送完成<span class="token punctuation">(</span>Transmission complete<span class="token punctuation">)</span>等待 
+    pop    <span class="token punctuation">{<!-- --></span>r0 <span class="token operator">-</span> r3<span class="token punctuation">}</span> 
+    bx     lr 
+
+
+                 
+<span class="token punctuation">;</span>子程序 led闪烁 
+LedFlas      
+    push   <span class="token punctuation">{<!-- --></span>r0 <span class="token operator">-</span> r3<span class="token punctuation">}</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>Flag1 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    tst    r1<span class="token punctuation">,</span> #Bit0 
+    <span class="token punctuation">;</span>bit0 闪烁标志位 
+    beq    ONLED        <span class="token punctuation">;</span>为<span class="token number">0</span> 打开led灯 
+    <span class="token punctuation">;</span>为<span class="token number">1</span> 关闭led灯 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>b_flas 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>闪烁标志位置为<span class="token number">0</span><span class="token punctuation">,</span>下一状态为打开灯 
+    <span class="token punctuation">;</span>PC<span class="token punctuation">.</span><span class="token number">7</span>输出<span class="token number">0</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>GPIOC_BRR 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #Bit7 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    b      LedEx 
+ONLED       
+    <span class="token punctuation">;</span>为<span class="token number">0</span> 打开led灯 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>b_flas 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">1</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    <span class="token punctuation">;</span>闪烁标志位置为<span class="token number">1</span><span class="token punctuation">,</span>下一状态为关闭灯 
+    <span class="token punctuation">;</span>PC<span class="token punctuation">.</span><span class="token number">7</span>输出<span class="token number">1</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>GPIOC_BSRR 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    orr    r1<span class="token punctuation">,</span> #Bit7 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+LedEx        
+    pop    <span class="token punctuation">{<!-- --></span>r0 <span class="token operator">-</span> r3<span class="token punctuation">}</span> 
+    bx     lr 
+                                
+<span class="token punctuation">;</span>异常程序 
+NMI_Handler 
+    bx     lr 
+
+
+HardFault_Handler 
+    bx     lr 
+              
+SysTick_Handler 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>SysTim 
+    ldr    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    add    r1<span class="token punctuation">,</span> #<span class="token number">1</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    cmp    r1<span class="token punctuation">,</span> #<span class="token number">500</span> 
+    bcc    TickExit 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">0</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+    ldr    r0<span class="token punctuation">,</span> <span class="token operator">=</span>b_05s  
+    <span class="token punctuation">;</span>大于等于<span class="token number">500</span>次 清零时钟滴答计数器 设置<span class="token number">0.5</span>s标志位 
+    <span class="token punctuation">;</span>位带操作置<span class="token number">1</span> 
+    mov    r1<span class="token punctuation">,</span> #<span class="token number">1</span> 
+    str    r1<span class="token punctuation">,</span> <span class="token punctuation">[</span>r0<span class="token punctuation">]</span> 
+TickExit    
+    bx     lr 
+                                                                           
+    ALIGN            
+    <span class="token punctuation">;</span>通过用零或空指令NOP填充<span class="token punctuation">,</span>来使当前位置与一个指定的边界对齐 
+    END
+
+
+</code></pre> 
+<p>（2）编译程序并创建hex文件<br> <img src="https://images2.imgbox.com/69/77/aL22edvQ_o.png" alt=""></p> 
+<h3><a id="3_574"></a>3.连接电路</h3> 
+<p>电路连接与使用HAL库串口输出"hello windows!"的连接方式完全一样</p> 
+<h3><a id="4_576"></a>4.程序烧录</h3> 
+<p>置BOOT0为0，BOOT1为1<br> （1）打开mcuisp，选择串口为COM5，并选择生成的hello.hex文件<br> <img src="https://images2.imgbox.com/f3/7b/vqbMHM3C_o.png" alt=""><br> （2）点击读器件信息，若显示一切正常则进行下一步<br> <img src="https://images2.imgbox.com/ca/e1/yaFlpOiB_o.png" alt=""><br> （3）点击开始编程，若显示一切正常则说明烧录成功<br> <img src="https://images2.imgbox.com/1b/81/5EsYH9Fa_o.png" alt=""></p> 
+<h3><a id="5_584"></a>5.串口调试</h3> 
+<p>打开野火串口调试助手，将波特率设置为115200，数据位设置为8，停止位设置为1，校验位设置为None，然后点击打开串口<br> <img src="https://images2.imgbox.com/90/d7/ubcB8apM_o.png" alt=""></p> 
+<h3><a id="6_587"></a>6.运行结果</h3> 
+<p><img src="https://images2.imgbox.com/b4/52/CUxosd8Z_o.png" alt=""></p> 
+<h3><a id="7_591"></a>7.观察串口输出波形</h3> 
+<p>相关参数设置与使用HAL库的方式相同，全部设置好后点击Run即可开始运行，运行一段时间后点击Stop停止运行并观察输出波形<br> <img src="https://images2.imgbox.com/d7/8a/55eD8eQE_o.png" alt=""><br> 由串口输出波形图及其显示的相关信息可知，时序状态正确。</p> 
+<h2><a id="_595"></a>五、总结</h2> 
+<p>通过本次实验可以发现，使用用寄存器方式写比较复杂，要声明很多地址，语句也比较繁琐，而且还容易出现各种各样的错误；而使用HAL库只需要在主函数里写几句代码就可以实现，更方便，且不易出错。</p> 
+<h2><a id="_598"></a>六、参考链接</h2> 
+<p><a href="https://blog.csdn.net/weixin_46129506/article/details/120895633?csdn_share_tail=%7B%22type%22:%22blog%22,%22rType%22:%22article%22,%22rId%22:%22120895633%22,%22source%22:%22qq_58879770%22%7D">基于STM32F103C8的USART串口通讯程序</a><br> <a href="https://blog.csdn.net/weixin_45969007/article/details/116270538?csdn_share_tail=%7B%22type%22:%22blog%22,%22rType%22:%22article%22,%22rId%22:%22116270538%22,%22source%22:%22qq_58879770%22%7D">电平标准（RS232 \ RS485 \ TTL）对比</a><br> <a href="https://blog.csdn.net/eker_ch/article/details/21046693?csdn_share_tail=%7B%22type%22:%22blog%22,%22rType%22:%22article%22,%22rId%22:%2221046693%22,%22source%22:%22qq_58879770%22%7D">RS-485标准</a><br> <a href="https://blog.csdn.net/NiceBabyaaa/article/details/120933917?csdn_share_tail=%7B%22type%22:%22blog%22,%22rType%22:%22article%22,%22rId%22:%22120933917%22,%22source%22:%22qq_58879770%22%7D">串口协议和RS-232标准，以及RS232电平与TTL电平的区别，“USB/TTL转232“模块（以CH340芯片模块为例）的工作原理。</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/95091d00acf6aa40a6b1e12445d5bd91/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Numpy基础入门知识点总结</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b2760d0061aca8154b5d676902e7c52c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Keil嵌入式开发环境的搭建与配置及基于STM32汇编程序的编写</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

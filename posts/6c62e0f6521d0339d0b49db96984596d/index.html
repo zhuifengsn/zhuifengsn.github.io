@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Oracle 分页查询方法和效率分析 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Oracle 分页查询方法和效率分析" />
+<meta property="og:description" content="1.Oracle 12c fetch抓取记录
+查询前10行记录
+# fetch first 10 rows only
+查询6至10行记录
+# offset 5 rows fetch next 5 rows only
+按百分比查询
+# offset 10 rows fetch next 10 percent rows only
+2.利用伪列rownum嵌套分页抓取记录
+select * from
+(select rownum as rn,t1.* from where rownum &lt;= 10) t2
+where rn &gt;= 5
+注:效率最高,几乎不受影响,但是SQL主体和分页操作不分离,不利于程序开发
+select * from
+(select rownum as rn,t1.* from
+(select * from test) t1 where rownum &lt;= 10) t2
+where rn &gt;= 5" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/6c62e0f6521d0339d0b49db96984596d/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-05-22T09:59:00+08:00" />
+<meta property="article:modified_time" content="2018-05-22T09:59:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Oracle 分页查询方法和效率分析</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div id="cnblogs_post_body" class="blogpost-body"> 
+ <p><span style="font-weight:600;">1.Oracle 12c fetch抓取记录</span></p> 
+ <p>查询前10行记录</p> 
+ <p><span style="color:#00ff00;"># fetch first 10 rows only</span></p> 
+ <p>查询6至10行记录</p> 
+ <p><span style="color:#00ff00;"># offset 5 rows fetch next 5 rows only</span></p> 
+ <p>按百分比查询</p> 
+ <p><span style="color:#00ff00;"># offset 10 rows fetch next 10 percent rows only</span></p> 
+ <p> </p> 
+ <p> </p> 
+ <p><span style="font-weight:600;">2.利用伪列rownum嵌套分页抓取记录</span></p> 
+ <p>select * from</p> 
+ <p> (select rownum as rn,t1.* from where rownum &lt;= 10) t2</p> 
+ <p>where rn &gt;= 5</p> 
+ <p><span style="color:#ff0000;">注:效率最高,几乎不受影响,但是SQL主体和分页操作不分离,不利于程序开发</span></p> 
+ <p> </p> 
+ <p>select * from</p> 
+ <p> (select rownum as rn,t1.* from</p> 
+ <p> (select * from test) t1 </p> 
+ <p> where rownum &lt;= 10) t2</p> 
+ <p>where rn &gt;= 5</p> 
+ <p> </p> 
+ <p>select * from</p> 
+ <p>(</p> 
+ <p> select rownum as rn,t1.* from</p> 
+ <p>(select * from test) t1</p> 
+ <p>)</p> 
+ <p>where rn between 5 and 10</p> 
+ <p> </p> 
+ <p><span style="color:#ff0000;">注:其中绿色的表示不进行翻页的原始语句,蓝色部分控制分页查询的范围</span></p> 
+ <p> </p> 
+ <p>选择第6到10条记录存在两种方法，</p> 
+ <p>一种是上面例子中展示的在查询的第二层通过ROWNUM &lt;= 10来控制最大值，在查询的最外层控制最小值。</p> 
+ <p>而另一种方式是去掉查询第二层的WHERE ROWNUM &lt;= 10语句，在查询的最外层控制分页的最小值和最大值。</p> 
+ <p> </p> 
+ <p>查询效率分析:</p> 
+ <p>对比这两种写法，绝大多数的情况下，第一个查询的效率比第二个高得多。</p> 
+ <p>这是由于CBO 优化模式下，Oracle可以将外层的查询条件推到内层查询中，以提高内层查询的执行效率。对于第一个查询语句，第二层的查询条件WHERE ROWNUM &lt;= 10就可以被Oracle推入到内层查询中，这样Oracle查询的结果一旦超过了ROWNUM限制条件，就终止查询将结果返回了。</p> 
+ <p>而第二个查询语句，由于查询条件BETWEEN 6 AND 10是存在于查询的第三层，而Oracle无法将第三层的查询条件推到最内层（即使推到最内层也没有意义，因为最内层查询不知道RN代表什么）。因此，对于第二个查询语句，Oracle最内层返回给中间层的是所有满足条件的数据，而中间层返回给最外层的也是所有数据。数据的过滤在最外层完成，显然这个效率要比第一个查询低得多。</p> 
+ <p>上面分析的查询不仅仅是针对单表的简单查询，对于最内层查询是复杂的多表联合查询或最内层查询包含排序的情况一样有效。</p> 
+ <p> </p> 
+ <p>以下主要为实现分页功能:</p> 
+ <p><span style="font-weight:600;">3.利用分析函数row_number()over(order by 字段)增加记录排序列</span></p> 
+ <p>select * from(</p> 
+ <p> select id,realname,row_number()over(order by id asc) rn from t_user</p> 
+ <p>) where rn between 6 and 10</p> 
+ <p> </p> 
+ <p><span style="font-weight:600;">4.利用minus方法</span></p> 
+ <p>(SELECT * FROM (SELECT * FROM test ORDER BY id asc) WHERE ROWNUM&lt;10)</p> 
+ <p>MINUS</p> 
+ <p>(SELECT * FROM (SELECT * FROM test ORDER BY id asc) WHERE ROWNUM&lt;6);</p> 
+ <p> </p> 
+ <p>建议:</p> 
+ <p>1.SQL主体不需要排序的简单操作,建议采用方式二的第一种方法</p> 
+ <p>2.SQL主题需要排序且逻辑复杂,建议采用方式二中的第二种方法或者方式一(只支持Oracle 12C)</p> 
+ <p> </p> 
+ <p> </p> 
+</div> 
+<p>转载于:https://www.cnblogs.com/xiaogaokui/p/9070576.html</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/0abccf4c8326d5c3e7f6a0eb8f9cc6a3/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">window 10 环境下Python 2与Python 3共存以及virtualenv的使用</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/2114659ceb62e5088e3095646770c2d9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">PYTHON 常用开发工具 IDE</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

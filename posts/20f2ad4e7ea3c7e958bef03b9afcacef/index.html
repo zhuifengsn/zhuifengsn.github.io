@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>LCD1602工作原理介绍 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="LCD1602工作原理介绍" />
+<meta property="og:description" content="LCD1602液晶显示屏简介 LCD1602（Liquid Crystal Display）是一种工业字符型液晶，能够同时显示16×02即32字符(16列两行)，LCD1602主要用来显示数字、字母、图形以及少量自定义字符。可以显示2行16个字符，拥有16个引脚，其中8位数据总线D0-D7，和RS、R/W、EN三个控制端口，工作电压为5V，并且带有字符对比度调节V0和背光源AK。
+LCD1602实物图 LCD1602主要参数 显示字符:16×2个字符工作电压:4.5~5V工作电流:2.0mA工作温度：-20°C~70°C模块最佳工作电压:5.0V单个字符尺寸2.95×4.35（W×Hmm）引脚：16脚 LCD1602引脚功能 引脚1(VSS/GND)：地引脚
+引脚2(VDD/VCC)：电源引脚
+引脚3(VL)：液晶显示器对比度引脚，接正电源时对比度最弱，接地时对比度最高,使用时可以通过外接一个电位器调整其对比度。
+引脚4(RS)：寄存器选择脚，高电平时选择数据寄存器、低电平时选择指令寄存器。
+引脚5(R/W)：读(read)/写(write)信号线，高电平时进行读操作，低电平时进行写操作。当RS和R/W共同为低电平时可以写入指令或显示地址；当RS为低电平，R/W为高电平时，可以读忙信号；当RS为高电平，R/W为低电平时，可以写入数据。
+引脚6(E)：使能端，当E端由高电平跳变为低电平时，液晶模块执行命令。
+引脚7-14(D0~D7)： 8位双向数据线 用于单片机向1602写入数据和从1602读取数据
+引脚15(BLA)：背光源正极
+引脚16(BLK)：背光源负极
+LCD1602引脚接线（51单片机） 虽然看到LCD1602的引脚很多，但是总体分下来其实只需要分成三个部分记忆去接线就好了。
+第一部分（电源、接地）：这里会分为两组，一组是VDD/GND组，主要给模块供电、另一组是BLA/BLK组，主要给背光源供电。由于VL引脚接地，也将它放在此部分记忆。
+注：两组我的写法都是以接5V电源/接地的顺序写的，当然也可以按着引脚说明部分自己注意甄别。
+第二部分（IO口）：也就是引脚7-14（D0-D7）由于他是8位双向数据线，所以按照顺序依次接51单片机P0^0引脚-P0^7引脚
+第三部分（信号线）：引脚RS（数据命令选择端）、R/W（读写选择端）、E（使能信号）可以随意选择其他IO口接线，这里以我自己写的代码所定义的引脚为例（C代码）：
+LCD1602的RAM地址 LCD1602,总共显示为16行2列，对应着32个RAM地址，在使用的时候，需要在哪个位置显示，就写入对应的RAM地址，然后再写入需要的字符，对应就会显示该字符。
+下图是LCD1602的内部显示地址
+一共32个地址，对应2行16列
+如果我要在第二行第一个位置显示字符，它的地址是 40H，那么是否直接写入 40H 就可以将光标定位在第二行第 一个字符的位置呢？
+答：这样不行，因为写入显示地址时要求最高位 D7 恒定为高电平 1 所以实 际写入的数据应该是 01000000B(40H) &#43;10000000B(80H)=11000000B(C0H)。
+那要显示什么字符呢就需要结课ASCII码表
+如上图所示，需要写入哪个字符，就直接设置对应进制码就可以了，比如数字1，代码是0011 0001与ASCII码一致。也就是表中的ASCII码字符的地址和实际的ASCII码字符是一样的。
+读时序、写时序及数序参数 以下为读时序和写时序的图以及数序参数。
+读时序：
+写时序：
+数序参数：
+写时序代码实现 首先我们先来观察写时序的图，通过时序图来确定代码
+在前面引脚功能部分有提到RS引脚为寄存器选择脚，高电平（1）时为选择数据寄存器、低电平（0）时为选择指令寄存器。我们知道液晶显示模块需要先有告诉在显示屏哪个地址显示字符后，再做显示字符操作，选择指令寄存器就是告知模块指令或地址、选择数据寄存器则是写入数据操作。不过要结合R/W来看。
+告知模块指令或地址时的写时序中一开始需要让RS = 0，继续观察写时序图我们会发现E一开始也是低电平，R/W一开始可高可低，但是根据后续变化来看，主要实现操作的电平为低电平，所以干脆直接在写时序里全程低电平，即：
+RS = 0;
+R/W = 0;
+EN = 0;//在定义时，将E接口命名成了EN
+如图，我们需要延时tsp1的时间为传输数据做准备，而后E会给到一个上升沿，这个时候指令就开始写入LCD中，此刻根据数序参数给到一定的延时后，将E置低电平。
+在准备传输数据阶段期间，其实已经开始将指令数据送到数据口D0~D7，所以综合以上时序的解析，代码如下：
+注：这个是一个自己写的函数，在主程序中调用，其中char cmd传进来的是需要显示字符的地址，check_busy();这个是读忙的函数，后续会提到，databuffer是之前定义的P0口，其中用到_nop_();做延时作用，它是一个空函数，运行它时大概需要1.085微妙，足够满足数序参数的需求。不过值得注意的是_nop_();需要加头文件#include &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/20f2ad4e7ea3c7e958bef03b9afcacef/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-09-26T17:26:59+08:00" />
+<meta property="article:modified_time" content="2023-09-26T17:26:59+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">LCD1602工作原理介绍</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h4><strong>LCD1602液晶显示屏简介</strong></h4> 
+<p>LCD1602（Liquid Crystal Display）是一种工业字符型液晶，能够同时显示16×02即32字符(16列两行)，LCD1602主要用来显示数字、字母、图形以及少量自定义字符。可以显示<strong>2行16个字符</strong>，拥有16个引脚，其中<strong>8位数据总线D0-D7</strong>，和<strong>RS、R/W、EN三个控制端口</strong>，工作电压为5V，并且带有字符对比度调节V0和背光源AK。</p> 
+<div class="img-center"> 
+ <figure class="image"> 
+  <img alt="" height="355" src="https://images2.imgbox.com/54/71/faSh0PKL_o.png" width="578"> 
+  <figcaption>
+    LCD1602实物图 
+  </figcaption> 
+ </figure> 
+</div> 
+<p></p> 
+<h5 id="LCD1602%E4%B8%BB%E8%A6%81%E5%8F%82%E6%95%B0">LCD1602主要参数</h5> 
+<ul><li>显示字符:16×2个字符</li><li>工作电压:4.5~5V</li><li>工作电流:2.0mA</li><li>工作温度：-20°C~70°C</li><li>模块最佳工作电压:5.0V</li><li>单个字符尺寸2.95×4.35（W×Hmm）</li><li>引脚：16脚</li></ul> 
+<h5>LCD1602引脚功能</h5> 
+<p class="img-center"><img alt="" height="430" src="https://images2.imgbox.com/d0/f7/6i8Em6N8_o.png" width="810"></p> 
+<p><strong>引脚1(VSS/GND)：</strong>地引脚</p> 
+<p><strong>引脚2(VDD/VCC)：</strong>电源引脚</p> 
+<p><strong>引脚3(VL)：</strong>液晶显示器对比度引脚，接正电源时对比度最弱，接地时对比度最高,使用时可以通过外接一个电位器调整其对比度。</p> 
+<p><strong>引脚4(RS)：</strong>寄存器选择脚，高电平时选择数据寄存器、低电平时选择指令寄存器。</p> 
+<p><strong>引脚5(R/W)：</strong>读(read)/写(write)信号线，高电平时进行读操作，低电平时进行写操作。当RS和R/W共同为低电平时可以写入指令或显示地址；当RS为低电平，R/W为高电平时，可以读忙信号；当RS为高电平，R/W为低电平时，可以写入数据。</p> 
+<p><strong>引脚6(E)：</strong>使能端，当E端由高电平跳变为低电平时，液晶模块执行命令。</p> 
+<p><strong>引脚7-14(D0~D7)： </strong>8位双向数据线 用于单片机向1602写入数据和从1602读取数据</p> 
+<p><strong>引脚15(BLA)：</strong>背光源正极</p> 
+<p><strong>引脚16(BLK)：</strong>背光源负极</p> 
+<h5>LCD1602引脚接线（51单片机）</h5> 
+<p>虽然看到LCD1602的引脚很多，但是总体分下来其实只需要分成三个部分记忆去接线就好了。</p> 
+<p><strong>第一部分（电源、接地）</strong>：这里会分为两组，一组是VDD/GND组，主要给模块供电、另一组是BLA/BLK组，主要给背光源供电。由于VL引脚接地，也将它放在此部分记忆。</p> 
+<p>注：两组我的写法都是以接5V电源/接地的顺序写的，当然也可以按着引脚说明部分自己注意甄别。</p> 
+<p><strong>第二部分（IO口）</strong>：也就是引脚7-14（D0-D7）由于他是8位双向数据线，所以按照顺序依次接51单片机P0^0引脚-P0^7引脚</p> 
+<p><strong>第三部分（信号线）</strong>：引脚RS（数据命令选择端）、R/W（读写选择端）、E（使能信号）可以随意选择其他IO口接线，这里以我自己写的代码所定义的引脚为例（C代码）：</p> 
+<p class="img-center"><img alt="" height="282" src="https://images2.imgbox.com/60/7f/r0gs4IxC_o.png" width="619"></p> 
+<h4>LCD1602的RAM地址</h4> 
+<p>LCD1602,总共显示为16行2列，对应着<strong>32个RAM地址</strong>，在使用的时候，需要在哪个位置显示，就写入对应的RAM地址，然后再写入需要的字符，对应就会显示该字符。</p> 
+<p>下图是LCD1602的内部显示地址<br> 一共32个地址，对应2行16列</p> 
+<p class="img-center"><img alt="" height="293" src="https://images2.imgbox.com/f5/7c/MylUCOwd_o.png" width="778"></p> 
+<p>如果我要在第二行第一个位置显示字符，它的地址是 40H，那么是否直接写入 40H 就可以将光标定位在第二行第 一个字符的位置呢？</p> 
+<p>答：这样不行，因为写入显示地址时<strong>要求最高位 D7 恒定为高电平 1 </strong>所以实 际写入的数据应该是 01000000B(40H) +10000000B(80H)=11000000B(C0H)。</p> 
+<p>那要显示什么字符呢就需要结课ASCII码表</p> 
+<p class="img-center"><img alt="" height="400" src="https://images2.imgbox.com/3f/da/ipPFThD3_o.png" width="335"></p> 
+<p>如上图所示，需要写入哪个字符，就直接设置对应进制码就可以了，比如数字1，代码是0011 0001与ASCII码一致。<strong>也就是表中的ASCII码字符的地址和实际的ASCII码字符是一样的。</strong></p> 
+<h4><strong>读时序、写时序及数序参数</strong></h4> 
+<p>以下为读时序和写时序的图以及数序参数。</p> 
+<p>读时序：</p> 
+<p class="img-center"><img alt="" height="271" src="https://images2.imgbox.com/34/de/DM6MfKHR_o.png" width="608"></p> 
+<p>写时序：</p> 
+<p class="img-center"><img alt="" height="289" src="https://images2.imgbox.com/21/df/L3bXV0hN_o.png" width="593"></p> 
+<p> 数序参数：</p> 
+<p class="img-center"><img alt="" height="216" src="https://images2.imgbox.com/dd/b9/Wwy8A8MP_o.png" width="599"></p> 
+<h4>写时序代码实现 </h4> 
+<p> 首先我们先来观察写时序的图，通过时序图来确定代码</p> 
+<p>在前面引脚功能部分有提到RS引脚为寄存器选择脚，高电平（1）时为选择数据寄存器、低电平（0）时为选择指令寄存器。我们知道液晶显示模块需要先有告诉在显示屏哪个地址显示字符后，再做显示字符操作，<strong>选择指令寄存器</strong>就是<strong>告知模块指令或地址</strong>、<strong>选择数据寄存器</strong>则是<strong>写入数据操作</strong>。不过要结合R/W来看。</p> 
+<p>告知模块指令或地址时的写时序中一开始需要让RS = 0，继续观察写时序图我们会发现E一开始也是低电平，R/W一开始可高可低，但是根据后续变化来看，主要实现操作的电平为低电平，所以干脆直接在写时序里全程低电平，即：</p> 
+<p>RS = 0;</p> 
+<p>R/W = 0;</p> 
+<p>EN = 0;//在定义时，将E接口命名成了EN</p> 
+<p class="img-center"><img alt="" height="377" src="https://images2.imgbox.com/46/ee/KqXSlmED_o.png" width="770"></p> 
+<p>如图，我们需要延时tsp1的时间为传输数据做准备，而后E会给到一个上升沿，这个时候指令就开始写入LCD中，此刻根据数序参数给到一定的延时后，将E置低电平。</p> 
+<p class="img-center"><img alt="" height="367" src="https://images2.imgbox.com/00/78/b8nQvVgi_o.png" width="782"></p> 
+<p>在准备传输数据阶段期间，其实已经开始将指令数据送到数据口D0~D7，所以综合以上时序的解析，代码如下：</p> 
+<p class="img-center"><img alt="" height="400" src="https://images2.imgbox.com/8f/85/4zsO5lka_o.png" width="362"></p> 
+<p>注：这个是一个自己写的函数，在主程序中调用，其中<strong>char cmd</strong>传进来的是需要显示字符的地址，<strong>check_busy();</strong>这个是读忙的函数，后续会提到，<strong>databuffer</strong>是之前定义的P0口，其中用到<strong>_nop_();</strong>做延时作用，它是一个<strong>空函数</strong>，运行它时大概需要1.085微妙，足够满足数序参数的需求。不过值得注意的是<strong>_nop_();需要加头文件#include "intrins.h"</strong>。 </p> 
+<p> 在写入数据时的写时序，只需要RS需要为高电平，其他和告知模块指令或地址时一致，代码如下：</p> 
+<p class="img-center"><img alt="" height="400" src="https://images2.imgbox.com/ec/11/A0Q0mgxa_o.png" width="419"></p> 
+<h4> LCD1602初始化</h4> 
+<p>我们可以根据一下步骤进行书写LCD1602的初始化</p> 
+<h5>LCD1602 初始化过程(8bit)</h5> 
+<p>（1）延时 15ms</p> 
+<p>（2）写指令 38H(不检测忙信号)</p> 
+<p>（3）延时 5ms</p> 
+<p>（4）以后每次写指令，读/写数据操作均需要检测忙信号</p> 
+<p>（5）写指令 38H：显示模式设置</p> 
+<p>（6）写指令 08H：显示关闭</p> 
+<p>（7）写指令 01H：显示清屏</p> 
+<p>（8）写指令 06H：显示光标移动设置</p> 
+<p>（9）写指令 0CH：显示开及光标设置</p> 
+<h5>LCD1602 初始化过程(4bit)</h5> 
+<p>（01）延时 50ms</p> 
+<p>（02）发送 0x03(4bit)(rs=0,rw=0)</p> 
+<p>（03）延时 4.5ms</p> 
+<p>（04）发送 0x03(4bit)(rs=0,rw=0)</p> 
+<p>（05）延时 4.5ms</p> 
+<p>（06）发送 0x03(4bit)(rs=0,rw=0)</p> 
+<p>（07）延时 150μs</p> 
+<p>（08）发送 0x02(4bit)(rs=0,rw=0)</p> 
+<p>（09）写指令 28H(8bit)</p> 
+<p>（10）写指令 0CH(8bit)</p> 
+<p>（11）写指令 01H(8bit)</p> 
+<p>（12）延时 2ms(8bit)</p> 
+<p>（13）写指令 06H(8bit)</p> 
+<p>因为我操作的是8bit的情况，如下图代码实现：</p> 
+<p class="img-center"><img alt="" height="393" src="https://images2.imgbox.com/8d/c4/kIzSbtII_o.png" width="500"></p> 
+<h4> LCD1602操作指令——读忙指令</h4> 
+<p><strong>LCD1602一共有11条指令，今天主要说读忙指令</strong></p> 
+<p>1602液晶模块的读写操作，屏幕和光标的操作都是通过指令来实现的。（1为高电平，0为低电平），操作指令整理如下图：</p> 
+<p class="img-center"><img alt="" height="400" src="https://images2.imgbox.com/9f/9f/9Mwg1HzD_o.png" width="594"></p> 
+<h5>读忙指令</h5> 
+<p class="img-center"><img alt="" height="200" src="https://images2.imgbox.com/0b/db/XBH2qzXB_o.png" width="901"></p> 
+<p>BF：忙标志位，高电平表示忙，此时模块不能接收命令或数据，如果为低电平表示不忙 </p> 
+<p>读忙指令编码可以知道要RS=0，R/W=1，这时需要观察读时序的图来判断E的状态，如下图</p> 
+<p class="img-center"><img alt="" height="342" src="https://images2.imgbox.com/3f/ba/sSGbYWrw_o.png" width="757"></p> 
+<p>依旧是我们需要延时tsp1的时间，并等待E提供一个上升沿，并延时一段时间，只是在读数据时是在E=1之后，所以获取数据的位置需要改变，其他E的状态变化和写时序没太大区别，代码如下</p> 
+<p class="img-center"><img alt="" height="265" src="https://images2.imgbox.com/e2/f5/HO4OkWGo_o.png" width="400"></p> 
+<p>这时我们需要做一个循环判断，来确定指令是不是处于忙状态，前面有提到当BF = 1时为忙状态，而它位于DB7口，其他IO口无所谓，所以可以定义一个tmp=0x80，databuffer=0x80，这样如上图所示，用databuffer给tmp赋值，当databuffer的P0^7口为0或1时，做while(tmp &amp; 0x80)的判断。完整代码如下：</p> 
+<p class="img-center"><img alt="" height="420" src="https://images2.imgbox.com/bd/cf/J98Obiqt_o.png" width="379"></p> 
+<p> 这时，我想要输出一个字符'C'的话，主函数如下写即可。</p> 
+<p class="img-center"><img alt="" height="247" src="https://images2.imgbox.com/b4/d6/4U2NMN1q_o.png" width="623"></p> 
+<p>当然，如果想输出一个字符串需要再做一个函数，如下图：</p> 
+<p class="img-center"><img alt="" height="550" src="https://images2.imgbox.com/9e/9e/AZsoOvwa_o.png" width="635"></p> 
+<p>注：其中row和col做的是在LCD1602的第几行显示的判断，row利用switch做判断，col做逻辑选择。这里解析一下0x80+col和0x80+0x40+col的操作为什么可以确定是第几行，0x80在前面已经有聊到过为什么需要加，写入显示地址时<strong>要求最高位 D7 恒定为高电平 1 </strong>。而第一行的第一个地址是00，也就是0x00，换算为十进制为0，而第二行地址为40，即0x40，换算为十进制则是64，但是由于不太美观且和上面不一致，不如写成0x80+0x40+0这样，就可以以形参的形式传递，具有比较好的观感。最后一个则是传递字符串的。</p> 
+<p>OK，今天的介绍就到这里吧，以下为完整代码</p> 
+<h4 style="background-color:transparent;">完整代码</h4> 
+<pre><code>#include "reg52.h"
+#include "intrins.h"
+/*
+RS  -- P1.0
+RW  -- P1.1 
+E   -- P1.4 */
+#define databuffer  P0 //定义8位数据线，Po端口组
+sbit RS = P1^0;
+sbit RW = P1^1;
+sbit EN = P1^4;
+
+void check_busy()
+{
+	char tmp = 0x80;
+	databuffer = 0x80;
+	
+	while(tmp &amp; 0x80){//1000 0000
+		RS = 0;
+		RW = 1;
+		EN = 0;
+		_nop_();
+		EN = 1;
+		_nop_();
+		_nop_();
+		tmp = databuffer;
+		EN = 0;
+		_nop_();
+	}
+}
+
+void Write_Cmd_Func(char cmd)
+{
+	check_busy();
+	RS = 0;
+	RW = 0;
+	
+	EN = 0;
+	_nop_();
+	databuffer = cmd;
+	_nop_();
+	EN = 1;
+	_nop_();
+	_nop_();
+	EN = 0;
+	_nop_();	
+}
+
+void Write_Data_Func(char dataShow)
+{
+	check_busy();
+	RS = 1;
+	RW = 0;
+	
+	EN = 0;
+	_nop_();
+	databuffer = dataShow;
+	_nop_();
+	EN = 1;
+	_nop_();
+	_nop_();
+	EN = 0;
+	_nop_();	
+}
+
+void Delay15ms()		//@11.0592MHz
+{
+	unsigned char i, j;
+
+	i = 27;
+	j = 226;
+	do
+	{
+		while (--j);
+	} while (--i);
+}
+void Delay5ms()		//@11.0592MHz
+{
+	unsigned char i, j;
+
+	i = 9;
+	j = 244;
+	do
+	{
+		while (--j);
+	} while (--i);
+}
+
+
+void LCD1602_INIT()
+{
+	//（1）延时 15ms
+	Delay15ms();
+//（2）写指令 38H(不检测忙信号) 
+	Write_Cmd_Func(0x38);
+//（3）延时 5ms
+	Delay5ms();
+//（4）以后每次写指令，读/写数据操作均需要检测忙信号
+//（5）写指令 38H：显示模式设置
+	Write_Cmd_Func(0x38);
+//（6）写指令 08H：显示关闭
+	Write_Cmd_Func(0x08);
+//（7）写指令 01H：显示清屏
+	Write_Cmd_Func(0x01);
+//（8）写指令 06H：显示光标移动设置
+	Write_Cmd_Func(0x06);
+//（9）写指令 0CH：显示开及光标设置}
+	Write_Cmd_Func(0x0c);
+}
+
+void LCD1602_showLine(char row, char col, char *string)
+{
+	
+	switch(row){
+
+		case 1:
+				Write_Cmd_Func(0x80+col);
+				while(*string){
+					Write_Data_Func(*string);
+					string++;
+				}
+				break;
+		
+		case 2:
+				Write_Cmd_Func(0x80+0x40+col);
+				while(*string){
+					Write_Data_Func(*string);
+					string++;
+				}
+				break;
+	
+	}
+}
+
+void main()
+{
+	char position = 0x80 + 0x05;
+	//char dataShow = 'C';
+	LCD1602_INIT();
+	LCD1602_showLine(1,5,"NO.1");
+	LCD1602_showLine(2,0,"clc handsome");
+
+}</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/19a387d2cac8d002b0b3d442988596b2/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">12大常用自动化测试工具，请记得转发收藏！</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/4e0ad3aa0f42c8ea61348a4d6b1e992f/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Spring Boot：实现与数据库的连接</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁" />
+<meta property="og:description" content="不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁 原文: 不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁 版权声明：本作品采用知识共享署名-非商业性使用-相同方式共享 4.0 国际许可协议进行许可。欢迎转载、使用、重新发布，但务必保留文章署名吕毅（包含链接：https://walterlv.blog.csdn.net/），不得用于商业目的，基于本文修改后的作品务必以相同的许可发布。如有任何疑问，请与我联系（walter.lv@qq.com）。 https://blog.csdn.net/WPwalter/article/details/85222847 WPF 中为了 UI 的跨线程访问，提供了 Dispatcher 线程模型。其 Invoke 方法，无论在哪个线程调用，都可以让传入的方法回到 UI 线程。
+然而，如果你在 Lazy 上下文中使用了 Invoke，那么当这个 Lazy&lt;T&gt; 跨线程并发时，极有可能导致死锁。本文将具体说说这个例子。
+本文内容 一段死锁的代码此死锁的触发条件此死锁的原因此死锁的解决方法更多死锁问题 一段死锁的代码 请先看一段非常简单的 WPF 代码：
+private Lazy&lt;Walterlv&gt; _walterlvLazy = new Lazy&lt;Walterlv&gt;(() =&gt; new Walterlv()); private void OnLoaded(object sender, RoutedEventArgs e) { Task.Run(() =&gt; { // 在后台线程通过 Lazy 获取。 var backgroundWalterlv = _walterlvLazy.Value; }); // 等待一个时间，这样可以确保后台线程先访问到 Lazy，并且在完成之前，UI 线程也能访问到 Lazy。 Thread.Sleep(50); // 在主线程通过 Lazy 获取。 var walterlv = _walterlvLazy." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/409759482a8a7130083d3b7b5429b708/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-03-08T14:28:00+08:00" />
+<meta property="article:modified_time" content="2019-03-08T14:28:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div id="post_detail"> 
+ <div class="post"> 
+  <div class="postTitle"> 
+   <a id="cb_post_title_url" href="https://www.cnblogs.com/lonelyxmas/p/10495622.html" rel="nofollow">不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁</a> 
+  </div> 
+  <div class="postText"> 
+   <div id="cnblogs_post_body" class="blogpost-body">
+     原文: 
+    <a href="https://blog.csdn.net/WPwalter/article/details/85222847">不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁</a> 
+    <p> </p> 
+    <div class="article-copyright">
+      版权声明：本作品采用知识共享署名-非商业性使用-相同方式共享 4.0 国际许可协议进行许可。欢迎转载、使用、重新发布，但务必保留文章署名吕毅（包含链接：https://walterlv.blog.csdn.net/），不得用于商业目的，基于本文修改后的作品务必以相同的许可发布。如有任何疑问，请与我联系（walter.lv@qq.com）。 https://blog.csdn.net/WPwalter/article/details/85222847 
+    </div> 
+    <div id="content_views" class="markdown_views prism-atom-one-dark"> 
+     <p>WPF 中为了 UI 的跨线程访问，提供了 <code>Dispatcher</code> 线程模型。其 <code>Invoke</code> 方法，无论在哪个线程调用，都可以让传入的方法回到 UI 线程。</p> 
+     <p>然而，如果你在 Lazy 上下文中使用了 <code>Invoke</code>，那么当这个 <code>Lazy&lt;T&gt;</code> 跨线程并发时，极有可能导致死锁。本文将具体说说这个例子。</p> 
+     <hr> 
+     <p></p> 
+     <div class="toc"> 
+      <h4>本文内容</h4> 
+      <ul><li> 
+        <ul><li> 
+          <ul><li><a href="#_8" rel="nofollow">一段死锁的代码</a></li><li><a href="#_51" rel="nofollow">此死锁的触发条件</a></li><li><a href="#_57" rel="nofollow">此死锁的原因</a></li><li><a href="#_65" rel="nofollow">此死锁的解决方法</a></li><li><a href="#_80" rel="nofollow">更多死锁问题</a></li></ul></li></ul></li></ul> 
+     </div> 
+     <p> </p> 
+     <h4><a id="_8"></a>一段死锁的代码</h4> 
+     <p>请先看一段非常简单的 WPF 代码：</p> 
+     <pre><code class="prism language-csharp"><span class="token keyword">private</span> Lazy<span class="token operator">&lt;</span>Walterlv<span class="token operator">&gt;</span> _walterlvLazy <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token generic-method"><span class="token function">Lazy</span><span class="token punctuation">&lt;</span><span class="token class-name">Walterlv</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span><span class="token operator">&gt;</span> <span class="token keyword">new</span> <span class="token class-name">Walterlv</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">OnLoaded</span><span class="token punctuation">(</span><span class="token keyword">object</span> sender<span class="token punctuation">,</span> <span class="token class-name">RoutedEventArgs</span> e<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    Task<span class="token punctuation">.</span><span class="token function">Run</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span><span class="token operator">&gt;</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 在后台线程通过 Lazy 获取。</span>
+        <span class="token keyword">var</span> backgroundWalterlv <span class="token operator">=</span> _walterlvLazy<span class="token punctuation">.</span>Value<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 等待一个时间，这样可以确保后台线程先访问到 Lazy，并且在完成之前，UI 线程也能访问到 Lazy。</span>
+    Thread<span class="token punctuation">.</span><span class="token function">Sleep</span><span class="token punctuation">(</span><span class="token number">50</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 在主线程通过 Lazy 获取。</span>
+    <span class="token keyword">var</span> walterlv <span class="token operator">=</span> _walterlvLazy<span class="token punctuation">.</span>Value<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+     <p>而其中的 <code>Walterlv</code> 类的定义也是非常简单的：</p> 
+     <pre><code class="prism language-csharp"><span class="token keyword">class</span> <span class="token class-name">Walterlv</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">public</span> <span class="token function">Walterlv</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 等待一段时间，是为了给我么的测试程序一个准确的时机。</span>
+        Thread<span class="token punctuation">.</span><span class="token function">Sleep</span><span class="token punctuation">(</span><span class="token number">100</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// Invoke 到主线程执行，里面什么都不做是为了证明绝不是里面代码带来的影响。</span>
+        Application<span class="token punctuation">.</span>Current<span class="token punctuation">.</span>Dispatcher<span class="token punctuation">.</span><span class="token function">Invoke</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span><span class="token operator">&gt;</span>
+        <span class="token punctuation">{<!-- --></span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+     <p>这里的 <code>Application.Current.Dispatcher</code> 并不一定必须是 <code>Application.Current</code>，只要是两个不同线程拿到的 <code>Dispatcher</code> 的实例是同一个，就会死锁。</p> 
+     <h4><a id="_51"></a>此死锁的触发条件</h4> 
+     <ol><li><code>Lazy&lt;T&gt;</code> 的线程安全参数设置为默认的，也就是 <code>LazyThreadSafetyMode.ExecutionAndPublication</code>；</li><li>后台线程和主 UI 线程并发访问这个 <code>Lazy&lt;T&gt;</code>，且后台线程先于主 UI 线程访问这个 <code>Lazy&lt;T&gt;</code>；</li><li><code>Lazy&lt;T&gt;</code> 内部的代码包含主线程的 <code>Invoke</code>。</li></ol> 
+     <h4><a id="_57"></a>此死锁的原因</h4> 
+     <ol><li>后台线程访问到 Lazy，于是 Lazy 内部获得同步锁；</li><li>主 UI 线程访问到 Lazy，于是主 UI 线程等待同步锁完成，并进入阻塞状态（以至于不能处理消息循环）；</li><li>后台线程的初始化调用到 <code>Invoke</code> 需要到 UI 线程完成指定的任务后才会返回，但 UI 线程此时阻塞不能处理消息循环，以至于无法完成 <code>Invoke</code> 内的任务；</li></ol> 
+     <p>于是，后台线程在等待 UI 线程处理消息以便让 <code>Invoke</code> 完成，而主 UI 线程由于进入 Lazy 的等待，于是不能完成 <code>Invoke</code> 中的任务；于是发生死锁。</p> 
+     <h4><a id="_65"></a>此死锁的解决方法</h4> 
+     <p><code>Invoke</code> 改为 <code>InvokeAsync</code> 便能解锁。</p> 
+     <p>这么做能解决的原因是：后台线程能够及时返回，这样 UI 线程便能够继续执行，包括执行 <code>InvokeAsync</code> 中传入的任务。</p> 
+     <p>实际上，以上可能是最好的解决办法了。因为：</p> 
+     <ol><li>我们使用 Lazy 并且设置线程安全，一定是因为这个初始化过程会被多个线程访问；</li><li>我们会在 Lazy 的初始化代码中使用回到主线程的 <code>Invoke</code>，也是因为我们预料到这份初始化代码可能在后台线程执行。</li></ol> 
+     <p>所以，这段初始化代码既然不可避免地会并发，那么就应该阻止并发造成的死锁问题。也就是不要使用 <code>Invoke</code> 而是改用 <code>InvokeAsync</code>。</p> 
+     <p>如果需要使用 <code>Invoke</code> 的返回值，那么改为 <code>InvokeAsync</code> 之后，可以使用 <code>await</code> 异步等待返回值。</p> 
+     <h4><a id="_80"></a>更多死锁问题</h4> 
+     <p>死锁问题：</p> 
+     <ul><li><a href="https://walterlv.com/post/deadlock-in-task-wait.html" rel="nofollow">使用 Task.Wait()？立刻死锁（deadlock） - walterlv</a></li><li><a href="https://walterlv.com/post/deadlock-of-invoke-in-lazy.html" rel="nofollow">不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁 - walterlv</a></li><li><a href="https://walterlv.com/post/deadlock-if-await-in-ui-lock-context.html" rel="nofollow">在有 UI 线程参与的同步锁（如 AutoResetEvent）内部使用 await 可能导致死锁</a></li><li><a href="https://walterlv.com/post/task-wait-may-cause-long-time-waiting.html" rel="nofollow">.NET 中小心嵌套等待的 Task，它可能会耗尽你线程池的现有资源，出现类似死锁的情况 - walterlv</a></li></ul> 
+     <p>解决方法：</p> 
+     <ul><li><a href="https://walterlv.com/post/using-configure-await-to-avoid-deadlocks.html" rel="nofollow">在编写异步方法时，使用 ConfigureAwait(false) 避免使用者死锁 - walterlv</a></li><li><a href="https://walterlv.com/post/convert-async-to-sync-by-push-frame.html" rel="nofollow">将 async/await 异步代码转换为安全的不会死锁的同步代码（使用 PushFrame） - walterlv</a></li></ul> 
+    </div> 
+   </div> 
+   <div id="MySignature"></div> 
+   <div class="clear"></div> 
+   <div id="blog_post_info_block"> 
+    <div id="BlogPostCategory"></div> 
+    <div id="EntryTag"></div> 
+    <div id="blog_post_info"> 
+    </div> 
+    <div class="clear"></div> 
+    <div id="post_next_prev"></div> 
+   </div> 
+  </div> 
+  <div class="postfoot">
+    posted on 
+   <span id="post-date">2019-03-08 14:28</span> 
+   <a href="https://www.cnblogs.com/lonelyxmas/" rel="nofollow">NET未来之路</a> 阅读( 
+   <span id="post_view_count">...</span>) 评论( 
+   <span id="post_comment_count">...</span>) 
+   <a href="https://i.cnblogs.com/EditPosts.aspx?postid=10495622" rel="nofollow">编辑</a> 
+   <a href="#" rel="nofollow">收藏</a> 
+  </div> 
+ </div> 
+</div> 
+<p>转载于:https://www.cnblogs.com/lonelyxmas/p/10495622.html</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/db748283ff746ae7e02567ebb5f37e83/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Spring Cloud Ribbon自定义负载均衡算法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/8ccff4719b07dd7c2ab1f6bd50d8f374/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">视频转格式消重 修改视频md5还有效吗</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>spring - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="spring" />
+<meta property="og:description" content="1.1 谈谈你对IOC的理解 当程序运行时，用的是具体的UserService对象、OrderService对象，那这些对象是什么时候创建的？谁创建的？包括对象里的属性是什么时候赋的值？谁赋的？所有这些都是我们程序员做的，以为我们只是写了类而已，所有的这些都是Spring做的，它才是幕后黑手。
+这就是控制：
+控制对象的创建控制对象内属性的赋值 如果我们不用Spring，那我们得自己来做这两件事，反过来，我们用Spring，这两件事情就不用我们做了，我们要做的仅仅是定义类，以及定义哪些属性需要Spring来赋值（比如某个属性上加@Autowired），而这其实就是第二个问题的答案，这就是反转，表示一种对象控制权的转移。
+我们自己来控制比交给Spring来控制，我们的代码量以及代码复杂度是要高很多的，反言之，将对象交给Spring来控制，减轻了程序员的负担。
+总结一下，IoC表示控制反转，表示如果用Spring，那么Spring会负责来创建对象，以及给对象内的属性赋值，也就是如果用Spring，那么对象的控制权会转交给Spring。
+1.2 Spring事务传播机制 多个事务方法相互调用时，事务如何在这些方法间传播，方法A是一个事务的方法，方法A执行过程中调用了方法B，那么方法B有无事务以及方法B对事务的要求不同都会对方法A的事务具体执行造成影响，同时方法A的事务对方法B的事务执行也有影响，这种影响具体是什么就由两个方法所定义的事务传播类型所决定。
+REQUIRED(Spring默认的事务传播类型)：如果当前没有事务，则自己新建一个事务，如果当前存在事务，则加入这个事务SUPPORTS：当前存在事务，则加入当前事务，如果当前没有事务，就以非事务方法执行MANDATORY：当前存在事务，则加入当前事务，如果当前事务不存在，则抛出异常。REQUIRES_NEW：创建一个新事务，如果存在当前事务，则挂起该事务。NOT_SUPPORTED：以非事务方式执行,如果当前存在事务，则挂起当前事务NEVER：不使用事务，如果当前事务存在，则抛出异常NESTED：如果当前事务存在，则在嵌套事务中执行，否则REQUIRED的操作一样（开启一个事务） 1.3 Spring事务失效的八大场景与原因分析 方法内的自调用：Spring事务是基于AOP的，只要使用代理对象调用某个方法时，Spring事务才能生效，而在一个方法中调用使用this.xxx()调用方法时，this并不是代理对象，所以会导致事务失效。 解放办法1：把调用方法拆分到另外一个Bean中解决办法2：自己注入自己解决办法3：AopContext.currentProxy()&#43;@EnableAspectJAutoProxy(exposeProxy = true) 方法是private的：Spring事务会基于CGLIB来进行AOP，而CGLIB会基于父子类来失效，子类是代理类，父类是被代理类，如果父类中的某个方法是private的，那么子类就没有办法重写它，也就没有办法额外增加Spring事务的逻辑。方法是final的：原因和private是一样的，也是由于子类不能重写父类中的final的方法单独的线程调用方法：当Mybatis或JdbcTemplate执行SQL时，会从ThreadLocal中去获取数据库连接对象，如果开启事务的线程和执行SQL的线程是同一个，那么就能拿到数据库连接对象，如果不是同一个线程，那就拿到不到数据库连接对象，这样，Mybatis或JdbcTemplate就会自己去新建一个数据库连接用来执行SQL，此数据库连接的autocommit为true，那么执行完SQL就会提交，后续再抛异常也就不能再回滚之前已经提交了的SQL了。没加@Configuration注解：如果用SpringBoot基本没有这个问题，但是如果用的Spring，那么可能会有这个问题，这个问题的原因其实也是由于Mybatis或JdbcTemplate会从ThreadLocal中去获取数据库连接，但是ThreadLocal中存储的是一个MAP，MAP的key为DataSource对象，value为连接对象，而如果我们没有在AppConfig上添加@Configuration注解的话，会导致MAP中存的DataSource对象和Mybatis和JdbcTemplate中的DataSource对象不相等，从而也拿不到数据库连接，导致自己去创建数据库连接了。异常被吃掉：如果Spring事务没有捕获到异常，那么也就不会回滚了，默认情况下Spring会捕获RuntimeException和Error。类没有被Spring管理数据库不支持事务 1.4 Spring中的Bean创建的生命周期有哪些步骤 Spring中一个Bean的创建大概分为以下几个步骤：
+推断构造方法实例化填充属性，也就是依赖注入处理Aware回调初始化前，处理@PostConstruct注解初始化，处理InitializingBean接口初始化后，进行AOP Spring Bean 生命周期 实例化
+实例化一个Bean,也就是我们常说的new。 IOC依赖注入
+按照Spring上下文对实例化的Bean进行配置，也就是IOC注入。 setBeanName 实现
+如果这个Bean已经实现了 BeanNameAware接口，会调用它实现的setBeanName(String) 方法，此处传递的就是Spring配置文件中Bean的id值 BeanFactoryAware 实现
+如果这个Bean已经实现了 BeanFactoryAware接口，会调用它实现的setBeanFactory， setBeanFactory(BeanFactory)传递的是Spring工厂自身(可以用这个方式来获取其它Bean， 只需在Spring配置文件中配置一个普通的Bean就可以)。 ApplicationContextAware 实现
+如果这个Bean已经实现了 ApplicationContextAware接口，会调用 setApplicationContext(ApplicationContext)方法，传入 Spring 上下文(同样这个方式也 可以实现步骤4的内容，但比4更好，因为ApplicationContext是BeanFactory的子接 口，有更多的实现方法) postProcessBeforelnitialization 接口实现初始化预处理
+如果这个Bean关联了 BeanPostProcessor接口，将会调用 postProcessBeforelnitialization(Object obj, String s)方法,BeanPostProcessor 经常被用 作是Bean内容的更改，并且由于这个是在Bean初始化结束时调用那个的方法，也可以被应 用于内存或缓存技术。 init-method
+如果Bean在Spring配置文件中配置了 init-method属性会自动调用其配置的初始化方法。 postProcessAfterlnitialization
+如果这个Bean关联了 BeanPostProcessor接口，将会调用 postProcessAfterlnitialization(Object obj, String s)方法。 注：以h工作完成以后就可以应用这个Bean 了，那这个Bean是一个Singleton的，所以一 般情况下我们调用同一个id的Bean会是在内容地址相同的实例，当然在Spring配置文件中 也可以配置非Singleton。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2a2d595e6ed9a0b24f027f2b63b134d6/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-25T18:34:41+08:00" />
+<meta property="article:modified_time" content="2024-02-25T18:34:41+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">spring</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h3 style="margin-left:.0001pt;text-align:justify;"><strong><strong><span style="color:#000000;"><strong>1.1        谈谈你对IOC的理解</strong></span></strong></strong></h3> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">当程序运行时，用的是具体的UserService对象、OrderService对象，那这些对象是什么时候创建的？谁创建的？包括对象里的属性是什么时候赋的值？谁赋的？所有这些都是我们程序员做的，以为我们只是写了类而已，所有的这些都是Spring做的，它才是幕后黑手。</span></p> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">这就是控制：</span></p> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">控制对象的创建</span></li><li style="text-align:justify;"><span style="color:#000000;">控制对象内属性的赋值</span></li></ol> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">如果我们不用Spring，那我们得自己来做这两件事，反过来，我们用Spring，这两件事情就不用我们做了，我们要做的仅仅是定义类，以及定义哪些属性需要Spring来赋值（比如某个属性上加@Autowired），而这其实就是第二个问题的答案，这就是反转，表示一种对象控制权的转移。</span></p> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">我们自己来控制比交给Spring来控制，我们的代码量以及代码复杂度是要高很多的，反言之，将对象交给Spring来控制，减轻了程序员的负担。</span></p> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">总结一下，IoC表示控制反转，表示如果用Spring，那么Spring会负责来创建对象，以及给对象内的属性赋值，也就是如果用Spring，那么对象的控制权会转交给Spring。</span></p> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.2        Spring事务传播机制</strong></span></strong></strong></h3> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">多个事务方法相互调用时，事务如何在这些方法间传播，方法A是一个事务的方法，方法A执行过程中调用了方法B，那么方法B有无事务以及方法B对事务的要求不同都会对方法A的事务具体执行造成影响，同时方法A的事务对方法B的事务执行也有影响，这种影响具体是什么就由两个方法所定义的事务传播类型所决定。</span></p> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">REQUIRED(Spring默认的事务传播类型)：如果当前没有事务，则自己新建一个事务，如果当前存在事务，则加入这个事务</span></li><li style="text-align:justify;"><span style="color:#000000;">SUPPORTS：当前存在事务，则加入当前事务，如果当前没有事务，就以非事务方法执行</span></li><li style="text-align:justify;"><span style="color:#000000;">MANDATORY：当前存在事务，则加入当前事务，如果当前事务不存在，则抛出异常。</span></li><li style="text-align:justify;"><span style="color:#000000;">REQUIRES_NEW：创建一个新事务，如果存在当前事务，则挂起该事务。</span></li><li style="text-align:justify;"><span style="color:#000000;">NOT_SUPPORTED：以非事务方式执行,如果当前存在事务，则挂起当前事务</span></li><li style="text-align:justify;"><span style="color:#000000;">NEVER：不使用事务，如果当前事务存在，则抛出异常</span></li><li style="text-align:justify;"><span style="color:#000000;">NESTED：如果当前事务存在，则在嵌套事务中执行，否则REQUIRED的操作一样（开启一个事务）</span></li></ol> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.3        Spring事务失效的八大场景与原因分析</strong></span></strong></strong></h3> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">方法内的自调用：Spring事务是基于AOP的，只要使用代理对象调用某个方法时，Spring事务才能生效，而在一个方法中调用使用this.xxx()调用方法时，this并不是代理对象，所以会导致事务失效。</span> 
+  <ol><li style="text-align:justify;"><span style="color:#000000;">解放办法1：把调用方法拆分到另外一个Bean中</span></li><li style="text-align:justify;"><span style="color:#000000;">解决办法2：自己注入自己</span></li><li style="text-align:justify;"><span style="color:#000000;">解决办法3：AopContext.currentProxy()+@EnableAspectJAutoProxy(exposeProxy = true)</span></li></ol></li></ol> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">方法是private的：Spring事务会基于CGLIB来进行AOP，而CGLIB会基于父子类来失效，子类是代理类，父类是被代理类，如果父类中的某个方法是private的，那么子类就没有办法重写它，也就没有办法额外增加Spring事务的逻辑。</span></li><li style="text-align:justify;"><span style="color:#000000;">方法是final的：原因和private是一样的，也是由于子类不能重写父类中的final的方法</span></li><li style="text-align:justify;"><span style="color:#000000;">单独的线程调用方法：当Mybatis或JdbcTemplate执行SQL时，会从ThreadLocal中去获取数据库连接对象，如果开启事务的线程和执行SQL的线程是同一个，那么就能拿到数据库连接对象，如果不是同一个线程，那就拿到不到数据库连接对象，这样，Mybatis或JdbcTemplate就会自己去新建一个数据库连接用来执行SQL，此数据库连接的autocommit为true，那么执行完SQL就会提交，后续再抛异常也就不能再回滚之前已经提交了的SQL了。</span></li><li style="text-align:justify;"><span style="color:#000000;">没加@Configuration注解：如果用SpringBoot基本没有这个问题，但是如果用的Spring，那么可能会有这个问题，这个问题的原因其实也是由于Mybatis或JdbcTemplate会从ThreadLocal中去获取数据库连接，但是ThreadLocal中存储的是一个MAP，MAP的key为DataSource对象，value为连接对象，而如果我们没有在AppConfig上添加@Configuration注解的话，会导致MAP中存的DataSource对象和Mybatis和JdbcTemplate中的DataSource对象不相等，从而也拿不到数据库连接，导致自己去创建数据库连接了。</span></li><li style="text-align:justify;"><span style="color:#000000;">异常被吃掉：如果Spring事务没有捕获到异常，那么也就不会回滚了，默认情况下Spring会捕获RuntimeException和Error。</span></li><li style="text-align:justify;"><span style="color:#000000;">类没有被Spring管理</span></li><li style="text-align:justify;"><span style="color:#000000;">数据库不支持事务</span></li></ol> 
+<h3 style="background-color:transparent;margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.4        Spring中的Bean创建的生命周期有哪些步骤</strong></span></strong></strong></h3> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">Spring中一个Bean的创建大概分为以下几个步骤：</span></p> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">推断构造方法</span></li><li style="text-align:justify;"><span style="color:#000000;">实例化</span></li><li style="text-align:justify;"><span style="color:#000000;">填充属性，也就是依赖注入</span></li><li style="text-align:justify;"><span style="color:#000000;">处理Aware回调</span></li><li style="text-align:justify;"><span style="color:#000000;">初始化前，处理@PostConstruct注解</span></li><li style="text-align:justify;"><span style="color:#000000;">初始化，处理InitializingBean接口</span></li><li style="text-align:justify;"><span style="color:#000000;">初始化后，进行AOP</span></li></ol> 
+<p><img alt="" height="619" src="https://images2.imgbox.com/0e/53/e5ib93AR_o.png" width="1200"></p> 
+<ol><li style="text-align:left;"><strong><span style="color:#000000;"><strong>Spring Bean </strong></span></strong><span style="color:#000000;">生命周期</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>实例化</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">实例化一个</span><span style="color:#000000;">Bean,</span><span style="color:#000000;">也就是我们常说的</span><span style="color:#000000;">new</span><span style="color:#000000;">。</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>IOC</em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>依赖注入</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">按照</span><span style="color:#000000;">Spring</span><span style="color:#000000;">上下文对实例化的</span><span style="color:#000000;">Bean</span><span style="color:#000000;">进行配置，也就是</span><span style="color:#000000;">IOC</span><span style="color:#000000;">注入。</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>setBeanName </em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>实现</em></strong></span></em></strong></p> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">如果这个</span><span style="color:#000000;">Bean</span><span style="color:#000000;">已经实现了 </span><span style="color:#000000;">BeanNameAware</span><span style="color:#000000;">接口，会调用它实现的</span><span style="color:#000000;">setBeanName(String) </span><span style="color:#000000;">方法，此处传递的就是</span><span style="color:#000000;">Spring</span><span style="color:#000000;">配置文件中</span><span style="color:#000000;">Bean</span><span style="color:#000000;">的</span><span style="color:#000000;">id</span><span style="color:#000000;">值</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>BeanFactoryAware </em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>实现</em></strong></span></em></strong></p> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">如果这个</span><span style="color:#000000;">Bean</span><span style="color:#000000;">已经实现了 </span><span style="color:#000000;">BeanFactoryAware</span><span style="color:#000000;">接口，会调用它实现的</span><span style="color:#000000;">setBeanFactory， setBeanFactory(BeanFactory)</span><span style="color:#000000;">传递的是</span><span style="color:#000000;">Spring</span><span style="color:#000000;">工厂自身(可以用这个方式来获取其它</span><span style="color:#000000;">Bean， </span><span style="color:#000000;">只需在</span><span style="color:#000000;">Spring</span><span style="color:#000000;">配置文件中配置一个普通的</span><span style="color:#000000;">Bean</span><span style="color:#000000;">就可以)。</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>ApplicationContextAware </em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>实现</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">如果这个</span><span style="color:#000000;">Bean</span><span style="color:#000000;">已经实现了 </span><span style="color:#000000;">ApplicationContextAware</span><span style="color:#000000;">接口，会调用 </span><span style="color:#000000;">setApplicationContext(ApplicationContext</span><span style="color:#000000;">)</span><span style="color:#000000;">方法，传入 </span><span style="color:#000000;">Spring </span><span style="color:#000000;">上下文(同样这个方式也 可以实现步骤</span><span style="color:#000000;">4</span><span style="color:#000000;">的内容，但比</span><span style="color:#000000;">4</span><span style="color:#000000;">更好，因为</span><span style="color:#000000;">ApplicationContext</span><span style="color:#000000;">是</span><span style="color:#000000;">BeanFactory</span><span style="color:#000000;">的子接 口，有更多的实现方法)</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>postProcessBeforelnitialization </em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>接口实现初始化预处理</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">如果这个</span><span style="color:#000000;">Bean</span><span style="color:#000000;">关联了 </span><span style="color:#000000;">BeanPostProcessor</span><span style="color:#000000;">接口</span><span style="color:#000000;">，</span><span style="color:#000000;">将会调用 </span><span style="color:#000000;">postProcessBeforelnitialization(Object obj, String s)</span><span style="color:#000000;">方法,</span><span style="color:#1f497d;">BeanPostProcessor </span><span style="color:#1f497d;">经常被用 作是</span><span style="color:#1f497d;">Bean</span><span style="color:#1f497d;">内容的更改，并且由于这个是在</span><span style="color:#1f497d;">Bean</span><span style="color:#1f497d;">初始化结束时调用那个的方法，也可以被应 用于内存或缓存技术。</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>init-method</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">如果</span><span style="color:#000000;">Bean</span><span style="color:#000000;">在</span><span style="color:#000000;">Spring</span><span style="color:#000000;">配置文件中配置了 </span><span style="color:#000000;">init-method</span><span style="color:#000000;">属性会自动调用其配置的初始化方法。</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>postProcessAfterlnitialization</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">如果这个</span><span style="color:#000000;">Bean</span><span style="color:#000000;">关联了 </span><span style="color:#000000;">BeanPostProcessor</span><span style="color:#000000;">接口，将会调用 </span><span style="color:#000000;">postProcessAfterlnitialization(Object obj, String s)</span><span style="color:#000000;">方法。</span></li></ol> 
+<p style="margin-left:21pt;text-align:justify;"><span style="color:#000000;">注：</span><span style="color:#1f497d;">以</span><span style="color:#1f497d;">h</span><span style="color:#1f497d;">工作完成以后就可以应用这个</span><span style="color:#1f497d;">Bean </span><span style="color:#1f497d;">了，</span><span style="color:#000000;">那这个</span><span style="color:#000000;">Bean</span><span style="color:#000000;">是一个</span><span style="color:#000000;">Singleton</span><span style="color:#000000;">的，所以一 般情况下我们调用同一个</span><span style="color:#000000;">id</span><span style="color:#000000;">的</span><span style="color:#000000;">Bean</span><span style="color:#000000;">会是在内容地址相同的实例，当然在</span><span style="color:#000000;">Spring</span><span style="color:#000000;">配置文件中 也可以配置非</span><span style="color:#000000;">Singleton</span><span style="color:#000000;">。</span></p> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>Destroy</em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>过期自动清理阶段</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">当</span><span style="color:#000000;">Bean</span><span style="color:#000000;">不有畐要时，会军二有理阶段，如果</span><span style="color:#000000;">Bean</span><span style="color:#000000;">实现了 </span><span style="color:#000000;">DisposableBean</span><span style="color:#000000;">这个接口，会调 用那个其实现的</span><span style="color:#000000;">destroy</span><span style="color:#000000;">。</span><span style="color:#000000;">方法；</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><strong><em><span style="color:#000000;"><strong><em>destroy-method </em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>自橱</em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>M</em></strong></span></em></strong><strong><em><span style="color:#000000;"><strong><em>清理</em></strong></span></em></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">最后，如果这个</span><span style="color:#000000;">Bean</span><span style="color:#000000;">的</span><span style="color:#000000;">Spring</span><span style="color:#000000;">配置中配置了 </span><span style="color:#000000;">destroy-method</span><span style="color:#000000;">属性，会自动调用其配置的 销毁方法。</span></li></ol> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.5        Spring中Bean是线程安全的吗</strong></span></strong></strong></h3> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">Spring本身并没有针对Bean做线程安全的处理，所以：</span></p> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">如果Bean是无状态的，那么Bean则是线程安全的</span></li><li style="text-align:justify;"><span style="color:#000000;">如果Bean是有状态的，那么Bean则不是线程安全的</span></li></ol> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">另外，Bean是不是线程安全，跟Bean的作用域没有关系，Bean的作用域只是表示Bean的生命周期范围，对于任何生命周期的Bean都是一个对象，这个对象是不是线程安全的，还是得看这个Bean对象本身。</span></p> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.6        ApplicationContext和BeanFactory有什么区别</strong></span></strong></strong></h3> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">BeanFactory是Spring中非常核心的组件，表示Bean工厂，可以生成Bean，维护Bean，而ApplicationContext继承了BeanFactory，所以ApplicationContext拥有BeanFactory所有的特点，也是一个Bean工厂，但是ApplicationContext除开继承了BeanFactory之外，还继承了诸如EnvironmentCapable、MessageSource、ApplicationEventPublisher等接口，从而ApplicationContext还有获取系统环境变量、国际化、事件发布等功能，这是BeanFactory所不具备的</span></p> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.7        Spring中的事务是如何实现的</strong></span></strong></strong></h3> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">Spring事务底层是基于数据库事务和AOP机制的</span></li><li style="text-align:justify;"><span style="color:#000000;">首先对于使用了@Transactional注解的Bean，Spring会创建一个代理对象作为Bean</span></li><li style="text-align:justify;"><span style="color:#000000;">当调用代理对象的方法时，会先判断该方法上是否加了@Transactional注解</span></li><li style="text-align:justify;"><span style="color:#000000;">如果加了，那么则利用事务管理器创建一个数据库连接</span></li><li style="text-align:justify;"><span style="color:#000000;">并且修改数据库连接的autocommit属性为false，禁止此连接的自动提交，这是实现Spring事务非常重要的一步</span></li><li style="text-align:justify;"><span style="color:#000000;">然后执行当前方法，方法中会执行sql</span></li><li style="text-align:justify;"><span style="color:#000000;">执行完当前方法后，如果没有出现异常就直接提交事务</span></li><li style="text-align:justify;"><span style="color:#000000;">如果出现了异常，并且这个异常是需要回滚的就会回滚事务，否则仍然提交事务</span></li><li style="text-align:justify;"><span style="color:#000000;">Spring事务的隔离级别对应的就是数据库的隔离级别</span></li><li style="text-align:justify;"><span style="color:#000000;">Spring事务的传播机制是Spring事务自己实现的，也是Spring事务中最复杂的</span></li><li style="text-align:justify;"><span style="color:#000000;">Spring事务的传播机制是基于数据库连接来做的，一个数据库连接一个事务，如果传播机制配置为需要新开一个事务，那么实际上就是先建立一个数据库连接，在此新数据库连接上执行sql</span></li></ol> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.8        Spring中什么时候@Transactional会失效</strong></span></strong></strong></h3> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">因为Spring事务是基于代理来实现的，所以某个加了@Transactional的方法只有是被代理对象调用时，那么这个注解才会生效，所以如果是被代理对象来调用这个方法，那么@Transactional是不会失效的。</span></p> 
+<p style="margin-left:.0001pt;text-align:justify;"><span style="color:#000000;">同时如果某个方法是private的，那么@Transactional也会失效，因为底层cglib是基于父子类来实现的，子类是不能重载父类的private方法的，所以无法很好的利用代理，也会导致@Transactianal失效</span></p> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.9        Spring容器启动流程是怎样的</strong></span></strong></strong></h3> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">在创建Spring容器，也就是启动Spring时：</span></li><li style="text-align:justify;"><span style="color:#000000;">首先会进行扫描，扫描得到所有的BeanDefinition对象，并存在一个Map中</span></li><li style="text-align:justify;"><span style="color:#000000;">然后筛选出非懒加载的单例BeanDefinition进行创建Bean，对于多例Bean不需要在启动过程中去进行创建，对于多例Bean会在每次获取Bean时利用BeanDefinition去创建</span></li><li style="text-align:justify;"><span style="color:#000000;">利用BeanDefinition创建Bean就是Bean的创建生命周期，这期间包括了合并BeanDefinition、推断构造方法、实例化、属性填充、初始化前、初始化、初始化后等步骤，其中AOP就是发生在初始化后这一步骤中</span></li><li style="text-align:justify;"><span style="color:#000000;">单例Bean创建完了之后，Spring会发布一个容器启动事件</span></li><li style="text-align:justify;"><span style="color:#000000;">Spring启动结束</span></li><li style="text-align:justify;"><span style="color:#000000;">在源码中会更复杂，比如源码中会提供一些模板方法，让子类来实现，比如源码中还涉及到一些BeanFactoryPostProcessor和BeanPostProcessor的注册，Spring的扫描就是通过BenaFactoryPostProcessor来实现的，依赖注入就是通过BeanPostProcessor来实现的</span></li><li style="text-align:justify;"><span style="color:#000000;">在Spring启动过程中还会去处理@Import等注解</span></li></ol> 
+<p> <strong><strong><span style="color:#000000;"><strong>Spring用到了哪些设计模式</strong></span></strong></strong></p> 
+<p></p> 
+<h3 style="margin-left:0pt;text-align:left;"><strong><strong><span style="color:#000000;"><strong>1.10        Spring Boot中常用注解及其底层实现</strong></span></strong></strong></h3> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">@SpringBootApplication注解：这个注解标识了一个SpringBoot工程，它实际上是另外三个注解的组合，这三个注解是：</span> 
+  <ol><li style="text-align:justify;"><span style="color:#000000;">@SpringBootConfiguration：这个注解实际就是一个@Configuration，表示启动类也是一个配置类</span></li><li style="text-align:justify;"><span style="color:#000000;">@EnableAutoConfiguration：向Spring容器中导入了一个Selector，用来加载ClassPath下SpringFactories中所定义的自动配置类，将这些自动加载为配置Bean</span></li><li style="text-align:justify;"><span style="color:#000000;">@ComponentScan：标识扫描路径，因为默认是没有配置实际扫描路径，所以SpringBoot扫描的路径是启动类所在的当前目录</span></li></ol></li></ol> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">@Bean注解：用来定义Bean，类似于XML中的&lt;bean&gt;标签，Spring在启动时，会对加了@Bean注解的方法进行解析，将方法的名字做为beanName，并通过执行方法得到bean对象</span></li><li style="text-align:justify;"><span style="color:#000000;">@Controller、@Service、@</span><span style="color:#121212;">ResponseBody、@Autowired都可以说</span></li></ol> 
+<h3 style="background-color:transparent;margin-left:0pt;text-align:left;"><strong><strong><span style="color:#121212;"><strong>1.11        Spring Boot是如何启动Tomcat的</strong></span></strong></strong></h3> 
+<ol><li style="text-align:justify;"><span style="color:#000000;">首先，SpringBoot在启动时会先创建一个Spring容器</span></li><li style="text-align:justify;"><span style="color:#000000;">在创建Spring容器过程中，会利用@ConditionalOnClass技术来判断当前classpath中是否存在Tomcat依赖，如果存在则会生成一个启动Tomcat的Bean</span></li><li style="text-align:justify;"><span style="color:#000000;">Spring容器创建完之后，就会获取启动Tomcat的Bean，并创建Tomcat对象，并绑定端口等，然后启动Tomcat</span></li></ol> 
+<p>1.12        <strong><span style="color:#000000;"><strong>负载均衡算法</strong></span></strong><strong><span style="color:#000000;"><strong>/</strong></span></strong><strong><span style="color:#000000;"><strong>策略</strong></span></strong></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">轮循均衡</span><span style="color:#000000;">(Round Robin)</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">每一次来自网络的请</span><span style="color:#1f497d;">求轮流分配给内部中的服务器</span><span style="color:#000000;">，从</span><span style="color:#000000;">1</span><span style="color:#000000;">至</span><span style="color:#000000;">N</span><span style="color:#000000;">然后重新开始。此种均衡算法适合 于服务器组中的所有服务器都有相同的软硬件配置并且平均月觞请求相对均衡的情况。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">权重轮循均衡</span><span style="color:#000000;">(Weighted Round Robin)</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">根据服</span> <span style="color:#000000;">,1</span><span style="color:#000000;">.隹</span><span style="color:#000000;">TE</span><span style="color:#000000;">够接一与相应"值数的月觞请</span></p> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">求。例如：服务器</span><span style="color:#000000;">A</span><span style="color:#000000;">的权值被设计成</span><span style="color:#000000;">1, </span><span style="color:#000000;">B f</span><span style="color:#000000;">权值是</span><span style="color:#000000;">3, </span><span style="color:#000000;">C</span><span style="color:#000000;">的又</span><span style="color:#000000;">1.</span><span style="color:#000000;">［是</span><span style="color:#000000;">u</span><span style="color:#000000;">则</span></p> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#1f497d;">别接受</span> <span style="color:#000000;">»此縛均歯真瀨爵保高生能的服务器得到更多的使用</span></p> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">率，避免低性能的</span><span style="color:#000000;">B</span><span style="color:#000000;">觞器负载'寸重。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">随机均衡</span><span style="color:#000000;">(</span><span style="color:#000000;">Random)</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">把来自网络的请求厲机分配给内部中的多个服务器。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">权重随机均衡</span><span style="color:#000000;">(</span><span style="color:#000000;">Weighted Random)</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">此种均衡算法类似于权重轮循算法，不过在处理请求分担时是个随机选择的过程。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">响应速度均衡</span><span style="color:#000000;">(</span><span style="color:#000000;">Response Time</span><span style="color:#000000;">探测时间)</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#1f497d;">负载均衡设备对内部各服务器发出一个探测请求(例如</span><span style="color:#1f497d;">Ping)，</span><span style="color:#1f497d;">然后根据内部中各服务器对探测 请求的最快响应时间来决定哪一台服务器来响应客户端的服务请求</span><span style="color:#000000;">。此种均衡算法能较好的反映 服务器的当前运行状态，但这最快响应时间仅仅指的是负载均衡设备与服务器间的最快响应时 间，而不是客户端与服务器间的最快响应时间。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">最少连接数均衡</span><span style="color:#000000;">（Least Connection）</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">最少连接数均衡算法对内部中需负载的每一台服务器都有一个数据记录，记录当前该服务器正在 处理的连接数量，当有新的服务连接请求时，将把当前请求分配给连接数最少的月艮务器，使均衡 更加符合实际情况，负载更加均衡。此种均衡算法适合长时处理的请求服务，如</span><span style="color:#000000;">FTP</span><span style="color:#000000;">。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">处理能力均衡</span><span style="color:#000000;">（</span><span style="color:#000000;">CPU</span><span style="color:#000000;">、</span><span style="color:#000000;">内存）</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">此种均衡算法将把月服务请求分配给</span><span style="color:#1f497d;">内部中处理负荷（根据服务器</span><span style="color:#1f497d;">CPU</span><span style="color:#1f497d;">型号、</span><span style="color:#1f497d;">CPU</span><span style="color:#1f497d;">数量、内存大小 及当前连接数等换算而成）最轻的服务器，由于考虑到了内部服务器的处理能力及当前网络运行 状况，所以此种均衡算法相对来说更加精确</span><span style="color:#000000;">，尤其适合运用到第七层（应用层）负载均衡的情况 下。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">DNS </span><span style="color:#000000;">响应均衡</span><span style="color:#000000;">（</span><span style="color:#000000;">Flash DNS）</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">在此均衡算法下，分处在不同地理位置的负载均衡设备收到同一个客户端的域名解析请求，并在 同_时间内把此域名解析成各自相对应月艮务器的</span><span style="color:#000000;">IP</span><span style="color:#000000;">地址并返回给客户端，</span></p> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#1f497d;">的</span> <span style="color:#000000;">。在种均刍策略适台应用在全局负</span></p> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">载均衡的情况下，对本地负载均衡是没有意义的。</span></p> 
+<ol><li style="text-align:left;"><span style="color:#000000;">哈希算法</span></li></ol> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">一致性哈希一致性</span><span style="color:#000000;">Hash,</span><span style="color:#000000;">相会数的请求总皂发项</span><span style="color:#000000;">I</span><span style="color:#000000;">曰一提供者。当某一台提供者挂时，原本发往 该提供者的请廿 基于虚拟节占，平搓到其它提供者，不会引起剧烈变动。</span></p> 
+<p style="margin-left:93pt;text-align:left;"><span style="color:#000000;">[8.1.2.10. IP</span><span style="color:#000000;">地址散列</span><span style="color:#1f497d;">（保证客户端服务器对应关系稳定）</span></p> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">通过管理发送方</span><span style="color:#000000;">IP</span><span style="color:#000000;">和目的地</span><span style="color:#000000;">IP</span><span style="color:#000000;">地址的散列，将来自同一发送方的分组（或发送至同一目的地的分 组）统一转发到相同服务器的算法。当客户端有一系列业务需要处理而必须和一个服务器反复通信 时，该算法能够以流（会话）为单位，</span><span style="color:#1f497d;">保证来自相同客户端的通信能够一直在同一服务器中进行处 理。</span></p> 
+<p style="margin-left:93pt;text-align:left;"><span style="color:#000000;">18.1.2.11.URL </span><span style="color:#000000;">散列</span></p> 
+<p style="margin-left:0pt;text-align:left;"><span style="color:#000000;">通过管理客户端请求</span><span style="color:#000000;">URL</span><span style="color:#000000;">信息的散列，将发送至相同</span><span style="color:#000000;">URL</span><span style="color:#000000;">的请求转发至同一服务器的算法。</span></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/fb634da863f2932c4dda286e32902ffe/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【Spring Boot 源码学习】深入 BootstrapContext 及其默认实现</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e900558163b355faf0496e134079874e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">[数据集][目标检测]游泳者溺水数据集VOC&#43;YOLO格式2类别895张</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

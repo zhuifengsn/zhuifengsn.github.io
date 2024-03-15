@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Redis的底层数据结构 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Redis的底层数据结构" />
+<meta property="og:description" content="1、Redis的五种数据类型及七种底层结构 键的类型只能为字符串，值支持五种数据类型：字符串、列表、集合、散列表、有序集合
+对于Redis来讲，对于键值对来说，键总是字符串，值就是五个中的一个，所以我们只用关心值的类型。**值有五种数据类型**
+String Hash List Set ZSet
+​​​​​​​
+​​​​​​​
+1、Redis的底层数据结构 Redis底层数据结构有⑦种：
+1、简单动态字符串
+2、链表
+3、字典
+4、跳跃表
+5、整数集合
+6、压缩列表
+7、快速列表
+2、Redis的底层数据结构 Redis底层数据结构之hash - 凡尘多遗梦 - 博客园讲的挺详细的
+1、简单动态字符串（SDS） （1）Redis默认字符串底层存储结构，比如set k1 v1，键k1是一个字符串，底层实现是保存着字符串k1的SDS，值v1也是一个字符串，底层实现是保存着字符串v1的SDS
+（2）每个sds.h/sdshdr表示一个SDS，结构如下
+struct sdshdr { //记录buf数组中已使用字节的数量，相当于保存的字符串的长度 int len; //记录buf数组中未使用的字节数量 int free; //字节数组，用于保存字符串 char buf[]; } 底层是一个SDS，核心是字节数组 char buf[];注意是字节数组，因为Redis会使用SDS API以处理二进制的方式来处理SDS存在buf数组里的数据。
+（3）优点：
+1&gt;获取字符串长度的复杂度为O(1)。
+C字符串不记录自身长度，获取C字符串长度时必须遍历整个字符串计数得到，复杂度是O(N)；
+SDS字符串自身记录维护len长度属性，获得SDS字符串长度的复杂度是O(1)；
+2&gt;杜绝缓存区溢出。因为其API会进行空间扩展，扩展之后未使用字节数量free和已使用字节数量len一样
+和重分配的区别是：这是在修改之前，预先判断内存空间是否够用，不够用则进行拓展
+C字符串不记录长度，由于两个C字符串在内存存储上紧邻，在执行字符串拼接strcat时，如果不提前分配足够空间，很可能发生修改s1的数据溢出到s2所在的空间中；（缓冲区溢出） SDS完全杜绝了缓冲区溢出问题，它记录了长度，当修改SDS字符串之前，API都会检查SDS的空间是否满足修改的要求，不满足API会自动进行空间扩展。
+3&gt;减少字符串修改时的内存重分配次数，因为有free（预分配），所有在最坏的情况下就是修改n次，重分配n次。
+在修改之后，进行预分配（len&lt;1mB,free=len,大于1MB，free=1MB）
+C字符串每次修改增加或减少时，都会对保存这个C字符串的数组进行一次内存重分配； 拼接操作，在执行之前，程序需要先通过内存重分配来扩展底层数组的空间大小——如果忘了这一步就会产生缓冲区溢出。 截断操作，在执行之后，程序需要通过内存重分配来释放字符串不再使用的那部分空间——如果忘了这一步就会产生内存泄漏。 内存重分配算法复杂还需要执行系统调用，如果发生频繁修改可能对性能造成影响。
+SDS通过free未使用空间，实现了空间预分配和惰性空间释放两种优化策略。 空间预分配 空间预分配：增长操作时，Redis可以减少连续执行字符串增长操作所需的内存重分配次数； 当SDS做增长操作，不仅会分配修改所必须要的空间，还会额外分配未使用空间，具体分配未使用空间如下2种方式： 一：如修改后长度len小于1MB，就分配和len属性相同大小的未使用空间；free=len; 二：如修改后长度len大于等于1MB，就分配1MD的未使用空间；free=1MB;
+4、二进制安全。
+C字符串的字符必须符合某种编码，除结尾空字符以外，字符串内部不允许有空字符串。存储有局限性； SDS存储的都是二进制安全的字符串，SDS API都会以处理二进制的方式来处理SDS存在buf数组里的数据。（这也是SDS的buf称之为字节数组的原因因——Redis不是用这个数组来保存字符，而是用它来保存一系列二进制数据）" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/71c0b6d3ba613d1df20cee0401dfa645/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-11-16T21:58:35+08:00" />
+<meta property="article:modified_time" content="2022-11-16T21:58:35+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Redis的底层数据结构</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>1、Redis的五种数据类型及七种底层结构</h2> 
+<p><strong>键的类型只能为字符串，值支持五种数据类型：字符串、列表、集合、散列表、有序集合</strong></p> 
+<p>对于Redis来讲，对于键值对来说，<strong>键总是字符串，值就是五个中的一个，所以我们只用关心值的类型。*</strong>*值有五种数据类型**</p> 
+<p><strong>String Hash List Set ZSet</strong></p> 
+<p><strong>​​​​​​​</strong><img alt="" height="318" src="https://images2.imgbox.com/78/2f/htsEnTMw_o.png" width="964"></p> 
+<p> </p> 
+<p><strong>​​​​​​​</strong><img alt="" height="285" src="https://images2.imgbox.com/f3/45/u4J4MWB1_o.png" width="777"></p> 
+<p></p> 
+<p><img alt="" height="319" src="https://images2.imgbox.com/11/53/nT9lLtHs_o.png" width="773"></p> 
+<p></p> 
+<p><img alt="" height="365" src="https://images2.imgbox.com/e0/db/5VCeqJgW_o.png" width="776"></p> 
+<p></p> 
+<p><img alt="" height="393" src="https://images2.imgbox.com/cb/fc/lPde9LfT_o.png" width="774"></p> 
+<p></p> 
+<p><img alt="" height="495" src="https://images2.imgbox.com/35/ed/LRnFrVeR_o.png" width="778"></p> 
+<p></p> 
+<h3>1、Redis的底层数据结构</h3> 
+<p>Redis底层数据结构有⑦种：</p> 
+<p>1、简单动态字符串</p> 
+<p>2、链表</p> 
+<p>3、字典</p> 
+<p>4、跳跃表</p> 
+<p>5、整数集合</p> 
+<p>6、压缩列表</p> 
+<p>7、快速列表</p> 
+<p></p> 
+<h3>2、Redis的底层数据结构</h3> 
+<p><a href="https://www.cnblogs.com/reecelin/p/13362104.html" rel="nofollow" title="Redis底层数据结构之hash - 凡尘多遗梦 - 博客园">Redis底层数据结构之hash - 凡尘多遗梦 - 博客园</a>讲的挺详细的</p> 
+<h4>1、简单动态字符串（SDS）</h4> 
+<p>（1）Redis默认字符串底层存储结构，比如set k1 v1，键k1是一个字符串，底层实现是保存着字符串k1的SDS，值v1也是一个字符串，底层实现是保存着字符串v1的SDS</p> 
+<p>（2）每个sds.h/sdshdr表示一个SDS，结构如下</p> 
+<pre>struct sdshdr {
+    //记录buf数组中已使用字节的数量，相当于保存的字符串的长度
+    int len;
+    //记录buf数组中未使用的字节数量
+    int free;
+    //字节数组，用于保存字符串
+    char buf[];
+}</pre> 
+<p>底层是一个SDS，<strong>核心是字节数组 char buf[];</strong>注意是<strong>字节数组</strong>，因为Redis会使用SDS API以处理二进制的方式来处理SDS存在buf数组里的数据。</p> 
+<p>（3）优点：</p> 
+<p>1&gt;获取字符串长度的复杂度为O(1)。</p> 
+<blockquote> 
+ <ul><li> <p>C字符串不记录自身长度，获取C字符串长度时必须遍历整个字符串计数得到，复杂度是O(N)；</p> </li><li> <p>SDS字符串自身记录维护len长度属性，获得SDS字符串长度的复杂度是O(1)；</p> </li></ul> 
+</blockquote> 
+<p>2&gt;杜绝缓存区溢出。因为其API会进行空间扩展，扩展之后未使用字节数量free和已使用字节数量len一样</p> 
+<p>和重分配的区别是：这是在<strong>修改之前</strong>，预先判断内存空间是否够用，不够用则进行拓展</p> 
+<blockquote> 
+ <p>C字符串不记录长度，由于两个C字符串在内存存储上紧邻，在执行字符串拼接strcat时，如果不提前分配足够空间，很可能发生修改s1的数据溢出到s2所在的空间中；（缓冲区溢出） SDS完全杜绝了缓冲区溢出问题，它记录了长度，当修改SDS字符串之前，API都会检查SDS的空间是否满足修改的要求，不满足API会自动进行空间扩展。</p> 
+</blockquote> 
+<p>3&gt;减少字符串修改时的内存重分配次数，因为有free（预分配），所有在最坏的情况下就是修改n次，重分配n次。</p> 
+<p><strong>在修改之后</strong>，进行预分配（len&lt;1mB,free=len,大于1MB，free=1MB）</p> 
+<blockquote> 
+ <p>C字符串每次修改增加或减少时，都会对保存这个C字符串的数组进行一次内存重分配； 拼接操作，在执行之前，程序需要先通过内存重分配来扩展底层数组的空间大小——如果忘了这一步就会产生缓冲区溢出。 截断操作，在执行之后，程序需要通过内存重分配来释放字符串不再使用的那部分空间——如果忘了这一步就会产生内存泄漏。 内存重分配算法复杂还需要执行系统调用，如果发生频繁修改可能对性能造成影响。</p> 
+</blockquote> 
+<blockquote> 
+ <p>SDS通过free未使用空间，实现了空间预分配和惰性空间释放两种优化策略。 空间预分配 空间预分配：增长操作时，Redis可以减少连续执行字符串增长操作所需的内存重分配次数； 当SDS做增长操作，不仅会分配修改所必须要的空间，还会额外分配未使用空间，具体分配未使用空间如下2种方式： 一：如修改后长度len小于1MB，就分配和len属性相同大小的未使用空间；free=len; 二：如修改后长度len大于等于1MB，就分配1MD的未使用空间；free=1MB;</p> 
+</blockquote> 
+<p>4、二进制安全。</p> 
+<blockquote> 
+ <p>C字符串的字符必须符合某种编码，除结尾空字符以外，字符串内部不允许有空字符串。存储有局限性； SDS存储的都是二进制安全的字符串，<strong>SDS API都会以处理二进制的方式来处理SDS存在buf数组里的数据</strong>。（这也是SDS的buf称之为字节数组的原因因——Redis不是用这个数组来保存字符，而是用它来保存一系列二进制数据）</p> 
+ <p>C字符串只能存储文本数据，SDS可以存储二进制数据</p> 
+</blockquote> 
+<p><strong>5）兼容部分C字符串函数。</strong></p> 
+<ul><li> 
+  <blockquote> 
+   <p>虽然SDS是二进制安全的，但是还秉承C字符串以空字符结尾的特性。很多函数是可以共用C字符串的不需要重写；</p> 
+  </blockquote> </li></ul> 
+<p><img alt="img" src="https://images2.imgbox.com/b2/c0/t6IDhdgO_o.png"></p> 
+<p>用处：</p> 
+<p>1、String通常<strong>用于保存单个字符串或JSON字符串数据</strong> 2、因为String是二进制安全的，<strong>所以可以把保密要求高的图片文件内容作为字符串来存储</strong> 3、<strong>计数器</strong>：<strong>常规Key-Value缓存应用</strong>，如微博数、粉丝数。INCR本身就具有原子性特性，所以不会有线程安全问题</p> 
+<p><strong>是String字符串的底层数据结构</strong></p> 
+<p></p> 
+<h4>2、字典（dictht）（比如将键设计为对象的名称?）</h4> 
+<p>Redis hash是一个string类型的field和value的映射表，<strong>hash特别适用于存储对象</strong>。</p> 
+<p>可以通过字典（<strong>dictht</strong>）这种结构实现，类似于HashMap(<strong>结构是数组+链表</strong>)</p> 
+<p><strong>数组叫做哈希表数组（table）,链表节点为dictEntry，每个Entry包含键和值，并且Entry连接到哈希表的索引下标处</strong></p> 
+<p>1）字典又称为<strong>符号表、关联数组或映射</strong>，是一种用于保存键值对的抽象数据结构，如果了解java7的HashMap的底层实现，那么这个自然就懂了。</p> 
+<p>（2）使用哈希表由dict.h/dictht结构定义</p> 
+<pre>struct dictht{
+    //哈希表数组 
+    dictEntry **table;
+    //哈希表大小 
+    unsigned long size;
+    //大小掩码，用于计算索引值，总是等于size-1
+    unsigned long sizemask;
+    //已有节点的数量  
+    unsigned long used;
+}dictht;</pre> 
+<p>table是一个数组，类型是指向dict.h/dictEntry结构的指针。每个dictEntry保存着一个键对值，结构如下</p> 
+<pre>struct dictEntry{
+    //键
+    void *key;
+    //值，下面三个的其中一个
+    union{
+        //指针
+        void *val;
+        //uint64_t整数
+        uint64_tu64;
+        //int64_t整数
+        int64_ts64;
+    }v;
+    //指向下一个节点的指针
+    struct dictEntry *next;
+}dictEntry;</pre> 
+<p>如果此时表中有一个entry的键为k0，插入键为k1的entry的时候，k1、k0它俩的hash值都一样，这时候就发生了哈希冲突，那么此时k1就会放在table中对应的索引下，k1的next就会指向k0，这个就是解决hash冲突的实现。</p> 
+<p><img alt="img" src="https://images2.imgbox.com/58/22/0y4pWNTE_o.png"></p> 
+<p>总结：由哈希表数组+字典Entry构成，其中<strong>哈希表数组定义了存储数组的大小，已有Entry的个数</strong>，<strong>对于相同key的字典Entry存储到相同的数组索引下标处，并且以链表的形式连接。</strong>采用的存储结构是数组+链表</p> 
+<p>解决哈希冲突的方法：拉链法</p> 
+<p>用处：</p> 
+<p><strong>存储对象的属性信息</strong></p> 
+<p><strong>应该是一个对象对应着一个table,一个属性对应着一个dictEntry，每个Entry是由键值对构成的</strong></p> 
+<p>根据以上字典的特性，我们知道，字典和 HashMap 的特性是差不多的，也是基于数组和链表的组合，所以一般都是用来存储键值对的。不过在实际运用场景中，我们会经常用来存储一个对象的信息。例如：一个对象的属性如 name ，age ，weight 等属性，可以直接当做一个个键值对存储在这个字典下，这样做的好处是，在需要用到这个对象的属性时，不用把这个对象全部序列化，只需要取出特定的就可以，而在传统的需要全部序列化，相比来讲就比较消耗资源。</p> 
+<blockquote> 
+ <p>这里用处写的很模糊</p> 
+</blockquote> 
+<p><strong>是哈希（Hash）和集合的底层数据结构</strong></p> 
+<p></p> 
+<p>怎么解决属性值为Object类型？</p> 
+<p><strong>redis hash每一个hashEntry只能存储key(String)-&gt;value(string)字符串类型数据</strong></p> 
+<p>讲了redisTemplate的hash数据类型存储｛key(String)-&gt;value(string)｝的方法； 但是实际清楚我们存储对象应该是{key(string)-&gt;value(object)}类型的。 开始测试的时候，报错为 object can not cast to object，发现redis的hash类型只能存储string类型的数据。后经翻阅资料，找到存储序列化对象的方法解决。 实现serializable接口的作用就是可以把对象转化为字节流，并且可以反序列化恢复，对象实现序列化可以进行网络传输，在分布式应用中，就需要进行序列化对象的操作。</p> 
+<h4>3、LinkedList(链表)</h4> 
+<p><strong>使用ListNode链表作为底层</strong>，<strong>是一个双向链表，并且有头指针和尾指针。</strong></p> 
+<p>双向链表！！！！！</p> 
+<p>（1）redis的list数据类型的底层实现之一，类似于java集合类LinkedArrayList。</p> 
+<p>（2）每个链表节点用一个adlist.h/listNode结构来表示</p> 
+<pre>struct listNode{
+    //前置节点
+    struct listNode *prev;
+    //后置节点
+    struct listNode *next;
+    //节点的值
+    void *value;     
+}listNode;</pre> 
+<p>多个listNode可以通过prev和next指针组层双端链表</p> 
+<p>（3）链表通过结构adlist.h/list来构建</p> 
+<pre>struct list{
+    //表头节点
+    listNode *head;
+    //表尾节点
+    listNode *tail;
+    //链表节点数量
+    unsigned long len;
+    //节点值复制函数
+    void *(*dup)(void *ptr);
+    //节点值释放函数
+    void (*free)(void *ptr);
+    //节点值对比函数
+    int (*match)(void *ptr,void *key);
+}list;</pre> 
+<p>结构如下： <img alt="img" src="https://images2.imgbox.com/38/03/tCtvvRN8_o.png"></p> 
+<p><strong>用处：</strong></p> 
+<p><strong>阻塞队列和文章列表或者数据分页展示的应用</strong></p> 
+<p><strong>redis的链表结构可以在左边和右边插入数据</strong></p> 
+<p>消息队列：<strong>Redis 的链表结构，可以轻松实现阻塞队列，可以使用左进右出的命令组成来完成队列的设计。比如：数据的生产者可以通过 Lpush 命令从左边插入数据，多个数据消费者，可以使用 BRpop 命令阻塞的“抢”列表尾部的数据。</strong>不过这种消息队列没有办法和专业的消息队列相比</p> 
+<p></p> 
+<p>常用命令：lpush:在头部插入元素，rpush在尾部插入元素，blpop在头部取出元素，brpop在尾部取出元素</p> 
+<p></p> 
+<p>文章列表或者<strong>数据分页展示的应用</strong>。比如，我们常用的博客网站的文章列表，当用户量越来越多时，而且每一个用户都有自己的文章列表，而且当文章多时，都需要分页展示，这时可以考虑使用 Redis 的列表，<strong>列表不但有序同时还支持按照范围内获取元素</strong>，<strong>可以完美解决分页查询功能</strong>。大大提高查询效率。</p> 
+<p><strong>是列表的底层数据结构</strong></p> 
+<p></p> 
+<h4>4、整数集合</h4> 
+<p><strong>全部是整数值，无重复</strong>, 有序，这里的有序是指取出的顺序和放入的顺序一致，而不是会对元素大小自动排序</p> 
+<p>当一个集合中的*<strong>元素都是整数值，且元素不多的时候，*</strong>整数集合就会作为集合 <strong>Set</strong> 的底层实现。</p> 
+<p>Redis 中的<strong>整数集合 intset</strong> 是用来保存<strong>多个不重复的整数值且有序</strong>的集合抽象数据结构，可以保存类型为 int16-t 、int32-t 或者 int64-t 的整数值。它是实现集合键底层之一。</p> 
+<p>并且保证集合中<strong>不会出现重复元素</strong>。</p> 
+<pre>typedef struct intset {
+​
+    // 编码方式
+    uint32_t encoding;
+​
+    // 集合包含的元素数量
+    uint32_t length;
+​
+    // 保存元素的数组
+    int8_t contents[];
+​
+} intset;</pre> 
+<p>encoding是整个整数数组的存储类型，假设添加一个新元素比原来数组的encoding要大，比如int64, 原数组会进行<strong>升级</strong>，将encoding变为int64</p> 
+<blockquote> 
+ <p>升级操作步骤：时间复杂度为O（N） 根据新元素的类型，扩展整数集合底层数组的空间大小，并为新元素分配空间。 <strong>将底层数组现有的所有元素都转换成与新元素相同的类型，并将类型转换后的元素放置到正确的位上，而且在放置元素的过程中，需要继续维持底层数组的有序性质不变。</strong> 将新元素添加到底层数组里面。 将enconding改为当前类型，长度加一。</p> 
+</blockquote> 
+<p>所有的元素都变为新的encoding类型</p> 
+<p>升级的好处</p> 
+<p>整数集合的升级策略有两个好处，一个是提升整数集合的灵活性，另一个是尽可能地节约内存。</p> 
+<p>（1）提升灵活性</p> 
+<p>因为整数集合可以通过自动升级底层数组来添加元素，<strong>所以可以任意添加不同类型的数值(int16_t,int32_t,int64_t)，不必担心类型错误。</strong></p> 
+<p>（2）尽可能的节约内存</p> 
+<p><strong>不必上来就定义int64_t类型(或者更长的类型)的数组，而是在需要的时候在扩展为int64_t(或者更长的类型)；</strong></p> 
+<p></p> 
+<p>特点：</p> 
+<p><strong>全部元素为整数，无重复，有序，可以升级不能降级</strong></p> 
+<p><strong>是集合（Set）的底层数据结构</strong></p> 
+<p></p> 
+<h4>5、跳跃表</h4> 
+<p>跳跃表（）</p> 
+<p>（1）跳跃表是一种<strong>有序</strong>的数据结构，通过每个节点中维持多个指向其他节点的指针，从而达到快速访问节点的目的。这种数据结构可以在小于等于O(n)的情况下找到相应的数据。</p> 
+<p>1&gt;由很多层组成</p> 
+<p>2&gt;每一层都是一个有序的链表</p> 
+<p>3&gt;最底层的链表包含了所有的元素；</p> 
+<p>4&gt;如果一个元素出现在某一层的链表中，那么在该层之下的链表也全都会出现（上一层的元素是当前层的元素的子集）；</p> 
+<p>5&gt;链表中的每个节点都包含两个指针，一个指向同一层的下一个链表节点，另一个指向下一层的同一个链表节点；</p> 
+<p><img alt="img" src="https://images2.imgbox.com/5c/bb/1ydmdt1Q_o.png"></p> 
+<p>简单的理解就是当前层节点之间的间隔都比下一层更大，但是每一层都必须是有头结点和尾节点。</p> 
+<p>特点：</p> 
+<p><strong>有序，多层，去重，构成有序集合的底层结构</strong>（ZSET）</p> 
+<p><strong>是有序列表的底层结构</strong></p> 
+<p>跳跃表查询：</p> 
+<p>从上层链表开始查询，遇到比查询值小的节点向后查询，遇到比查询值大的节点返回前一个结点并向下查询</p> 
+<h4>6、压缩列表</h4> 
+<p><a href="https://www.cnblogs.com/hunternet/p/11306690.html" rel="nofollow" title="Redis数据结构——压缩列表 - Mr于 - 博客园">Redis数据结构——压缩列表 - Mr于 - 博客园</a></p> 
+<p>传统的数组存储元素的时候，每个元素占用的内存大小都是一样的，比如Int64，这样就会造成内存的浪费，但是好处是因为数组元素的内存地址都是连续的，所以好计算元素的位置，比如比较小的数。因此这是redis为了节省内存自己设计的一种数据结构，它是对于数组的每一个元素，都带有前一元素占用内存的大小，这样，元素就不需要全部占用一样的内存了，从而减少内存开销</p> 
+<p>数组：</p> 
+<p></p> 
+<p>Redis压缩列表的机构示意图:</p> 
+<p></p> 
+<p><strong>每个压缩列表节点可以保存一个字节数组或者一个整数值。</strong></p> 
+<p>上面的图只是形象的表示，实际上是存储的前一个节点的内存大小</p> 
+<p>节点的结构：</p> 
+<p></p> 
+<p><strong>分别定义了前一节点占用内存大小，此节点的编码方式，此节点的内容</strong></p> 
+<p>对于前一节点的占用内存大小：</p> 
+<p><strong>前一节点长度小于254字节，则该字段长度为一字节保存其长度大小</strong></p> 
+<p><strong>前一节点长度大于254字节，该字段长度使用5个字节记录前一节点长度</strong></p> 
+<p>对于此节点的内容：可以是<strong>字节数组或者整数</strong></p> 
+<p></p> 
+<p>特点：</p> 
+<ul><li> <p>压缩列表是Redis为节约内存自己设计的一种<strong>顺序型数据结构。</strong></p> </li><li> <p>压缩列表被用作<strong>列表键和哈希键</strong>的底层实现之一。</p> </li><li> <p>压缩列表可以包含多个节点,<strong>每个节点可以保存一个字节数组或者整数值。</strong></p> </li><li> <p>添加新节点到压缩列表,或者从压缩列表中删除节点,可能会引发连锁更新操作,但这种操作出现的几率并不高。</p> </li></ul> 
+<p></p> 
+<h4>7、快速列表</h4> 
+<p>考虑到链表的附加空间相对太高，prev 和 next 指针就要占去 16 个字节 (64bit 系统的指针是 8 个字节)，另外每个节点的内存都是单独分配，会加剧内存的碎片化，影响内存管理效率。</p> 
+<p>后续版本对列表数据结构进行了改造，使用 quicklist 代替了 ziplist 和 linkedlist</p> 
+<p><strong>quickList 是 zipList 和 linkedList 的混合体，它将 linkedList 按段切分，每一段使用 zipList 来紧凑存储，多个 zipList 之间使用双向指针串接起来。</strong></p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/a2/21/bWx4lb0d_o.png"></p> 
+<p><strong>这样就减少了双向链表的前后指针，并且中间是使用的是zipList，其内部是连续的，也减少了内存的碎片化</strong></p> 
+<p><strong>传统链表的缺点：前后指针占用内存大，并且内存空间不连续，容易产生内存碎片</strong></p> 
+<p><strong>快速列表使用了双向链表，并且每个节点就是一个zipList，这样减少了前后指针，也减少了内存碎片化</strong></p> 
+<p>优点是：节省内存以及较少内存碎片化</p> 
+<p></p> 
+<h3>3、Redis的数据类型以及使用场景</h3> 
+<h4>1、String类型</h4> 
+<p>一种实现方法</p> 
+<p>底层使用简单动态字符串（SDS）</p> 
+<p>使用场景</p> 
+<p>1、String通常<strong>用于保存单个字符串或JSON字符串数据</strong> 2、因为String是二进制安全的，<strong>所以可以把保密要求高的图片文件内容作为字符串来存储</strong> 3、<strong>计数器</strong>：<strong>常规Key-Value缓存应用</strong>，如微博数、粉丝数。可以快速实现计数和查询的功能。INCR本身就具有原子性特性，所以不会有线程安全问题</p> 
+<p>4、缓存功能：String 字符串是最常用的数据类型，不仅仅是 Redis，各个语言都是最基本类型，因此，利用 Redis 作为缓存，配合其它数据库作为存储层，利用 Redis 支持高并发的特点，可以大大加快系统的读写速度、以及降低后端数据库的压力。</p> 
+<h4>2、列表（List）</h4> 
+<p>三种实现方式</p> 
+<p><strong>可以通过链表或者压缩列表或者快速列表实现</strong></p> 
+<p>用处：</p> 
+<p>阻塞队列和文章列表或者数据分页展示的应用</p> 
+<p><strong>redis的链表结构可以在左边和右边插入数据</strong></p> 
+<p>消息队列：<strong>Redis 的链表结构，可以轻松实现阻塞队列，可以使用左进右出的命令组成来完成队列的设计。比如：数据的生产者可以通过 Lpush 命令从左边插入数据，多个数据消费者，可以使用 BRpop 命令阻塞的“抢”列表尾部的数据。</strong>（应该是新加入的元素为头部？） <strong>文章列表或者数据分页展示的应用</strong>。比如，我们常用的博客网站的文章列表，当用户量越来越多时，而且每一个用户都有自己的文章列表，而且当文章多时，都需要分页展示，这时可以考虑使用 Redis 的列表，列表不但有序同时还支持按照范围内获取元素，可以完美解决分页查询功能。大大提高查询效率。</p> 
+<p>快速列表也可以作为列表的一种实现方式</p> 
+<h4>3、Hash</h4> 
+<p>两种实现方式</p> 
+<p>底层由字典或者<strong>压缩列表</strong>实现</p> 
+<p>用处：</p> 
+<p>存储对象属性信息</p> 
+<p>zipList怎么实现hash</p> 
+<p>ziplist 编码的<a href="https://so.csdn.net/so/search?q=%E5%93%88%E5%B8%8C&amp;spm=1001.2101.3001.7020" title="哈希">哈希</a>对象使用压缩列表作为底层实现， 每当有新的键值对要加入到哈希对象时， <strong>程序会先将保存了键的压缩列表节点推入到压缩列表表尾， 然后再将保存了值的压缩列表节点推入到压缩列表表尾</strong>， 因此：</p> 
+<p><strong>保存了同一键值对的两个节点总是紧挨在一起， 保存键的节点在前， 保存值的节点在后；</strong> 先添加到哈希对象中的键值对会被放在压缩列表的表头方向， 而后来添加到哈希对象中的键值对会被放在压缩列表的表尾方向。</p> 
+<h4>4、Set</h4> 
+<p>两种实现方式</p> 
+<p><strong>底层由整数集合或者字典实现</strong></p> 
+<p>一种<strong>去重无序</strong>的集合（这里的无序是说没有对其中的元素自动排序，而不是存取的顺序不同）</p> 
+<p>用处：</p> 
+<p>对数据进行自动去重或者进行交集并集差集的操作</p> 
+<p>Set 是会自动去重的无序集合。直接基于 Set 将系统里需要去重的数据扔进去，自动就给去重了，如果需要对一些数据进行快速的全局去重，当然也可以基于 JVM 内存里的 HashSet 进行去重，但是如果某个系统部署在多台机器上呢？<strong>得基于 Redis 进行全局的 Set 去重。</strong></p> 
+<p>可以基于 Set 玩交集、并集、差集的操作，比如交集吧，我们可以把两个人的好友列表整一个交集，看看俩人的共同好友是谁。</p> 
+<p>dict字典为什么能作为set的一种实现方式</p> 
+<p>set<strong>对外与list类似，都是提供列表功能，即单键多值</strong>，唯独多了一个<strong>自动去重</strong>功能。</p> 
+<p><img alt="在这里插入图片描述" src="https://images2.imgbox.com/26/28/SST90MND_o.png"></p> 
+<h4>5、Sorted Set</h4> 
+<p><strong>底层使用跳跃表实现</strong></p> 
+<p>用处：</p> 
+<p>Sorted set 是<strong>排序的 Set</strong>，<strong>去重但可以排序</strong>，写进去的时候给一个分数，自动根据分数排序。</p> 
+<p><strong>排行榜：有序集合经典使用场景。例如视频网站需要对用户上传的视频做排行榜，榜单维护可能是多方面：按照时间、按照播放量、按照获得的赞数等。</strong> 用 Sorted Sets 来做带权重的队列，比如普通消息的 score 为1，重要消息的 score 为2，然后工作线程可以选择按 score 的倒序来获取工作任务。让重要的任务优先执行。</p> 
+<p></p> 
+<h3>4、Redis常用的命令？</h3> 
+<p></p> 
+<p></p> 
+<h3>4、Redis的数据对象类型是什么？</h3> 
+<h4>redisObject</h4> 
+<p>redisObject是Redis类型系统的核心，数据库中的每个键、值，以及Redis本身处理的参数，都表示为这种数据类型。</p> 
+<pre>//Redis 对象
+typedef struct redisObject {
+    // 类型，记录了对象所保存的值的类型
+    unsigned type:4
+    // 对齐位
+    unsigned notused:2;
+    // 编码方式，记录了对象所保存的值的编码
+    unsigned encoding:4;
+    // LRU 时间（相对于 server.lruclock）
+    unsigned lru:22;
+    // 引用计数
+    int refcount;
+    // 指向对象的值，指向实际保存值的数据结构, 这个数据结构由type属性和encoding属性决定
+    void *ptr;
+} robj;</pre> 
+<p>type:有五种分别代表Redis的五种数据类型</p> 
+<p><img alt="" height="714" src="https://images2.imgbox.com/30/3e/YcCtbP1M_o.png" width="643"></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/545d6f500a831b2369b74fa2e8d5c373/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Matplotlib 基础入门知识点总结</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/4f6ab9b687f67890c10b848059619339/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">VIAVI唯亚威FI-10/-11 光纤识别仪</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

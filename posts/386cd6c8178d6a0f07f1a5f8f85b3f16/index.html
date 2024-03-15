@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>TCP三次握手四次挥手以及SYN泛洪攻击 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="TCP三次握手四次挥手以及SYN泛洪攻击" />
+<meta property="og:description" content="更多文章欢迎关注个人微信公众号：极客熊猫
+从TCP 首部结构谈起 本文中我们重点关注TCP首部中的以下字段：
+source port 和 destination port。Sequence Number 和 Acknowledgement Number：用以实现可靠数据传输服务。标志字段中的A、S、F，即ACK、SYN、FIN。 三次握手与四次挥手 图片过大传不上来，欢迎关注我的微信公众号：极客熊猫，查看全文。
+TCP的三次握手与四次挥手是老生常谈的问题了，接下来我将结合上图，完整的描述三次握手与四次挥手的过程。
+三次握手 三次握手指的是TCP的连接过程。一般而言，连接由客户端发起，服务端被动接受连接。所以我们从客户端发起连接请求讲起。
+第一次握手（SYN报文段） 第一次握手由客户端发起，客户端的TCP封装一个特殊的TCP报文段，即SYN报文段。
+该SYN报文段有以下特点：
+其首部的标志字段中的SYN被置为1；客户端随机选择一个初始序号(client_isn)，置于其首部中的Sequence Number字段。 之后，这个特殊的TCP报文段就会被封装为IP数据报，进而封装为以太网帧，然后由物理层送往服务器。
+SYN报文段不含应用层数据。
+发送SYN报文段后，客户端进入SYN_SENT状态。
+第二次握手（SYNACK报文段） 第二次握手由服务端发起，服务端收到客户端发来的SYN报文段后，服务端的TCP也会封装一个特殊的TCP报文段，即SYNACK报文段。
+该SYNACK报文段有以下特点：
+其首部的标志字段中的SYN被置为1；其首部中的Acknowledgment Number字段被设为client_isn&#43;1,其中client_isn即客户端发来的SYN报文段中Sequence Number的值；服务端选择自己的初始序号(server_isn)，置于其首部中的Sequence Number字段。 SYNACK报文段也不含应用层数据。
+接收SYN报文段并发送SYNACK报文段后，服务端进入SYN_RCVD状态。
+若在完成第三次握手之前，服务端就给连接分配资源，将使得服务端易受到SYN泛洪攻击。
+初始序号server_isn的选择方法为解决SYN泛洪攻击提供了思路。
+第三次握手（ACK报文段） 第三次握手由客户端发起，客户端收到服务端发来的SYNACK报文段后，会再发送一个特殊的TCP报文段，即ACK报文段。
+该ACK报文段有以下特点：
+其首部的标志字段中的SYN被置为0；其首部中的Acknowledgment Number字段被设为server_isn&#43;1,其中server_isn即服务端发来的SYNACK报文段中Sequence Number的值；其首部中的Sequence Number字段被设置为client_isn&#43;1，其中client_isn即之前客户端发送给服务端的SYN报文段中Sequence Number的值。 ACK报文段可以携带应用层数据。
+接收SYNACK报文段并发送ACK报文段后，客户端进入ESTABLISHED状态。服务端收到ACK报文段后，也进入ESTABLISHED状态。至此，连接建立成功。
+四次挥手 四次挥手指的是TCP连接的断开过程。断开连接可以由客户端发起，也可以由服务端发起，这里我以客户端发起为例进行讲解。
+第一次挥手 第一次挥手由主动发起断开的一方发起，在我们这里也就是客户端。客户端的TCP会封装一个特殊的TCP报文段，即FIN报文段。
+该FIN报文段有以下特点：
+其首部的标志字段中的FIN被置为1。 发送FIN报文段后，客户端进入FIN_WAIT_1状态。
+第二次挥手 第二次挥手由服务端发起，实际上是对客户端发来的FIN报文段的回应。服务端收到来自客户端的FIN报文段后，回应客户端一个ACK报文段。
+接收FIN报文段并发送ACK报文段后，服务端进入CLOSE_WAIT状态。
+客户端收到ACK报文段后，客户端进入FIN_WAIT_2状态。
+第三次挥手 第三次挥手仍由服务端发起，本次挥手服务端发送自己的FIN报文段给客户端。
+该FIN报文段有以下特点：
+其首部的标志字段中的FIN被置为1。 发送FIN报文段后，服务端进入LAST_ACK状态。之后接收到来自客户端的第四次挥手的ACK报文段后，服务端进入CLOSED状态。
+第四次挥手 第四次挥手由客户端发起，实际上是对服务端发来的FIN报文段的回应。客户端收到来自服务端的FIN报文段后，回应服务端一个ACK报文段，并进入TIME_WAIT状态。假设ACK报文段丢失，TIME_WAIT状态将使客户端重新发送ACK报文段。
+接收FIN报文段并发送ACK报文段后，客户端进入TIME_WAIT状态。等待30s后，客户端进入CLOSED状态。至此，连接彻底断开。
+SYN泛洪攻击 SYN泛洪攻击的原理 经过以上讨论可以看到，正常情况下TCP连接建立过程如下：客户端首先向服务端发送SYN报文段，随后服务端回以SYNACK报文段到达客户端，最后客户端向服务端发送ACK报文段完成三次握手，后续就是上层业务数据交互，直到某一方断开连接。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/386cd6c8178d6a0f07f1a5f8f85b3f16/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-04-14T20:59:37+08:00" />
+<meta property="article:modified_time" content="2021-04-14T20:59:37+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">TCP三次握手四次挥手以及SYN泛洪攻击</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>更多文章欢迎关注个人微信公众号：极客熊猫<br> <img src="https://images2.imgbox.com/5f/79/JLNS3ok1_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="TCP__3"></a>从TCP 首部结构谈起</h2> 
+<p><img src="https://images2.imgbox.com/f0/51/Jv6mw6xt_o.png" alt="在这里插入图片描述"></p> 
+<p>本文中我们重点关注TCP首部中的以下字段：</p> 
+<ul><li>source port 和 destination port。</li><li><strong>Sequence Number</strong> 和 <strong>Acknowledgement Number</strong>：用以实现可靠数据传输服务。</li><li>标志字段中的A、S、F，即<strong>ACK</strong>、<strong>SYN</strong>、<strong>FIN</strong>。</li></ul> 
+<h2><a id="_14"></a>三次握手与四次挥手</h2> 
+<blockquote> 
+ <p>图片过大传不上来，欢迎关注我的微信公众号：极客熊猫，查看全文。</p> 
+</blockquote> 
+<p>TCP的三次握手与四次挥手是老生常谈的问题了，接下来我将结合上图，完整的描述三次握手与四次挥手的过程。</p> 
+<h3><a id="_19"></a>三次握手</h3> 
+<p>三次握手指的是TCP的连接过程。一般而言，连接由客户端发起，服务端被动接受连接。所以我们从客户端发起连接请求讲起。</p> 
+<h4><a id="SYN_23"></a>第一次握手（SYN报文段）</h4> 
+<p>第一次握手由客户端发起，客户端的TCP封装一个特殊的TCP报文段，即<strong>SYN报文段</strong>。</p> 
+<p>该SYN报文段有以下特点：</p> 
+<ul><li>其首部的标志字段中的SYN被置为1；</li><li>客户端随机选择一个初始序号(client_isn)，置于其首部中的Sequence Number字段。</li></ul> 
+<p>之后，这个特殊的TCP报文段就会被封装为IP数据报，进而封装为以太网帧，然后由物理层送往服务器。</p> 
+<blockquote> 
+ <p>SYN报文段不含应用层数据。</p> 
+ <p>发送SYN报文段后，客户端进入SYN_SENT状态。</p> 
+</blockquote> 
+<h4><a id="SYNACK_38"></a>第二次握手（SYNACK报文段）</h4> 
+<p>第二次握手由服务端发起，服务端收到客户端发来的SYN报文段后，服务端的TCP也会封装一个特殊的TCP报文段，即SYNACK报文段。</p> 
+<p>该SYNACK报文段有以下特点：</p> 
+<ul><li>其首部的标志字段中的SYN被置为1；</li><li>其首部中的Acknowledgment Number字段被设为client_isn+1,其中client_isn即客户端发来的SYN报文段中Sequence Number的值；</li><li>服务端选择自己的初始序号(server_isn)，置于其首部中的Sequence Number字段。</li></ul> 
+<blockquote> 
+ <p>SYNACK报文段也不含应用层数据。</p> 
+ <p>接收SYN报文段并发送SYNACK报文段后，服务端进入SYN_RCVD状态。</p> 
+ <p>若在完成第三次握手之前，服务端就给连接分配资源，将使得服务端易受到SYN泛洪攻击。</p> 
+ <p>初始序号server_isn的选择方法为解决SYN泛洪攻击提供了思路。</p> 
+</blockquote> 
+<h4><a id="ACK_56"></a>第三次握手（ACK报文段）</h4> 
+<p>第三次握手由客户端发起，客户端收到服务端发来的SYNACK报文段后，会再发送一个特殊的TCP报文段，即ACK报文段。</p> 
+<p>该ACK报文段有以下特点：</p> 
+<ul><li>其首部的标志字段中的SYN被置为0；</li><li>其首部中的Acknowledgment Number字段被设为server_isn+1,其中server_isn即服务端发来的SYNACK报文段中Sequence Number的值；</li><li>其首部中的Sequence Number字段被设置为client_isn+1，其中client_isn即之前客户端发送给服务端的SYN报文段中Sequence Number的值。</li></ul> 
+<blockquote> 
+ <p>ACK报文段可以携带应用层数据。</p> 
+ <p>接收SYNACK报文段并发送ACK报文段后，客户端进入ESTABLISHED状态。服务端收到ACK报文段后，也进入ESTABLISHED状态。至此，连接建立成功。</p> 
+</blockquote> 
+<h3><a id="_70"></a>四次挥手</h3> 
+<p>四次挥手指的是TCP连接的断开过程。断开连接可以由客户端发起，也可以由服务端发起，这里我以客户端发起为例进行讲解。</p> 
+<h4><a id="_74"></a>第一次挥手</h4> 
+<p>第一次挥手由主动发起断开的一方发起，在我们这里也就是客户端。客户端的TCP会封装一个特殊的TCP报文段，即FIN报文段。</p> 
+<p>该FIN报文段有以下特点：</p> 
+<ul><li>其首部的标志字段中的FIN被置为1。</li></ul> 
+<blockquote> 
+ <p>发送FIN报文段后，客户端进入FIN_WAIT_1状态。</p> 
+</blockquote> 
+<h4><a id="_84"></a>第二次挥手</h4> 
+<p>第二次挥手由服务端发起，实际上是对客户端发来的FIN报文段的回应。服务端收到来自客户端的FIN报文段后，回应客户端一个ACK报文段。</p> 
+<blockquote> 
+ <p>接收FIN报文段并发送ACK报文段后，服务端进入CLOSE_WAIT状态。</p> 
+ <p>客户端收到ACK报文段后，客户端进入FIN_WAIT_2状态。</p> 
+</blockquote> 
+<h4><a id="_92"></a>第三次挥手</h4> 
+<p>第三次挥手仍由服务端发起，本次挥手服务端发送自己的FIN报文段给客户端。</p> 
+<p>该FIN报文段有以下特点：</p> 
+<ul><li>其首部的标志字段中的FIN被置为1。</li></ul> 
+<blockquote> 
+ <p>发送FIN报文段后，服务端进入LAST_ACK状态。之后接收到来自客户端的第四次挥手的ACK报文段后，服务端进入CLOSED状态。</p> 
+</blockquote> 
+<h4><a id="_102"></a>第四次挥手</h4> 
+<p>第四次挥手由客户端发起，实际上是对服务端发来的FIN报文段的回应。客户端收到来自服务端的FIN报文段后，回应服务端一个ACK报文段，并进入TIME_WAIT状态。假设ACK报文段丢失，TIME_WAIT状态将使客户端重新发送ACK报文段。</p> 
+<blockquote> 
+ <p>接收FIN报文段并发送ACK报文段后，客户端进入TIME_WAIT状态。等待30s后，客户端进入CLOSED状态。至此，连接彻底断开。</p> 
+</blockquote> 
+<h2><a id="SYN_108"></a>SYN泛洪攻击</h2> 
+<h3><a id="SYN_110"></a>SYN泛洪攻击的原理</h3> 
+<p>经过以上讨论可以看到，正常情况下TCP连接建立过程如下：客户端首先向服务端发送SYN报文段，随后服务端回以SYNACK报文段到达客户端，最后客户端向服务端发送ACK报文段完成三次握手，后续就是上层业务数据交互，直到某一方断开连接。</p> 
+<p>那么假如在握手的过程中，客户端因为莫名崩溃等原因，收到SYNACK报文段后不再回以ACK报文段，服务端将如何处置呢？这时服务端会“优雅地”再等等，会不会是发送的包丢失了呢？于是重新发送一遍SYNACK报文段，再收不到来自客户端的ACK报文段响应的话，就把这次连接丢弃掉。这个过程大约会“优雅地”持续分钟级，这个持续时间被称作SYN timeout时间。</p> 
+<p>如果只有个别这样的异常情况，目标服务端处理起来自是毫不费力；可如果大量这样的情况出现，对服务端来说就不堪重负了。</p> 
+<p>如果大量的握手请求涌向TCP服务端，而它们只发出SYN报文段而不以ACK报文段响应结束握手，服务端就要为这每一个请求都维持约一分多钟的连接去等待ACK报文段，也就形成所谓的“半连接”。维护这些半连接是需要消耗很多服务器的网络连接资源的。如果短时间内这些资源几乎都被半连接占满，那么正常的业务请求在这期间就得不到服务，处于等待状态。</p> 
+<p>更进一步的，如果这些半连接的握手请求是恶意程序发出，并且持续不断，那么就会导致服务端较长时间内丧失服务功能——这就形成了DoS攻击。这种攻击方式就称为<strong>SYN泛洪攻击</strong>。</p> 
+<h3><a id="SYN_122"></a>SYN泛洪攻击的防范措施</h3> 
+<h4><a id="SYN_cookie_124"></a>SYN cookie</h4> 
+<p>SYN cookie以下列方式工作：</p> 
+<ul><li> <p>当服务器接收到一个SYN报文段时，它并不知道该SYN报文段是来自一个合法的用户，还是一个SYN泛洪攻击的一部分。因此服务器不会为该连接请求生成一个半开连接。相反，服务端生成一个初始TCP序列号，该序列号是SYN报文段的源和目的IP地址与端口号以及<strong>仅有该服务器知道的秘密数</strong>的一个哈希函数。这种精心制作的序列号称为cookie。以此cookie代替上文第二次握手中SYNACK报文段中的server_isn。</p> 
+  <blockquote> 
+   <p>重要的是，服务端并不记忆该cookie或任何对应于SYN的其他状态信息。</p> 
+  </blockquote> </li><li> <p>若客户端是合法的，则它将返回一个ACK报文段。其Acknowledgment Number值应为cookie+1。服务端将使用在SYNACK报文段中的源和目的IP地址与端口号以及秘密数运行相同的哈希函数。若该函数结果加1与cookie值相同，服务端则认为该ACK报文段对应较早的SYN报文段，是合法的，服务端为它生成一个全开的连接。</p> </li><li> <p>若客户端没有返回ACK报文段，则初始的SYN报文段并没有对服务端产生危害，因为服务端没有为它分配任何资源。</p> </li></ul> 
+<h4><a id="SYN_timeout_136"></a>减短SYN timeout时间</h4> 
+<p>降低SYN timeout时间，使得主机尽快释放半连接的占用，也是防范SYN泛洪攻击的措施之一。</p> 
+<h2><a id="_140"></a>拓展</h2> 
+<h3><a id="_142"></a>为什么需要三次握手，两次不行吗？</h3> 
+<p>弄清这个问题，我们需要先弄明白三次握手的目的是什么，能不能只用两次握手来达到同样的目的。</p> 
+<p>第一次握手：客户端发送网络包，服务端收到了。</p> 
+<p>这样服务端就能得出结论：客户端的发送能力、服务端的接收能力是正常的。</p> 
+<p>第二次握手：服务端发包，客户端收到了。</p> 
+<p>这样客户端就能得出结论：服务端的接收、发送能力，客户端的接收、发送能力是正常的。不过此时服务器并不能确认客户端的接收能力是否正常。</p> 
+<p>第三次握手：客户端发包，服务端收到了。</p> 
+<p>这样服务端就能得出结论：客户端的接收、发送能力正常，服务器自己的发送、接收能力也正常。</p> 
+<p>因此，需要三次握手才能确认双方的接收与发送能力是否正常。</p> 
+<p>试想如果是用两次握手，则会出现下面这种情况：</p> 
+<blockquote> 
+ <p>如客户端发出连接请求，但因连接请求报文丢失而未收到确认，于是客户端再重传一次连接请求。后来收到了确认，建立了连接。数据传输完毕后，就释放了连接，客户端共发出了两个连接请求报文段，其中第一个丢失，第二个到达了服务端，但是第一个丢失的报文段只是在某些网络结点长时间滞留了，延误到连接释放以后的某个时间才到达服务端，此时服务端误认为客户端又发出一次新的连接请求，于是就向客户端发出确认报文段，同意建立连接，不采用三次握手，只要服务端发出确认，就建立新的连接了，此时客户端忽略服务端发来的确认，也不发送数据，则服务端一致等待客户端发送数据，浪费资源。</p> 
+</blockquote> 
+<h3><a id="_164"></a>挥手为什么需要四次？</h3> 
+<p>因为当服务端收到客户端的SYN连接请求报文后，可以直接发送SYN+ACK报文。其中ACK报文是用来应答的，SYN报文是用来同步的。但是关闭连接时，当服务端收到FIN报文时，很可能并不会立即关闭SOCKET，所以只能先回复一个ACK报文，告诉客户端，“你发的FIN报文我收到了”。只有等到我服务端所有的报文都发送完了，我才能发送FIN报文，因此不能一起发送。故需要四次挥手。</p> 
+<h3><a id="TIME_WAIT_168"></a>TIME_WAIT状态</h3> 
+<p>TIME_WAIT状态也成为2MSL等待状态。MSL是Maximum Segment Lifetime的英文缩写，可译为“最长报文段寿命”，它是任何报文在网络上存在的最长时间，超过这个时间报文将被丢弃。</p> 
+<p>为了保证客户端发送的最后一个ACK报文段能够到达服务器。因为这个ACK有可能丢失，从而导致处在LAST_ACK状态的服务器收不到对FIN_ACK的确认报文。服务器会超时重传这个FIN_ACK，接着客户端再重传一次确认，重新启动时间等待计时器。最后客户端和服务器都能正常的关闭。假设客户端不等待2MSL，而是在发送完ACK之后直接释放关闭，一旦这个ACK丢失的话，服务器就无法正常的进入关闭连接状态。</p> 
+<h3><a id="_175"></a>什么是半连接队列？</h3> 
+<p>服务器第一次收到客户端的 SYN 之后，就会处于 SYN_RCVD 状态，此时双方还没有完全建立其连接，服务器会把此种状态下请求连接放在一个队列里，我们把这种队列称之为半连接队列。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/6b10db98942863b49a20768a41e503b8/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">解决Explorer.exe频繁占用大量的CPU和内存资源</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/15b0490944e47f4d4a4ce4ad102e9cb9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">如何用CSS实现漂亮的个人资料卡效果</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

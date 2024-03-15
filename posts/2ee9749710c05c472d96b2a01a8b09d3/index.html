@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>SpringCloud学习 Ribbon实现自定义负载均衡 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="SpringCloud学习 Ribbon实现自定义负载均衡" />
+<meta property="og:description" content="ribbon实现负载均衡 ribbon中所有的loadbalancer都是通过继承AbstractLoalBalancerRule来实现负载均衡规则的实现
+公司项目中使用的zookeeper注册节点地址为127.0.0.1，本机地址，在部署时不会发生错误，但在开发环境中，使用feign接口进行调用时会出现feign调用失败的错误
+基于ribbon修复bug
+原始的ribbon负载均衡调用 （轮询源码）
+public Server choose(ILoadBalancer lb, Object key) { if (lb == null) { log.warn(&#34;no load balancer&#34;); return null; } else { Server server = null; int count = 0; while(true) { if (server == null &amp;&amp; count&#43;&#43; &lt; 10) { // 得到所有存活的服务列表 List&lt;Server&gt; reachableServers = lb.getReachableServers(); List&lt;Server&gt; allServers = lb.getAllServers(); int upCount = reachableServers.size(); int serverCount = allServers.size(); if (upCount != 0 &amp;&amp; serverCount !" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2ee9749710c05c472d96b2a01a8b09d3/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-10-11T17:11:04+08:00" />
+<meta property="article:modified_time" content="2021-10-11T17:11:04+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">SpringCloud学习 Ribbon实现自定义负载均衡</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>ribbon实现负载均衡</h2> 
+<p>ribbon中所有的loadbalancer都是通过继承AbstractLoalBalancerRule来实现负载均衡规则的实现</p> 
+<p>公司项目中使用的zookeeper注册节点地址为127.0.0.1，本机地址，在部署时不会发生错误，但在开发环境中，使用feign接口进行调用时会出现feign调用失败的错误</p> 
+<p>基于ribbon修复bug</p> 
+<p>原始的ribbon负载均衡调用 （轮询源码）</p> 
+<pre><code class="language-java">    public Server choose(ILoadBalancer lb, Object key) {
+        if (lb == null) {
+            log.warn("no load balancer");
+            return null;
+        } else {
+            Server server = null;
+            int count = 0;
+
+            while(true) {
+                if (server == null &amp;&amp; count++ &lt; 10) {
+                    // 得到所有存活的服务列表
+                    List&lt;Server&gt; reachableServers = lb.getReachableServers();
+                    List&lt;Server&gt; allServers = lb.getAllServers();
+                    int upCount = reachableServers.size();
+                    int serverCount = allServers.size();
+                    if (upCount != 0 &amp;&amp; serverCount != 0) {
+                        int nextServerIndex = this.incrementAndGetModulo(serverCount);
+                        // 轮询nextServerIndex
+                        server = (Server)allServers.get(nextServerIndex);
+                        if (server == null) {
+                            Thread.yield();
+                        } else {
+                            if (server.isAlive() &amp;&amp; server.isReadyToServe()) {
+                                return server;
+                            }
+
+                            server = null;
+                        }
+                        continue;
+                    }
+
+                    log.warn("No up servers available from load balancer: " + lb);
+                    return null;
+                }
+
+                if (count &gt;= 10) {
+                    log.warn("No available alive servers after 10 tries from load balancer: " + lb);
+                }
+
+                return server;
+            }
+        }
+    }</code></pre> 
+<p>除了轮询策略，loadbalancer还内置了一些策略如下：</p> 
+<table><thead><tr><th>策略类</th><th>命名</th><th>描述</th></tr></thead><tbody><tr><td>RandomRule</td><td>随机策略</td><td>随机选择 Server</td></tr><tr><td>RoundRobinRule</td><td>轮询策略</td><td>按照顺序循环选择 Server</td></tr><tr><td>RetryRule</td><td>重试策略</td><td>在一个配置时间段内，当选择的 Server 不成功，则一直尝试选择一个可用的 Server</td></tr><tr><td>BestAvailableRule</td><td>最低并发策略</td><td>逐个考察 Server，如果 Server 的断路器被打开，则忽略，在不被忽略的 Server 中选择并发连接最低的 Server</td></tr><tr><td>AvailabilityFilteringRule</td><td>可用过滤测试</td><td>过滤掉一直连接失败，并被标记未 circuit tripped（即不可用） 的 Server，过滤掉高并发的 Server</td></tr><tr><td>ResponseTimeWeightedRule</td><td>响应时间加权策略</td><td>根据 Server 的响应时间分配权重，响应时间越长，权重越低，被选择到的几率就越低</td></tr><tr><td>ZoneAvoidanceRule</td><td>区域权衡策略</td><td>综合判断 Server 所在区域的性能和 Server 的可用性轮询选择 Server，并判定一个 AWS Zone 的运行性能是否可用，剔除不可用的 Zone 中的所有 Server</td></tr></tbody></table> 
+<p>Ribbon 默认的负载均衡策略是<strong>轮询策略</strong>。</p> 
+<p>解决项目问题，由于是单应用调用，使用自定义负载均衡调用：</p> 
+<pre><code class="language-java">public class LoadBalancerRule extends AbstractLoadBalancerRule {
+
+    private static int index = 0;
+
+    @Override
+    public void initWithNiwsConfig(IClientConfig iClientConfig) {
+
+    }
+
+    @Override
+    public Server choose(Object o) {
+        ILoadBalancer loadBalancer = getLoadBalancer();
+        if (loadBalancer == null){
+            return null;
+        }
+        List&lt;Server&gt; servers = loadBalancer.getAllServers();
+        // 修改server的host地址，将本机地址修改为zk地址
+        for (Server server : servers) {
+            server.setHost("host");
+        }
+        Server server = servers.get(index % servers.size());
+        index++;
+        return server;
+    }
+}</code></pre> 
+<p>修复完成。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3f8324c53632322d94aacf12e181c871/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">mvcc1</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/5676f8c8e718bc0f240e162e1e931f15/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">时间序列数据的白噪声检验</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

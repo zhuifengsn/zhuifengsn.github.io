@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>R语言：蒙特卡洛模拟 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="R语言：蒙特卡洛模拟" />
+<meta property="og:description" content="hello，大家好，今天带给大家的是一种计算机模拟的方法——蒙特卡洛模拟（Monte Carlo）。这是一种基于概率统计模型所衍生的一种计算机模拟的方法，而它的原理就是概率论中所涉及的“大数定律”，也就是在实验次数非常多时，频率会依概率收敛，即频率非常接近概率。
+蒙特卡洛模拟的基本思路可以归纳为三步：构造问题的概率模型-&gt;从已知概率分布中抽样-&gt;建立所需的统计量。后面我会用两个例子来做详细的解释。因为本人后续的学习内容要以R语言为主，因此这两个例子我都是基于R语言来实现的。
+例1 蒙特卡洛模拟求积分 I = ∫ 0 1 ln ⁡ ( 1 &#43; x ) 1 &#43; x 2 d x I = \int_0^1 \frac {\ln(1&#43;x)}{1&#43;x^2} \mathrm{d} x I=∫01​1&#43;x2ln(1&#43;x)​dx
+首先我们可以先画下图，看下这个所要求的积分函数是什么样子的。
+f &lt;- function(x){ log(1&#43;x)/(1&#43;x^2) } x &lt;- seq(0,1,length=50) y &lt;- f(x) df &lt;- data.frame(x,y) ggplot(df, mapping = aes(x=x,y=y))&#43;geom_line() 画完后发现，整个函数在[0,1]的区间内都是大于0的，那么我们就可以画一个边长为1含有这个函数的正方形，往该区域内投点，看看落在该函数内的点有多少个（即图中红色区域），这样我们就完成了第一步，构造问题的概率模型。
+ggplot(df, mapping = aes(x=x,y=y))&#43;geom_line()&#43;geom_ribbon(aes(ymin=0, ymax=y, x = x), fill=&#34;red&#34;, alpha=0.2)&#43;geom_hline(yintercept = c(0,1))&#43;geom_vline(xintercept = c(0,1)) 接下来，第二步，从已知概率分布中抽样，往该区域随机投点属于均匀分布，因此我们用runif()函数即可生成n个随机点。每有一个点落在红色区域，便记为一次，记k为落在红色区域内的次数。随着投点的次数增多，我们就可以根据大数定律认为 k n = S r e d S 正 方 形 \frac kn = \frac {S_{red}}{S_{正方形}} nk​=S正方形​Sred​​，那么这个 k n \frac kn nk​就是我们所需要的统计量。又因为这个正方形面积为1，所以 k n \frac kn nk​就是我们要求的定积分。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/787e0e12d317464840abcfe1770e8099/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-11-14T18:06:56+08:00" />
+<meta property="article:modified_time" content="2020-11-14T18:06:56+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">R语言：蒙特卡洛模拟</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>hello，大家好，今天带给大家的是一种计算机模拟的方法——蒙特卡洛模拟（Monte Carlo）。这是一种基于概率统计模型所衍生的一种计算机模拟的方法，而它的原理就是概率论中所涉及的“大数定律”，也就是在实验次数非常多时，频率会依概率收敛，即频率非常接近概率。</p> 
+<p>蒙特卡洛模拟的基本思路可以归纳为三步：<strong>构造问题的概率模型-&gt;从已知概率分布中抽样-&gt;建立所需的统计量</strong>。后面我会用两个例子来做详细的解释。因为本人后续的学习内容要以R语言为主，因此这两个例子我都是基于R语言来实现的。</p> 
+<h2><a id="1__4"></a>例1 蒙特卡洛模拟求积分</h2> 
+<p><span class="katex--display"><span class="katex-display"><span class="katex"><span class="katex-mathml"> 
+      
+       
+        
+        
+          I 
+         
+        
+          = 
+         
+         
+         
+           ∫ 
+          
+         
+           0 
+          
+         
+           1 
+          
+         
+         
+          
+          
+            ln 
+           
+          
+            ⁡ 
+           
+          
+            ( 
+           
+          
+            1 
+           
+          
+            + 
+           
+          
+            x 
+           
+          
+            ) 
+           
+          
+          
+          
+            1 
+           
+          
+            + 
+           
+           
+           
+             x 
+            
+           
+             2 
+            
+           
+          
+         
+        
+          d 
+         
+        
+          x 
+         
+        
+       
+         I = \int_0^1 \frac {\ln(1+x)}{1+x^2} \mathrm{d} x 
+        
+       
+     </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord mathdefault" style="margin-right: 0.07847em;">I</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 2.47596em; vertical-align: -0.91195em;"></span><span class="mop"><span class="mop op-symbol large-op" style="margin-right: 0.44445em; position: relative; top: -0.001125em;">∫</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 1.56401em;"><span class="" style="top: -1.78805em; margin-left: -0.44445em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span><span class="" style="top: -3.8129em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.91195em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 1.427em;"><span class="" style="top: -2.314em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">1</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height: 0.740108em;"><span class="" style="top: -2.989em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.677em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mop">ln</span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mord mathdefault">x</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.76933em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord"><span class="mord mathrm">d</span></span><span class="mord mathdefault">x</span></span></span></span></span></span><br> 首先我们可以先画下图，看下这个所要求的积分函数是什么样子的。</p> 
+<pre><code class="prism language-r">f <span class="token operator">&lt;-</span> <span class="token keyword">function</span><span class="token punctuation">(</span>x<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+log<span class="token punctuation">(</span><span class="token number">1</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token operator">/</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token operator">+</span>x<span class="token operator">^</span><span class="token number">2</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+x <span class="token operator">&lt;-</span> seq<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span>length<span class="token operator">=</span><span class="token number">50</span><span class="token punctuation">)</span>
+y <span class="token operator">&lt;-</span> f<span class="token punctuation">(</span>x<span class="token punctuation">)</span>
+df <span class="token operator">&lt;-</span> data.frame<span class="token punctuation">(</span>x<span class="token punctuation">,</span>y<span class="token punctuation">)</span>
+ggplot<span class="token punctuation">(</span>df<span class="token punctuation">,</span> mapping <span class="token operator">=</span> aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/ce/00/dJl73mFe_o.png" alt="在这里插入图片描述"></p> 
+<p>画完后发现，整个函数在[0,1]的区间内都是大于0的，那么我们就可以画一个边长为1含有这个函数的正方形，往该区域内投点，看看落在该函数内的点有多少个（即图中红色区域），这样我们就完成了第一步，构造问题的概率模型。</p> 
+<pre><code class="prism language-r">ggplot<span class="token punctuation">(</span>df<span class="token punctuation">,</span> mapping <span class="token operator">=</span> aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_ribbon<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>ymin<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">,</span> ymax<span class="token operator">=</span>y<span class="token punctuation">,</span> x <span class="token operator">=</span> x<span class="token punctuation">)</span><span class="token punctuation">,</span> fill<span class="token operator">=</span><span class="token string">"red"</span><span class="token punctuation">,</span> alpha<span class="token operator">=</span><span class="token number">0.2</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_hline<span class="token punctuation">(</span>yintercept <span class="token operator">=</span> c<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_vline<span class="token punctuation">(</span>xintercept <span class="token operator">=</span> c<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/83/cb/ufDe9DQ8_o.png" alt="在这里插入图片描述"></p> 
+<p>接下来，第二步，从已知概率分布中抽样，往该区域随机投点属于均匀分布，因此我们用runif()函数即可生成n个随机点。每有一个点落在红色区域，便记为一次，记k为落在红色区域内的次数。随着投点的次数增多，我们就可以根据大数定律认为<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          k 
+         
+        
+          n 
+         
+        
+       
+         = 
+        
+        
+         
+         
+           S 
+          
+          
+          
+            r 
+           
+          
+            e 
+           
+          
+            d 
+           
+          
+         
+         
+         
+           S 
+          
+          
+          
+            正 
+           
+          
+            方 
+           
+          
+            形 
+           
+          
+         
+        
+       
+      
+        \frac kn = \frac {S_{red}}{S_{正方形}} 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1.22511em; vertical-align: -0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.880108em;"><span class="" style="top: -2.655em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">n</span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.394em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right: 0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.345em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1.33929em; vertical-align: -0.4451em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.894191em;"><span class="" style="top: -2.655em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right: 0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist"><span class="" style="top: -2.357em; margin-left: -0.05764em; margin-right: 0.0714286em;"><span class="pstrut" style="height: 2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord cjk_fallback mtight">正</span><span class="mord cjk_fallback mtight">方</span><span class="mord cjk_fallback mtight">形</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.143em;"><span class=""></span></span></span></span></span></span></span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.41586em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right: 0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.3448em;"><span class="" style="top: -2.34877em; margin-left: -0.05764em; margin-right: 0.0714286em;"><span class="pstrut" style="height: 2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right: 0.02778em;">r</span><span class="mord mathdefault mtight">e</span><span class="mord mathdefault mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.151229em;"><span class=""></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.4451em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>，那么这个<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          k 
+         
+        
+          n 
+         
+        
+       
+      
+        \frac kn 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1.22511em; vertical-align: -0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.880108em;"><span class="" style="top: -2.655em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">n</span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.394em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right: 0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.345em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>就是我们所需要的统计量。又因为这个正方形面积为1，所以<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          k 
+         
+        
+          n 
+         
+        
+       
+      
+        \frac kn 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1.22511em; vertical-align: -0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.880108em;"><span class="" style="top: -2.655em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">n</span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.394em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right: 0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.345em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>就是我们要求的定积分。</p> 
+<pre><code class="prism language-r">MC1 <span class="token operator">&lt;-</span> <span class="token keyword">function</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+    k <span class="token operator">&lt;-</span> <span class="token number">0</span><span class="token punctuation">;</span> x <span class="token operator">&lt;-</span> runif<span class="token punctuation">(</span>n<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span> y <span class="token operator">&lt;-</span> runif<span class="token punctuation">(</span>n<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token comment">#从已知概率分布中抽样</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>i <span class="token keyword">in</span> <span class="token number">1</span><span class="token operator">:</span>n<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>y<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">&lt;</span> f<span class="token punctuation">(</span>x<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            k <span class="token operator">&lt;-</span> k<span class="token operator">+</span><span class="token number">1</span>
+    <span class="token punctuation">}</span>
+    k<span class="token operator">/</span>n <span class="token comment">#建立所需的统计量</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>这样我们蒙特卡洛模拟就完成了，一般来说，模拟次数越多，最后的精度就越高，因此我们就模拟100000次来跟正确答案<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          π 
+         
+        
+          8 
+         
+        
+       
+         ln 
+        
+       
+         ⁡ 
+        
+       
+         2 
+        
+       
+      
+        \frac \pi8 \ln 2 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1.04039em; vertical-align: -0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.695392em;"><span class="" style="top: -2.655em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">8</span></span></span><span class="" style="top: -3.23em;"><span class="pstrut" style="height: 3em;"></span><span class="frac-line" style="border-bottom-width: 0.04em;"></span></span><span class="" style="top: -3.394em;"><span class="pstrut" style="height: 3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right: 0.03588em;">π</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.345em;"><span class=""></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mop">ln</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord">2</span></span></span></span></span>作比较。</p> 
+<pre><code class="prism language-r">MC1<span class="token punctuation">(</span><span class="token number">100000</span><span class="token punctuation">)</span>
+<span class="token comment">## [1] 0.27057</span>
+pi<span class="token operator">/</span><span class="token number">8</span><span class="token operator">*</span>log<span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span>
+<span class="token comment">## [1] 0.2721983</span>
+</code></pre> 
+<p>从结果中我们可以看出准确度还是非常不错的。</p> 
+<p>经过这个简单的例子，大家应该就能对蒙特卡洛模拟有个基本的印象，接下来再举一个在知乎上看到的例子（<a href="https://www.zhihu.com/question/263316961" rel="nofollow">https://www.zhihu.com/question/263316961</a>）。</p> 
+<h2><a id="2__53"></a>例2 蒙特卡洛模拟在项目管理中的应用</h2> 
+<p>现在有个项目，该项目共有三个WBS要素分别是设计、建造和测试，为了简单起见我们假设这三个WBS要素的预估的工期概率分布都呈标准正态分布，各自的平均工期、标准差以及最悲观、最可能和最乐观的估计工期如下表所示</p> 
+<table><thead><tr><th></th><th>最乐观</th><th>最可能</th><th>最悲观</th><th>平均工期</th><th>标准差</th><th>分布</th></tr></thead><tbody><tr><td>设计</td><td>8</td><td>14</td><td>20</td><td>14</td><td>2</td><td>正态分布</td></tr><tr><td>建造</td><td>14</td><td>23</td><td>32</td><td>23</td><td>3</td><td>正态分布</td></tr><tr><td>测试</td><td>10</td><td>22</td><td>34</td><td>22</td><td>4</td><td>正态分布</td></tr></tbody></table> 
+<p>现在我们要通过这些信息推断整个工期的分布参数。</p> 
+<p>首先，我们可以先画出这三个的概率密度函数，有一个直观的感受。</p> 
+<pre><code class="prism language-r">x <span class="token operator">&lt;-</span> seq<span class="token punctuation">(</span><span class="token number">7</span><span class="token punctuation">,</span><span class="token number">35</span><span class="token punctuation">,</span>length <span class="token operator">=</span> <span class="token number">100</span><span class="token punctuation">)</span>
+y1 <span class="token operator">&lt;-</span> dnorm<span class="token punctuation">(</span>x<span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">14</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">2</span><span class="token punctuation">)</span>
+y2 <span class="token operator">&lt;-</span> dnorm<span class="token punctuation">(</span>x<span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">23</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">3</span><span class="token punctuation">)</span>
+y3 <span class="token operator">&lt;-</span> dnorm<span class="token punctuation">(</span>x<span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">22</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">4</span><span class="token punctuation">)</span>
+data <span class="token operator">&lt;-</span> data.frame<span class="token punctuation">(</span>x<span class="token punctuation">,</span>y1<span class="token punctuation">,</span>y2<span class="token punctuation">,</span>y3<span class="token punctuation">)</span>
+colnames<span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token operator">&lt;-</span> c<span class="token punctuation">(</span><span class="token string">"x"</span><span class="token punctuation">,</span><span class="token string">"y1"</span><span class="token punctuation">,</span><span class="token string">"y2"</span><span class="token punctuation">,</span><span class="token string">"y3"</span><span class="token punctuation">)</span>
+ggplot<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y1<span class="token punctuation">)</span><span class="token punctuation">,</span> color <span class="token operator">=</span> <span class="token string">"red"</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y2<span class="token punctuation">)</span><span class="token punctuation">,</span> color <span class="token operator">=</span> <span class="token string">"blue"</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y3<span class="token punctuation">)</span><span class="token punctuation">,</span> color <span class="token operator">=</span> <span class="token string">"green"</span><span class="token punctuation">)</span><span class="token operator">+</span>theme_classic<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/66/a7/2D3yMZV6_o.png" alt="在这里插入图片描述"></p> 
+<p>紧接着构建蒙特卡洛模拟</p> 
+<pre><code class="prism language-r">MC2 <span class="token operator">&lt;-</span> <span class="token keyword">function</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+	y1 <span class="token operator">&lt;-</span> rnorm<span class="token punctuation">(</span>n <span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">14</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">2</span><span class="token punctuation">)</span> <span class="token comment">#从已知概率分布中抽样</span>
+	y2 <span class="token operator">&lt;-</span> rnorm<span class="token punctuation">(</span>n <span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">23</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">3</span><span class="token punctuation">)</span>
+	y3 <span class="token operator">&lt;-</span> rnorm<span class="token punctuation">(</span>n <span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">22</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">4</span><span class="token punctuation">)</span>
+	y <span class="token operator">&lt;-</span> y1 <span class="token operator">+</span> y2 <span class="token operator">+</span> y3 <span class="token comment">#构造问题的概率模型</span>
+	result <span class="token operator">&lt;-</span> c<span class="token punctuation">(</span>mean<span class="token punctuation">(</span>y<span class="token punctuation">)</span><span class="token punctuation">,</span>var<span class="token punctuation">(</span>y<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token comment">#建立所需的统计量，即样本均值和样本方差</span>
+	return<span class="token punctuation">(</span>result<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>我们根据正态分布的可加性，可以知道总工期的分布应该是均值为59，方差为29的正态分布。然后进行100000次模拟后，看看模拟的结果与真实结果相差多少。</p> 
+<pre><code class="prism language-r">result <span class="token operator">&lt;-</span> MC2<span class="token punctuation">(</span><span class="token number">100000</span><span class="token punctuation">)</span>
+print<span class="token punctuation">(</span>result<span class="token punctuation">)</span>
+<span class="token comment">## [1] 59.00243 29.11788</span>
+x <span class="token operator">&lt;-</span> seq<span class="token punctuation">(</span><span class="token number">7</span><span class="token punctuation">,</span><span class="token number">80</span><span class="token punctuation">,</span>length <span class="token operator">=</span> <span class="token number">1000</span><span class="token punctuation">)</span>
+data <span class="token operator">&lt;-</span> data.frame<span class="token punctuation">(</span>x<span class="token punctuation">,</span>y1 <span class="token operator">&lt;-</span> dnorm<span class="token punctuation">(</span>x<span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">14</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">,</span>dnorm<span class="token punctuation">(</span>x<span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">23</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span>dnorm<span class="token punctuation">(</span>x<span class="token punctuation">,</span> mean <span class="token operator">=</span> <span class="token number">22</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> <span class="token number">4</span><span class="token punctuation">)</span><span class="token punctuation">,</span>dnorm<span class="token punctuation">(</span>x<span class="token punctuation">,</span> mean <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> sd <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">^</span><span class="token number">0.5</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+colnames<span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token operator">&lt;-</span> c<span class="token punctuation">(</span><span class="token string">"x"</span><span class="token punctuation">,</span><span class="token string">"y1"</span><span class="token punctuation">,</span><span class="token string">"y2"</span><span class="token punctuation">,</span><span class="token string">"y3"</span><span class="token punctuation">,</span><span class="token string">"y"</span><span class="token punctuation">)</span>
+ggplot<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y1<span class="token punctuation">)</span><span class="token punctuation">,</span> color <span class="token operator">=</span> <span class="token string">"red"</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y2<span class="token punctuation">)</span><span class="token punctuation">,</span> color <span class="token operator">=</span> <span class="token string">"blue"</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y3<span class="token punctuation">)</span><span class="token punctuation">,</span> color <span class="token operator">=</span> <span class="token string">"green"</span><span class="token punctuation">)</span><span class="token operator">+</span>geom_line<span class="token punctuation">(</span>aes<span class="token punctuation">(</span>x<span class="token operator">=</span>x<span class="token punctuation">,</span>y<span class="token operator">=</span>y<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">+</span>theme_classic<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/3b/b7/jBuJ9Ify_o.png" alt="在这里插入图片描述"><br> 从结果中可以看出，精度还是非常高的。</p> 
+<h2><a id="_103"></a>结语</h2> 
+<p>从以上两个例子不难看出，蒙特卡洛模拟在参数估计方面还是十分有效的，除了无偏估计以外，极大似然估计、渐近估计等也都可以用蒙特卡洛模拟进行计算。</p> 
+<h2><a id="_106"></a>获得代码</h2> 
+<p>以下是我的个人公众号，本文完整代码已上传，关注公众号回复“<strong>蒙特卡洛模拟</strong>”，即可获得，谢谢大家支持。<br> <img src="https://images2.imgbox.com/4b/23/DSJlaLpr_o.jpg" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/0bb0eff301438daf9f83f1cc88e36e22/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">md5是什么_全民小视频视频修改md5有什么用6</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/6f0e9641795aad7646eef542061fbb19/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">电脑硬盘数据线_血的教训，配电脑选硬盘不看这几个指标，分分钟被坑</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

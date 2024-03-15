@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>自然语言处理（一）：RNN - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="自然语言处理（一）：RNN" />
+<meta property="og:description" content="「循环神经网络」（Recurrent Neural Network，RNN）是一个非常经典的面向序列的模型，可以对自然语言句子或是其他时序信号进行建模。进一步讲，它只有一个物理RNN单元，但是这个RNN单元可以按照时间步骤进行展开，在每个时间步骤接收当前时间步的输入和上一个时间步的输出，然后进行计算得出本时间步的输出。
+Why CNN 需要固定长度的输入、输出，RNN 的输入和输出可以是不定长且不等长的 CNN 只有 one-to-one 一种结构，而 RNN 有多种结构，如下图： Model 简单模型示例
+循环神经网络的隐藏层的值s不仅仅取决于当前这次的输入x，还取决于上一次隐藏层的值s。「权重矩阵」 W就是「隐藏层」上一次的值作为这一次的输入的权重。
+RNN时间线展开 时刻的输入，不仅是 ，还应该包括上一个时刻所计算的 。
+使用公式表示 示例 下面我们举个例子来讨论一下，如图所示，假设我们现在有这样一句话：”我爱人工智能”，经过分词之后变成”我，爱，人工，智能”这4个单词，RNN会根据这4个单词的时序关系进行处理，在第1个时刻处理单词”我”，第2个时刻处理单词”爱”，依次类推。
+从图上可以看出，RNN在每个时刻 均会接收两个输入，一个是当前时刻的单词 ，一个是来自上一个时刻的输出 ，经过计算后产生当前时刻的输出 。例如在第2个时刻，它的输入是”爱”和 ，它的输出是 ；在第3个时刻，它的输入是”人工”和 , 输出是 ，依次类推，直到处理完最后一个单词。
+总结一下，RNN会从左到右逐词阅读这个句子，并不断调用一个相同的RNN Cell来处理时序信息，每阅读一个单词，RNN首先将本时刻 的单词 和这个模型内部记忆的「状态向量」 融合起来，形成一个带有最新记忆的状态向量 。
+「Tip」：当RNN读完最后一个单词后，那RNN就已经读完了整个句子，一般可认为最后一个单词输出的状态向量能够表示整个句子的语义信息，即它是整个句子的语义向量，这是一个常用的想法。 Code 数据准备 import torch
+import torch.nn as nn
+import numpy as np
+torch.manual_seed(0) # 设置随机种子以实现可重复性
+seq_length = 5
+input_size = 1
+hidden_size = 10
+output_size = 1
+batch_size = 1" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9c1602600ad8f60fffa336fe1d74d485/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-11-08T20:58:31+08:00" />
+<meta property="article:modified_time" content="2023-11-08T20:58:31+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">自然语言处理（一）：RNN</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <section id="nice" style="font-size: 16px; padding: 0 10px; word-spacing: 0px; word-break: break-word; word-wrap: break-word; text-align: left; line-height: 1.25; color: #2b2b2b; letter-spacing: 2px; background-image: linear-gradient(90deg, rgba(50, 0, 0, 0.04) 3%, rgba(0, 0, 0, 0) 3%), linear-gradient(360deg, rgba(50, 0, 0, 0.04) 3%, rgba(0, 0, 0, 0) 3%); background-size: 20px 20px; background-position: center center; font-family: Optima-Regular, Optima, PingFangSC-light, PingFangTC-light, 'PingFang SC', Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;"> 
+ <p style="padding-top: 8px; padding-bottom: 8px; line-height: 26px; color: #2b2b2b; margin: 10px 0px; letter-spacing: 2px; font-size: 14px; word-spacing: 2px;"><strong style="color: #3594F7; font-weight: bold;">「循环神经网络」</strong>（Recurrent Neural Network，RNN）是一个非常经典的面向序列的模型，可以对自然语言句子或是其他时序信号进行建模。进一步讲，它只有一个物理RNN单元，但是这个RNN单元可以按照时间步骤进行展开，在每个时间步骤接收当前时间步的输入和上一个时间步的输出，然后进行计算得出本时间步的输出。</p> 
+ <h3 style="margin-top: 30px; margin-bottom: 15px; padding: 0px; font-weight: bold; color: black; font-size: 22px; display: block; border-bottom: 4px solid #40B8FA;"><span class="prefix" style="display: flex; width: 20px; height: 20px; background-size: 20px 20px; background-image: url(https://files.mdnice.com/fullstack-1.png); margin-bottom: -22px;"></span><span class="content" style="display: flex; color: #40B8FA; font-size: 20px; margin-left: 25px;">Why</span><span class="suffix" style="display: flex; box-sizing: border-box; width: 200px; height: 10px; border-top-left-radius: 20px; background: RGBA(64, 184, 250, .5); color: rgb(255, 255, 255); font-size: 16px; letter-spacing: 0.544px; justify-content: flex-end; float: right; margin-top: -10px; box-sizing: border-box !important; overflow-wrap: break-word !important;"></span></h3> 
+ <ol style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; list-style-type: decimal; font-size: 15px; color: #595959;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     CNN 需要固定长度的输入、输出，RNN 的输入和输出可以是不定长且不等长的 
+   </section></li><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     CNN 只有 one-to-one 一种结构，而 RNN 有多种结构，如下图： 
+   </section></li></ol> 
+ <figure style="margin: 0; margin-top: 10px; margin-bottom: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center;"> 
+  <img src="https://images2.imgbox.com/dc/74/0kQi4Xpa_o.png" alt="alt" style="max-width: 100%; border-radius: 6px; display: block; margin: 20px auto; object-fit: contain; box-shadow: 2px 4px 7px #999;"> 
+ </figure> 
+ <h3 style="margin-top: 30px; margin-bottom: 15px; padding: 0px; font-weight: bold; color: black; font-size: 22px; display: block; border-bottom: 4px solid #40B8FA;"><span class="prefix" style="display: flex; width: 20px; height: 20px; background-size: 20px 20px; background-image: url(https://files.mdnice.com/fullstack-1.png); margin-bottom: -22px;"></span><span class="content" style="display: flex; color: #40B8FA; font-size: 20px; margin-left: 25px;">Model</span><span class="suffix" style="display: flex; box-sizing: border-box; width: 200px; height: 10px; border-top-left-radius: 20px; background: RGBA(64, 184, 250, .5); color: rgb(255, 255, 255); font-size: 16px; letter-spacing: 0.544px; justify-content: flex-end; float: right; margin-top: -10px; box-sizing: border-box !important; overflow-wrap: break-word !important;"></span></h3> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;"> 
+    <p style="padding-top: 8px; padding-bottom: 8px; line-height: 26px; color: #2b2b2b; margin: 10px 0px; letter-spacing: 2px; font-size: 14px; word-spacing: 2px;">简单模型示例</p> 
+    <figure style="margin: 0; margin-top: 10px; margin-bottom: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center;"> 
+     <img src="https://images2.imgbox.com/3f/c6/2958yHWu_o.jpg" alt="alt" style="max-width: 100%; border-radius: 6px; display: block; margin: 20px auto; object-fit: contain; box-shadow: 2px 4px 7px #999;"> 
+    </figure> 
+   </section></li></ul> 
+ <p style="padding-top: 8px; padding-bottom: 8px; line-height: 26px; color: #2b2b2b; margin: 10px 0px; letter-spacing: 2px; font-size: 14px; word-spacing: 2px;">循环神经网络的隐藏层的值s不仅仅取决于当前这次的输入x，还取决于上一次隐藏层的值s。<strong style="color: #3594F7; font-weight: bold;">「权重矩阵」</strong> W就是<strong style="color: #3594F7; font-weight: bold;">「隐藏层」</strong>上一次的值作为这一次的输入的权重。</p> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     RNN时间线展开 
+   </section></li></ul> 
+ <figure style="margin: 0; margin-top: 10px; margin-bottom: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center;"> 
+  <img src="https://images2.imgbox.com/1e/ec/0moZQN03_o.jpg" alt="alt" style="max-width: 100%; border-radius: 6px; display: block; margin: 20px auto; object-fit: contain; box-shadow: 2px 4px 7px #999;"> 
+ </figure> 
+ <p style="padding-top: 8px; padding-bottom: 8px; line-height: 26px; color: #2b2b2b; margin: 10px 0px; letter-spacing: 2px; font-size: 14px; word-spacing: 2px;"><span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -626 361 637" style="vertical-align: -0.025ex; width: 0.817ex; height: 1.441ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+       </path></g> 
+      </g> 
+     </g> 
+    </svg></span></span> 时刻的输入，不仅是<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -683 1133.3 840.8" style="vertical-align: -0.357ex; width: 2.564ex; height: 1.902ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M42 0H40Q26 0 26 11Q26 15 29 27Q33 41 36 43T55 46Q141 49 190 98Q200 108 306 224T411 342Q302 620 297 625Q288 636 234 637H206Q200 643 200 645T202 664Q206 677 212 683H226Q260 681 347 681Q380 681 408 681T453 682T473 682Q490 682 490 671Q490 670 488 658Q484 643 481 640T465 637Q434 634 411 620L488 426L541 485Q646 598 646 610Q646 628 622 635Q617 635 609 637Q594 637 594 648Q594 650 596 664Q600 677 606 683H618Q619 683 643 683T697 681T738 680Q828 680 837 683H845Q852 676 852 672Q850 647 840 637H824Q790 636 763 628T722 611T698 593L687 584Q687 585 592 480L505 384Q505 383 536 304T601 142T638 56Q648 47 699 46Q734 46 734 37Q734 35 732 23Q728 7 725 4T711 1Q708 1 678 1T589 2Q528 2 496 2T461 1Q444 1 444 10Q444 11 446 25Q448 35 450 39T455 44T464 46T480 47T506 54Q523 62 523 64Q522 64 476 181L429 299Q241 95 236 84Q232 76 232 72Q232 53 261 47Q262 47 267 47T273 46Q276 46 277 46T280 45T283 42T284 35Q284 26 282 19Q279 6 276 4T261 1Q258 1 243 1T201 2T142 2Q64 2 42 0Z"> 
+        </path></g> 
+        <g transform="translate(828, -150) scale(0.707)"> 
+         <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>，还应该包括上一个时刻所计算的 <span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -705 1821.9 913" style="vertical-align: -0.471ex; width: 4.122ex; height: 2.066ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M308 24Q367 24 416 76T466 197Q466 260 414 284Q308 311 278 321T236 341Q176 383 176 462Q176 523 208 573T273 648Q302 673 343 688T407 704H418H425Q521 704 564 640Q565 640 577 653T603 682T623 704Q624 704 627 704T632 705Q645 705 645 698T617 577T585 459T569 456Q549 456 549 465Q549 471 550 475Q550 478 551 494T553 520Q553 554 544 579T526 616T501 641Q465 662 419 662Q362 662 313 616T263 510Q263 480 278 458T319 427Q323 425 389 408T456 390Q490 379 522 342T554 242Q554 216 546 186Q541 164 528 137T492 78T426 18T332 -20Q320 -22 298 -22Q199 -22 144 33L134 44L106 13Q83 -14 78 -18T65 -22Q52 -22 52 -14Q52 -11 110 221Q112 227 130 227H143Q149 221 149 216Q149 214 148 207T144 186T142 153Q144 114 160 87T203 47T255 29T308 24Z"> 
+        </path></g> 
+        <g transform="translate(613, -150) scale(0.707)"> 
+         <g> 
+          <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+         </path></g> 
+         <g transform="translate(361, 0)"> 
+          <path d="M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z"> 
+         </path></g> 
+         <g transform="translate(1139, 0)"> 
+          <path d="M213 578L200 573Q186 568 160 563T102 556H83V602H102Q149 604 189 617T245 641T273 663Q275 666 285 666Q294 666 302 660V361L303 61Q310 54 315 52T339 48T401 46H427V0H416Q395 3 257 3Q121 3 100 0H88V46H114Q136 46 152 46T177 47T193 50T201 52T207 57T213 61V578Z"> 
+         </path></g> 
+        </g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span> 。</p> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     使用公式表示 
+   </section></li></ul> 
+ <figure style="margin: 0; margin-top: 10px; margin-bottom: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center;"> 
+  <img src="https://images2.imgbox.com/25/6b/0Be1o5SA_o.png" alt="alt" style="max-width: 100%; border-radius: 6px; display: block; margin: 20px auto; object-fit: contain; box-shadow: 2px 4px 7px #999;"> 
+ </figure> 
+ <h4 style="padding: 0px; color: black; font-size: 17px; font-weight: bold; text-align: center; position: relative; margin-top: 20px; margin-bottom: 20px;"><span class="prefix" style="display: none;"></span><span class="content" style="border-bottom: 2px solid RGBA(79, 177, 249, .65); color: #2b2b2b; padding-bottom: 2px;"><span style="width: 30px; height: 30px; display: block; background-image: url(https://files.mdnice.com/fullstack-2.png); background-position: center; background-size: 30px; margin: auto; opacity: 1; background-repeat: no-repeat; margin-bottom: -8px;"></span>示例</span><span class="suffix" style="display: none;"></span></h4> 
+ <p style="padding-top: 8px; padding-bottom: 8px; line-height: 26px; color: #2b2b2b; margin: 10px 0px; letter-spacing: 2px; font-size: 14px; word-spacing: 2px;">下面我们举个例子来讨论一下，如图所示，假设我们现在有这样一句话：”我爱人工智能”，经过分词之后变成”我，爱，人工，智能”这4个单词，RNN会根据这4个单词的时序关系进行处理，在第1个时刻处理单词”我”，第2个时刻处理单词”爱”，依次类推。</p> 
+ <figure style="margin: 0; margin-top: 10px; margin-bottom: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center;"> 
+  <img src="https://images2.imgbox.com/0d/b9/RmSUNqbT_o.png" alt="alt" style="max-width: 100%; border-radius: 6px; display: block; margin: 20px auto; object-fit: contain; box-shadow: 2px 4px 7px #999;"> 
+ </figure> 
+ <p style="padding-top: 8px; padding-bottom: 8px; line-height: 26px; color: #2b2b2b; margin: 10px 0px; letter-spacing: 2px; font-size: 14px; word-spacing: 2px;">从图上可以看出，RNN在每个时刻<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -626 361 637" style="vertical-align: -0.025ex; width: 0.817ex; height: 1.441ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+       </path></g> 
+      </g> 
+     </g> 
+    </svg></span></span>均会接收两个输入，一个是当前时刻的单词<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -683 1133.3 840.8" style="vertical-align: -0.357ex; width: 2.564ex; height: 1.902ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M42 0H40Q26 0 26 11Q26 15 29 27Q33 41 36 43T55 46Q141 49 190 98Q200 108 306 224T411 342Q302 620 297 625Q288 636 234 637H206Q200 643 200 645T202 664Q206 677 212 683H226Q260 681 347 681Q380 681 408 681T453 682T473 682Q490 682 490 671Q490 670 488 658Q484 643 481 640T465 637Q434 634 411 620L488 426L541 485Q646 598 646 610Q646 628 622 635Q617 635 609 637Q594 637 594 648Q594 650 596 664Q600 677 606 683H618Q619 683 643 683T697 681T738 680Q828 680 837 683H845Q852 676 852 672Q850 647 840 637H824Q790 636 763 628T722 611T698 593L687 584Q687 585 592 480L505 384Q505 383 536 304T601 142T638 56Q648 47 699 46Q734 46 734 37Q734 35 732 23Q728 7 725 4T711 1Q708 1 678 1T589 2Q528 2 496 2T461 1Q444 1 444 10Q444 11 446 25Q448 35 450 39T455 44T464 46T480 47T506 54Q523 62 523 64Q522 64 476 181L429 299Q241 95 236 84Q232 76 232 72Q232 53 261 47Q262 47 267 47T273 46Q276 46 277 46T280 45T283 42T284 35Q284 26 282 19Q279 6 276 4T261 1Q258 1 243 1T201 2T142 2Q64 2 42 0Z"> 
+        </path></g> 
+        <g transform="translate(828, -150) scale(0.707)"> 
+         <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>，一个是来自上一个时刻的输出<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 1784.9 902" style="vertical-align: -0.471ex; width: 4.038ex; height: 2.041ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+        </path></g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <g> 
+          <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+         </path></g> 
+         <g transform="translate(361, 0)"> 
+          <path d="M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z"> 
+         </path></g> 
+         <g transform="translate(1139, 0)"> 
+          <path d="M213 578L200 573Q186 568 160 563T102 556H83V602H102Q149 604 189 617T245 641T273 663Q275 666 285 666Q294 666 302 660V361L303 61Q310 54 315 52T339 48T401 46H427V0H416Q395 3 257 3Q121 3 100 0H88V46H114Q136 46 152 46T177 47T193 50T201 52T207 57T213 61V578Z"> 
+         </path></g> 
+        </g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span> ，经过计算后产生当前时刻的输出<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 881.3 851.8" style="vertical-align: -0.357ex; width: 1.994ex; height: 1.927ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+        </path></g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>。例如在第2个时刻，它的输入是”爱”和<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 979.6 844" style="vertical-align: -0.339ex; width: 2.216ex; height: 1.91ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <g> 
+          <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+         </path></g> 
+        </g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <path d="M213 578L200 573Q186 568 160 563T102 556H83V602H102Q149 604 189 617T245 641T273 663Q275 666 285 666Q294 666 302 660V361L303 61Q310 54 315 52T339 48T401 46H427V0H416Q395 3 257 3Q121 3 100 0H88V46H114Q136 46 152 46T177 47T193 50T201 52T207 57T213 61V578Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>，它的输出是<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 979.6 844" style="vertical-align: -0.339ex; width: 2.216ex; height: 1.91ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+        </path></g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <path d="M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>；在第3个时刻，它的输入是”人工”和<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 979.6 844" style="vertical-align: -0.339ex; width: 2.216ex; height: 1.91ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+        </path></g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <path d="M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>, 输出是<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 979.6 859.6" style="vertical-align: -0.375ex; width: 2.216ex; height: 1.945ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+        </path></g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <path d="M127 463Q100 463 85 480T69 524Q69 579 117 622T233 665Q268 665 277 664Q351 652 390 611T430 522Q430 470 396 421T302 350L299 348Q299 347 308 345T337 336T375 315Q457 262 457 175Q457 96 395 37T238 -22Q158 -22 100 21T42 130Q42 158 60 175T105 193Q133 193 151 175T169 130Q169 119 166 110T159 94T148 82T136 74T126 70T118 67L114 66Q165 21 238 21Q293 21 321 74Q338 107 338 175V195Q338 290 274 322Q259 328 213 329L171 330L168 332Q166 335 166 348Q166 366 174 366Q202 366 232 371Q266 376 294 413T322 525V533Q322 590 287 612Q265 626 240 626Q208 626 181 615T143 592T132 580H135Q138 579 143 578T153 573T165 566T175 555T183 540T186 520Q186 498 172 481T127 463Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>，依次类推，直到处理完最后一个单词。</p> 
+ <p style="padding-top: 8px; padding-bottom: 8px; line-height: 26px; color: #2b2b2b; margin: 10px 0px; letter-spacing: 2px; font-size: 14px; word-spacing: 2px;">总结一下，RNN会从左到右逐词阅读这个句子，并不断调用一个相同的RNN Cell来处理时序信息，每阅读一个单词，RNN首先将本时刻<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -626 361 637" style="vertical-align: -0.025ex; width: 0.817ex; height: 1.441ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+       </path></g> 
+      </g> 
+     </g> 
+    </svg></span></span>的单词<span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -683 1133.3 840.8" style="vertical-align: -0.357ex; width: 2.564ex; height: 1.902ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M42 0H40Q26 0 26 11Q26 15 29 27Q33 41 36 43T55 46Q141 49 190 98Q200 108 306 224T411 342Q302 620 297 625Q288 636 234 637H206Q200 643 200 645T202 664Q206 677 212 683H226Q260 681 347 681Q380 681 408 681T453 682T473 682Q490 682 490 671Q490 670 488 658Q484 643 481 640T465 637Q434 634 411 620L488 426L541 485Q646 598 646 610Q646 628 622 635Q617 635 609 637Q594 637 594 648Q594 650 596 664Q600 677 606 683H618Q619 683 643 683T697 681T738 680Q828 680 837 683H845Q852 676 852 672Q850 647 840 637H824Q790 636 763 628T722 611T698 593L687 584Q687 585 592 480L505 384Q505 383 536 304T601 142T638 56Q648 47 699 46Q734 46 734 37Q734 35 732 23Q728 7 725 4T711 1Q708 1 678 1T589 2Q528 2 496 2T461 1Q444 1 444 10Q444 11 446 25Q448 35 450 39T455 44T464 46T480 47T506 54Q523 62 523 64Q522 64 476 181L429 299Q241 95 236 84Q232 76 232 72Q232 53 261 47Q262 47 267 47T273 46Q276 46 277 46T280 45T283 42T284 35Q284 26 282 19Q279 6 276 4T261 1Q258 1 243 1T201 2T142 2Q64 2 42 0Z"> 
+        </path></g> 
+        <g transform="translate(828, -150) scale(0.707)"> 
+         <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>和这个模型内部记忆的<strong style="color: #3594F7; font-weight: bold;">「状态向量」</strong><span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 1784.9 902" style="vertical-align: -0.471ex; width: 4.038ex; height: 2.041ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+        </path></g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <g> 
+          <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+         </path></g> 
+         <g transform="translate(361, 0)"> 
+          <path d="M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z"> 
+         </path></g> 
+         <g transform="translate(1139, 0)"> 
+          <path d="M213 578L200 573Q186 568 160 563T102 556H83V602H102Q149 604 189 617T245 641T273 663Q275 666 285 666Q294 666 302 660V361L303 61Q310 54 315 52T339 48T401 46H427V0H416Q395 3 257 3Q121 3 100 0H88V46H114Q136 46 152 46T177 47T193 50T201 52T207 57T213 61V578Z"> 
+         </path></g> 
+        </g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>融合起来，形成一个带有最新记忆的状态向量 <span class="span-inline-equation" style="cursor:pointer"><span class="inline-equation" style="position: relative;"> 
+    <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 -694 881.3 851.8" style="vertical-align: -0.357ex; width: 1.994ex; height: 1.927ex;"> 
+     <g stroke="currentColor" fill="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)"> 
+      <g> 
+       <g> 
+        <g> 
+         <path d="M137 683Q138 683 209 688T282 694Q294 694 294 685Q294 674 258 534Q220 386 220 383Q220 381 227 388Q288 442 357 442Q411 442 444 415T478 336Q478 285 440 178T402 50Q403 36 407 31T422 26Q450 26 474 56T513 138Q516 149 519 151T535 153Q555 153 555 145Q555 144 551 130Q535 71 500 33Q466 -10 419 -10H414Q367 -10 346 17T325 74Q325 90 361 192T398 345Q398 404 354 404H349Q266 404 205 306L198 293L164 158Q132 28 127 16Q114 -11 83 -11Q69 -11 59 -2T48 16Q48 30 121 320L195 616Q195 629 188 632T149 637H128Q122 643 122 645T124 664Q129 683 137 683Z"> 
+        </path></g> 
+        <g transform="translate(576, -150) scale(0.707)"> 
+         <path d="M26 385Q19 392 19 395Q19 399 22 411T27 425Q29 430 36 430T87 431H140L159 511Q162 522 166 540T173 566T179 586T187 603T197 615T211 624T229 626Q247 625 254 615T261 596Q261 589 252 549T232 470L222 433Q222 431 272 431H323Q330 424 330 420Q330 398 317 385H210L174 240Q135 80 135 68Q135 26 162 26Q197 26 230 60T283 144Q285 150 288 151T303 153H307Q322 153 322 145Q322 142 319 133Q314 117 301 95T267 48T216 6T155 -11Q125 -11 98 4T59 56Q57 64 57 83V101L92 241Q127 382 128 383Q128 385 77 385H26Z"> 
+        </path></g> 
+       </g> 
+      </g> 
+     </g> 
+    </svg></span></span>。</p> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;"> 
+    <strong style="color: #3594F7; font-weight: bold;">「Tip」</strong>：当RNN读完最后一个单词后，那RNN就已经读完了整个句子，一般可认为最后一个单词输出的状态向量能够表示整个句子的语义信息，即它是整个句子的语义向量，这是一个常用的想法。 
+   </section></li></ul> 
+ <h3 style="margin-top: 30px; margin-bottom: 15px; padding: 0px; font-weight: bold; color: black; font-size: 22px; display: block; border-bottom: 4px solid #40B8FA;"><span class="prefix" style="display: flex; width: 20px; height: 20px; background-size: 20px 20px; background-image: url(https://files.mdnice.com/fullstack-1.png); margin-bottom: -22px;"></span><span class="content" style="display: flex; color: #40B8FA; font-size: 20px; margin-left: 25px;">Code</span><span class="suffix" style="display: flex; box-sizing: border-box; width: 200px; height: 10px; border-top-left-radius: 20px; background: RGBA(64, 184, 250, .5); color: rgb(255, 255, 255); font-size: 16px; letter-spacing: 0.544px; justify-content: flex-end; float: right; margin-top: -10px; box-sizing: border-box !important; overflow-wrap: break-word !important;"></span></h3> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     数据准备 
+   </section></li></ul> 
+ <pre class="custom" style="margin-top: 10px; margin-bottom: 10px; border-radius: 5px; box-shadow: rgba(0, 0, 0, 0.55) 0px 2px 10px; text-align: left;"><span style="display: block; background: url(https://files.mdnice.com/user/3441/876cad08-0422-409d-bb5a-08afec5da8ee.svg); height: 30px; width: 100%; background-size: 40px; background-repeat: no-repeat; background-color: #1E1E1E; margin-bottom: -7px; border-radius: 5px; background-position: 10px 10px;"></span><code class="hljs" style="overflow-x: auto; padding: 16px; color: #DCDCDC; display: -webkit-box; font-family: Operator Mono, Consolas, Monaco, Menlo, monospace; font-size: 12px; -webkit-overflow-scrolling: touch; letter-spacing: 0px; padding-top: 15px; background: #1E1E1E; border-radius: 5px;"><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">import</span> torch<br><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">import</span> torch.nn <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">as</span> nn<br><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">import</span> numpy <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">as</span> np<br><br>torch.manual_seed(<span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">0</span>)  <span class="hljs-comment" style="color: #57A64A; font-style: italic; line-height: 26px;"># 设置随机种子以实现可重复性</span><br><br>seq_length = <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">5</span><br>input_size = <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">1</span><br>hidden_size = <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">10</span><br>output_size = <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">1</span><br>batch_size = <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">1</span><br><br>time_steps = np.linspace(<span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">0</span>, np.pi, <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">100</span>)<br>data = np.sin(time_steps)<br>data.resize((len(time_steps), <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">1</span>))<br><br><span class="hljs-comment" style="color: #57A64A; font-style: italic; line-height: 26px;"># Split data into sequences of length 5</span><br>x = []<br>y = []<br><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">for</span> i <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">in</span> range(len(data)-seq_length):<br>    _x = data[i:i+seq_length]<br>    _y = data[i+seq_length]<br>    x.append(_x)<br>    y.append(_y)<br><br>x = np.array(x)<br>y = np.array(y)<br></code></pre> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     Model 
+   </section></li></ul> 
+ <pre class="custom" style="margin-top: 10px; margin-bottom: 10px; border-radius: 5px; box-shadow: rgba(0, 0, 0, 0.55) 0px 2px 10px; text-align: left;"><span style="display: block; background: url(https://files.mdnice.com/user/3441/876cad08-0422-409d-bb5a-08afec5da8ee.svg); height: 30px; width: 100%; background-size: 40px; background-repeat: no-repeat; background-color: #1E1E1E; margin-bottom: -7px; border-radius: 5px; background-position: 10px 10px;"></span><code class="hljs" style="overflow-x: auto; padding: 16px; color: #DCDCDC; display: -webkit-box; font-family: Operator Mono, Consolas, Monaco, Menlo, monospace; font-size: 12px; -webkit-overflow-scrolling: touch; letter-spacing: 0px; padding-top: 15px; background: #1E1E1E; border-radius: 5px;"><span class="hljs-class" style="color: #B8D7A3; line-height: 26px;"><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">class</span> <span class="hljs-title" style="color: #DCDCDC; line-height: 26px;">RNN</span><span class="hljs-params" style="color: #DCDCDC; line-height: 26px;">(nn.Module)</span>:</span><br>    <span class="hljs-function" style="color: #DCDCDC; line-height: 26px;"><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">def</span> <span class="hljs-title" style="color: #DCDCDC; line-height: 26px;">__init__</span><span class="hljs-params" style="color: #DCDCDC; line-height: 26px;">(self, input_size, hidden_size, output_size)</span>:</span><br>        super(RNN, self).__init__()<br>        self.hidden_size = hidden_size<br>        self.rnn = nn.RNN(input_size, hidden_size, batch_first=<span class="hljs-literal" style="color: #569CD6; line-height: 26px;">True</span>)<br>        self.fc = nn.Linear(hidden_size, output_size)<br><br>    <span class="hljs-function" style="color: #DCDCDC; line-height: 26px;"><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">def</span> <span class="hljs-title" style="color: #DCDCDC; line-height: 26px;">forward</span><span class="hljs-params" style="color: #DCDCDC; line-height: 26px;">(self, x, hidden)</span>:</span><br>        out, hidden = self.rnn(x, hidden)<br>        out = out.view(<span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">-1</span>, self.hidden_size)<br>        out = self.fc(out)<br>        <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">return</span> out, hidden<br></code></pre> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     Train 
+   </section></li></ul> 
+ <pre class="custom" style="margin-top: 10px; margin-bottom: 10px; border-radius: 5px; box-shadow: rgba(0, 0, 0, 0.55) 0px 2px 10px; text-align: left;"><span style="display: block; background: url(https://files.mdnice.com/user/3441/876cad08-0422-409d-bb5a-08afec5da8ee.svg); height: 30px; width: 100%; background-size: 40px; background-repeat: no-repeat; background-color: #1E1E1E; margin-bottom: -7px; border-radius: 5px; background-position: 10px 10px;"></span><code class="hljs" style="overflow-x: auto; padding: 16px; color: #DCDCDC; display: -webkit-box; font-family: Operator Mono, Consolas, Monaco, Menlo, monospace; font-size: 12px; -webkit-overflow-scrolling: touch; letter-spacing: 0px; padding-top: 15px; background: #1E1E1E; border-radius: 5px;">model = RNN(input_size, hidden_size, output_size)<br>criterion = nn.MSELoss()<br>optimizer = torch.optim.Adam(model.parameters(), lr=<span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">0.01</span>)<br><br><span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">for</span> epoch <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">in</span> range(<span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">100</span>):<br>    total_loss = <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">0</span><br>    hidden = <span class="hljs-literal" style="color: #569CD6; line-height: 26px;">None</span><br>    <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">for</span> i <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">in</span> range(len(x)):<br>        optimizer.zero_grad()<br>        input_ = torch.Tensor(x[i]).unsqueeze(<span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">0</span>)<br>        target = torch.Tensor(y[i])<br>        output, hidden = model(input_, hidden)<br>        hidden = hidden.detach()<br>        loss = criterion(output, target)<br>        loss.backward()<br>        optimizer.step()<br>        total_loss += loss.item()<br><br>    <span class="hljs-keyword" style="color: #569CD6; line-height: 26px;">if</span> epoch % <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">10</span> == <span class="hljs-number" style="color: #B8D7A3; line-height: 26px;">0</span>:<br>        print(<span class="hljs-string" style="color: #D69D85; line-height: 26px;">f'Epoch <span class="hljs-subst" style="color: #DCDCDC; line-height: 26px;">{epoch}</span>, Loss: <span class="hljs-subst" style="color: #DCDCDC; line-height: 26px;">{total_loss}</span>'</span>)<br></code></pre> 
+ <h3 style="margin-top: 30px; margin-bottom: 15px; padding: 0px; font-weight: bold; color: black; font-size: 22px; display: block; border-bottom: 4px solid #40B8FA;"><span class="prefix" style="display: flex; width: 20px; height: 20px; background-size: 20px 20px; background-image: url(https://files.mdnice.com/fullstack-1.png); margin-bottom: -22px;"></span><span class="content" style="display: flex; color: #40B8FA; font-size: 20px; margin-left: 25px;">缺点</span><span class="suffix" style="display: flex; box-sizing: border-box; width: 200px; height: 10px; border-top-left-radius: 20px; background: RGBA(64, 184, 250, .5); color: rgb(255, 255, 255); font-size: 16px; letter-spacing: 0.544px; justify-content: flex-end; float: right; margin-top: -10px; box-sizing: border-box !important; overflow-wrap: break-word !important;"></span></h3> 
+ <ul style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; font-size: 15px; color: #595959; list-style-type: circle;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     当阅读很长的序列时，网络内部的信息会逐渐变得越来越复杂，以至于超过网络的记忆能力，使得最终的输出信息变得混乱无用。 
+   </section></li></ul> 
+ <h3 style="margin-top: 30px; margin-bottom: 15px; padding: 0px; font-weight: bold; color: black; font-size: 22px; display: block; border-bottom: 4px solid #40B8FA;"><span class="prefix" style="display: flex; width: 20px; height: 20px; background-size: 20px 20px; background-image: url(https://files.mdnice.com/fullstack-1.png); margin-bottom: -22px;"></span><span class="content" style="display: flex; color: #40B8FA; font-size: 20px; margin-left: 25px;">参考</span><span class="suffix" style="display: flex; box-sizing: border-box; width: 200px; height: 10px; border-top-left-radius: 20px; background: RGBA(64, 184, 250, .5); color: rgb(255, 255, 255); font-size: 16px; letter-spacing: 0.544px; justify-content: flex-end; float: right; margin-top: -10px; box-sizing: border-box !important; overflow-wrap: break-word !important;"></span></h3> 
+ <ol style="margin-top: 8px; margin-bottom: 8px; padding-left: 25px; list-style-type: decimal; font-size: 15px; color: #595959;"><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     https://zhuanlan.zhihu.com/p/30844905 
+   </section></li><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     https://paddlepedia.readthedocs.io/en/latest/tutorials/sequence_model/rnn.html 
+   </section></li><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     https://saturncloud.io/blog/building-rnn-from-scratch-in-pytorch/ 
+   </section></li><li> 
+   <section style="margin-top: 5px; margin-bottom: 5px; line-height: 26px; text-align: left; font-size: 14px; font-weight: normal; color: #595959;">
+     https://pytorch.org/docs/stable/generated/torch.nn.RNN.html 
+   </section></li></ol> 
+</section> 
+<p>本文由<a href="https://mdnice.com/?platform=4" rel="nofollow"> mdnice </a>多平台发布</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3536d54ef8b5b8c5b493d3c9a13eea63/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【WinForm详细教程八】WinForm中的TreeView控件</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f6648d39ebc983e40b33fb1b42c09191/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">[前端]浏览器警告：Failed to resolve component: xxxIf this is a native custom element, make sure to exclude</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

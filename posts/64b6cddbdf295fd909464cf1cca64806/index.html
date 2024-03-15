@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Kubernetes中Pod详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Kubernetes中Pod详解" />
+<meta property="og:description" content="文章目录 一、kubectl命令二、基础命令基础命令部署命令集群管理命令故障和调试命令其它命令 三、YAML文件四、Pod介绍4.1 pod存在的意义4.2 Pod实现机制共享网络同一pod内容器共享网络pod1与pod2不在同一主机同一主机中的pod通讯解决方案 共享存储 4.3 Pod中镜像拉取策略4.4 Pod资源限制4.5 Pod重启策略4.6 Pod健康检查4.7 Pod创建流程4.8 创建Pod的调度策略污点容忍 4.9 Pod标签 一、kubectl命令 kubectl是Kubernetes集群的命令行工具，通过kubectl能够对集群本身进行管理，并能够在集群上进行容器化应用的安装和部署
+命令格式如下
+kubectl [command] [type] [name] [flags] 参数
+command：指定要对资源执行的操作，例如create、get、describe、deletetype：指定资源类型，资源类型是大小写敏感的，开发者能够以单数 、复数 和 缩略的形式 例如：
+kubectl get pod pod1 kubectl get pods pod1 kubectl get po pod1 name：指定资源的名称，名称也是大小写敏感的，如果省略名称，则会显示所有的资源flags：指定可选的参数，例如，可用 -s 或者 -server参数指定Kubernetes API server的地址和端口 二、基础命令 基础命令 命令介绍create通过文件名或标准输入创建资源expose将一个资源公开为一个新的Servicerun在集群中运行一个特定的镜像set在对象上设置特定的功能get显示一个或多个资源explain文档参考资料edit使用默认的编辑器编辑一个资源delete通过文件名，标准输入，资源名称或标签来删除资源 部署命令 命令介绍rollout管理资源的发布rolling-update对给定的复制控制器滚动更新scale扩容或缩容Pod数量，Deployment、ReplicaSet、RC或Jobautoscale创建一个自动选择扩容或缩容并设置Pod数量 集群管理命令 命令介绍certificate修改证书资源cluster-info显示集群信息top显示资源(CPU/M)cordon标记节点不可调度uncordon标记节点可被调度drain驱逐节点上的应用，准备下线维护taint修改节点taint标记 故障和调试命令 命令介绍describe显示特定资源或资源组的详细信息logs在一个Pod中打印一个容器日志，如果Pod只有一个容器，容器名称是可选的attach附加到一个运行的容器exec执行命令到容器port-forward转发一个或多个proxy运行一个proxy到Kubernetes API Servercp拷贝文件或目录到容器中auth检查授权 其它命令 命令介绍apply通过文件名或标准输入对资源应用配置patch使用补丁修改、更新资源的字段replace通过文件名或标准输入替换一个资源convert不同的API版本之间转换配置文件label更新资源上的标签annotate更新资源上的注释completion用于实现kubectl工具自动补全api-versions打印受支持的API版本config修改kubeconfig文件（用于访问API，比如配置认证信息）help所有命令帮助plugin运行一个命令行插件version打印客户端和服务版本信息 三、YAML文件 k8s 集群中对资源管理和资源对象编排部署都可以通过声明样式（YAML）文件来解决，也就是可以把需要对资源对象操作编辑到YAML 格式文件中，我们把这种文件叫做资源清单文件，通过kubectl 命令直接使用资源清单文件就可以实现对大量的资源对象进行编排部署了。一般在我们开发的时候，都是通过配置YAML文件来部署集群的。
+YAML ：仍是一种标记语言。为了强调这种语言以数据做为中心，而不是以标记语言为重点。YAML文件：就是资源清单文件，用于资源编排YAML 是一个可读性高，用来表达数据序列的格式在这里插入代码片 基本语法：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/64b6cddbdf295fd909464cf1cca64806/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-15T05:00:00+08:00" />
+<meta property="article:modified_time" content="2021-12-15T05:00:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Kubernetes中Pod详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-dracula">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#kubectl_1" rel="nofollow">一、kubectl命令</a></li><li><a href="#_24" rel="nofollow">二、基础命令</a></li><li><ul><li><a href="#_25" rel="nofollow">基础命令</a></li><li><a href="#_37" rel="nofollow">部署命令</a></li><li><a href="#_45" rel="nofollow">集群管理命令</a></li><li><a href="#_58" rel="nofollow">故障和调试命令</a></li><li><a href="#_71" rel="nofollow">其它命令</a></li></ul> 
+  </li><li><a href="#YAML_88" rel="nofollow">三、YAML文件</a></li><li><a href="#Pod_184" rel="nofollow">四、Pod介绍</a></li><li><ul><li><a href="#41_pod_200" rel="nofollow">4.1 pod存在的意义</a></li><li><a href="#42_Pod_219" rel="nofollow">4.2 Pod实现机制</a></li><li><ul><li><a href="#_220" rel="nofollow">共享网络</a></li><li><ul><li><a href="#pod_221" rel="nofollow">同一pod内容器共享网络</a></li><li><a href="#pod1pod2_224" rel="nofollow">pod1与pod2不在同一主机</a></li><li><a href="#pod_227" rel="nofollow">同一主机中的pod通讯解决方案</a></li></ul> 
+    </li><li><a href="#_230" rel="nofollow">共享存储</a></li></ul> 
+   </li><li><a href="#43_Pod_233" rel="nofollow">4.3 Pod中镜像拉取策略</a></li><li><a href="#44_Pod_241" rel="nofollow">4.4 Pod资源限制</a></li><li><a href="#45_Pod_250" rel="nofollow">4.5 Pod重启策略</a></li><li><a href="#46_Pod_262" rel="nofollow">4.6 Pod健康检查</a></li><li><a href="#47_Pod_340" rel="nofollow">4.7 Pod创建流程</a></li><li><a href="#48_Pod_351" rel="nofollow">4.8 创建Pod的调度策略</a></li><li><ul><li><a href="#_503" rel="nofollow">污点容忍</a></li></ul> 
+   </li><li><a href="#49_Pod_506" rel="nofollow">4.9 Pod标签</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="kubectl_1"></a>一、kubectl命令</h2> 
+<p>kubectl是Kubernetes集群的命令行工具，通过kubectl能够对集群本身进行管理，并能够在集群上进行容器化应用的安装和部署</p> 
+<p>命令格式如下</p> 
+<pre><code class="prism language-c">kubectl <span class="token punctuation">[</span>command<span class="token punctuation">]</span> <span class="token punctuation">[</span>type<span class="token punctuation">]</span> <span class="token punctuation">[</span>name<span class="token punctuation">]</span> <span class="token punctuation">[</span>flags<span class="token punctuation">]</span>
+</code></pre> 
+<p>参数</p> 
+<ul><li>command：指定要对资源执行的操作，例如create、get、describe、delete</li><li>type：指定资源类型，资源类型是大小写敏感的，开发者能够以单数 、复数 和 缩略的形式</li></ul> 
+<p>例如：</p> 
+<pre><code class="prism language-c">kubectl get pod pod1
+kubectl get pods pod1
+kubectl get po pod1
+</code></pre> 
+<p><img src="https://images2.imgbox.com/48/0a/s9S22PFW_o.png" alt="在这里插入图片描述"></p> 
+<ul><li>name：指定资源的名称，名称也是大小写敏感的，如果省略名称，则会显示所有的资源</li><li>flags：指定可选的参数，例如，可用 -s 或者 -server参数指定Kubernetes API server的地址和端口</li></ul> 
+<h2><a id="_24"></a>二、基础命令</h2> 
+<h3><a id="_25"></a>基础命令</h3> 
+<table><thead><tr><th>命令</th><th>介绍</th></tr></thead><tbody><tr><td>create</td><td>通过文件名或标准输入创建资源</td></tr><tr><td>expose</td><td>将一个资源公开为一个新的Service</td></tr><tr><td>run</td><td>在集群中运行一个特定的镜像</td></tr><tr><td>set</td><td>在对象上设置特定的功能</td></tr><tr><td>get</td><td>显示一个或多个资源</td></tr><tr><td>explain</td><td>文档参考资料</td></tr><tr><td>edit</td><td>使用默认的编辑器编辑一个资源</td></tr><tr><td>delete</td><td>通过文件名，标准输入，资源名称或标签来删除资源</td></tr></tbody></table> 
+<h3><a id="_37"></a>部署命令</h3> 
+<table><thead><tr><th>命令</th><th>介绍</th></tr></thead><tbody><tr><td>rollout</td><td>管理资源的发布</td></tr><tr><td>rolling-update</td><td>对给定的复制控制器滚动更新</td></tr><tr><td>scale</td><td>扩容或缩容Pod数量，Deployment、ReplicaSet、RC或Job</td></tr><tr><td>autoscale</td><td>创建一个自动选择扩容或缩容并设置Pod数量</td></tr></tbody></table> 
+<h3><a id="_45"></a>集群管理命令</h3> 
+<table><thead><tr><th>命令</th><th>介绍</th></tr></thead><tbody><tr><td>certificate</td><td>修改证书资源</td></tr><tr><td>cluster-info</td><td>显示集群信息</td></tr><tr><td>top</td><td>显示资源(CPU/M)</td></tr><tr><td>cordon</td><td>标记节点不可调度</td></tr><tr><td>uncordon</td><td>标记节点可被调度</td></tr><tr><td>drain</td><td>驱逐节点上的应用，准备下线维护</td></tr><tr><td>taint</td><td>修改节点taint标记</td></tr></tbody></table> 
+<h3><a id="_58"></a>故障和调试命令</h3> 
+<table><thead><tr><th>命令</th><th>介绍</th></tr></thead><tbody><tr><td>describe</td><td>显示特定资源或资源组的详细信息</td></tr><tr><td>logs</td><td>在一个Pod中打印一个容器日志，如果Pod只有一个容器，容器名称是可选的</td></tr><tr><td>attach</td><td>附加到一个运行的容器</td></tr><tr><td>exec</td><td>执行命令到容器</td></tr><tr><td>port-forward</td><td>转发一个或多个</td></tr><tr><td>proxy</td><td>运行一个proxy到Kubernetes API Server</td></tr><tr><td>cp</td><td>拷贝文件或目录到容器中</td></tr><tr><td>auth</td><td>检查授权</td></tr></tbody></table> 
+<h3><a id="_71"></a>其它命令</h3> 
+<table><thead><tr><th>命令</th><th>介绍</th></tr></thead><tbody><tr><td>apply</td><td>通过文件名或标准输入对资源应用配置</td></tr><tr><td>patch</td><td>使用补丁修改、更新资源的字段</td></tr><tr><td>replace</td><td>通过文件名或标准输入替换一个资源</td></tr><tr><td>convert</td><td>不同的API版本之间转换配置文件</td></tr><tr><td>label</td><td>更新资源上的标签</td></tr><tr><td>annotate</td><td>更新资源上的注释</td></tr><tr><td>completion</td><td>用于实现kubectl工具自动补全</td></tr><tr><td>api-versions</td><td>打印受支持的API版本</td></tr><tr><td>config</td><td>修改kubeconfig文件（用于访问API，比如配置认证信息）</td></tr><tr><td>help</td><td>所有命令帮助</td></tr><tr><td>plugin</td><td>运行一个命令行插件</td></tr><tr><td>version</td><td>打印客户端和服务版本信息</td></tr></tbody></table> 
+<h2><a id="YAML_88"></a>三、YAML文件</h2> 
+<p>k8s 集群中对资源管理和资源对象编排部署都可以通过声明样式（YAML）文件来解决，也就是可以把需要对资源对象操作编辑到YAML 格式文件中，我们把这种文件叫做资源清单文件，通过kubectl 命令直接使用资源清单文件就可以实现对大量的资源对象进行编排部署了。一般在我们开发的时候，都是通过配置YAML文件来部署集群的。</p> 
+<ul><li>YAML ：仍是一种标记语言。为了强调这种语言以数据做为中心，而不是以标记语言为重点。</li><li>YAML文件：就是资源清单文件，用于资源编排</li><li>YAML 是一个可读性高，用来表达数据序列的格式<code>在这里插入代码片</code></li></ul> 
+<p>基本语法：</p> 
+<ul><li>使用空格做为缩进</li><li>缩进的空格数目不重要，只要相同层级的元素左侧对齐即可</li><li>低版本缩进时不允许使用Tab 键，只允许使用空格</li><li>使用#标识注释，从这个字符一直到行尾，都会被解释器忽略</li><li>使用<code>---</code>表示新的yaml文件开始</li></ul> 
+<p>yaml支持的数据结构：</p> 
+<ul><li>对象：键值对的集合，又称为映射(mapping) / 哈希（hashes） / 字典（dictionary）</li></ul> 
+<pre><code class="prism language-c"># 对象类型：对象的一组键值对，使用冒号结构表示
+name<span class="token operator">:</span> Tom
+age<span class="token operator">:</span> <span class="token number">18</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span> <span class="token directive keyword">yaml</span> <span class="token expression">也允许另一种写法，将所有键值对写成一个行内对象</span></span>
+hash<span class="token operator">:</span> <span class="token punctuation">{<!-- --></span>name<span class="token operator">:</span> Tom<span class="token punctuation">,</span> age<span class="token operator">:</span> <span class="token number">18</span><span class="token punctuation">}</span>
+</code></pre> 
+<ul><li>数组</li></ul> 
+<pre><code class="prism language-c"># 数组类型：一组连词线开头的行，构成一个数组
+People
+<span class="token operator">-</span> Tom
+<span class="token operator">-</span> Jack
+
+# 数组也可以采用行内表示法
+People<span class="token operator">:</span> <span class="token punctuation">[</span>Tom<span class="token punctuation">,</span> Jack<span class="token punctuation">]</span>
+</code></pre> 
+<p>YAML文件组成部分，一个是控制器的定义 和 被控制的对象</p> 
+<table><thead><tr><th>属性名称</th><th>介绍</th></tr></thead><tbody><tr><td>apiVersion</td><td>API版本</td></tr><tr><td>kind</td><td>资源类型</td></tr><tr><td>metadata</td><td>资源元数据</td></tr><tr><td>spec</td><td>资源规格</td></tr><tr><td>replicas</td><td>副本数量</td></tr><tr><td>selector</td><td>标签选择器</td></tr><tr><td>template</td><td>Pod模板</td></tr><tr><td>metadata</td><td>Pod元数据</td></tr><tr><td>spec</td><td>Pod规格</td></tr><tr><td>containers</td><td>容器配置</td></tr></tbody></table> 
+<p>一般来说，我们很少自己手写YAML文件，因为这里面涉及到了很多内容，我们一般都会借助工具来创建<br> 使用kubectl create命令<br> 这种方式一般用于资源没有部署的时候，我们可以直接创建一个YAML配置文件</p> 
+<pre><code># 尝试运行,并不会真正的创建镜像
+kubectl create deployment web --image=nginx -o yaml --dry-run &gt; nginx.yaml
+
+[root@k8s-master ~]# cat nginx.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: web
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: web
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+        resources: {}
+status: {}
+
+
+</code></pre> 
+<pre><code class="prism language-c">对一个已经运行的pod创建
+kubectl get deploy nginx <span class="token operator">-</span>o<span class="token operator">=</span>yaml <span class="token operator">--</span>export <span class="token operator">&gt;</span> nginx<span class="token punctuation">.</span>yaml
+</code></pre> 
+<h2><a id="Pod_184"></a>四、Pod介绍</h2> 
+<p>Pod是在K8S集群中运行部署应用或服务的最小单元，它是可以支持多容器的。Pod的设计理念是支持多个容器在一个Pod中共享网络地址和文件系统，可以通过进程间通信和文件共享这种简单高效的方式组合完成服务。同时Pod对多容器的支持是K8S中最基础的设计理念。在生产环境中，通常是由不同的团队各自开发构建自己的容器镜像，在部署的时候组合成一个微服务对外提供服务。</p> 
+<p>其它的资源对象都是用来支撑或者扩展Pod对象功能的，比如控制器对象是用来管控Pod对象的，Service或者Ingress资源对象是用来暴露Pod引用对象的，PersistentVolume资源对象是用来为Pod提供存储等等，K8S不会直接处理容器，而是Pod，Pod是由一个或多个container组成。</p> 
+<p>Pod是Kubernetes的最重要概念，每一个Pod都有一个特殊的被称为 “根容器”的Pause容器。Pause容器对应的镜像属于Kubernetes平台的一部分，除了Pause容器，每个Pod还包含一个或多个紧密相关的用户业务容器。</p> 
+<p><img src="https://images2.imgbox.com/41/72/bi0WqZCJ_o.png" alt="在这里插入图片描述"><br> 总结：</p> 
+<blockquote> 
+ <p>最小部署的单元<br> Pod里面是由一个或多个容器组成【一组容器的集合】<br> 一个pod中的容器是共享网络命名空间<br> Pod是短暂的<br> 每个Pod包含一个或多个紧密相关的用户业务容器</p> 
+</blockquote> 
+<h3><a id="41_pod_200"></a>4.1 pod存在的意义</h3> 
+<p>创建容器使用docker，一个docker对应一个容器，一个容器运行一个应用进程<br> Pod是多进程设计，运用多个应用程序，也就是一个Pod里面有多个容器，而一个容器里面运行一个应用程序</p> 
+<p>Pod的存在主要是为了亲密性应用更方便的交互</p> 
+<ul><li>两个或多个应用之间进行交互</li><li>网络之间的调用【通过127.0.0.1 或 socket】</li><li>两个应用之间需要频繁调用</li></ul> 
+<p>Pod是K8S集群中所有业务类型的基础，可以把Pod看作运行在K8S集群上的小机器人，不同类型的业务就需要不同类型的小机器人去执行。目前K8S的业务主要可以分为以下几种</p> 
+<ul><li>长期伺服型：long-running</li><li>批处理型：batch</li><li>节点后台支撑型：node-daemon</li><li>有状态应用型：stateful application</li></ul> 
+<p>上述的几种类型，分别对应的小机器人控制器为：Deployment、Job、DaemonSet 和 StatefulSet (后面将介绍控制器)</p> 
+<h3><a id="42_Pod_219"></a>4.2 Pod实现机制</h3> 
+<h4><a id="_220"></a>共享网络</h4> 
+<h5><a id="pod_221"></a>同一pod内容器共享网络</h5> 
+<p>通过 Pause 容器，把其它业务容器加入到Pause容器里，让所有业务容器在同一个名称空间中，可以实现网络共享</p> 
+<h5><a id="pod1pod2_224"></a>pod1与pod2不在同一主机</h5> 
+<p>Flannel网络模型解决方案：<br> <img src="https://images2.imgbox.com/23/f0/TdpvrC4F_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="pod_227"></a>同一主机中的pod通讯解决方案</h5> 
+<p>由docker0网桥直接转发请求至pod2 ，不需要经过Flannal</p> 
+<h4><a id="_230"></a>共享存储</h4> 
+<p>一个Pod里的多个容器可以共享存储卷，这个存储卷会被定义为Pod的一部分，并且可以挂载到该Pod里的所有容器的文件系统上。<br> <img src="https://images2.imgbox.com/66/58/okCwzLka_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="43_Pod_233"></a>4.3 Pod中镜像拉取策略</h3> 
+<p>拉取策略主要分为了以下几种</p> 
+<ul><li>IfNotPresent：默认值，镜像在宿主机上不存在才拉取</li><li>Always：每次创建Pod都会重新拉取一次镜像</li><li>Never：Pod永远不会主动拉取这个镜像<br> <img src="https://images2.imgbox.com/56/85/azkflJAg_o.png" alt="在这里插入图片描述"></li></ul> 
+<h3><a id="44_Pod_241"></a>4.4 Pod资源限制</h3> 
+<p>我们在对Pod进行调度的时候，可以对调度的资源进行限制，例如我们限制 Pod调度是使用的资源是 2C4G，那么在调度对应的node节点时，只会占用对应的资源，对于不满足资源的节点，将不会进行调度。</p> 
+<p>示例：<br> <img src="https://images2.imgbox.com/d1/73/729YzktG_o.png" alt="在这里插入图片描述"></p> 
+<ul><li>request：表示调度所需的资源</li><li>limits：表示最大所占用的资源</li></ul> 
+<h3><a id="45_Pod_250"></a>4.5 Pod重启策略</h3> 
+<p>restartPolicy</p> 
+<p>Pod中包含了很多个容器，假设某个容器出现问题了，那么就会触发Pod重启机制<br> <img src="https://images2.imgbox.com/1a/64/FoeOKyG7_o.png" alt="在这里插入图片描述"><br> 重启策略主要分为以下三种</p> 
+<ul><li>Always：当容器终止退出后，总是重启容器，默认策略 【nginx等，需要不断提供服务】</li><li>OnFailure：当容器异常退出（退出状态码非0）时，才重启容器，正常退出时，不会重启。</li><li>Never：当容器终止退出，从不重启容器 【批量任务】</li></ul> 
+<p>注：当控制器是job或者是cronjob时，重启策略只能是OnFailure和Never。</p> 
+<h3><a id="46_Pod_262"></a>4.6 Pod健康检查</h3> 
+<p>通过容器检查，原来我们使用下面的命令来检查</p> 
+<pre><code class="prism language-c">kubectl get pod
+</code></pre> 
+<p>但是有的时候，程序可能出现了 Java 堆内存溢出，程序还在运行，但是不能对外提供服务了，这个时候就不能通过 容器检查来判断服务是否可用了，这个时候就可以使用应用层面的检查。<br> <img src="https://images2.imgbox.com/40/a4/Pg18VG5V_o.png" alt="在这里插入图片描述"></p> 
+<ul><li> <p>livenessProbe<br> 存活检查，如果检查失败，将杀死容器，根据Pod的restartPolicy【重启策略】来操作livenessProbe</p> </li><li> <p>readinessProbe<br> 就绪检查，如果检查失败，Kubernetes会把Pod从Service endpoints中剔除</p> <pre><code class="prism language-c">检测的是容器是否正常对外提供服务。如果检测失败则从负载均衡器上删除
+就绪性探测的检测方式分为以下三种：
+         EXEC 	 <span class="token operator">:</span> 执行命令探测，如果探测不成功一直在探测直至探测成功
+		TCP 	：ping端口探测，如果探测失败则一分钟重启探测一次
+		HTTP	：访问链接探测
+	
+    
+### 存活性检查和就绪性检查共有的五个参数
+	initialDelaySeconds：<span class="token number">30</span>s   设置开始延时时间 <span class="token punctuation">(</span>默认情况下延迟<span class="token number">0</span>秒）
+	failureThreshold<span class="token operator">:</span> <span class="token number">3</span>        探测失败的次数<span class="token punctuation">(</span>失效的阀值）<span class="token punctuation">(</span>默认的情况下为<span class="token number">3</span>次）
+	timeoutSeconds<span class="token operator">:</span><span class="token number">1</span>           探测的超时时间（默认的情况下为<span class="token number">1</span>秒）
+	periodSeconds<span class="token operator">:</span> <span class="token number">5</span>s          每次探测的时间间隔<span class="token punctuation">(</span>默认的情况下间隔<span class="token number">10</span>秒）
+	successThreshold<span class="token operator">:</span><span class="token number">2</span>         探测成功的次数 （默认情况下为<span class="token number">1</span>次）	
+</code></pre> </li></ul> 
+<p>Probe支持以下三种检查方式</p> 
+<ul><li>http Get：发送HTTP请求，返回200 - 400 范围状态码为成功</li><li>exec：执行Shell命令返回$?是0为成功</li><li>tcpSocket：发起TCP Socket建立成功</li></ul> 
+<p><mark>Pod的整个生命周期都伴随着存活性探测和就绪性探测</mark><br> 三种示例如下：</p> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span> <span class="token directive keyword">exec</span></span>
+spec<span class="token operator">:</span>
+  containers<span class="token operator">:</span>      # 定义容器
+    <span class="token operator">-</span> name<span class="token operator">:</span> nginx     # 容器名称
+      image<span class="token operator">:</span> alvinos<span class="token operator">/</span>django<span class="token operator">:</span>v1  # 定义镜像名称
+      imagePullPolicy<span class="token operator">:</span> IfNotPresent   # 拉取策略<span class="token punctuation">(</span>可写可不写<span class="token punctuation">)</span>
+      livenessProbe<span class="token operator">:</span>                  #存活性检查的配置项
+        exec<span class="token operator">:</span>           # 选项
+          command<span class="token operator">:</span>            # 指定的命令
+            <span class="token operator">-</span> <span class="token string">"/bin/sh"</span>
+            <span class="token operator">-</span> <span class="token string">"-c"</span>
+            <span class="token operator">-</span> <span class="token string">"cat /usr/share/nginx/html/index.html"</span>  # 如果返回的状态不为<span class="token number">0</span>，则探测失败
+
+
+<span class="token macro property"><span class="token directive-hash">#</span> <span class="token expression">TCP</span></span>
+spec<span class="token operator">:</span>
+  containers<span class="token operator">:</span>
+    <span class="token operator">-</span> name<span class="token operator">:</span> nginx
+      image<span class="token operator">:</span> alvinos<span class="token operator">/</span>django<span class="token operator">:</span>v1
+      imagePullPolicy<span class="token operator">:</span> IfNotPresent   # 镜像拉取策略<span class="token punctuation">(</span>可写可不写<span class="token punctuation">)</span>
+      livenessProbe<span class="token operator">:</span>                  #存活性检查的配置项
+        tcpSocket<span class="token operator">:</span>                 # 验证tcp探测的方式
+          port<span class="token operator">:</span> <span class="token number">80</span>             # 探测的是<span class="token number">80</span>端口
+
+
+<span class="token macro property"><span class="token directive-hash">#</span> <span class="token directive keyword">http</span></span>
+ spec<span class="token operator">:</span>
+   containers<span class="token operator">:</span>
+     <span class="token operator">-</span> name<span class="token operator">:</span> nginx
+       image<span class="token operator">:</span> alvinos<span class="token operator">/</span>django<span class="token operator">:</span>v1
+       imagePullPolicy<span class="token operator">:</span> IfNotPresent   # 镜像拉取策略<span class="token punctuation">(</span>可写可不写<span class="token punctuation">)</span>
+       livenessProbe<span class="token operator">:</span>                  #存活性检查的配置项
+         httpGet<span class="token operator">:</span>                 #http的探测方式
+           port<span class="token operator">:</span> <span class="token number">80</span>            #指定端口
+           path<span class="token operator">:</span> <span class="token operator">/</span>index       # 有index这个链接，返回的状态码为<span class="token number">200</span>
+              
+</code></pre> 
+<p><img src="https://images2.imgbox.com/0d/12/6YS9gRSy_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="47_Pod_340"></a>4.7 Pod创建流程</h3> 
+<p><img src="https://images2.imgbox.com/00/76/UWhiqh5X_o.png" alt="在这里插入图片描述"><br> Master节点上：</p> 
+<ol><li>当create pod时，首先会将 pod信息通过apiserver保存在etcd中</li><li>scheduler会时刻监视着apiserver,当有新的pod创建时，会通过apiserver从etcd中读取pod信息，根据调度算法把pod分配到某一节点中，并且存储在etcd中。</li></ol> 
+<p>node节点：</p> 
+<ol start="3"><li>通过kubelet访问apiserver,读取etcd信息，拿到分配给当前节点的pod，通过docker创建容器，然后将结果状态返回给apiserver, 通过apiserver写入etcd中。</li></ol> 
+<h3><a id="48_Pod_351"></a>4.8 创建Pod的调度策略</h3> 
+<p>影响pod调度的属性</p> 
+<ol><li>pod资源限制（resources.requests）</li><li>节点选择器标签影响Pod调度<br> <img src="https://images2.imgbox.com/86/ad/HjdNp7YL_o.png" alt="在这里插入图片描述"></li></ol> 
+<p>例如可以根据生产环境和开发环境调度，先让pod调度到开发环境<br> 可以通过以下命令，给我们的节点新增标签，然后节点选择器就能根据指定的标签进行调度。</p> 
+<pre><code class="prism language-c"><span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl label node k8s<span class="token operator">-</span>node1 env_role<span class="token operator">=</span>dev
+node<span class="token operator">/</span>k8s<span class="token operator">-</span>node1 labeled
+
+# 查看节点标签
+root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl get nodes k8s<span class="token operator">-</span>node1 <span class="token operator">--</span>show<span class="token operator">-</span>labels
+NAME        STATUS   ROLES    AGE   VERSION   LABELS
+k8s<span class="token operator">-</span>node1   Ready    <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>   <span class="token number">18</span>h   v1<span class="token punctuation">.</span><span class="token number">20.1</span>   beta<span class="token punctuation">.</span>kubernetes<span class="token punctuation">.</span>io<span class="token operator">/</span>arch<span class="token operator">=</span>amd64<span class="token punctuation">,</span>beta<span class="token punctuation">.</span>kubernetes<span class="token punctuation">.</span>io<span class="token operator">/</span>os<span class="token operator">=</span>linux<span class="token punctuation">,</span>env_role<span class="token operator">=</span>dev<span class="token punctuation">,</span>kubernetes<span class="token punctuation">.</span>io<span class="token operator">/</span>arch<span class="token operator">=</span>amd64<span class="token punctuation">,</span>kubernetes<span class="token punctuation">.</span>io<span class="token operator">/</span>hostname<span class="token operator">=</span>k8s<span class="token operator">-</span>node1<span class="token punctuation">,</span>kubernetes<span class="token punctuation">.</span>io<span class="token operator">/</span>os<span class="token operator">=</span>linux
+
+</code></pre> 
+<ol start="3"><li>节点亲和性 nodeAffinity<br> 节点亲和性 和之前nodeSelector 基本一样的，根据节点上标签约束来决定Pod调度到哪些节点上 
+  <ul><li>硬亲和性：约束条件必须满足</li><li>软亲和性：尝试满足，不保证</li></ul> </li></ol> 
+<p><img src="https://images2.imgbox.com/7b/5f/zBOGzYRo_o.png" alt="在这里插入图片描述"><br> 支持常用操作符：in、NotIn、Exists、Gt、Lt、DoesNotExists</p> 
+<p>反亲和性：就是和亲和性刚刚相反，如 NotIn、DoesNotExists等</p> 
+<ol start="4"><li>污点（Taint）和污点容忍<br> nodeSelector 和 NodeAffinity，都是Prod调度到某些节点上，属于Pod的属性，是在调度的时候实现的。<br> Taint 污点：节点不做普通分配调度，是节点属性</li></ol> 
+<p>场景</p> 
+<ul><li>专用节点【限制ip】</li><li>配置特定硬件的节点【固态硬盘】</li><li>基于Taint驱逐【在node1不放，在node2放】</li></ul> 
+<p>查看节点污点情况</p> 
+<pre><code class="prism language-c">kubectl describe node k8smaster <span class="token operator">|</span> grep Taint
+</code></pre> 
+<pre><code class="prism language-Go">[root@k8s-master ~]# kubectl describe node k8s-master | grep Taint
+Taints:             node-role.kubernetes.io/master:NoSchedule
+
+[root@k8s-master ~]# kubectl describe node k8s-node1 | grep Taint
+Taints:             &lt;none&gt;
+
+</code></pre> 
+<p>污点值有三个</p> 
+<ul><li>NoSchedule：一定不被调度</li><li>PreferNoSchedule：尽量不被调度【也有被调度的几率】</li><li>NoExecute：不会调度，并且还会驱逐Node已有Pod</li></ul> 
+<p>给指定节点添加污点：</p> 
+<pre><code class="prism language-c">kubectl taint node <span class="token punctuation">[</span>nodename<span class="token punctuation">]</span> key<span class="token operator">=</span>value<span class="token operator">:</span>污点的三个值
+</code></pre> 
+<p>例：</p> 
+<pre><code class="prism language-c">kubectl taint node k8s<span class="token operator">-</span>node1 env_role<span class="token operator">=</span>yes<span class="token operator">:</span>NoSchedule
+</code></pre> 
+<p>删除污点</p> 
+<pre><code class="prism language-c">kubectl taint node k8s<span class="token operator">-</span>node1 env_role<span class="token operator">:</span>NoSchedule<span class="token operator">-</span>
+</code></pre> 
+<p>示例： 先创建 多个Pod,查看分配到node的情况</p> 
+<pre><code class="prism language-c"><span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl create deployment  web <span class="token operator">--</span>image<span class="token operator">=</span>nginx
+deployment<span class="token punctuation">.</span>apps<span class="token operator">/</span>web created
+
+<span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl get pods <span class="token operator">-</span>o wide
+NAME                     READY   STATUS    RESTARTS   AGE   IP           NODE        NOMINATED NODE   READINESS GATES
+nginx<span class="token operator">-</span><span class="token number">6799f</span>c88d8<span class="token operator">-</span>zzdqb   <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">1</span>          <span class="token number">20</span>h   <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.3</span>   k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>x2thn      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">59</span>s   <span class="token number">10.244</span><span class="token number">.3</span><span class="token number">.6</span>   k8s<span class="token operator">-</span>node1   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+</code></pre> 
+<p>可以看到 web 创建到了node1上了，我们在复制5份</p> 
+<pre><code class="prism language-c"><span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl scale deployment web <span class="token operator">--</span>replicas<span class="token operator">=</span><span class="token number">5</span>
+deployment<span class="token punctuation">.</span>apps<span class="token operator">/</span>web scaled
+
+</code></pre> 
+<pre><code class="prism language-c"><span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl get pods <span class="token operator">-</span>o wide
+NAME                     READY   STATUS    RESTARTS   AGE     IP           NODE        NOMINATED NODE   READINESS GATES
+nginx<span class="token operator">-</span><span class="token number">6799f</span>c88d8<span class="token operator">-</span>zzdqb   <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">1</span>          <span class="token number">20</span>h     <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.3</span>   k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>d857s      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">113</span>s    <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.4</span>   k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>k8mgg      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">113</span>s    <span class="token number">10.244</span><span class="token number">.3</span><span class="token number">.7</span>   k8s<span class="token operator">-</span>node1   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>n54tf      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">113</span>s    <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.5</span>   k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>txbwz      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">113</span>s    <span class="token number">10.244</span><span class="token number">.3</span><span class="token number">.8</span>   k8s<span class="token operator">-</span>node1   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>x2thn      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">5</span>m18s   <span class="token number">10.244</span><span class="token number">.3</span><span class="token number">.6</span>   k8s<span class="token operator">-</span>node1   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+
+</code></pre> 
+<p>可以看到 node1 、node2节点都有分配。</p> 
+<p>删除刚创建的所有pod</p> 
+<pre><code class="prism language-c">kubectl delete deployment web
+</code></pre> 
+<p>现在给了更好的演示污点的用法，我们现在给 node1节点打上污点<br> <code>kubectl taint node k8s-node1 env_role=yes:NoSchedule</code></p> 
+<pre><code class="prism language-c"><span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl taint node k8s<span class="token operator">-</span>node1 env_role<span class="token operator">=</span>yes<span class="token operator">:</span>NoSchedule
+node<span class="token operator">/</span>k8s<span class="token operator">-</span>node1 tainted
+
+<span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl describe node k8s<span class="token operator">-</span>node1 <span class="token operator">|</span> grep Taint
+Taints<span class="token operator">:</span>             env_role<span class="token operator">=</span>yes<span class="token operator">:</span>NoSchedule
+</code></pre> 
+<p>然后我们重新创建一个 pod</p> 
+<pre><code class="prism language-c"># 创建nginx pod
+kubectl create deployment web <span class="token operator">--</span>image<span class="token operator">=</span>nginx
+# 复制五次
+kubectl scale deployment web <span class="token operator">--</span>replicas<span class="token operator">=</span><span class="token number">5</span>
+</code></pre> 
+<p>再次查看，可以看到所有Pod都创建到了node2</p> 
+<pre><code class="prism language-c"><span class="token punctuation">[</span>root@k8s<span class="token operator">-</span>master <span class="token operator">~</span><span class="token punctuation">]</span># kubectl get pods <span class="token operator">-</span>o wide
+NAME                     READY   STATUS    RESTARTS   AGE     IP            NODE        NOMINATED NODE   READINESS GATES
+nginx<span class="token operator">-</span><span class="token number">6799f</span>c88d8<span class="token operator">-</span>zzdqb   <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">1</span>          <span class="token number">21</span>h     <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.3</span>    k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span><span class="token number">4</span>nqsz      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">2</span>m29s   <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.8</span>    k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span><span class="token number">57</span>vfn      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">2</span>m29s   <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.7</span>    k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>g8nvl      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">2</span>m51s   <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.6</span>    k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>jhwlh      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">2</span>m29s   <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.10</span>   k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+web<span class="token operator">-</span><span class="token number">96</span>d5df5c8<span class="token operator">-</span>zq6g9      <span class="token number">1</span><span class="token operator">/</span><span class="token number">1</span>     Running   <span class="token number">0</span>          <span class="token number">2</span>m29s   <span class="token number">10.244</span><span class="token number">.1</span><span class="token number">.9</span>    k8s<span class="token operator">-</span>node2   <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>           <span class="token operator">&lt;</span>none<span class="token operator">&gt;</span>
+
+</code></pre> 
+<p>删除污点，删除web</p> 
+<pre><code class="prism language-c">kubectl delete deployment web
+kubectl taint node k8s<span class="token operator">-</span>node1 env_role<span class="token operator">:</span>NoSchedule<span class="token operator">-</span>
+</code></pre> 
+<h4><a id="_503"></a>污点容忍</h4> 
+<p>污点容忍就是某个节点可能被调度，也可能不被调度<br> <img src="https://images2.imgbox.com/6c/2e/ZoS1uGqE_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="49_Pod_506"></a>4.9 Pod标签</h3> 
+<pre><code class="prism language-c">相当于别名
+<span class="token number">1</span>、添加标签
+		
+	① 创建之时文件中添加（
+			
+	② 使用命令方式给pod添加标签
+		kubectl label pods pod名称 school<span class="token operator">=</span>beij
+		
+<span class="token number">2</span>、删除标签
+	kubectl label pods test beij<span class="token operator">-</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/76706062dd5f4e0b46393727dc0ca5de/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Java工具类-树</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f88c28affa9d5eecc8ab4dbe26c85c93/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【笔记】opencv-python中的腐蚀与膨胀函数：图像的膨胀（Dilation）和腐蚀（Erosion）是两种基本的形态学运算，主要用来寻找图像中的极大区域和极小区域</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

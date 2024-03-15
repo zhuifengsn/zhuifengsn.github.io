@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>如何解决批量上传太多文件导致浏览器挂掉的问题(已解决) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="如何解决批量上传太多文件导致浏览器挂掉的问题(已解决)" />
+<meta property="og:description" content="1、bug场景描述 今天分到一个bug，场景是这样的，项目中有一个上传文件夹的功能，使用了foreach循环请求接口上传文件，但是如果选择文件夹中图片太多，相当于浏览器在超短时间内发送极多的网络请求（循环速度很快），导致浏览器卡死。
+// 上传文件夹 handleUploadFiles() { // 循环上传文件列表 this.fileList.forEach((item,index) =&gt; { // 发送网络请求 this.axios.post(this.api.uploadBatch, formData).then(res =&gt; { if(res.data.code == 2000){ console.log(&#34;上传成功&#34;); // 业务逻辑代码...... } }) }) } 2、解决思路 我决定让请求同步发送，也就是第一条发送完成之后在发送第二条，话不多说直接上代码。
+// 上传文件夹 handleUploadFiles() { // 下标归0 this.num = 0 let that = this // 上传文件总数 this.uploadFilesLength = this.fileList.length // 上传函数 num变量充当下标，初始值为0 function uploadFun() { // 转换formdata格式 let formData = new FormData() formData.append(&#34;file&#34;, that.fileList[that.num]); // 根据num上传 // 发送网络请求 that.axios.post(that.api.uploadBatch, formData).then(res =&gt; { if(res." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/4d106de81aec0a1dbf0b0ca82c4feab3/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-09-02T10:54:10+08:00" />
+<meta property="article:modified_time" content="2022-09-02T10:54:10+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">如何解决批量上传太多文件导致浏览器挂掉的问题(已解决)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>1、bug场景描述</h2> 
+<p></p> 
+<p>今天分到一个bug，场景是这样的，项目中有一个上传文件夹的功能，使用了foreach循环请求接口上传文件，但是如果选择文件夹中图片太多，相当于浏览器在超短时间内发送极多的网络请求（循环速度很快），导致浏览器卡死。</p> 
+<pre><code class="language-javascript">// 上传文件夹
+handleUploadFiles() {
+  // 循环上传文件列表
+  this.fileList.forEach((item,index) =&gt; {
+    // 发送网络请求
+    this.axios.post(this.api.uploadBatch, formData).then(res =&gt; {
+      if(res.data.code == 2000){
+        console.log("上传成功");
+        // 业务逻辑代码......
+      }
+    })
+  })
+}</code></pre> 
+<h2><img alt="" height="1200" src="https://images2.imgbox.com/67/c2/eT5bW805_o.png" width="1200"></h2> 
+<p></p> 
+<h2>2、解决思路</h2> 
+<p>我决定让请求同步发送，也就是第一条发送完成之后在发送第二条，话不多说直接上代码。</p> 
+<pre><code class="language-javascript">// 上传文件夹
+handleUploadFiles() {
+  // 下标归0
+  this.num = 0
+  let that = this
+  // 上传文件总数
+  this.uploadFilesLength = this.fileList.length
+
+  // 上传函数 num变量充当下标，初始值为0 
+  function uploadFun() {
+    // 转换formdata格式
+    let formData = new FormData()
+    formData.append("file", that.fileList[that.num]); // 根据num上传
+
+    // 发送网络请求
+    that.axios.post(that.api.uploadBatch, formData).then(res =&gt; {
+      if(res.data.code == 2000){
+        // 上传成功，下标+1
+        that.num++
+        // 还有文件没有上传完成
+        if(that.num &lt; that.uploadFilesLength){
+          // 调用自身继续上传
+          uploadFun()
+        }
+      }
+    })
+  }
+  uploadFun()
+}</code></pre> 
+<p>核心方法就是使用了递归函数上传文件，每次上传完成后num变量+1，也就是上传文件的下标+1。</p> 
+<p>其实跟循环上传的原理有点像，只不过现在上传变成了同步上传，而不是一次性直接上传</p> 
+<h2>3、拓展方法</h2> 
+<p>一开始用的这个办法但是效果不理想，也给大家放出来看一下</p> 
+<pre><code class="language-javascript">
+// 上传文件夹
+handleUploadFiles() {
+  // 循环上传文件列表
+  this.fileList.forEach((item,index) =&gt; {
+    (function(i) {
+      setTimeout(function () {
+        // 发送文件上传网络请求
+        uploadfiles(item)
+      }, 500 * i);
+    })(index);
+  })
+}</code></pre> 
+<p>这个就是每隔500ms发送一次请求，不管上次有没有请求完成</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/f5ffc79f7bec3f936e300a34aa08b0fb/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">算法 - 归并排序（Merge_sort）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b426e90ce7e556ccb51140267b2d3704/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">计算机视觉之PCA和特征脸</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

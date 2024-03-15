@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>linux设备驱动程序：简单字符设备驱动 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="linux设备驱动程序：简单字符设备驱动" />
+<meta property="og:description" content="一、linux系统设备分类 linux系统将设备分为3类：字符设备、块设备、网络设备。使用驱动程序：
+1、字符设备：是指只能一个字节一个字节读写的设备，不能随机读取设备内存中的某一数据，读取数据需要按照先后数据。字符设备是面向流的设备，常见的字符设备有鼠标、键盘、串口、控制台和LED设备等。
+2、块设备：是指可以从设备的任意位置读取一定长度数据的设备。块设备包括硬盘、磁盘、U盘和SD卡等。
+每一个字符设备或块设备都在/dev目录下对应一个设备文件。linux用户程序通过设备文件（或称设备节点）来使用驱动程序操作字符设备和块设备。
+二、字符设备驱动程序基础 1、主设备号和次设备号（二者一起为设备号）：
+一个字符设备或块设备都有一个主设备号和一个次设备号。主设备号用来标识与设备文件相连的驱动程序，用来反映设备类型。次设备号被驱动程序用来辨别操作的是哪个设备，用来区分同类型的设备。
+linux内核中，设备号用dev_t来描述，2.6.28中定义如下：
+typedef u_long dev_t;
+在32位机中是4个字节，高12位表示主设备号，低12位表示次设备号。
+可以使用下列宏从dev_t中获得主次设备号： 也可以使用下列宏通过主次设备号生成dev_t:
+MAJOR(dev_t dev);　MKDEV(int major,int minor);
+MINOR(dev_t dev);
+//宏定义： #define MINORBITS 20 #define MINORMASK ((1U &lt;&lt; MINORBITS) - 1) #define MAJOR(dev) ((unsigned int) ((dev) &gt;&gt; MINORBITS)) #define MINOR(dev) ((unsigned int) ((dev) &amp; MINORMASK)) #define MKDEV(ma,mi) (((ma) &lt;&lt; MINORBITS) | (mi)) 2、分配设备号（两种方法）：
+（1）静态申请：
+int register_chrdev_region(dev_t from, unsigned count, const char *name)；
+/** * register_chrdev_region() - register a range of device numbers * @from: the first in the desired range of device numbers; must include * the major number." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/fa8c35043bd17e2859c3e8fb436f721e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-07-01T16:07:21+08:00" />
+<meta property="article:modified_time" content="2023-07-01T16:07:21+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">linux设备驱动程序：简单字符设备驱动</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h3><strong>一、linux系统设备分类</strong></h3> 
+<p><strong>linux系统将设备</strong>分为3类：字符设备、块设备、网络设备。使用驱动程序：</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/d3/07/agwjR65j_o.png"></p> 
+<p>1、<strong>字符设备</strong>：是指只能一个字节一个字节读写的设备，不能随机读取设备内存中的某一数据，读取数据需要按照先后数据。字符设备是面向流的设备，常见的字符设备有鼠标、键盘、串口、控制台和LED设备等。<br> 2、<strong>块设备</strong>：是指可以从设备的任意位置读取一定长度数据的设备。块设备包括硬盘、磁盘、U盘和SD卡等。</p> 
+<p>　　每一个字符设备或块设备都在/dev目录下对应一个设备文件。linux用户程序通过设备文件（或称设备节点）来使用驱动程序操作字符设备和块设备。</p> 
+<h3><strong>二、字符设备驱动程序基础</strong></h3> 
+<p>1、<strong>主设备号和次设备号</strong>（二者一起为设备号）：<br> 　　一个字符设备或块设备都有一个主设备号和一个次设备号。主设备号用来标识与设备文件相连的驱动程序，用来反映设备类型。次设备号被驱动程序用来辨别操作的是哪个设备，用来区分同类型的设备。<br> 　　linux内核中，设备号用dev_t来描述，2.6.28中定义如下：<br> 　　typedef u_long dev_t;<br> 　　在32位机中是4个字节，高12位表示主设备号，低12位表示次设备号。<br><br> 可以使用下列宏从dev_t中获得主次设备号： 　　　　　　 　　　也可以使用下列宏通过主次设备号生成dev_t:<br> MAJOR(dev_t dev);　　　　　　　　　　　　　　　　　　　　 MKDEV(int major,int minor);<br> MINOR(dev_t dev);</p> 
+<pre><code>//宏定义：
+#define MINORBITS    20
+#define MINORMASK    ((1U &lt;&lt; MINORBITS) - 1)
+#define MAJOR(dev)    ((unsigned int) ((dev) &gt;&gt; MINORBITS))
+#define MINOR(dev)    ((unsigned int) ((dev) &amp; MINORMASK))
+#define MKDEV(ma,mi)    (((ma) &lt;&lt; MINORBITS) | (mi))</code></pre> 
+<p>2、<strong>分配设备号</strong>（两种方法）：</p> 
+<p>（1）静态申请：<br> int register_chrdev_region(dev_t from, unsigned count, const char *name)；</p> 
+<pre><code>/**
+ * register_chrdev_region() - register a range of device numbers
+ * @from: the first in the desired range of device numbers; must include
+ *        the major number.
+ * @count: the number of consecutive device numbers required
+ * @name: the name of the device or driver.
+ *
+ * Return value is zero on success, a negative error code on failure.
+ */</code></pre> 
+<p>（2）动态分配：</p> 
+<p>int alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count, const char *name)；</p> 
+<pre><code>int alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count, const char *name)；
+     /**
+ * alloc_chrdev_region() - register a range of char device numbers
+ * @dev: output parameter for first assigned number
+ * @baseminor: first of the requested range of minor numbers
+ * @count: the number of minor numbers required
+ * @name: the name of the associated device or driver
+ *
+ * Allocates a range of char device numbers.  The major number will be
+ * chosen dynamically, and returned (along with the first minor number)
+ * in @dev.  Returns zero or a negative error code.
+ */</code></pre> 
+<p><strong>注销设备号</strong>：</p> 
+<p>void unregister_chrdev_region(dev_t from, unsigned count)；</p> 
+<p><strong>创建设备文件</strong>：<br> 利用cat /proc/devices查看申请到的设备名，设备号。<br> （1）使用mknod手工创建：mknod filename type major minor<br> （2）自动创建；</p> 
+<p>利用udev（mdev）来实现设备文件的自动创建，首先应保证支持udev（mdev），由busybox配置。在驱动初始化代码里调用class_create为该设备创建一个class，再为每个设备调用device_create创建对应的设备。</p> 
+<p>3、<strong>字符设备驱动程序重要的数据结构</strong>：</p> 
+<p>（1）struct file：代表一个打开的文件描述符，系统中每一个打开的文件在内核中都有一个关联的struct file。它由内核在open时创建，并传递给在文件上操作的任何函数，直到最后关闭。当文件的所有实例都关闭之后，内核释放这个数据结构。</p> 
+<pre><code>//重要成员：     
+const struct file_operations    *f_op;  //该操作是定义文件关联的操作的。内核在执行open时对这个指针赋值。 
+off_t  f_pos;     //该文件读写位置。
+void            *private_data;//该成员是系统调用时保存状态信息非常有用的资源。</code></pre> 
+<p>（2）struct inode:用来记录文件的物理信息。它和代表打开的file结构是不同的。一个文件可以对应多个file结构，但只有一个inode结构。inode一般作为file_operations结构中函数的参数传递过来。</p> 
+<p>inode译成中文就是索引节点。每个存储设备或存储设备的分区（存储设备是硬盘、软盘、U盘 ... ... ）被格式化为文件系统后，应该有两部份，一部份是inode，另一部份是Block，Block是用来存储数据用的。而inode呢，就是用来存储这些数据的信息，这些信息包括文件大小、属主、归属的用户组、读写权限等。inode为每个文件进行信息索引，所以就有了inode的数值。操作系统根据指令，能通过inode值最快的找到相对应的文件。</p> 
+<pre><code>dev_t i_rdev;    //对表示设备文件的inode结构，该字段包含了真正的设备编号。
+struct cdev *i_cdev;     //是表示字符设备的内核的内部结构。当inode指向一个字符设备文件时，该字段包含了指向struct cdev结构的指针。
+//我们也可以使用下边两个宏从inode中获得主设备号和此设备号：
+unsigned int iminor(struct inode *inode);
+unsigned int imajor(struct inode *inode);</code></pre> 
+<p>（3）struct file_operations</p> 
+<p>本部分来源于：<a href="https://link.zhihu.com/?target=http%3A//blog.chinaunix.net/space.php%3Fuid%3D20729583%26do%3Dblog%26id%3D1884550" rel="nofollow" title="http://blog.chinaunix.net/space.php?uid=20729583&amp;do=blog&amp;id=1884550">http://blog.chinaunix.net/space.php?uid=20729583&amp;do=blog&amp;id=1884550</a>，感谢<a href="https://link.zhihu.com/?target=http%3A//blog.chinaunix.net/space.php%3Fuid%3D20729583" rel="nofollow" title="chinahhucai">chinahhucai</a>的分享。</p> 
+<pre><code>struct file_operations ***_ops={
+ .owner =  THIS_MODULE,
+ .llseek =  ***_llseek,
+ .read =  ***_read,
+ .write =  ***_write,
+ .ioctl =  ***_ioctl,
+ .open =  ***_open,
+ .release = ***_release, 
+ 。。。  。。。
+};
+
+struct module *owner;
+ /*第一个 file_operations 成员根本不是一个操作; 它是一个指向拥有这个结构的模块的指针.
+ 这个成员用来在它的操作还在被使用时阻止模块被卸载. 几乎所有时间中, 它被简单初始化为 
+THIS_MODULE, 一个在 &lt;linux/module.h&gt; 中定义的宏.这个宏比较复杂，在进行简单学习操作的时候，一般初始化为THIS_MODULE。*/
+
+
+loff_t (*llseek) (struct file * filp , loff_t  p,  int  orig);
+/*(指针参数filp为进行读取信息的目标文件结构体指针；参数 p 为文件定位的目标偏移量；参数orig为对文件定位
+的起始地址，这个值可以为文件开头（SEEK_SET，0,当前位置(SEEK_CUR,1)，文件末尾(SEEK_END,2)）
+llseek 方法用作改变文件中的当前读/写位置, 并且新位置作为(正的)返回值.
+loff_t 参数是一个"long offset", 并且就算在 32位平台上也至少 64 位宽. 错误由一个负返回值指示.
+如果这个函数指针是 NULL, seek 调用会以潜在地无法预知的方式修改 file 结构中的位置计数器( 在"file 结构" 一节中描述).*/
+
+ssize_t (*read) (struct file * filp, char __user * buffer, size_t    size , loff_t *  p);
+/*(指针参数 filp 为进行读取信息的目标文件，指针参数buffer 为对应放置信息的缓冲区（即用户空间内存地址），
+参数size为要读取的信息长度，参数 p 为读的位置相对于文件开头的偏移，在读取信息后，这个指针一般都会移动，移动的值为要读取信息的长度值）
+这个函数用来从设备中获取数据. 在这个位置的一个空指针导致 read 系统调用以 -EINVAL("Invalid argument") 失败.
+ 一个非负返回值代表了成功读取的字节数( 返回值是一个 "signed size" 类型, 常常是目标平台本地的整数类型).*/
+
+ssize_t (*aio_read)(struct kiocb *  , char __user *  buffer, size_t  size ,  loff_t   p);
+/*可以看出，这个函数的第一、三个参数和本结构体中的read()函数的第一、三个参数是不同 的，
+异步读写的第三个参数直接传递值，而同步读写的第三个参数传递的是指针，因为AIO从来不需要改变文件的位置。
+异步读写的第一个参数为指向kiocb结构体的指针，而同步读写的第一参数为指向file结构体的指针，每一个I/O请求都对应一个kiocb结构体);
+初始化一个异步读 -- 可能在函数返回前不结束的读操作.如果这个方法是 NULL, 所有的操作会由 read 代替进行(同步地).
+(有关linux异步I/O，可以参考有关的资料，《linux设备驱动开发详解》中给出了详细的解答)*/
+
+ssize_t (*write) (struct file *  filp, const char __user *   buffer, size_t  count, loff_t * ppos);
+/*(参数filp为目标文件结构体指针，buffer为要写入文件的信息缓冲区，count为要写入信息的长度，
+ppos为当前的偏移位置，这个值通常是用来判断写文件是否越界）
+发送数据给设备. 如果 NULL, -EINVAL 返回给调用 write 系统调用的程序. 如果非负, 返回值代表成功写的字节数.
+(注：这个操作和上面的对文件进行读的操作均为阻塞操作）*/
+
+ssize_t (*aio_write)(struct kiocb *, const char __user *  buffer, size_t  count, loff_t * ppos);
+/*初始化设备上的一个异步写.参数类型同aio_read()函数;*/
+
+int (*readdir) (struct file *  filp, void *, filldir_t);
+/*对于设备文件这个成员应当为 NULL; 它用来读取目录, 并且仅对文件系统有用.*/
+
+unsigned int (*poll) (struct file *, struct poll_table_struct *);
+/*(这是一个设备驱动中的轮询函数，第一个参数为file结构指针，第二个为轮询表指针）
+这个函数返回设备资源的可获取状态，即POLLIN，POLLOUT，POLLPRI，POLLERR，POLLNVAL等宏的位“或”结果。
+每个宏都表明设备的一种状态，如：POLLIN（定义为0x0001）意味着设备可以无阻塞的读，POLLOUT（定义为0x0004）意味着设备可以无阻塞的写。
+(poll 方法是 3 个系统调用的后端: poll, epoll, 和 select, 都用作查询对一个或多个文件描述符的读或写是否会阻塞.
+ poll 方法应当返回一个位掩码指示是否非阻塞的读或写是可能的, 并且, 可能地, 提供给内核信息用来使调用进程睡眠直到 I/O 变为可能. 
+如果一个驱动的 poll 方法为 NULL, 设备假定为不阻塞地可读可写.
+(这里通常将设备看作一个文件进行相关的操作，而轮询操作的取值直接关系到设备的响应情况，可以是阻塞操作结果，同时也可以是非阻塞操作结果）*/
+
+int (*ioctl) (struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg);
+/*(inode 和 filp 指针是对应应用程序传递的文件描述符 fd 的值, 和传递给 open 方法的相同参数.
+cmd 参数从用户那里不改变地传下来, 并且可选的参数 arg 参数以一个 unsigned long 的形式传递, 不管它是否由用户给定为一个整数或一个指针.
+如果调用程序不传递第 3 个参数, 被驱动操作收到的 arg 值是无定义的.
+因为类型检查在这个额外参数上被关闭, 编译器不能警告你如果一个无效的参数被传递给 ioctl, 并且任何关联的错误将难以查找.）
+ioctl 系统调用提供了发出设备特定命令的方法(例如格式化软盘的一个磁道, 这不是读也不是写). 另外, 几个 ioctl 命令被内核识别而不必引用 fops 表.
+ 如果设备不提供 ioctl 方法, 对于任何未事先定义的请求(-ENOTTY, "设备无这样的 ioctl"), 系统调用返回一个错误.*/
+
+int (*mmap) (struct file *, struct vm_area_struct *);
+/*mmap 用来请求将设备内存映射到进程的地址空间. 如果这个方法是 NULL, mmap 系统调用返回 -ENODEV.
+(如果想对这个函数有个彻底的了解，那么请看有关“进程地址空间”介绍的书籍)*/
+
+int (*open) (struct inode * inode , struct file *  filp ) ;
+/*(inode 为文件节点,这个节点只有一个，无论用户打开多少个文件，都只是对应着一个inode结构；
+但是filp就不同，只要打开一个文件，就对应着一个file结构体，file结构体通常用来追踪文件在运行时的状态信息）
+ 尽管这常常是对设备文件进行的第一个操作, 不要求驱动声明一个对应的方法. 如果这个项是 NULL, 设备打开一直成功, 但是你的驱动不会得到通知.
+与open()函数对应的是release()函数。*/
+
+int (*flush) (struct file *);
+/*flush 操作在进程关闭它的设备文件描述符的拷贝时调用; 它应当执行(并且等待)设备的任何未完成的操作.
+这个必须不要和用户查询请求的 fsync 操作混淆了. 当前, flush 在很少驱动中使用;
+ SCSI 磁带驱动使用它, 例如, 为确保所有写的数据在设备关闭前写到磁带上. 如果 flush 为 NULL, 内核简单地忽略用户应用程序的请求.*/
+
+int (*release) (struct inode *, struct file *);
+/*release ()函数当最后一个打开设备的用户进程执行close()系统调用的时候，内核将调用驱动程序release()函数：
+void release(struct inode inode,struct file *file),release函数的主要任务是清理未结束的输入输出操作，释放资源，用户自定义排他标志的复位等。
+    在文件结构被释放时引用这个操作. 如同 open, release 可以为 NULL.*/
+
+int(*synch)(struct file *,struct dentry *,int datasync);
+//刷新待处理的数据,允许进程把所有的脏缓冲区刷新到磁盘。
+
+
+int (*aio_fsync)(struct kiocb *, int);
+ /*这是 fsync 方法的异步版本.所谓的fsync方法是一个系统调用函数。系统调用fsync
+把文件所指定的文件的所有脏缓冲区写到磁盘中（如果需要，还包括存有索引节点的缓冲区）。
+相应的服务例程获得文件对象的地址，并随后调用fsync方法。通常这个方法以调用函数__writeback_single_inode()结束，
+这个函数把与被选中的索引节点相关的脏页和索引节点本身都写回磁盘。*/
+
+int (*fasync) (int, struct file *, int);
+//这个函数是系统支持异步通知的设备驱动，下面是这个函数的模板：
+
+static int ***_fasync(int fd,struct file *filp,int mode)
+{
+    struct ***_dev * dev=filp-&gt;private_data;
+    return fasync_helper(fd,filp,mode,&amp;dev-&gt;async_queue);//第四个参数为 fasync_struct结构体指针的指针。
+//这个函数是用来处理FASYNC标志的函数。（FASYNC：表示兼容BSD的fcntl同步操作）当这个标志改变时，驱动程序中的fasync（）函数将得到执行。
+}
+/*此操作用来通知设备它的 FASYNC 标志的改变. 异步通知是一个高级的主题, 在第 6 章中描述.
+这个成员可以是NULL 如果驱动不支持异步通知.*/
+
+int (*lock) (struct file *, int, struct file_lock *);
+//lock 方法用来实现文件加锁; 加锁对常规文件是必不可少的特性, 但是设备驱动几乎从不实现它.
+
+ssize_t (*readv) (struct file *, const struct iovec *, unsigned long, loff_t *);
+ssize_t (*writev) (struct file *, const struct iovec *, unsigned long, loff_t *);
+/*这些方法实现发散/汇聚读和写操作. 应用程序偶尔需要做一个包含多个内存区的单个读或写操作;
+ 这些系统调用允许它们这样做而不必对数据进行额外拷贝. 如果这些函数指针为 NULL, read 和 write 方法被调用( 可能多于一次 ).*/
+
+ssize_t (*sendfile)(struct file *, loff_t *, size_t, read_actor_t, void *);
+/*这个方法实现 sendfile 系统调用的读, 使用最少的拷贝从一个文件描述符搬移数据到另一个.
+例如, 它被一个需要发送文件内容到一个网络连接的 web 服务器使用. 设备驱动常常使 sendfile 为 NULL.*/
+
+ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);
+/*sendpage 是 sendfile 的另一半; 它由内核调用来发送数据, 一次一页, 到对应的文件. 设备驱动实际上不实现 sendpage.*/
+
+unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);
+/*这个方法的目的是在进程的地址空间找一个合适的位置来映射在底层设备上的内存段中.
+这个任务通常由内存管理代码进行; 这个方法存在为了使驱动能强制特殊设备可能有的任何的对齐请求. 大部分驱动可以置这个方法为 NULL.[10]*/
+
+int (*check_flags)(int)
+//这个方法允许模块检查传递给 fnctl(F_SETFL...) 调用的标志.
+
+int (*dir_notify)(struct file *, unsigned long);
+//这个方法在应用程序使用 fcntl 来请求目录改变通知时调用. 只对文件系统有用; 驱动不需要实现 dir_notify.</code></pre> 
+<h3>三、<strong>字符设备驱动程序设计</strong>：</h3> 
+<p>1.<strong>设备注册</strong>：<br> 在linux2.6内核中，字符设备使用struct cdev来描述；</p> 
+<pre><code>struct cdev
+{
+  struct kobject kobj;//内嵌的kobject对象
+  struct module *owner;//所属模块
+  struct file_operations *ops;//文件操作结构体
+  struct list_head list;
+  dev_t dev;//设备号,长度为32位，其中高12为主设备号，低20位为此设备号
+  unsigned int count;
+};</code></pre> 
+<p>字符设备的注册分为三个步骤：</p> 
+<p>（1）分配cdev: struct cdev *cdev_alloc(void);<br> （2）初始化cdev： void cdev_init(struct cdev *cdev, const struct file_operations *fops)；<br> （3）添加cdev： int cdev_add(struct cdev *p, dev_t dev, unsigned count)</p> 
+<pre><code>/**
+ * cdev_add() - add a char device to the system
+ * @p: the cdev structure for the device
+ * @dev: the first device number for which this device is responsible
+ * @count: the number of consecutive minor numbers corresponding to this
+ *         device
+ *
+ * cdev_add() adds the device represented by @p to the system, making it
+ * live immediately.  A negative error code is returned on failure.
+ */</code></pre> 
+<p>2.<strong>设备操作的实现</strong>：file_operations函数集的实现（要明确某个函数什么时候被调用？调用来做什么操作？）</p> 
+<p><strong>特别注意：驱动程序应用程序的数据交换:</strong></p> 
+<p>驱动程序和应用程序的数据交换是非常重要的。file_operations中的read()和write()函数，就是用来在驱动程序和应用程序间交换数据的。通过数据交换，驱动程序和应用程序可以彼此了解对方的情况。但是驱动程序和应用程序属于不同的地址空间。驱动程序不能直接访问应用程序的地址空间；同样应用程序也不能直接访问驱动程序的地址空间，否则会破坏彼此空间中的数据，从而造成系统崩溃，或者数据损坏。安全的方法是使用内核提供的专用函数，完成数据在应用程序空间和驱动程序空间的交换。这些函数对用户程序传过来的指针进行了严格的检查和必要的转换，从而保证用户程序与驱动程序交换数据的安全性。这些函数有：</p> 
+<pre><code>unsigned long copy_to_user(void __user *to, const void *from, unsigned long n); 
+unsigned long copy_from_user(void *to, const void __user *from, unsigned long n); 
+put_user(local,user); 
+get_user(local,user);</code></pre> 
+<p>3.<strong>设备注销</strong>：void cdev_del(struct cdev *p)；</p> 
+<h3><strong>四、字符设备驱动小结：</strong></h3> 
+<p>字符设备是3大类设备（字符设备、块设备、网络设备）中较简单的一类设备，其驱动程序中完成的主要工作是初始化、添加和删除cdev结构体，申请和释放设备号，以及填充file_operation结构体中操作函数，并实现file_operations结构体中的read()、write()、ioctl()等重要函数。如图所示为cdev结构体、file_operations和用户空间调用驱动的关系。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/f5/7c/KVHpkaFJ_o.png"></p> 
+<p><strong>五：字符设备驱动程序分析：</strong></p> 
+<p>（1）<strong>memdev.h</strong></p> 
+<pre><code>#ifndef _MEMDEV_H_
+#define _MEMDEV_H_
+
+#ifndef MEMDEV_MAJOR
+#define MEMDEV_MAJOR 251   /*预设的mem的主设备号*/
+#endif
+
+#ifndef MEMDEV_NR_DEVS
+#define MEMDEV_NR_DEVS 2    /*设备数*/
+#endif
+
+#ifndef MEMDEV_SIZE
+#define MEMDEV_SIZE 4096
+#endif
+
+/*mem设备描述结构体*/
+struct mem_dev                                     
+{                                                        
+  char *data;                      
+  unsigned long size;       
+};
+
+#endif /* _MEMDEV_H_ */</code></pre> 
+<p>(2)<strong>memdev.c</strong></p> 
+<pre><code>static mem_major = MEMDEV_MAJOR;
+
+module_param(mem_major, int, S_IRUGO);
+
+struct mem_dev *mem_devp; /*设备结构体指针*/
+
+struct cdev cdev; 
+
+/*文件打开函数*/
+int mem_open(struct inode *inode, struct file *filp)
+{
+    struct mem_dev *dev;
+    
+    /*获取次设备号*/
+    int num = MINOR(inode-&gt;i_rdev);
+
+    if (num &gt;= MEMDEV_NR_DEVS) 
+            return -ENODEV;
+    dev = &amp;mem_devp[num];
+    
+    /*将设备描述结构指针赋值给文件私有数据指针*/
+    filp-&gt;private_data = dev;
+    
+    return 0; 
+}
+
+/*文件释放函数*/
+int mem_release(struct inode *inode, struct file *filp)
+{
+  return 0;
+}
+
+/*读函数*/
+static ssize_t mem_read(struct file *filp, char __user *buf, size_t size, loff_t *ppos)
+{
+  unsigned long p =  *ppos;        /*记录文件指针偏移位置*/  
+  unsigned int count = size;    /*记录需要读取的字节数*/ 
+  int ret = 0;    /*返回值*/  
+  struct mem_dev *dev = filp-&gt;private_data; /*获得设备结构体指针*/
+
+  /*判断读位置是否有效*/
+  if (p &gt;= MEMDEV_SIZE)    /*要读取的偏移大于设备的内存空间*/  
+    return 0;
+  if (count &gt; MEMDEV_SIZE - p)     /*要读取的字节大于设备的内存空间*/ 
+    count = MEMDEV_SIZE - p;
+
+  /*读数据到用户空间:内核空间-&gt;用户空间交换数据*/  
+  if (copy_to_user(buf, (void*)(dev-&gt;data + p), count))
+  {
+    ret =  - EFAULT;
+  }
+  else
+  {
+    *ppos += count;
+    ret = count;
+    
+    printk(KERN_INFO "read %d bytes(s) from %d\n", count, p);
+  }
+
+  return ret;
+}
+
+/*写函数*/
+static ssize_t mem_write(struct file *filp, const char __user *buf, size_t size, loff_t *ppos)
+{
+  unsigned long p =  *ppos;
+  unsigned int count = size;
+  int ret = 0;
+  struct mem_dev *dev = filp-&gt;private_data; /*获得设备结构体指针*/
+  
+  /*分析和获取有效的写长度*/
+  if (p &gt;= MEMDEV_SIZE)
+    return 0;
+  if (count &gt; MEMDEV_SIZE - p)    /*要写入的字节大于设备的内存空间*/
+    count = MEMDEV_SIZE - p;
+    
+  /*从用户空间写入数据*/
+  if (copy_from_user(dev-&gt;data + p, buf, count))
+    ret =  - EFAULT;
+  else
+  {
+    *ppos += count;      /*增加偏移位置*/  
+    ret = count;      /*返回实际的写入字节数*/ 
+    
+    printk(KERN_INFO "written %d bytes(s) from %d\n", count, p);
+  }
+
+  return ret;
+}
+
+/* seek文件定位函数 */
+static loff_t mem_llseek(struct file *filp, loff_t offset, int whence)
+{ 
+    loff_t newpos;      
+
+    switch(whence) {
+      case 0: /* SEEK_SET */       /*相对文件开始位置偏移*/ 
+        newpos = offset;           /*更新文件指针位置*/
+        break;
+
+      case 1: /* SEEK_CUR */
+        newpos = filp-&gt;f_pos + offset;    
+        break;
+
+      case 2: /* SEEK_END */
+        newpos = MEMDEV_SIZE -1 + offset;
+        break;
+
+      default: /* can't happen */
+        return -EINVAL;
+    }
+    if ((newpos&lt;0) || (newpos&gt;MEMDEV_SIZE))
+        return -EINVAL;
+        
+    filp-&gt;f_pos = newpos;
+    return newpos;
+
+}
+
+/*文件操作结构体*/
+static const struct file_operations mem_fops =
+{
+  .owner = THIS_MODULE,
+  .llseek = mem_llseek,
+  .read = mem_read,
+  .write = mem_write,
+  .open = mem_open,
+  .release = mem_release,
+};
+
+/*设备驱动模块加载函数*/
+static int memdev_init(void)
+{
+  int result;
+  int i;
+
+  dev_t devno = MKDEV(mem_major, 0);
+
+   /* 申请设备号，当xxx_major不为0时，表示静态指定；当为0时，表示动态申请*/ 
+  /* 静态申请设备号*/
+  if (mem_major)
+    result = register_chrdev_region(devno, 2, "memdev");
+  else  /* 动态分配设备号 */
+  {
+    result = alloc_chrdev_region(&amp;devno, 0, 2, "memdev");
+    mem_major = MAJOR(devno);    /*获得申请的主设备号*/
+  }  
+  
+  if (result &lt; 0)
+    return result;
+
+ /*初始化cdev结构，并传递file_operations结构指针*/ 
+  cdev_init(&amp;cdev, &amp;mem_fops);    
+  cdev.owner = THIS_MODULE;    /*指定所属模块*/
+  cdev.ops = &amp;mem_fops;
+  
+  /* 注册字符设备 */
+  cdev_add(&amp;cdev, MKDEV(mem_major, 0), MEMDEV_NR_DEVS);
+   
+  /* 为设备描述结构分配内存*/
+  mem_devp = kmalloc(MEMDEV_NR_DEVS * sizeof(struct mem_dev), GFP_KERNEL);
+  if (!mem_devp)    /*申请失败*/
+  {
+    result =  - ENOMEM;
+    goto fail_malloc;
+  }
+  memset(mem_devp, 0, sizeof(struct mem_dev));
+  
+  /*为设备分配内存*/
+  for (i=0; i &lt; MEMDEV_NR_DEVS; i++) 
+  {
+        mem_devp[i].size = MEMDEV_SIZE;
+        mem_devp[i].data = kmalloc(MEMDEV_SIZE, GFP_KERNEL);
+        memset(mem_devp[i].data, 0, MEMDEV_SIZE);
+  }
+    
+  return 0;
+
+  fail_malloc: 
+  unregister_chrdev_region(devno, 1);
+  
+  return result;
+}
+
+/*模块卸载函数*/
+static void memdev_exit(void)
+{
+  cdev_del(&amp;cdev);   /*注销设备*/
+  kfree(mem_devp);     /*释放设备结构体内存*/
+  unregister_chrdev_region(MKDEV(mem_major, 0), 2); /*释放设备号*/
+}
+
+MODULE_AUTHOR("David Xie");
+MODULE_LICENSE("GPL");
+
+module_init(memdev_init);
+module_exit(memdev_exit);</code></pre> 
+<p>(3)应用程序(测试文件)：<strong>app-mem.c</strong></p> 
+<pre><code>#include &lt;stdio.h&gt;
+
+int main()
+{
+    FILE *fp0 = NULL;
+    char Buf[4096];
+    
+    /*初始化Buf*/
+    strcpy(Buf,"Mem is char dev!");
+    printf("BUF: %s\n",Buf);
+    
+    /*打开设备文件*/
+    fp0 = fopen("/dev/memdev0","r+");
+    if (fp0 == NULL)
+    {
+        printf("Open Memdev0 Error!\n");
+        return -1;
+    }
+    
+    /*写入设备*/
+    fwrite(Buf, sizeof(Buf), 1, fp0);
+    
+    /*重新定位文件位置（思考没有该指令，会有何后果)*/
+    fseek(fp0,0,SEEK_SET);
+    
+    /*清除Buf*/
+    strcpy(Buf,"Buf is NULL!");
+    printf("BUF: %s\n",Buf);
+    
+    
+    /*读出设备*/
+    fread(Buf, sizeof(Buf), 1, fp0);
+    
+    /*检测结果*/
+    printf("BUF: %s\n",Buf);
+    
+    return 0;    
+
+}</code></pre> 
+<p><strong>测试步骤：</strong></p> 
+<pre><code>1)cat /proc/devices看看有哪些编号已经被使用，我们选一个没有使用的XXX。
+2)insmod memdev.ko
+3)通过"mknod /dev/memdev0 c XXX 0"命令创建"/dev/memdev0"设备节点。
+4)交叉编译app-mem.c文件，下载并执行：
+#./app-mem,显示：
+Mem is char dev!</code></pre> 
+<p>原文作者：<u><a href="https://link.zhihu.com/?target=https%3A//home.cnblogs.com/u/geneil/" rel="nofollow" title="LoveFM">LoveFM</a></u></p> 
+<p><u>原文地址：</u><a href="https://link.zhihu.com/?target=https%3A//www.cnblogs.com/geneil/archive/2011/12/03/2272869.html" rel="nofollow" title="linux设备驱动程序之简单字符设备驱动 - LoveFM - 博客园">linux设备驱动程序之简单字符设备驱动 - LoveFM - 博客园</a>（版权归原文作者所有，侵权留言联系删除）</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/09c3a7dcdacb2113d077fc7dd403def7/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">华为防火墙SSL VPN隧道连接实验配置</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/bfb9bddaa33d110725dd28063f4b7f76/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">APP自动化之Poco框架</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

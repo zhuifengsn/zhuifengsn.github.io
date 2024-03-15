@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>以ARM Cortex-A55/A53为例分析 L1/L2/L3 cache所支持的写策略（write-back/wirte-through,写通和写回） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="以ARM Cortex-A55/A53为例分析 L1/L2/L3 cache所支持的写策略（write-back/wirte-through,写通和写回）" />
+<meta property="og:description" content="在文章 ARM 中缓存维护策略：Allocate policy（读分配/写分配），Write policy（写通/写回）以及replacement policy基础知识中，笔者介绍了ARM cache的Write policy（写通/写回）。今天我们以ARM Cortex-A55和A53为例，具体分析各级cache（L1/L2/L3 ）对Write policy（写通/写回）的支持情况。
+Cortex-A55/A53 一，Cortex-A53 处理器二，Cortex-A55 处理器 一，Cortex-A53 处理器 Cortex-A53 处理器支持 L1 cache（instruction cache 和 data cache）以及L2 cache （unified cache）。
+Cortex-A53处理器将缓存同步逻辑简化成了如下的内存类型：
+当内存类型为nner Write-Back 和Outer Write-Back 时，数据可以被缓存到 L1 Data cache 以及L2 cache中。当内存类型为Inner Write-Through时，Cortex-A53会将Inner Write-Through降级为Non-cacheable。当内存类型为Outer Write-Through 或者 Outer Non-cacheable时，也会被Cortex-A53降级为Non-cacheable，就是内存的inner属性为Write-Back。
+上述规则如何理解呢？ 就是说Cortex-A53处理器的L1 data cache以及L2 cache都不支持Write-Through策略，当处理器访问内存类型为Write-Through的数据时，这些数据并不会经过L1 data cache和L2。
+至于L1 instruction cache，对于指令数据，处理器只是读取，并不会写，所以cache 的写策略对指令缓存不起作用。
+笔者在文章 关于cache maintenance 操作的四个寄存器（CTR，CLIDR，CSSELR，CCSIDR）解析中介绍过 CCSIDR寄存器，在访问CCSIDR之前，必须先在CSSELR寄存器中写入正确的值， 与CSSELR相对应，会根据CSSELR中的内容，显示指定cache的cache line大小、way的数量以及set的数量。
+不仅如此，CCSIDR还提供了四个状态位：WT、WB、RA以及WA：
+通过这四个状态位，我们可以知道当前cache所支持的读分配策略以及写策略。
+从WT始终为0也可以知道：Cortex-A53的所有级别的cacahe都不支持 Write-Through策略。
+二，Cortex-A55 处理器 Cortex-A53 处理器支持 L1 cache（instruction cache 和 data cache），L2 cache （unified cache）以及L3 cache。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/6c4e8a4b50c1f595ae0277aef26a7a1a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-26T11:07:29+08:00" />
+<meta property="article:modified_time" content="2024-02-26T11:07:29+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">以ARM Cortex-A55/A53为例分析 L1/L2/L3 cache所支持的写策略（write-back/wirte-through,写通和写回）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>在文章 <a href="https://blog.csdn.net/luolaihua2018/article/details/132648277?spm=1001.2014.3001.5502">ARM 中缓存维护策略：Allocate policy（读分配/写分配），Write policy（写通/写回）以及replacement policy基础知识</a>中，笔者介绍了ARM cache的Write policy（写通/写回）。今天我们以ARM Cortex-A55和A53为例，具体分析各级cache（L1/L2/L3 ）对Write policy（写通/写回）的支持情况。</p> 
+<p></p> 
+<div class="toc"> 
+ <h4>Cortex-A55/A53</h4> 
+ <ul><li><a href="#CortexA53__4" rel="nofollow">一，Cortex-A53 处理器</a></li><li><a href="#CortexA55__26" rel="nofollow">二，Cortex-A55 处理器</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="CortexA53__4"></a>一，Cortex-A53 处理器</h2> 
+<p>Cortex-A53 处理器支持 L1 cache（instruction cache 和 data cache）以及L2 cache （unified cache）。</p> 
+<p>Cortex-A53处理器将缓存同步逻辑简化成了如下的内存类型：</p> 
+<ul><li>当内存类型为nner Write-Back 和Outer Write-Back 时，数据可以被缓存到 L1 Data cache 以及L2 cache中。</li><li>当内存类型为Inner <strong>Write-Through</strong>时，Cortex-A53会将Inner <strong>Write-Through</strong>降级为<strong>Non-cacheable</strong>。</li><li>当内存类型为Outer Write-Through 或者 Outer Non-cacheable时，也会被Cortex-A53降级为<strong>Non-cacheable</strong>，就是内存的inner属性为Write-Back。<br> 上述规则如何理解呢？</li></ul> 
+<p><strong>就是说Cortex-A53处理器的L1 data cache以及L2 cache都不支持Write-Through策略，当处理器访问内存类型为Write-Through的数据时，这些数据并不会经过L1 data cache和L2。<br> 至于L1 instruction cache，对于指令数据，处理器只是读取，并不会写，所以cache 的写策略对指令缓存不起作用。</strong></p> 
+<p>笔者在文章 <a href="https://blog.csdn.net/luolaihua2018/article/details/119271704?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522170887690516800180619182%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&amp;request_id=170887690516800180619182&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_ecpm_v1~rank_v31_ecpm-1-119271704-null-null.nonecase&amp;utm_term=CCSIDR&amp;spm=1018.2226.3001.4450">关于cache maintenance 操作的四个寄存器（CTR，CLIDR，CSSELR，CCSIDR）解析</a>中介绍过 CCSIDR寄存器，在访问CCSIDR之前，必须先在CSSELR寄存器中写入正确的值， 与CSSELR相对应，会根据CSSELR中的内容，显示指定cache的cache line大小、way的数量以及set的数量。</p> 
+<p><img src="https://images2.imgbox.com/b5/cb/hclwS8sX_o.png" alt="在这里插入图片描述"></p> 
+<p>不仅如此，CCSIDR还提供了四个状态位：WT、WB、RA以及WA：<br> <img src="https://images2.imgbox.com/0a/87/sVWGKHVY_o.png" alt="在这里插入图片描述"><br> 通过这四个状态位，我们可以知道当前cache所支持的读分配策略以及写策略。<br> 从WT始终为0也可以知道：Cortex-A53的所有级别的cacahe都不支持 <strong>Write-Through</strong>策略。</p> 
+<h2><a id="CortexA55__26"></a>二，Cortex-A55 处理器</h2> 
+<p>Cortex-A53 处理器支持 L1 cache（instruction cache 和 data cache），L2 cache （unified cache）以及L3 cache。<br> Cortex-A55处理器也将缓存同步逻辑简化成了如下的内存类型：</p> 
+<ul><li>当内存类型为Inner Write-Back 或者 Outer Write-Back 时，该内存上的数据才会被缓存到 L1 data cache 以及L2 cache中</li><li>当内存类型为其他类型（包括 Write-Through）时，都会被视为<strong>Non-cacheable</strong>，即都不会被缓存。</li></ul> 
+<p>所以Cortex-A55处理器对Write-Through策略的处理也是大同小异：<br> <strong>当内存被标记为 Write-Through属性时，读写该内存上的数据，不会被cache缓存，也不会发起cache coherency请求。对于被标记为Write-Through 或者Write-Back的指令数据，它可以被存储在L1 instruction cache，但是只有Write-Back属性的数据可以被缓存到L2 cache或者L3 cache。</strong></p> 
+<p>同Cortex-A53一样，其CCSIDR的WT状态位也始终为0，说明<strong>对Cortex-A55 来讲，它的任何级别的cache（L1/L2/L3)都不支持 Write-Through 策略。</strong><br> <img src="https://images2.imgbox.com/0f/9e/qoSfMHyj_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/70/66/zZfdwCuR_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4fe427b74d8013d3cf3d77efb3faa2d4/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">每天一个数据分析题（一百七十）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f250a291d24d1fe0ce389c6321839f23/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">每天一个数据分析题（一百七十一）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

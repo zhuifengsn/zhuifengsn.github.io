@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>蓝桥杯单片机备战（七）矩阵键盘的扫描原理及其应用 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="蓝桥杯单片机备战（七）矩阵键盘的扫描原理及其应用" />
+<meta property="og:description" content="1.扫描原理 1.首先还是先观察电路图 我们知道要想控制独立按键的话首先要先使J5跳帽连接到1和2,这时P44和第一列键盘也就是S4~S7连上了
+2.那要怎么来实现按键状态的读取呢？我们使用扫描的思想，也就是逐行逐列读取 这里我们选择逐行读取，先读取第一行（也就是S7、S11、S15、S19），先将P30口置低，P31P32P33置高，然后将代表四列的P34P35P42P44置高，此时检测P34P35P42P44口，如果P44是低电平，那么证明S7被按下了，如果P42是低电平，证明S11被按下了，以此类推就检测了所有的按键。
+2.代码实现 注意事项！！！！
+我们导入的头文件“reg52.h”中并没有对于P4口的定义
+我们需要自行查找数据手册来得知P4口寄存器的地址
+查找手册得知P4口的地址为C0H，我们需要在头文件或者用户编写的文件中添加这个定义：
+这里再补充一个点：“sfr”
+SFR全称为：special function register（翻译为：特殊功能寄存器）
+在单片机的世界里，并不会识别所谓的“P1”，只会识别P1这个IO口的地址0x90，sfr是用来给这个地址赋予一个名字的，sfr P1 = 0x90，代表的意思就是给地址0x90赋予一个名字P1（有点类似与sbit、define这种东西，有机会会再写一篇笔记来充分认识51单片机bit、sbin、sfr、sfr_16的区别。
+#include &#34;reg52.h&#34; sbit R1 = P3^0;//第一行的P3^0口为R1,下面以此类推 sbit R2 = P3^1; sbit R3 = P3^2; sbit R4 = P3^3; sbit C1 = P4^4; sbit C2 = P4^2; sbit C3 = P3^5; sbit C4 = P3^4; unsigned char KEY_number = 0;//按键按下标志位 void Delay(unsigned char t)	//延时函数 { while(t--) { unsigned char i, j; i = 15; j = 90; do { while (--j); } while (--i); } } unsigned char code SMG_duanma[18] = {0xc0,0xf9,0xa4,0xb0,0x99,0x92,0x82,0xf8,0x80, 0x90,0x88,0x83,0xc6,0xa1,0x86,0x8e,0xbf,0x7f}; // 数码管的断码表 void HC138Init(unsigned char n) { switch(n) { case 4: P2 = (P2 &amp; 0x1f) | 0x80;//让Y4输出低电平,此时Y4C为高电平 break; case 5: P2 = (P2 &amp; 0x1f) | 0xa0;//让Y5输出低电平,此时Y5C为高电平 break; case 6: P2 = (P2 &amp; 0x1f) | 0xc0;//让Y6输出低电平,此时Y6C为高电平 break; case 7: P2 = (P2 &amp; 0x1f) | 0xe0;//让Y7输出低电平,此时Y7C为高电平 break; } } void showSMG(unsigned char position,unsigned char number) //字符显示函数 { HC138Init(6); // 选通Y6C switch(position) { case 1://第1个位置 P0 = 0x01; break; case 2://第2个位置 P0 = 0x02; break; case 3://第3个位置 P0 = 0x04; break; case 4://第4个位置 P0 = 0x08; break; case 5://第5个位置 P0 = 0x10; break; case 6://第6个位置 P0 = 0x20; break; case 7://第7个位置 P0 = 0x40; break; case 8://第8个位置 P0 = 0x80; break; } HC138Init(7); // 选通Y7C if(number == &#39;0&#39;) //下面是显示各个字符 P0 = SMG_duanma[0]; else if(number == &#39;1&#39;) P0 = SMG_duanma[1]; else if(number == &#39;2&#39;) P0 = SMG_duanma[2]; else if(number == &#39;3&#39;) P0 = SMG_duanma[3]; else if(number == &#39;4&#39;) P0 = SMG_duanma[4]; else if(number == &#39;5&#39;) P0 = SMG_duanma[5]; else if(number == &#39;6&#39;) P0 = SMG_duanma[6]; else if(number == &#39;7&#39;) P0 = SMG_duanma[7]; else if(number == &#39;8&#39;) P0 = SMG_duanma[8]; else if(number == &#39;9&#39;) P0 = SMG_duanma[9]; else if(number == &#39;a&#39;) P0 = SMG_duanma[10]; else if(number == &#39;b&#39;) P0 = SMG_duanma[11]; else if(number == &#39;c&#39;) P0 = SMG_duanma[12]; else if(number == &#39;d&#39;) P0 = SMG_duanma[13]; else if(number == &#39;e&#39;) P0 = SMG_duanma[14]; else if(number == &#39;f&#39;) P0 = SMG_duanma[15]; else if(number == &#39;-&#39;) P0 = SMG_duanma[16]; else if(number == &#39;." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3aa3666597195b94af7d206a58f34dcd/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-11-11T10:54:26+08:00" />
+<meta property="article:modified_time" content="2022-11-11T10:54:26+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">蓝桥杯单片机备战（七）矩阵键盘的扫描原理及其应用</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>1.扫描原理</h2> 
+<h4>1.首先还是先观察电路图</h4> 
+<p><img alt="" height="576" src="https://images2.imgbox.com/79/4e/ZzGDWBCR_o.png" width="1200"></p> 
+<p><img alt="" height="332" src="https://images2.imgbox.com/c7/b9/ZhlGCmpy_o.png" width="481"></p> 
+<p>我们知道要想控制独立按键的话首先要先使J5跳帽连接到1和2,这时P44和第一列键盘也就是S4~S7连上了</p> 
+<h4>2.那要怎么来实现按键状态的读取呢？我们使用扫描的思想，也就是逐行逐列读取</h4> 
+<p><img alt="" height="483" src="https://images2.imgbox.com/ad/c2/gysqVXJY_o.png" width="1059"></p> 
+<p>这里我们选择逐行读取，先读取第一行（也就是S7、S11、S15、S19），先将P30口置低，P31P32P33置高，然后将代表四列的P34P35P42P44置高，此时检测P34P35P42P44口，如果P44是低电平，那么证明S7被按下了，如果P42是低电平，证明S11被按下了，以此类推就检测了所有的按键。</p> 
+<hr> 
+<h2>2.代码实现</h2> 
+<p><span style="color:#fe2c24;"><strong>注意事项！！！！</strong></span></p> 
+<p>我们导入的头文件“reg52.h”中并没有对于P4口的定义</p> 
+<p><img alt="" height="170" src="https://images2.imgbox.com/bd/2f/26U9b5X2_o.png" width="412"></p> 
+<p>我们需要自行查找数据手册来得知P4口寄存器的地址</p> 
+<p><img alt="" height="243" src="https://images2.imgbox.com/0c/af/nDr0s2PU_o.png" width="1113"></p> 
+<p>查找手册得知P4口的地址为C0H，我们需要在头文件或者用户编写的文件中添加这个定义：</p> 
+<p><img alt="" height="60" src="https://images2.imgbox.com/d2/20/9jpiPfOH_o.png" width="313"></p> 
+<p>这里再补充一个点：“sfr”</p> 
+<p>SFR全称为：special function register（翻译为：特殊功能寄存器）</p> 
+<p>在单片机的世界里，并不会识别所谓的“P1”，只会识别P1这个IO口的地址0x90，sfr是用来给这个地址赋予一个名字的，sfr P1 = 0x90，代表的意思就是给地址0x90赋予一个名字P1（有点类似与sbit、define这种东西，有机会会再写一篇笔记来充分认识51单片机bit、sbin、sfr、sfr_16的区别。</p> 
+<pre><code class="language-cpp">#include "reg52.h"
+
+sbit R1 = P3^0;//第一行的P3^0口为R1,下面以此类推
+sbit R2 = P3^1;
+sbit R3 = P3^2;
+sbit R4 = P3^3;
+
+sbit C1 = P4^4;
+sbit C2 = P4^2;
+sbit C3 = P3^5;
+sbit C4 = P3^4;
+
+unsigned char KEY_number = 0;//按键按下标志位
+
+void Delay(unsigned char t)		//延时函数
+{
+	while(t--)
+	{
+		unsigned char i, j;
+		i = 15;
+		j = 90;
+		do
+		{
+			while (--j);
+		} while (--i);
+	}
+}
+
+unsigned char code SMG_duanma[18] = {0xc0,0xf9,0xa4,0xb0,0x99,0x92,0x82,0xf8,0x80,
+																		 
+                                     0x90,0x88,0x83,0xc6,0xa1,0x86,0x8e,0xbf,0x7f}; // 数码管的断码表
+	
+
+void HC138Init(unsigned char n)
+{
+    switch(n)
+    {
+        case 4:
+            P2 = (P2 &amp; 0x1f) | 0x80;//让Y4输出低电平,此时Y4C为高电平
+        break;
+        case 5:
+            P2 = (P2 &amp; 0x1f) | 0xa0;//让Y5输出低电平,此时Y5C为高电平
+        break;
+        case 6:
+            P2 = (P2 &amp; 0x1f) | 0xc0;//让Y6输出低电平,此时Y6C为高电平
+        break;
+        case 7:
+            P2 = (P2 &amp; 0x1f) | 0xe0;//让Y7输出低电平,此时Y7C为高电平             
+        break;                           
+    }
+}
+
+void showSMG(unsigned char position,unsigned char number)  //字符显示函数
+{
+	HC138Init(6); // 选通Y6C
+	switch(position)
+	{
+		case 1://第1个位置
+			P0 = 0x01;
+		break;
+		case 2://第2个位置
+			P0 = 0x02;
+		break;
+		case 3://第3个位置
+			P0 = 0x04;
+		break;
+		case 4://第4个位置
+			P0 = 0x08;
+		break;
+		case 5://第5个位置
+			P0 = 0x10;
+		break;
+		case 6://第6个位置
+			P0 = 0x20;
+		break;
+		case 7://第7个位置
+			P0 = 0x40;
+		break;
+		case 8://第8个位置
+			P0 = 0x80;
+		break;
+	}
+	HC138Init(7); // 选通Y7C
+	if(number == '0')  //下面是显示各个字符
+		P0 = SMG_duanma[0];
+	else if(number == '1')
+		P0 = SMG_duanma[1];
+	else if(number == '2')
+		P0 = SMG_duanma[2];
+	else if(number == '3')
+		P0 = SMG_duanma[3];
+	else if(number == '4')
+		P0 = SMG_duanma[4];
+	else if(number == '5')
+		P0 = SMG_duanma[5];
+	else if(number == '6')
+		P0 = SMG_duanma[6];
+	else if(number == '7')
+		P0 = SMG_duanma[7];
+	else if(number == '8')
+		P0 = SMG_duanma[8];
+	else if(number == '9')
+		P0 = SMG_duanma[9];
+	else if(number == 'a')
+		P0 = SMG_duanma[10];
+	else if(number == 'b')
+		P0 = SMG_duanma[11];
+	else if(number == 'c')
+		P0 = SMG_duanma[12];
+	else if(number == 'd')
+		P0 = SMG_duanma[13];
+	else if(number == 'e')
+		P0 = SMG_duanma[14];
+	else if(number == 'f')
+		P0 = SMG_duanma[15];
+	else if(number == '-')
+		P0 = SMG_duanma[16];
+	else if(number == '.')
+		P0 = SMG_duanma[17];
+	
+}
+
+
+unsigned char KEYscan()//矩阵键盘扫描函数，该函数将返回一个KEY_number，这个变量代表被按下的按键，若KEY_number=4，则代表S4被按下
+{
+	/*扫描第一行*/
+	R1 = 0;//先将第一行置低
+	R2 = R3 = R4 = 1;//再将第二三四行置高
+	if(C1 == 0)//第一行第一列按键S7被按下
+	{
+		Delay(20);//按键消抖
+		if(C1 == 0)
+		{
+			while(C1 == 0);//松手检测，松手时C1重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 7;//标志位置7			
+		}		
+	}
+	else if(C2 == 0)//第一行第二列按键S11被按下
+	{
+		Delay(20);//按键消抖
+		if(C2 == 0)
+		{
+			while(C2 == 0);//松手检测，松手时C2重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 11;//标志位置11
+		}		
+	}
+	
+	else if(C3 == 0)//第一行第三列按键S15被按下
+	{
+		Delay(20);//按键消抖
+		if(C3 == 0)
+		{
+			while(C3 == 0);//松手检测，松手时C3重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 15;//标志位置15			
+		}		
+	}
+	else if(C4 == 0)//第一行第四列按键S19被按下
+	{
+		Delay(20);//按键消抖
+		if(C4 == 0)
+		{
+			while(C4 == 0);//松手检测，松手时C4重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 19;//标志位置19
+		}		
+	}
+	
+	/*扫描第二行*/
+	R2 = 0;//先将第二行置低
+	R1 = R3 = R4 = 1;//再将第一三四行置高
+	if(C1 == 0)//第二行第一列按键S6被按下
+	{
+		Delay(20);//按键消抖
+		if(C1 == 0)
+		{
+			while(C1 == 0);//松手检测，松手时C1重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 6;//标志位置6			
+		}		
+	}
+	else if(C2 == 0)//第二行第二列按键S10被按下
+	{
+		Delay(20);//按键消抖
+		if(C2 == 0)
+		{
+			while(C2 == 0);//松手检测，松手时C2重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 10;//标志位置10
+		}		
+	}
+	else if(C3 == 0)//第二行第三列按键S14被按下
+	{
+		Delay(20);//按键消抖
+		if(C3 == 0)
+		{
+			while(C3 == 0);//松手检测，松手时C3重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 14;//标志位置14
+		}		
+	}
+	else if(C4 == 0)//第二行第四列按键S18被按下
+	{
+		Delay(20);//按键消抖
+		if(C4 == 0)
+		{
+			while(C4 == 0);//松手检测，松手时C4重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 18;//标志位置18
+		}		
+	}
+	
+	/*扫描第三行*/
+	R3 = 0;//先将第三行置低
+	R1 = R2 = R4 = 1;//再将第一二四行置高
+	if(C1 == 0)//第三行第一列按键S5被按下
+	{
+		Delay(20);//按键消抖
+		if(C1 == 0)
+		{
+			while(C1 == 0);//松手检测，松手时C1重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 5;//标志位置5			
+		}		
+	}
+	else if(C2 == 0)//第三行第二列按键S9被按下
+	{
+		Delay(20);//按键消抖
+		if(C2 == 0)
+		{
+			while(C2 == 0);//松手检测，松手时C2重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 9;//标志位置9
+		}		
+	}
+	else if(C3 == 0)//第三行第三列按键S13被按下
+	{
+		Delay(20);//按键消抖
+		if(C3 == 0)
+		{
+			while(C3 == 0);//松手检测，松手时C3重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 13;//标志位置13
+		}		
+	}
+	else if(C4 == 0)//第三行第四列按键S17被按下
+	{
+		Delay(20);//按键消抖
+		if(C4 == 0)
+		{
+			while(C4 == 0);//松手检测，松手时C4重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 17;//标志位置17
+		}		
+	}
+	
+	/*扫描第四行*/
+	R4 = 0;//先将第四行置低
+	R1 = R2 = R3 = 1;//再将第一二三行置高
+	if(C1 == 0)//第四行第一列按键S4被按下
+	{
+		Delay(20);//按键消抖
+		if(C1 == 0)
+		{
+			while(C1 == 0);//松手检测，松手时C1重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 4;//标志位置4
+		}		
+	}
+	else if(C2 == 0)//第四行第二列按键S8被按下
+	{
+		Delay(20);//按键消抖
+		if(C2 == 0)
+		{
+			while(C2 == 0);//松手检测，松手时C2重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 8;//标志位置8
+		}		
+	}
+	else if(C3 == 0)//第四行第三列按键S12被按下
+	{
+		Delay(20);//按键消抖
+		if(C3 == 0)
+		{
+			while(C3 == 0);//松手检测，松手时C3重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 12;//标志位置12
+		}		
+	}
+	else if(C4 == 0)//第四行第四列按键S16被按下
+	{
+		Delay(20);//按键消抖
+		if(C4 == 0)
+		{
+			while(C4 == 0);//松手检测，松手时C4重新变成高阻态，向下执行
+			Delay(20);//按键消抖
+			KEY_number = 16;//标志位置16
+		}		
+	}
+	
+	//四行都扫描完之后判断一下，如果所有按键都没有按下将标志位置为0
+	if(KEY_number != 4 &amp; KEY_number != 5 &amp; KEY_number != 6 &amp; KEY_number != 7 &amp; KEY_number != 8 &amp;
+		 KEY_number != 9 &amp; KEY_number != 10 &amp; KEY_number != 11 &amp; KEY_number != 12 &amp; KEY_number != 13 &amp;
+   	 KEY_number != 14 &amp; KEY_number != 15 &amp; KEY_number != 16 &amp; KEY_number != 17 &amp; KEY_number != 18 &amp; KEY_number != 19)
+	{
+		KEY_number = 0;
+	}
+	
+	return KEY_number;//返回扫描结果
+}
+
+void main()
+{
+	unsigned char KEYnumber = 0;
+	while(1)
+	{
+		KEYnumber = KEYscan();
+		if(KEYnumber == 4)
+		{
+			showSMG(1,'0');
+			Delay(1);
+			showSMG(2,'4');
+			Delay(1);	
+		}
+		else if(KEYnumber == 5)
+		{
+			showSMG(1,'0');
+			Delay(1);
+			showSMG(2,'5');
+			Delay(1);
+		}
+		else if(KEYnumber == 6)
+		{
+			showSMG(1,'0');
+			Delay(1);
+			showSMG(2,'6');
+			Delay(1);
+		}
+		else if(KEYnumber == 7)
+		{
+			showSMG(1,'0');
+			Delay(1);
+			showSMG(2,'7');
+			Delay(1);
+		}
+		else if(KEYnumber == 8)
+		{
+			showSMG(1,'0');
+			Delay(1);
+			showSMG(2,'8');
+			Delay(1);
+		}
+		else if(KEYnumber == 9)
+		{
+			showSMG(1,'0');
+			Delay(1);
+			showSMG(2,'9');
+			Delay(1);
+		}
+		else if(KEYnumber == 10)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'0');
+			Delay(1);
+		}
+		else if(KEYnumber == 11)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'1');
+			Delay(1);
+		}
+		else if(KEYnumber == 12)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'2');
+			Delay(1);
+		}
+		else if(KEYnumber == 13)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'3');
+			Delay(1);
+		}
+		else if(KEYnumber == 14)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'4');
+			Delay(1);
+		}
+		else if(KEYnumber == 15)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'5');
+			Delay(1);						
+		}
+		else if(KEYnumber == 16)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'6');
+			Delay(1);
+		}
+		else if(KEYnumber == 17)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'7');
+			Delay(1);
+		}
+		else if(KEYnumber == 18)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'8');
+			Delay(1);
+		}
+		else if(KEYnumber == 19)
+		{
+			showSMG(1,'1');
+			Delay(1);
+			showSMG(2,'9');
+			Delay(1);	
+		}	
+	}
+}</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/a419f25f1db0b97b4e6104122b3c3f70/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Linux用户分类和权限详解</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/4ff4fb21693e5a3e5192a26e7246383a/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Pandas基础入门知识点总结</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>iOS开发 之 isEqual与hash - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="iOS开发 之 isEqual与hash" />
+<meta property="og:description" content="为什么要有isEqual方法? isEqual方法的作用大家肯定是知道的:
+判断两个对象是否相等
+但是判断相等不是已经有==运算符了么, 为什么还要isEqual方法?
+这是因为:
+对于基本类型, == 运算符比较的是值; 对于对象类型, ==运算符比较的是对象的地址(即是否为同一对象)
+注意: 上述==运算符的说明适用于Objective-C和Java等不支持运算符重载的语言, 支持运算符重载的语言有C&#43;&#43;
+所以要理清==运算符和isEqual方法的区别, 问题就集中在
+什么叫比较对象的地址, 什么叫比较对象
+我们通过下面的例子来说明这个问题
+UIColor *color1 = [UIColor colorWithRed:0.5 green:0.5 blue:0.5 alpha:1.0]; UIColor *color2 = [UIColor colorWithRed:0.5 green:0.5 blue:0.5 alpha:1.0]; NSLog(@&#34;color1 == color2 = %@&#34;, color1 == color2 ? @&#34;YES&#34; : @&#34;NO&#34;); NSLog(@&#34;[color1 isEqual:color2] = %@&#34;, [color1 isEqual:color2] ? @&#34;YES&#34; : @&#34;NO&#34;); 打印结果如下
+color1 == color2 = NO [color1 isEqual:color2] = YES 从上面的例子可以看出, ==运算符只是简单地判断是否是同一个对象, 而isEqual方法可以判断对象是否相同, 例如UIColor对象表示的color是否相同" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/a58cda5db5a5944ee4c37db61d49b759/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-21T11:18:00+08:00" />
+<meta property="article:modified_time" content="2024-02-21T11:18:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">iOS开发 之 isEqual与hash</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="isEqual_0"></a>为什么要有isEqual方法?</h2> 
+<p>isEqual方法的作用大家肯定是知道的:</p> 
+<blockquote> 
+ <p>判断两个对象是否相等</p> 
+</blockquote> 
+<p>但是判断相等不是已经有==运算符了么, 为什么还要isEqual方法?</p> 
+<p>这是因为:</p> 
+<blockquote> 
+ <p>对于基本类型, == 运算符比较的是值; 对于对象类型, ==运算符比较的是对象的地址(即是否为同一对象)</p> 
+</blockquote> 
+<p>注意: 上述==运算符的说明适用于Objective-C和Java等不支持运算符重载的语言, 支持运算符重载的语言有C++</p> 
+<p>所以要理清==运算符和isEqual方法的区别, 问题就集中在</p> 
+<p>什么叫比较对象的地址, 什么叫比较对象</p> 
+<p>我们通过下面的例子来说明这个问题</p> 
+<pre><code class="prism language-objectivec">UIColor <span class="token operator">*</span>color1 <span class="token operator">=</span> <span class="token punctuation">[</span>UIColor colorWithRed<span class="token punctuation">:</span><span class="token number">0.5</span> green<span class="token punctuation">:</span><span class="token number">0.5</span> blue<span class="token punctuation">:</span><span class="token number">0.5</span> alpha<span class="token punctuation">:</span><span class="token number">1.0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+UIColor <span class="token operator">*</span>color2 <span class="token operator">=</span> <span class="token punctuation">[</span>UIColor colorWithRed<span class="token punctuation">:</span><span class="token number">0.5</span> green<span class="token punctuation">:</span><span class="token number">0.5</span> blue<span class="token punctuation">:</span><span class="token number">0.5</span> alpha<span class="token punctuation">:</span><span class="token number">1.0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"color1 == color2 = %@"</span><span class="token punctuation">,</span> color1 <span class="token operator">==</span> color2 <span class="token operator">?</span> <span class="token string">@"YES"</span> <span class="token punctuation">:</span> <span class="token string">@"NO"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"[color1 isEqual:color2] = %@"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>color1 isEqual<span class="token punctuation">:</span>color2<span class="token punctuation">]</span> <span class="token operator">?</span> <span class="token string">@"YES"</span> <span class="token punctuation">:</span> <span class="token string">@"NO"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>打印结果如下</p> 
+<pre><code class="prism language-objectivec">color1 <span class="token operator">==</span> color2 <span class="token operator">=</span> NO
+<span class="token punctuation">[</span>color1 isEqual<span class="token punctuation">:</span>color2<span class="token punctuation">]</span> <span class="token operator">=</span> YES
+</code></pre> 
+<p>从上面的例子可以看出, ==运算符只是简单地判断是否是同一个对象, 而isEqual方法可以判断对象是否相同, 例如UIColor对象表示的color是否相同</p> 
+<h2><a id="isEqual_33"></a>如何重写自己的isEqual方法?</h2> 
+<p>对于Cocoa Framework中定义的类型, 例如上面例子中的UIColor, isEqual方法已经实现好了</p> 
+<p>常见类型的isEqual方法还有NSString isEqualToString / NSDate isEqualToDate / NSArray isEqualToArray / NSDictionary isEqualToDictionary / NSSet isEqualToSet, 更多参考<a href="https://nshipster.com/equality/" rel="nofollow">Equality</a></p> 
+<p>但对于自定义类型来说, 通常需要重写isEqual方法</p> 
+<p>通过下面的例子, 我们来看看重写isEqual方法的正确姿势</p> 
+<p>首先定义Person类如下</p> 
+<pre><code class="prism language-objectivec"><span class="token keyword">@interface</span> Person <span class="token punctuation">:</span> NSObject
+
+<span class="token keyword">@property</span> <span class="token punctuation">(</span>nonatomic<span class="token punctuation">,</span> copy<span class="token punctuation">)</span> NSString <span class="token operator">*</span>name<span class="token punctuation">;</span>
+<span class="token keyword">@property</span> <span class="token punctuation">(</span>nonatomic<span class="token punctuation">,</span> strong<span class="token punctuation">)</span> NSDate <span class="token operator">*</span>birthday<span class="token punctuation">;</span>
+
+<span class="token keyword">@end</span>
+</code></pre> 
+<p>Person类中实现的isEqual方法如下</p> 
+<pre><code class="prism language-objectivec"><span class="token operator">-</span> <span class="token punctuation">(</span>BOOL<span class="token punctuation">)</span>isEqual<span class="token punctuation">:</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span>object <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">self</span> <span class="token operator">==</span> object<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> YES<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token punctuation">[</span>object isKindOfClass<span class="token punctuation">:</span><span class="token punctuation">[</span>Person class<span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> NO<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token keyword">return</span> <span class="token punctuation">[</span><span class="token keyword">self</span> isEqualToPerson<span class="token punctuation">:</span><span class="token punctuation">(</span>Person <span class="token operator">*</span><span class="token punctuation">)</span>object<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token operator">-</span> <span class="token punctuation">(</span>BOOL<span class="token punctuation">)</span>isEqualToPerson<span class="token punctuation">:</span><span class="token punctuation">(</span>Person <span class="token operator">*</span><span class="token punctuation">)</span>person <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>person<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> NO<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    BOOL haveEqualNames <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token keyword">self</span><span class="token punctuation">.</span>name <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>person<span class="token punctuation">.</span>name<span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token punctuation">[</span><span class="token keyword">self</span><span class="token punctuation">.</span>name isEqualToString<span class="token punctuation">:</span>person<span class="token punctuation">.</span>name<span class="token punctuation">]</span><span class="token punctuation">;</span>
+    BOOL haveEqualBirthdays <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token keyword">self</span><span class="token punctuation">.</span>birthday <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>person<span class="token punctuation">.</span>birthday<span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token punctuation">[</span><span class="token keyword">self</span><span class="token punctuation">.</span>birthday isEqualToDate<span class="token punctuation">:</span>person<span class="token punctuation">.</span>birthday<span class="token punctuation">]</span><span class="token punctuation">;</span>
+    
+    <span class="token keyword">return</span> haveEqualNames <span class="token operator">&amp;&amp;</span> haveEqualBirthdays<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>上述代码主要步骤如下</p> 
+<ul><li> <p>Step 1: ==运算符判断是否是同一对象, 因为同一对象必然完全相同</p> </li><li> <p>Step 2: 判断是否是同一类型, 这样不仅可以提高判等的效率, 还可以避免隐式类型转换带来的潜在风险</p> </li><li> <p>Step 3: 通过封装的isEqualToPerson方法, 提高代码复用性</p> </li><li> <p>Step 4: 判断person是否是nil, 做参数有效性检查</p> </li><li> <p>Step 5: 对各个属性分别使用默认判等方法进行判断</p> </li><li> <p>Step 6: 返回所有属性判等的与结果</p> </li></ul> 
+<p>isEqual的实现并不复杂, 但是从代码质量(效率, 安全, 复用)来说, 上述实现仍然值得仔细学习和借鉴</p> 
+<p>除了上面的最佳实践, 还有一种最不佳实践</p> 
+<pre><code class="prism language-objectivec"><span class="token keyword">@implementation</span> <span class="token function">NSDate</span> <span class="token punctuation">(</span>Approximate<span class="token punctuation">)</span>
+
+<span class="token operator">-</span> <span class="token punctuation">(</span>BOOL<span class="token punctuation">)</span>isEqual<span class="token punctuation">:</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span>object <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">return</span> YES<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">@end</span>
+</code></pre> 
+<p>这里的isEqual方法一直返回YES</p> 
+<pre><code class="prism language-objectivec"><span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"[self.date1 isEqual:@\"hello\"] = %@"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token keyword">self</span><span class="token punctuation">.</span>date1 isEqual<span class="token punctuation">:</span><span class="token string">@"hello"</span><span class="token punctuation">]</span> <span class="token operator">?</span> <span class="token string">@"YES"</span> <span class="token punctuation">:</span> <span class="token string">@"NO"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>打印结果如下</p> 
+<pre><code class="prism language-objectivec"><span class="token punctuation">[</span><span class="token keyword">self</span><span class="token punctuation">.</span>date1 isEqual<span class="token punctuation">:</span><span class="token string">@"hello"</span><span class="token punctuation">]</span> <span class="token operator">=</span> YES
+</code></pre> 
+<h2><a id="hash_115"></a>为什么要有hash方法?</h2> 
+<p>这个问题要从Hash Table这种数据结构说起</p> 
+<p>首先我们看下如何在数组中查找某个成员</p> 
+<ul><li> <p>Step 1: 遍历数组中的成员</p> </li><li> <p>Step 2: 将取出的值与目标值比较, 如果相等, 则返回该成员</p> </li></ul> 
+<p>在数组未排序的情况下, 查找的时间复杂度是O(array_length)</p> 
+<p>为了提高查找的速度, Hash Table出现了</p> 
+<p>当成员被加入到Hash Table中时, 会给它分配一个hash值, 以标识该成员在集合中的位置</p> 
+<p>通过这个位置标识可以将查找的时间复杂度优化到O(1), 当然如果多个成员都是同一个位置标识, 那么查找就不能达到O(1)了</p> 
+<p>重点来了:</p> 
+<blockquote> 
+ <p>分配的这个hash值(即用于查找集合中成员的位置标识), 就是通过hash方法计算得来的, 且hash方法返回的hash值最好唯一</p> 
+</blockquote> 
+<p>和数组相比, 基于hash值索引的Hash Table查找某个成员的过程就是</p> 
+<ul><li>Step 1: 通过hash值直接找到查找目标的位置</li><li>Step 2: 如果目标位置上有多个相同hash值得成员, 此时再按照数组方式进行查找</li></ul> 
+<h2><a id="hash_141"></a>hash方法什么时候被调用?</h2> 
+<p>带着这个问题, 我们来看下面的例子</p> 
+<pre><code class="prism language-objectivec">Person <span class="token operator">*</span>person1 <span class="token operator">=</span> <span class="token punctuation">[</span>Person personWithName<span class="token punctuation">:</span>kName1 birthday<span class="token punctuation">:</span><span class="token keyword">self</span><span class="token punctuation">.</span>date1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+Person <span class="token operator">*</span>person2 <span class="token operator">=</span> <span class="token punctuation">[</span>Person personWithName<span class="token punctuation">:</span>kName2 birthday<span class="token punctuation">:</span><span class="token keyword">self</span><span class="token punctuation">.</span>date2<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+NSMutableArray <span class="token operator">*</span>array1 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableArray array<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>array1 addObject<span class="token punctuation">:</span>person1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+NSMutableArray <span class="token operator">*</span>array2 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableArray array<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>array2 addObject<span class="token punctuation">:</span>person2<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"array end -------------------------------"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+NSMutableSet <span class="token operator">*</span>set1 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableSet set<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>set1 addObject<span class="token punctuation">:</span>person1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+NSMutableSet <span class="token operator">*</span>set2 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableSet set<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>set2 addObject<span class="token punctuation">:</span>person2<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"set end -------------------------------"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+NSMutableDictionary <span class="token operator">*</span>dictionaryValue1 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableDictionary dictionary<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>dictionaryValue1 setObject<span class="token punctuation">:</span>person1 forKey<span class="token punctuation">:</span>kKey1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+NSMutableDictionary <span class="token operator">*</span>dictionaryValue2 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableDictionary dictionary<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>dictionaryValue2 setObject<span class="token punctuation">:</span>person2 forKey<span class="token punctuation">:</span>kKey2<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"dictionary value end -------------------------------"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+NSMutableDictionary <span class="token operator">*</span>dictionaryKey1 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableDictionary dictionary<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>dictionaryKey1 setObject<span class="token punctuation">:</span>kValue1 forKey<span class="token punctuation">:</span>person1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+NSMutableDictionary <span class="token operator">*</span>dictionaryKey2 <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableDictionary dictionary<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>dictionaryKey2 setObject<span class="token punctuation">:</span>kValue2 forKey<span class="token punctuation">:</span>person2<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"dictionary key end -------------------------------"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<pre><code class="prism language-objectivec">person1 <span class="token operator">==</span> person2 <span class="token operator">=</span> NO
+<span class="token punctuation">[</span>person1 isEqual<span class="token punctuation">:</span>person2<span class="token punctuation">]</span> <span class="token operator">=</span> NO
+isEqual end <span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">-</span>
+array end <span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">-</span>
+hash <span class="token operator">=</span> <span class="token number">7809196951631946839</span>
+hash <span class="token operator">=</span> <span class="token number">7809196951631946839</span>
+hash <span class="token operator">=</span> <span class="token number">7809191961023760480</span>
+hash <span class="token operator">=</span> <span class="token number">7809191961023760480</span>
+set end <span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">-</span>
+dictionary value end <span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">-</span>
+hash <span class="token operator">=</span> <span class="token number">7809196951631946839</span>
+hash <span class="token operator">=</span> <span class="token number">7809196951631946839</span>
+hash <span class="token operator">=</span> <span class="token number">7809191961023760480</span>
+hash <span class="token operator">=</span> <span class="token number">7809191961023760480</span>
+dictionary key end <span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">--</span><span class="token operator">-</span>
+</code></pre> 
+<p>从打印结果可以看到:</p> 
+<blockquote> 
+ <p>hash方法只在对象被添加至NSSet和设置为NSDictionary的key时会调用</p> 
+</blockquote> 
+<p>NSSet添加新成员时, 需要根据hash值来快速查找成员, 以保证集合中是否已经存在该成员</p> 
+<p>NSDictionary在查找key时, 也利用了key的hash值来提高查找的效率</p> 
+<h2><a id="hash_198"></a>hash方法与判等的关系?</h2> 
+<p>hash方法主要是用于在Hash Table查询成员用的, 那么和我们要讨论的isEqual()有什么关系呢?</p> 
+<p>为了优化判等的效率, 基于hash的NSSet和NSDictionary在判断成员是否相等时, 会这样做</p> 
+<ul><li>Step 1: 集成成员的hash值是否和目标hash值相等, 如果相同进入Step 2, 如果不等, 直接判断不相等</li><li>Step 2: hash值相同(即Step 1)的情况下, 再进行对象判等, 作为判等的结果</li></ul> 
+<p>简单地说就是</p> 
+<blockquote> 
+ <p>hash值是对象判等的必要非充分条件</p> 
+</blockquote> 
+<p>很多人在iOS开发中, 都是这么重写hash方法的</p> 
+<pre><code class="prism language-objectivec"><span class="token operator">-</span> <span class="token punctuation">(</span>NSUInteger<span class="token punctuation">)</span>hash <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">return</span> <span class="token punctuation">[</span><span class="token keyword">super</span> hash<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>这样写有问题么? 带着这个问题, 我们先来看下[super hash]的值到底是什么</p> 
+<pre><code class="prism language-objectivec">Person <span class="token operator">*</span>person <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">[</span>Person alloc<span class="token punctuation">]</span> init<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"person = %ld"</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>NSUInteger<span class="token punctuation">)</span>person<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"[person1 getSuperHash] = %ld"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>person getSuperHash<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>打印结果如下</p> 
+<pre><code class="prism language-objectivec">person <span class="token operator">=</span> <span class="token number">140643147498880</span>
+<span class="token punctuation">[</span>person1 getSuperHash<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">140643147498880</span>
+</code></pre> 
+<p>由此可以看出, [super hash]返回的就是该对象的内存地址</p> 
+<p>联想到前面对hash值唯一性的要求, 使用对象的内存地址作为hash值不是很好么?</p> 
+<p>别急, 我们添加如下两个对象到NSSet中试试</p> 
+<pre><code class="prism language-objectivec">Person <span class="token operator">*</span>person1 <span class="token operator">=</span> <span class="token punctuation">[</span>Person personWithName<span class="token punctuation">:</span>kName1 birthday<span class="token punctuation">:</span><span class="token keyword">self</span><span class="token punctuation">.</span>date1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+Person <span class="token operator">*</span>person2 <span class="token operator">=</span> <span class="token punctuation">[</span>Person personWithName<span class="token punctuation">:</span>kName1 birthday<span class="token punctuation">:</span><span class="token keyword">self</span><span class="token punctuation">.</span>date1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"[person1 isEqual:person2] = %@"</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>person1 isEqual<span class="token punctuation">:</span>person2<span class="token punctuation">]</span> <span class="token operator">?</span> <span class="token string">@"YES"</span> <span class="token punctuation">:</span> <span class="token string">@"NO"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+NSMutableSet <span class="token operator">*</span>set <span class="token operator">=</span> <span class="token punctuation">[</span>NSMutableSet set<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>set addObject<span class="token punctuation">:</span>person1<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">[</span>set addObject<span class="token punctuation">:</span>person2<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token function">NSLog</span><span class="token punctuation">(</span><span class="token string">@"set count = %ld"</span><span class="token punctuation">,</span> set<span class="token punctuation">.</span>count<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>此时打印结果如下</p> 
+<pre><code class="prism language-objectivec"><span class="token punctuation">[</span>person1 isEqual<span class="token punctuation">:</span>person2<span class="token punctuation">]</span> <span class="token operator">=</span> YES
+set count <span class="token operator">=</span> <span class="token number">2</span>
+</code></pre> 
+<p>isEqual相等的两个对象都加入到了NSSet中(set count = 2), 所以直接返回[super hash]是不正确的</p> 
+<p>那么hash方法的最佳实践到底是什么呢?</p> 
+<p>大神Mattt Thompson在Equality中给出的结论就是</p> 
+<blockquote> 
+ <p>In reality, a simple XOR over the hash values of critical properties is sufficient 99% of the time(对关键属性的hash值进行位或运算作为hash值)</p> 
+</blockquote> 
+<p>对于上面Person类的hash方法实现如下</p> 
+<pre><code class="prism language-objectivec"><span class="token operator">-</span> <span class="token punctuation">(</span>NSUInteger<span class="token punctuation">)</span>hash <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">return</span> <span class="token punctuation">[</span><span class="token keyword">self</span><span class="token punctuation">.</span>name hash<span class="token punctuation">]</span> <span class="token operator">^</span> <span class="token punctuation">[</span><span class="token keyword">self</span><span class="token punctuation">.</span>birthday hash<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/41611231b5cf231ecb23b234c57688af/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">db-gpt docker部署进坑</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ae51bb45e21e7fe3beadcbf432c16312/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">小程序--事件处理</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

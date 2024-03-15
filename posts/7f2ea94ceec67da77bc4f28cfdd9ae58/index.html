@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux个人防火墙设计与实现-数据包捕获 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux个人防火墙设计与实现-数据包捕获" />
+<meta property="og:description" content="摘 要 防火墙是网络安全研究的一个重要内容，数据包捕获是包过滤型防火墙的前提，本文对基于Linux主机的个人防火墙的数据包捕获模块进行了研究,重点论述数据包捕获模块的结构、组成以及功能。首先对信息安全及防火墙的重要性进行论述，并给出防火墙的详细分类；然后分析了基于Linux主机的个人防火墙总体设计及软硬件平台原理，接着论述Linux下的数据包捕获模块结构与原理，并详述其具体实现步骤。 关键词 防火墙 Linux 数据包捕获模块 包过滤 一、防火墙概述 网络防火墙技术是一种用来加强网络之间访问控制，防止外部网络用户以非法手段通过外部网络进入内部网络，访问内部网络资源，保护内部网络操作环境的特殊网络互联设备。它对两个或多个网络之间传输的数据包按照一定的安全策略来实施检查，以决定网络之间的通信是否被允许，并监视网络运行状态。 根据防火墙所采用的技术不同，可以将它分为四种基本类型：包过滤型、网络地址转换—NAT、代理型和监测型。包过滤型产品是防火墙的初级产品，其技术依据是网络中的分包传输技术。包过滤技术的优点是简单实用，实现成本较低，在应用环境比较简单的情况下，能够以较小的代价在一定程度上保证系统的安全。网络地址转换是一种用于把IP地址转换成临时的、外部的、注册的IP地址标准。它允许具有私有IP地址的内部网络访问因特网。 代理型防火墙也可以被称为代理服务器，它的安全性要高于包过滤型产品，并已经开始向应用层发展。代理型防火墙的优点是安全性较高，可以针对应用层进行侦测和扫描，对付基于应用层的侵入和病毒都十分有效。其缺点是对系统的整体性能有较大的影响，而且代理服务器必须针对客户机可能产生的所有应用类型逐一进行设置，大大增加了系统管理的复杂性。 监测型防火墙是新一代的产品，能够对各层的数据进行主动的、实时的监测，在对这些数据加以分析的基础上，监测型防火墙能够有效地判断出各层中的非法侵入。同时,这种检测型防火墙产品一般还带有分布式探测器，这些探测器安置在各种应用服务器和其他网络的节点之中，不仅能够检测来自网络外部的攻击，同时对来自内部的恶意破坏也有极强的防范作用。监测型防火墙在安全性上已超越了包过滤型和代理服务器型防火墙，但其实现成本较高。基于对系统成本与安全技术成本的综合考虑，用户可以选择性地使用某些监测型技术。 二、基于Linux个人防火墙总体设计 本文研究的是防火墙系统的软硬件环境以及该防火墙的开发步骤和所要实现的功能，最后重点对该防火墙系统所需要的硬件和软件平台原理进行说明。尽管所有Linux系统都自带防火墙内核程序，但需要用户进行配置才能起到保护网络安全的目的。 1、防火墙系统总体设计 Linux系统下实现软件防火墙的设计与应用，实质上就是基于主机的网络安全解决方案。因此，我们完全可以选择合适的软硬件平台和相应的防火墙设计原理，自己开发出一套能够满足要求的防火墙系统。 归纳起来这里要实现的防火墙需要满足两大要求：第一，必须能够对主机提供安全保护，即对主机与局域网以外的主机进行数据传输时实施安全保护；第二，必须能够提供良好的人机接口界面，具有容易操作、容易管理的优点。 考虑到现有硬件设备的限制，在保证满足实验要求的环境下尽可能地简化了实验环境。因为该防火墙系统是基于主机设计的，故只需要一个联网的主机即可进行实验。该系统是在Linux环境下用C语言实现包过滤型软件防火墙的设计与应用，采用Kylix开发工具进行界面设计和数据库连接。 基于Linux的个人防火墙系统主要具有以下功能： （1）全程动态包过滤 本防火墙要在Linux下实现全程动态包过滤功能，通过分析数据包的地址、协议、端口对任何网络连接当前状态进行访问控制，从而提高系统的性能和安全性。 （2）提供日志审计 本防火墙配备了日志记录系统和查询工具，用于记录系统管理、系统访问及针对安全策略的网络访问情况。 （3）防火墙数据库的备份 本防火墙制作防火墙过滤数据库，并且管理员可以能动地对该数据库进行设置。 三、基于Linux的数据包捕获模块结构与原理分析 本节就监控层数据包捕获模块的结构特性进行探讨，并详细论述其原理，且对实现数据包捕获功能的程序的一些重要函数进行说明。 1、数据包捕获模块结构 数据包捕获模块用于监视和验证网络流量情况，它可以截取或者阅读网络上OSI协议模型中各个协议层次上的数据包。 本文所设计的数据包捕获程序可以捕获通过原始套接口(Socket)的原始数据包(Raw Packet)，当一个数据包到达网络接口时，数据包捕获程序就直接从缓存区读取捕获的数据包，以供数据分析和处理时调用。数据捕获模块的结构如图1所示： 数据捕获 网卡设置 获取数据包 得到数据包头信息 图1 数据捕获程序结构图
+2、数据包捕获模块原理分析
+（1）网卡设置原理
+在一个实际的系统中，数据的收发是由网卡来完成的，网卡接收到传输来的数据，网卡内的程序接收数据帧的目的MAC地址，根据计算机上的网卡驱动程序设置的接收模式判断该不该接收，认为不该接收就丢掉不管。而对于网卡来说一般有四种接收模式：广播模式组播模式、直接方式、混杂模式。数据包捕获程序首先使网络接口(网卡)处于混杂状态，从而可截获网络上的内容，并且通过相应的软件处理，可以实时分析这些数据的内容，为数据包过滤作准备。
+（2）基本函数说明
+本文中在Linux主机上用C语言编写数据包捕获程序，所编写的程序中用到很多Linux中的预定义函数，在此节将对这些基本函数的功能和使用特点进行说明。
+1）ioctl函数定义
+ioctl()函数非常庞杂，它可以控制各种文件的属性。它用于控制特殊文件的底层设备参数，这些特殊文件通常是指终端、套接字和接口。ioctl函数原型为：
+int ioctl(int handle,int cmd[,int *argdx,int argcx])；
+2）socket函数定义
+常用的Socket类型有两种：流式Socket(SOCK_STREAM)和数据包式Socket (SOCK_DGRAM)。流式是一种面向连接的Socket，针对面向连接的TCP服务应用；数据报式Socket是一种无连接的Socket，针对无连接的UDP服务应用。Socket函数原型为：
+int socket(int domain, int type,int protocol)；
+3）recvfrom()函数定义
+用recvfrom()函数来实现接收数据包，recvfrom()是具备“阻塞式I/O”特性的函数，能够在没有数据包到达的情况下暂时挂起等待，直至接收到数据包后，再激活转入下一步处理。recvfrom()函数的原型为：
+int recvfrom(SOCKET s,char FAR *buf,int len,int flags,struct sockaddr FAR *from,int *fromlen)；" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/7f2ea94ceec67da77bc4f28cfdd9ae58/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2006-04-03T14:00:00+08:00" />
+<meta property="article:modified_time" content="2006-04-03T14:00:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux个人防火墙设计与实现-数据包捕获</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    摘 要 防火墙是网络安全研究的一个重要内容，数据包捕获是包过滤型防火墙的前提，本文对基于Linux主机的个人防火墙的数据包捕获模块进行了研究,重点论述数据包捕获模块的结构、组成以及功能。首先对信息安全及防火墙的重要性进行论述，并给出防火墙的详细分类；然后分析了基于Linux主机的个人防火墙总体设计及软硬件平台原理，接着论述Linux下的数据包捕获模块结构与原理，并详述其具体实现步骤。 
+<br>　　 
+<br>　　关键词 防火墙 Linux 数据包捕获模块 包过滤 
+<br>　　 
+<br>　　 
+<strong>一、防火墙概述</strong> 
+<br> 
+<br>　　网络防火墙技术是一种用来加强网络之间访问控制，防止外部网络用户以非法手段通过外部网络进入内部网络，访问内部网络资源，保护内部网络操作环境的特殊网络互联设备。它对两个或多个网络之间传输的数据包按照一定的安全策略来实施检查，以决定网络之间的通信是否被允许，并监视网络运行状态。 
+<br>　　 
+<br>　　根据防火墙所采用的技术不同，可以将它分为四种基本类型：包过滤型、网络地址转换—NAT、代理型和监测型。包过滤型产品是防火墙的初级产品，其技术依据是网络中的分包传输技术。包过滤技术的优点是简单实用，实现成本较低，在应用环境比较简单的情况下，能够以较小的代价在一定程度上保证系统的安全。网络地址转换是一种用于把IP地址转换成临时的、外部的、注册的IP地址标准。它允许具有私有IP地址的内部网络访问因特网。 
+<br>　　 
+<br>　　代理型防火墙也可以被称为代理服务器，它的安全性要高于包过滤型产品，并已经开始向应用层发展。代理型防火墙的优点是安全性较高，可以针对应用层进行侦测和扫描，对付基于应用层的侵入和病毒都十分有效。其缺点是对系统的整体性能有较大的影响，而且代理服务器必须针对客户机可能产生的所有应用类型逐一进行设置，大大增加了系统管理的复杂性。 
+<br>　　 
+<br>　　监测型防火墙是新一代的产品，能够对各层的数据进行主动的、实时的监测，在对这些数据加以分析的基础上，监测型防火墙能够有效地判断出各层中的非法侵入。同时,这种检测型防火墙产品一般还带有分布式探测器，这些探测器安置在各种应用服务器和其他网络的节点之中，不仅能够检测来自网络外部的攻击，同时对来自内部的恶意破坏也有极强的防范作用。监测型防火墙在安全性上已超越了包过滤型和代理服务器型防火墙，但其实现成本较高。基于对系统成本与安全技术成本的综合考虑，用户可以选择性地使用某些监测型技术。 
+<br>　　 
+<br>　　 
+<strong>二、基于Linux个人防火墙总体设计</strong> 
+<br> 
+<br>　　本文研究的是防火墙系统的软硬件环境以及该防火墙的开发步骤和所要实现的功能，最后重点对该防火墙系统所需要的硬件和软件平台原理进行说明。尽管所有Linux系统都自带防火墙内核程序，但需要用户进行配置才能起到保护网络安全的目的。 
+<br>　　 
+<br>　　1、防火墙系统总体设计 
+<br>　　Linux系统下实现软件防火墙的设计与应用，实质上就是基于主机的网络安全解决方案。因此，我们完全可以选择合适的软硬件平台和相应的防火墙设计原理，自己开发出一套能够满足要求的防火墙系统。 
+<br>　　 
+<br>　　归纳起来这里要实现的防火墙需要满足两大要求：第一，必须能够对主机提供安全保护，即对主机与局域网以外的主机进行数据传输时实施安全保护；第二，必须能够提供良好的人机接口界面，具有容易操作、容易管理的优点。 
+<br>　　 
+<br>　　考虑到现有硬件设备的限制，在保证满足实验要求的环境下尽可能地简化了实验环境。因为该防火墙系统是基于主机设计的，故只需要一个联网的主机即可进行实验。该系统是在Linux环境下用C语言实现包过滤型软件防火墙的设计与应用，采用Kylix开发工具进行界面设计和数据库连接。 
+<br>　　 
+<br>　　基于Linux的个人防火墙系统主要具有以下功能： 
+<br> 
+<br>　　（1）全程动态包过滤 本防火墙要在Linux下实现全程动态包过滤功能，通过分析数据包的地址、协议、端口对任何网络连接当前状态进行访问控制，从而提高系统的性能和安全性。 
+<br> 
+<br>　　（2）提供日志审计 本防火墙配备了日志记录系统和查询工具，用于记录系统管理、系统访问及针对安全策略的网络访问情况。 
+<br> 
+<br>　　（3）防火墙数据库的备份 本防火墙制作防火墙过滤数据库，并且管理员可以能动地对该数据库进行设置。 
+<br>　　 
+<br>　　 
+<strong>三、基于Linux的数据包捕获模块结构与原理分析</strong> 
+<br> 
+<br>　　本节就监控层数据包捕获模块的结构特性进行探讨，并详细论述其原理，且对实现数据包捕获功能的程序的一些重要函数进行说明。 
+<br>　　 
+<br>　　1、数据包捕获模块结构 
+<br>　　数据包捕获模块用于监视和验证网络流量情况，它可以截取或者阅读网络上OSI协议模型中各个协议层次上的数据包。 
+<br>　　 
+<br>　　本文所设计的数据包捕获程序可以捕获通过原始套接口(Socket)的原始数据包(Raw Packet)，当一个数据包到达网络接口时，数据包捕获程序就直接从缓存区读取捕获的数据包，以供数据分析和处理时调用。数据捕获模块的结构如图1所示： 
+<p> </p> 
+<table cellspacing="0" cellpadding="0" align="center" border="1"><tbody><tr><td width="203"> 
+    <div>
+                        数据捕获 
+    </div> 
+    <table cellspacing="0" cellpadding="0" border="1"><tbody><tr><td width="182"> 
+        <div align="center">
+          网卡设置 
+        </div> </td></tr></tbody></table> 
+    <div>
+        
+    </div> 
+    <table cellspacing="0" cellpadding="0" border="1"><tbody><tr><td width="182"> 
+        <div align="center">
+          获取数据包 
+        </div> </td></tr></tbody></table> 
+    <div>
+        
+    </div> 
+    <table cellspacing="0" cellpadding="0" border="1"><tbody><tr><td width="182"> 
+        <div align="center">
+          得到数据包头信息 
+        </div> </td></tr></tbody></table> </td></tr></tbody></table> 
+<p></p> 
+<p align="center">　　图1 数据捕获程序结构图</p> 
+<p align="center">2、数据包捕获模块原理分析<br>　　（1）网卡设置原理<br>　　在一个实际的系统中，数据的收发是由网卡来完成的，网卡接收到传输来的数据，网卡内的程序接收数据帧的目的MAC地址，根据计算机上的网卡驱动程序设置的接收模式判断该不该接收，认为不该接收就丢掉不管。而对于网卡来说一般有四种接收模式：广播模式组播模式、直接方式、混杂模式。数据包捕获程序首先使网络接口(网卡)处于混杂状态，从而可截获网络上的内容，并且通过相应的软件处理，可以实时分析这些数据的内容，为数据包过滤作准备。<br>　　<br>　　（2）基本函数说明<br>　　本文中在Linux主机上用C语言编写数据包捕获程序，所编写的程序中用到很多Linux中的预定义函数，在此节将对这些基本函数的功能和使用特点进行说明。<br>　　<br>　　1）ioctl函数定义<br>　　ioctl()函数非常庞杂，它可以控制各种文件的属性。它用于控制特殊文件的底层设备参数，这些特殊文件通常是指终端、套接字和接口。ioctl函数原型为：<br>　　int ioctl(int handle,int cmd[,int *argdx,int argcx])；<br>　　<br>　　2）socket函数定义<br>　　常用的Socket类型有两种：流式Socket(SOCK_STREAM)和数据包式Socket (SOCK_DGRAM)。流式是一种面向连接的Socket，针对面向连接的TCP服务应用；数据报式Socket是一种无连接的Socket，针对无连接的UDP服务应用。Socket函数原型为：<br>　　int socket(int domain, int type,int protocol)；<br>　　<br>　　3）recvfrom()函数定义<br>　　用recvfrom()函数来实现接收数据包，recvfrom()是具备“阻塞式I/O”特性的函数，能够在没有数据包到达的情况下暂时挂起等待，直至接收到数据包后，再激活转入下一步处理。recvfrom()函数的原型为：<br>　　<br>　　int recvfrom(SOCKET s,char FAR *buf,int len,int flags,struct sockaddr FAR *from,int *fromlen)；<br>　　<br>　　本函数从已连接套接口上接收数据，并捕获数据发送源的地址。对于SOCK_STREAM类型的套接口，最多可以接收缓冲区大小个数据。如果套接口被设置为线内接收带外数据(选项为 SO_OOBINLINE)，且有带外数据未读入，则返回带外数据。应用程序可通过调用ioctlsocket()的SOCATMARK命令来确定是否有带外数据待读入。对于SOCK_STREAM类型套接口，忽略from和fromlen参数。<br>　　<br>　　4）一些“字节顺序”转换函数<br>　　因为网络和主机采用的存储字节时内存顺序安排方式的差异，就存在“字节顺序”的问题。在网络环境下存储时，高位字节存放在内存的起始位置，而低字节则存放在较高的位置。主机形式的存放顺序恰好相反，低位字节存放在内存的起始位置。这就需要以下相应的字节顺序转换函数：<br>　　<br>　　inet_ntoa()：将32位的网络二进制数值转换为可读十进制形式的带点分割符的IP地址。<br>　　inet_addr()：将带有分割符的IP地址转换为32位的unsigned long的格式。<br>　　ntohs()：将网络字节顺序转换为32位的主机字节顺序。<br>　　ntohl()：将网络字节顺序转换成16位的主机字节顺序。<br>　　htonl()：将32位u_long的值由主机字节顺序转换为网络字节顺序。<br>　　htons()：将16位u_long的值由主机字节顺序转换为网络字节顺序。<br>　　<br>　　本文设计的数据捕获程序需要使用SOCK_PACKET设备，SOCK_PACKET只在基于Linux的操作系统中有效定义。为此，美国洛仑兹伯克利国家实验室编写了专用于数据包截获的API函数库“Libpcap”。该函数的设计目标是统一不同系统上所提供的用于数据包截获的不同类型接口，并使得类似的高层应用程序的编写和移植变得简单有效，不再需要对每一个应用都使用不同的依赖于具体系统的数据包截获模块。<br></p> 
+<p align="center"><strong>四、基于Linux的数据包捕获模块设计实现<br><br></strong>　　1、 数据包捕获模块设计流程图<br>　　在数据包捕获程序中，通过设置网卡工作于混杂状态，对网络链路进行监听并收集数据包，从而获得数据包头信息。其流程图如图2所示：<br> </p> 
+<table cellspacing="0" cellpadding="0" align="center" border="1"><tbody><tr><td width="127"> 
+    <div>
+      启动SOCKET函数 
+    </div> </td></tr></tbody></table> 
+<p></p> 
+<p> </p> 
+<div align="center"> 
+ <table cellspacing="0" cellpadding="0" border="1"><tbody><tr><td width="132"> 
+     <div>
+       设置网卡为混杂模式 
+     </div> </td></tr></tbody></table> 
+</div> 
+<div>
+                
+ <table cellspacing="0" cellpadding="0" align="center" border="1"><tbody><tr><td width="119"> 
+     <div>
+         从缓冲区接收数据 
+     </div> </td></tr></tbody></table> 
+</div> 
+<div>
+    
+</div> 
+<div align="center"> 
+ <table cellspacing="0" cellpadding="0" border="1"><tbody><tr><td width="140"> 
+     <div>
+       数据包格式检查并显示 
+     </div> </td></tr></tbody></table> 
+</div> 
+<div></div> 
+<div align="center"> 
+ <table cellspacing="0" cellpadding="0" border="1"><tbody><tr><td width="109"> 
+     <div>
+       数据处理模块 
+     </div> </td></tr></tbody></table> 
+</div> 
+<p align="center">　　图2 数据包捕获模块流程图<br></p> 
+<p>　　2、数据包捕获模块实现<br>　　该数据包捕获程序用C语言来编写，程序中用到很多Linux网络编程中的函数。<br>　　<br>　　（1）设置网络接口为混杂模式<br>　　网络接口的混杂模式使得一个网络接口设备从只能读取目标地址为6字节MAC地址的数据包，变为可读取网络广播媒体中的所有数据包。该部分通过两次ioctl函数调用实现：<br>　　<br>　　ioctl(sock, SIOCGIFFLAGS, &amp;ifr)<br>　　ifr.ifr_flags |= IFF_PROMISC<br>　　ioctl(sock, SIOCGIFFLAGS, &amp;ifr)<br>　　<br>　　第一次的ioctl函数调用，用来截获ifr(struct ifreq)结构中所含接口名称所指接口的标记。第一个参数是打开的原始套接字描述符“sock”，第二个参数是所要执行的请求操作。第三个参数是接口请求数据结构的地址指针，该结构中包含了所以进行请求操作的接口名称值。<br>　　<br>　　我们通过将混合标记(IFF_PROMISC)应用到接口请求结构的标记位变量中来改变接口标记位。操作符“|=”将混合标记符与原有的接口标记进行“或”操作来设置新的接口标记。获得新的接口标记后，将其设置到实际接口中。第二次的ioctl调用，将接口设备设置为混合模式。正如第一个ioctl调用是获得网络接口的标记，这次调用是设置ifr结构中修改过的新标记写到物理接口上。<br>　　<br>　　（2）打开Socket设备<br>　　用socket函数来打开Socket设备。<br>　　sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))<br>　　domain域使用AF_PACKET,能够既接收链路层也接收网络层的数据包。<br>　　<br>　　（3）接收数据<br>　　使用recvfrom()函数来实现接收数据包：<br>　　recvfrom(sock,(char *)buf,sizeof(buf), 0, (struct sockaddr *)&amp;addr,&amp;len)<br>　　这是从打开的网络插座Socket读取数据包的地方，但要注意，addr结构有一个强制类型转换，以适应recvfrom()函数的语法要求，recvfrom()函数在成功读取的情况下返回读取的字节数，否则返回-1。<br>　　<br>　　（4）判断包头指针<br>　　该数据包捕获模块可以接收到的数据包都是原始数据包，它们的格式一般先是以太网数据帧的头部，接着是ARP或者IP数据包的头部。IP数据包后紧跟着TCP或UDP、ICMP的头部，最后才是真正要传输的数据。于是，在拆分IP数据包时，先提取以太网数据帧的头部，再提取IP数据包的头部，然后分析TCP或UDP、ICMP数据包的头部。最后，从数据包提取出需要的数据。<br>　　 <br></p> 
+<p>3、程序中用到的一些结构体解析<br>　　（1）sockadd_in结构体<br>　　在网络中第一个被创造的结构类型是sockaddr。这个数据结构是为许多类型的套接口储存地址信息。它的定义如下： <br>　　<br>　　struct sockaddr{ <br>　　unsigned shortsa_family； /*这个是地址族，通常是AF-xxxx的形式*/ <br>　　charsa_data[14]； /*14字节的地址信息*/ <br>　　}； <br>　　<br>　　（2）ethhdr结构体<br>　　以下是相应数据结构：<br>　　<br>　　struct ethhdr<br>　　{<!-- --><br>　　unsigned char h_dest[ETH_ALEN]；/*48位的目标地址的网卡物理地址*/<br>　　unsigned char h_source[ETH_ALEN]；/*48位的源地址的物理网卡地址*/<br>　　unsigned short h_proto；/*16位的以太网协议*/<br>　　}<br>　　<br>　　（3）iphdr结构体<br>　　这是Linux 的ip协议报头，针对版本的不同它可以有不同的定义，我们国内一般用BIG的定义，其中version 是ip的版本，protocol是ip的协议分类，saddr是32位的源ip地址，daddr是32位的目标ip地址。<br>　　<br>　　（4）tcphdr结构体<br>　　这是Linux 下tcp协议的一部分,与ip协议相同取BIG，其中source是源端口，dest 是目的端口，seq是s序，ack_seq是a序号，其余的是tcp的连接标志其中包括6个标志：syn表示连接请求，urg 表示紧急信息，fin表示连接结束，ack表示连接应答，psh表示推栈标志，rst表示中断连接。window是表示接受数据窗口大小，check是校验码，urg ptr是紧急指针。<br>　　<br>　　（5）udphdr结构体<br>　　这是Linux下ip协议中udp协议的一部分,以下是相应数据结构：<br>　　struct udphdr <br>　　{<!-- --><br>　　u_int16_t source;/* 源端口*/<br>　　u_int16_t dest;/* 目的端口*/<br>　　u_int16_t len;/* udp 长度*/<br>　　u_int16_t check;/*校验码*/<br>　　}<br>　　<br>　　本文设计的是一个基于Linux主机的包过滤型个人防火墙，它实现的功能和现今市场上流行的防火墙有巨大差距。随着技术的不断发展，防火墙也处于不断的变化之中。防火墙技术经历了包过滤、应用代理网关再到状态检测三个阶段。其中状态检测是比较先进的防火墙技术，它摒弃了包过滤防火墙仅考查数据包的 IP 地址等几个参数，而不关心数据包连接状态变化的缺点，在防火墙的核心部分建立状态连接表，并将进出网络的数据当成一个个的会话，利用状态表跟踪每一个会话状态。状态检测技术在大力提高安全防范能力的同时也改进了流量处理速度。状态监测技术采用了一系列优化技术，使防火墙性能大幅度提升，能应用在各类网络环境中，尤其是在一些规则复杂的大型网络上。深度包检测技术将为防火墙的发展提升到一个新的阶段。该技术对数据包头或有效载荷所封装的内容进行分析，从而引导、过滤和记录基于IP的应用程序和Web服务通信流量，其工作并不受协议种类和应用程序类型的限制。采用深度包检测技术，企业网络可以获得性能上的大幅度提升而无需购买昂贵的服务器或是其他安全产品。<br>　　<br>作者：华南理工大学计算机学院 陈晓霞 华南师范大学电信学院 刘寿强 陈梓忠</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/c70076398b00518c52f3365636bc8bc8/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">错误unknown character &#39;0xa1&#39;</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/c1f0d307d490051ed75d3934ed8548c7/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">h323 document</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

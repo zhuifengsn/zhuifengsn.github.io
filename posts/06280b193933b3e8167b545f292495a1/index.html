@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux 系统编程 -进程概念篇 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux 系统编程 -进程概念篇" />
+<meta property="og:description" content="Linux系统编程-进程篇 冯诺依曼体系结构冯诺依曼的两个重要思想当代计算机的三级缓存 操作系统操作系统的概念操作系统的组成操作系统作用Linux下的操作系统体系 进程进程概念进程特性进程的组成进程与程序区别进程控制块 Linux下的底层下的组织明确Linux操作系统底层Linux底层管理进程的结构体(描述)从操作系统内核的结构看进程(组织)查看进程命令进程号通过进程调用获取进程标识符通过系统调用来创建进程fork()命令1.如何理解进程创建2.fork()为什么会有两个返回值？写时拷贝技术 3.fork()父子的执行顺序和代码和数据的复制问题？4.子进程是从fork之前还是fork之后开始运行？*** Linux下查看进程的ps命令Linux环境下的几种状态R状态--运行状态S状态 --睡眠状态，可中断的D状态 ---磁盘休眠状态。T状态--暂停状态X状态 --死亡状态孤儿进程孤儿进程的概念。孤儿进程的产生条件 Z状态，僵尸进程***僵尸进程的危害？为什么要提出僵尸进程的概念解决方案为什么会产生僵尸进程？ 解释一下什么是前台程序和后台程序 环境变量--重点什么是环境变量环境变量的分类系统级的用户级的 使用echo查看环境变量内容常见的环境变量查看所有的环境变量env命令修改环境变量临时修改 使用命令永久修改 --用户级别的（针对当前用户） 环境变量的加载顺序环境变量的组织格式main()函数的几大参数通过第三方变量environ获取获取特定环境变量和修改环境变量getenvputenv()函数 进程优先级区分一下优先级与权限的问题查看系统进程的优先级数PRI与NI修改进程的PRI进程优先级的一些注意 进程状态转换问题结语 冯诺依曼体系结构 这里的存储器是内存，一般情况下内存不直接与外存打交道，而是通过缓存先将输入/输出 输出到寄存器中，再由寄存器与外存做交互。
+当代典型的输入设备：键盘、鼠标、扫描仪、写板等
+输出设备：显示器、打印机等。
+冯诺依曼的两个重要思想 1.所有数据均采用二进制存储（契合电路，高低电平的特点）
+2.数据都保存在存储器中(内存中)
+当代计算机的三级缓存 三级缓存与高速缓存(cache)
+首先必须明确三级缓存均属于高速缓存
+一级缓存：一级缓存通常设置在cpu内部，但是比起寄存器来说还是远一点，因为其放在cpu内部，所以它的空间是很小的，通常为8-16k
+二级缓存：二级缓存在CPU之外，因为主板上的空间很大，所以二级缓存比一级缓存大得多，大概是256KB-1MB左右，但是它的速度慢，因为它离CPU比较远。二级缓存通常用作一级缓存与内存的交换空间
+三级缓存：其空间更大，但是相应的离cpu也越来越远。
+所以从远及近看 CPU〈------〉寄存器〈----》缓存《-----》内存。
+缓存中的数据是可以提升的？
+比如初始情况下，一个数据位于三级缓存中，但是因为经常使用，所以它会被提升到二级缓存甚至一级缓存，这块很好理解，经常用cpu就让该数据离它更近点。
+为了保证CPU访问时有较高的命中率，Cache中的内容应该按一定的算法替换。一种较常用的算法是“最近最少使用算法”（LRU算法），它是将最近一段时间内最少被访问过的行淘汰出局。因此需要为每行设置一个计数器，LRU算法是把命中行的计数器清零，其他各行计数器加1。当需要替换时淘汰行计数器计数值最大的数据行出局。这是一种高效、科学的算法，其计数器清零过程可以把一些频繁调用后再不需要的数据淘汰出Cache，提高Cache的利用率。
+LRU为操作系统中提供的算法。
+操作系统 操作系统的概念 操作系统时配置在计算机硬件上的第一层软件，是对硬件系统的首次扩充。其主要作用是管理好这些设备，提高它们的利用率和系统的吞吐量，并为用户和应用程序提供一个简单的接口，便于用户使用。
+硬件：冯诺依曼中的所有设备
+软件:安装软件、卸载软件、升级软件
+在系统层面：文件、进程、驱动等
+操作系统的组成 操作系统=操作系统内核&#43;一堆应用
+操作系统内核：代表某种操作系统的代码的统称。
+操作系统作用 操作系统是管理当前设备的软硬件资源的软件。
+管理：先描述，再组织。
+这块管理：管理不是像宿管阿姨管理一个宿舍那样，更像是一个leader(校长)，操作系统具有**“决策权”**。
+对上：给用户一个稳定高效的执行文件。
+对下：管理好软硬件资源，提供稳定的软硬件资源。
+这里还是以学校举例：把学生比作硬件的话，那么宿管就相当于是驱动程序，而操作系统位于驱动程序之上，等于说驱动程序只是按照操作系统的命令去做事而已。这便是真正的管理者。作为一个leader，统筹全局。
+Linux下的操作系统体系 进程 进程概念 进程：进程是程序的一次执行，是系统进行资源分配和调度的一个独立单位。
+进程特性 1.动态性。由创建而产生，由调度而执行，由撤销而消亡。
+2.并发性。是指多个进程实体同时存在于内存中，且能在一段时间内使进程实体和其他进程实体同时执行。(在不同的时间点，交给处理及处理。在同一时间点，任务不会同时进行)。
+这块解释一下并发与并行区别：
+并发性：在一个处理机上，宏观上有多个进程同时执行的效果，但在微观上，并不是同时执行，只是把时间分为若干段，（类似于时间片轮转算法），使多个进程轮流交替的运行。
+并行性：指在同一时刻，多个处理机同时处理不同的任务(进程)。
+3.独立性：进程是一个能独立运行，独立获得资源和独立接受调度的基本单位。前提：建立PCB情况下。
+4.异步性：进程按独立的，不可预知的速度向前推进。
+进程的组成 进程=程序段&#43;数据段&#43;进程控制块(PCB)（PCB常驻内存）" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/06280b193933b3e8167b545f292495a1/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-06-14T08:24:47+08:00" />
+<meta property="article:modified_time" content="2021-06-14T08:24:47+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux 系统编程 -进程概念篇</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p><img src="https://images2.imgbox.com/4d/b9/idedh2oG_o.jpg" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/77/4c/XbZ9qlJH_o.jpg" alt="在这里插入图片描述"></p> 
+<p></p> 
+<div class="toc"> 
+ <h4>Linux系统编程-进程篇</h4> 
+ <ul><li><a href="#_5" rel="nofollow">冯诺依曼体系结构</a></li><li><ul><li><a href="#_10" rel="nofollow">冯诺依曼的两个重要思想</a></li><li><a href="#_14" rel="nofollow">当代计算机的三级缓存</a></li></ul> 
+  </li><li><a href="#_25" rel="nofollow">操作系统</a></li><li><ul><li><a href="#_26" rel="nofollow">操作系统的概念</a></li><li><a href="#_32" rel="nofollow">操作系统的组成</a></li><li><a href="#_35" rel="nofollow">操作系统作用</a></li><li><a href="#Linux_42" rel="nofollow">Linux下的操作系统体系</a></li></ul> 
+  </li><li><a href="#_46" rel="nofollow">进程</a></li><li><ul><li><a href="#_47" rel="nofollow">进程概念</a></li><li><a href="#_49" rel="nofollow">进程特性</a></li><li><a href="#_57" rel="nofollow">进程的组成</a></li><li><a href="#_59" rel="nofollow">进程与程序区别</a></li><li><a href="#_67" rel="nofollow">进程控制块</a></li></ul> 
+  </li><li><a href="#Linux_77" rel="nofollow">Linux下的底层下的组织</a></li><li><ul><li><a href="#Linux_78" rel="nofollow">明确Linux操作系统底层</a></li><li><a href="#Linux_82" rel="nofollow">Linux底层管理进程的结构体(描述)</a></li><li><a href="#_99" rel="nofollow">从操作系统内核的结构看进程(组织)</a></li><li><a href="#_108" rel="nofollow">查看进程命令</a></li><li><a href="#_111" rel="nofollow">进程号</a></li><li><a href="#_115" rel="nofollow">通过进程调用获取进程标识符</a></li><li><a href="#fork_128" rel="nofollow">通过系统调用来创建进程fork()命令</a></li><li><ul><li><a href="#1_144" rel="nofollow">1.如何理解进程创建</a></li><li><a href="#2fork_146" rel="nofollow">2.fork()为什么会有两个返回值？</a></li><li><ul><li><a href="#_151" rel="nofollow">写时拷贝技术</a></li></ul> 
+    </li><li><a href="#3fork_154" rel="nofollow">3.fork()父子的执行顺序和代码和数据的复制问题？</a></li><li><a href="#4forkfork_159" rel="nofollow">4.子进程是从fork之前还是fork之后开始运行？***</a></li></ul> 
+   </li><li><a href="#Linuxps_165" rel="nofollow">Linux下查看进程的ps命令</a></li><li><a href="#Linux_173" rel="nofollow">Linux环境下的几种状态</a></li><li><ul><li><a href="#R_176" rel="nofollow">R状态--运行状态</a></li><li><a href="#S__183" rel="nofollow">S状态 --睡眠状态，可中断的</a></li><li><a href="#D__192" rel="nofollow">D状态 ---磁盘休眠状态。</a></li><li><a href="#T_195" rel="nofollow">T状态--暂停状态</a></li><li><a href="#X__207" rel="nofollow">X状态 --死亡状态</a></li><li><a href="#_209" rel="nofollow">孤儿进程</a></li><li><ul><li><a href="#_210" rel="nofollow">孤儿进程的概念。</a></li><li><a href="#_214" rel="nofollow">孤儿进程的产生条件</a></li></ul> 
+    </li><li><a href="#Z_228" rel="nofollow">Z状态，僵尸进程***</a></li><li><ul><li><a href="#_237" rel="nofollow">僵尸进程的危害？</a></li><li><a href="#_241" rel="nofollow">为什么要提出僵尸进程的概念</a></li><li><a href="#_245" rel="nofollow">解决方案</a></li><li><a href="#_249" rel="nofollow">为什么会产生僵尸进程？</a></li></ul> 
+   </li></ul> 
+   </li><li><a href="#_253" rel="nofollow">解释一下什么是前台程序和后台程序</a></li></ul> 
+  </li><li><a href="#_260" rel="nofollow">环境变量--重点</a></li><li><ul><li><a href="#_261" rel="nofollow">什么是环境变量</a></li><li><a href="#_264" rel="nofollow">环境变量的分类</a></li><li><ul><li><a href="#_265" rel="nofollow">系统级的</a></li><li><a href="#_269" rel="nofollow">用户级的</a></li></ul> 
+   </li><li><a href="#echo_273" rel="nofollow">使用echo查看环境变量内容</a></li><li><a href="#_276" rel="nofollow">常见的环境变量</a></li><li><a href="#env_286" rel="nofollow">查看所有的环境变量env命令</a></li><li><a href="#_289" rel="nofollow">修改环境变量</a></li><li><ul><li><a href="#__290" rel="nofollow">临时修改 使用命令</a></li><li><a href="#__298" rel="nofollow">永久修改 --用户级别的（针对当前用户）</a></li></ul> 
+   </li><li><a href="#_305" rel="nofollow">环境变量的加载顺序</a></li><li><a href="#_311" rel="nofollow">环境变量的组织格式</a></li><li><a href="#main_315" rel="nofollow">main()函数的几大参数</a></li><li><a href="#environ_326" rel="nofollow">通过第三方变量environ获取</a></li><li><a href="#_329" rel="nofollow">获取特定环境变量和修改环境变量</a></li><li><ul><li><a href="#getenv_330" rel="nofollow">getenv</a></li><li><a href="#putenv_336" rel="nofollow">putenv()函数</a></li></ul> 
+  </li></ul> 
+  </li><li><a href="#_354" rel="nofollow">进程优先级</a></li><li><ul><li><a href="#_355" rel="nofollow">区分一下优先级与权限的问题</a></li><li><a href="#_363" rel="nofollow">查看系统进程的优先级数</a></li><li><a href="#PRINI_367" rel="nofollow">PRI与NI</a></li><li><a href="#PRI_372" rel="nofollow">修改进程的PRI</a></li><li><a href="#_386" rel="nofollow">进程优先级的一些注意</a></li></ul> 
+  </li><li><a href="#_392" rel="nofollow">进程状态转换问题</a></li><li><a href="#_398" rel="nofollow">结语</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_5"></a>冯诺依曼体系结构</h2> 
+<p><img src="https://images2.imgbox.com/c6/06/AI7U0Cmb_o.png" alt="在这里插入图片描述"><br> <strong>这里的存储器是内存</strong>，一般情况下内存不直接与外存打交道，而是通过缓存先将输入/输出 输出到寄存器中，再由寄存器与外存做交互。<br> 当代典型的输入设备：键盘、鼠标、扫描仪、写板等<br> 输出设备：显示器、打印机等。</p> 
+<h3><a id="_10"></a>冯诺依曼的两个重要思想</h3> 
+<p>1.所有数据均采用二进制存储（契合电路，高低电平的特点）<br> 2.数据都保存在存储器中(内存中)</p> 
+<h3><a id="_14"></a>当代计算机的三级缓存</h3> 
+<p>三级缓存与高速缓存(cache)<br> <strong>首先必须明确三级缓存均属于高速缓存</strong><br> 一级缓存：<strong>一级缓存通常设置在cpu内部</strong>，但是比起寄存器来说还是远一点，因为其放在cpu内部，所以它的空间是很小的，通常为8-16k<br> 二级缓存：二级缓存在CPU之外，因为主板上的空间很大，所以二级缓存比一级缓存大得多，大概是256KB-1MB左右，但是它的速度慢，因为它离CPU比较远。二级缓存通常用作一级缓存与内存的交换空间<br> 三级缓存：其空间更大，但是相应的离cpu也越来越远。<br> 所以从远及近看 CPU〈------〉寄存器〈----》缓存《-----》内存。<br> 缓存中的数据是可以提升的？<br> 比如初始情况下，一个数据位于三级缓存中，但是因为经常使用，所以它会被提升到二级缓存甚至一级缓存，这块很好理解，经常用cpu就让该数据离它更近点。<br> 为了保证CPU访问时有较高的命中率，Cache中的内容应该按一定的算法替换。一种较常用的算法是“最近最少使用算法”（LRU算法），它是将最近一段时间内最少被访问过的行淘汰出局。因此需要为每行设置一个计数器，LRU算法是把命中行的计数器清零，其他各行计数器加1。当需要替换时淘汰行计数器计数值最大的数据行出局。这是一种高效、科学的算法，其计数器清零过程可以把一些频繁调用后再不需要的数据淘汰出Cache，提高Cache的利用率。<br> LRU为操作系统中提供的算法。</p> 
+<h2><a id="_25"></a>操作系统</h2> 
+<h3><a id="_26"></a>操作系统的概念</h3> 
+<p>操作系统时配置在计算机硬件上的第一层软件，是对硬件系统的首次扩充。其<strong>主要作用是管理好这些设备，提高它们的利用率和系统的吞吐量，并为用户和应用程序提供一个简单的接口，便于用户使用</strong>。<br> 硬件：冯诺依曼中的所有设备<br> 软件:安装软件、卸载软件、升级软件<br> 在系统层面：文件、进程、驱动等</p> 
+<h3><a id="_32"></a>操作系统的组成</h3> 
+<p>操作系统=操作系统内核+一堆应用<br> <strong>操作系统内核：代表某种操作系统的代码的统称。</strong></p> 
+<h3><a id="_35"></a>操作系统作用</h3> 
+<p>操作系统是<strong>管理</strong>当前设备的<strong>软硬件资源</strong>的<strong>软件</strong>。<br> <strong>管理：先描述，再组织。</strong><br> 这块管理：管理不是像宿管阿姨管理一个宿舍那样，更像是一个leader(校长)，操作系统具有**“决策权”**。<br> 对上：给用户一个稳定高效的执行文件。<br> 对下：管理好软硬件资源，提供稳定的软硬件资源。<br> 这里还是以学校举例：把学生比作硬件的话，那么宿管就相当于是驱动程序，而操作系统位于驱动程序之上，等于说驱动程序只是按照操作系统的命令去做事而已。这便是真正的管理者。作为一个leader，统筹全局。</p> 
+<h3><a id="Linux_42"></a>Linux下的操作系统体系</h3> 
+<p><img src="https://images2.imgbox.com/ea/6b/qdKretPn_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_46"></a>进程</h2> 
+<h3><a id="_47"></a>进程概念</h3> 
+<p>进程：进程是<strong>程序的一次执行</strong>，是<strong>系统进行资源分配和调度的一个独立单位。</strong></p> 
+<h3><a id="_49"></a>进程特性</h3> 
+<p>1.<strong>动态性</strong>。由创建而产生，由调度而执行，由撤销而消亡。<br> 2.<strong>并发性</strong>。是指多个进程实体同时存在于内存中，且能在一段时间内使进程实体和其他进程实体同时执行。(在不同的时间点，交给处理及处理。在同一时间点，任务不会同时进行)。<br> 这块解释一下并发与并行区别：<br> <strong>并发性</strong>：<strong>在一个处理机上</strong>，宏观上有多个进程同时执行的效果，但在微观上，并不是同时执行，只是把时间分为若干段，（类似于时间片轮转算法），使<strong>多个进程轮流交替的运行</strong>。<br> <strong>并行性</strong>：指在同一时刻，<strong>多个处理机同时处理不同的任务(进程)</strong>。<br> 3.<strong>独立性</strong>：进程是一个能独立运行，独立获得资源和独立接受调度的基本单位。<strong>前提：建立PCB情况下</strong>。<br> 4.<strong>异步性</strong>：进程按独立的，不可预知的速度向前推进。</p> 
+<h3><a id="_57"></a>进程的组成</h3> 
+<p><strong>进程=程序段+数据段+进程控制块(PCB)（PCB常驻内存）</strong></p> 
+<h3><a id="_59"></a>进程与程序区别</h3> 
+<p>1.进程是一个<strong>动态的概念</strong>，程序是一个<strong>静态的概念</strong>。<br> 2.进程具有并发性，而程序没有<br> 3.进程是资源分配和处理机调度的独立单位，其并发性受系统制约。<br> 4.一个程序，多次执行，对应多个进程，不同的进程可包含同一组程序。<br> 进程：程序 (1:n)<br> <img src="https://images2.imgbox.com/06/15/1GTJDPS7_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_67"></a>进程控制块</h3> 
+<p>PCB定义：作为<strong>进程实体的一部分，记录了操作系统所需的，用于描述进程的当前情况以及管理进程运行的全部信息，是操作系统中最重要的记录型数据结构。</strong><br> PCB的作用是<strong>使一个在多道程序环境下不能独立运行的程序(含数据)称为一个独立运行的基本单位，一个能与其他进程并发执行的进程</strong>。<br> 作用：<br> 1）PCB标志了程序作为独立运行基本单位。<br> 2）能实现间断性运行方式。这很好理解，比如cpu处理进程使的并发性。当在一段时间内A进程的时间片耗尽时，此时需要记录执行到哪里了(保护现场)。保证了进程下次被分到时间片时的恢复现场。<br> 3）提供了进程管理所需要的信息。PCB中记录了程序和数据在内存或外存的始址指针，找到对应的程序和数据。总的来说，PCB里面保存着执行资源的地址。<br> 4）提供进程调度所需要的信息。比如优先级、程序目前的状态，是在阻塞态还是在S（sleep）状态。<br> 5）实现与其他进程的同步和通信。比如一个程序被分为多个进程，此时后一个所需的资源依赖于前一个进程执行完毕，这就涉及到了进程的同步与通信了，是有顺序的，。要不然你执行你的，我执行我的，这样的出来的值到底是什么！！<br> <strong>注：PCB里面存储的程序和数据均是程序和数据的地址，PCB常驻内存。</strong></p> 
+<h2><a id="Linux_77"></a>Linux下的底层下的组织</h2> 
+<h3><a id="Linux_78"></a>明确Linux操作系统底层</h3> 
+<p>Linux系统<strong>是以C语言编写的</strong>，C语言可以存储多个对象的数据类型的结构是什么，当然<strong>是结构体</strong><br> 文件=内容+属性</p> 
+<h3><a id="Linux_82"></a>Linux底层管理进程的结构体(描述)</h3> 
+<p>进程=对应的文件+进程属性<br> struct task_struct<br> {<!-- --></p> 
+<p>}<br> 这个结构体下存了哪些东西：<br> 标示符: 描述本进程的唯一标示符，用来区别其他进程。<br> 状态: 任务状态，退出代码，退出信号等。<br> 优先级: 相对于其他进程的优先级。<br> 程序计数器: 程序中即将被执行的下一条指令的地址。（汇编指令）<br> 内存指针: 包括程序代码和进程相关数据的指针，还有和其他进程共享的内存块的指针<br> 上下文数据: 进程执行时处理器的寄存器中的数据[休学例子，要加图CPU，寄存器]。<br> I／ O状态信息: 包括显示的I/O请求,分配给进程的I／ O设备和被进程使用的文件列表。<br> 记账信息: 可能包括处理器时间总和，使用的时钟数总和，时间限制，记账号等。<br> 其他信息<br> 这个结构体又称为<strong>PCB</strong></p> 
+<h3><a id="_99"></a>从操作系统内核的结构看进程(组织)</h3> 
+<p>前面我们提到过：<br> 管理=描述+组织<br> 描述：前面我们已经给出了描述进程的结构体，那在底层，它是怎么实现组织的？<br> <strong>是通过双向链表的方式，通过增、删、查、改的操作来实现进程的调度。</strong><br> 进程管理：<strong>先描述，再组织</strong><br> 将程序跑起来，就相当于将程序加载入内存，将程序输出可视化，便是将程序加载到显示器中。</p> 
+<h3><a id="_108"></a>查看进程命令</h3> 
+<p><strong>ls /proc</strong> proc目录下存储着当前所运行的进程<br> <img src="https://images2.imgbox.com/59/27/4D23uJjz_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_111"></a>进程号</h3> 
+<p>什么是进程号：进程号就相当于是标识进程存在的序号，这个序号是随机产生的，<strong>每次产生的进程的进程号都是不同的</strong>。它是用来唯一标识进程的。就像每个人自出生起你的身份证号就固定起来了。（唯一标识：在当前主机），比如说两个不同的主机，两个进程号就算相同的话，它也不是同一进程。<br> <img src="https://images2.imgbox.com/c4/5f/aqp0vgwb_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_115"></a>通过进程调用获取进程标识符</h3> 
+<p>getpid()获取到当前进程的进程号<br> getppid()获取的是该进程的父进程的进程号<br> <img src="https://images2.imgbox.com/db/24/8ixWRkd8_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/92/ea/HXk60E9C_o.png" alt="在这里插入图片描述"><br> 测试用例：<br> <img src="https://images2.imgbox.com/5b/78/DrABTtIy_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/7d/76/DQHxwuo0_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/3f/89/tM1RLfzG_o.png" alt="在这里插入图片描述"><br> 基本Linux下的所有命令的父进程都是bash。<br> bash的运行原理：<br> <strong>通过创建子进程，让子进程去完成任务。</strong> 为什么？因为通过上面可以看到bash也相当于是操作系统的一个进程，所以具有进程独立性的特点，命令执行基础是要保证自己是安全的。等于说自己先创建一个子进程去完成命令，就算执行不了，崩掉了，此时根据进程独立性特点，它也影响不到父进程。因为bash是Linux程序运行的基础，bash崩了，整个Linux操作系统就崩了。</p> 
+<h3><a id="fork_128"></a>通过系统调用来创建进程fork()命令</h3> 
+<p>fork系统调用用于<strong>创建一个新进程</strong>，称为<strong>子进程</strong>，它与进程（称为系统调用fork的进程）同时运行，此进程称为父进程。创建新的子进程后，两个进程将执行fork（）系统调用之后的下一条指令。子进程使用相同的pc（程序计数器），相同的CPU寄存器，在父进程中使用的相同打开文件。<br> <strong>头文件 :#include&lt;unistd.h&gt;<br> 函数参数:pid_t fork(void);<br> pid_t 就是int类型</strong><br> 它不需要参数并返回一个整数值。下面是fork（）返回的不同值。<br> 负值：创建子进程失败。<br> 零：返回到新创建的子进程。<br> 正值：返回给父进程或调用者。<strong>该值是新创建的子进程的进程ID</strong> 。<br> <img src="https://images2.imgbox.com/dc/ae/VogUzLqE_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/56/91/sdMd6mOW_o.png" alt="在这里插入图片描述"><br> fork的一些特性：<br> 返回值。有三个返回值，成功时候两个，失败时候一个。<br> 成功时：给创建子进程的父进程返回创建子进程的进程号。给子进程返回0值。<br> <img src="https://images2.imgbox.com/38/78/wUxiUC6j_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="1_144"></a>1.如何理解进程创建</h4> 
+<p><img src="https://images2.imgbox.com/2b/da/mrWQnduB_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="2fork_146"></a>2.fork()为什么会有两个返回值？</h4> 
+<p><strong>声明一点fork()只调用了一次</strong><br> 此时父进程创建出来一次的时候会return一次，子进程的数据流也会返回一次。<br> 由于在复制时复制了 <strong>父进程的堆栈段，所以两个进程都停留在fork函数中，等待返回.因为fork函数会返回两次,一次是在父进程中返回，另一次是在子进程中返回，这两次的返回值不同. 从fork函数开始以后的代码父子共享，既父进程要执行这段代码，子进程也要执行这段代码.(子进程获得父进程数据空间，堆和栈的副本. 但是父子进程并不共享这些存储空间部分. 父，子进程共享代码段.)</strong> 现在很多现实并不执行一个父进程数据段，堆和栈的完全复制. 而是采用 <strong>写时拷贝技术</strong>.这些区域有父子进程共享，而且内核地他们的访问权限改为只读的.如果父子进程中任一个试图修改这些区域,则内核值为修改区域的那块内存制作一个副本, 也就是如果你不修改我们一起用，你修改了之后对应修改的那部分。<br> 就是类似于<strong>进程的独立性，进程间代码共享，数据私有</strong>，此时因为数据要私有一份(数据改变)，所以此时父进程会return 一次（return一次子进程的进程号），子进程return一次，（return 0）；<strong>前提是进程创建成功的前提下</strong>。</p> 
+<h5><a id="_151"></a>写时拷贝技术</h5> 
+<p><img src="https://images2.imgbox.com/86/37/BVviPhjk_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="3fork_154"></a>3.fork()父子的执行顺序和代码和数据的复制问题？</h4> 
+<p>进程数据=代码+数据<br> 父进程创建子进程时，<strong>代码共享</strong>(因为代码在内存中一般为只读)，<strong>数据私有</strong>(写时拷贝)，这也就解释了上面的fork()为什么会有两个不同的返回值，。为什么数据私有呢？<strong>是由于进程的特性所决定的，进程具有独立性</strong>。<br> 关于执行顺序：当子进程被创建成功时，此时它会被加载到内存的运行队列中，又因为进程的特征具有<strong>异步性</strong>。(进程以不可预料的结果向前推进)，所以这块子进程与父进程的执行顺序是<strong>不确定</strong>的。由操作系统中的<strong>调度器</strong>决定</p> 
+<h4><a id="4forkfork_159"></a>4.子进程是从fork之前还是fork之后开始运行？***</h4> 
+<p>子进程是从fork()之后开始运行的。<br> 父进程调用fork()函数时，其程序计数器中保存的是fork’()之后的下一条汇编指令。<br> 上下文信息：调用fork()完毕之后保存的寄存器内容。<br> 此时子进程去拷贝父进程的PCB，所以<strong>此时子进程拿到的便是fork之后的代码，所以子进程的执行是从fork()之后开始的。</strong></p> 
+<h3><a id="Linuxps_165"></a>Linux下查看进程的ps命令</h3> 
+<p>-A 显示所有进程（同-e）<br> -a 显示当前终端的所有进程<br> -u 显示进程的用户信息<br> -o 以用户自定义形式显示进程信息<br> -f 显示程序间的关系<br> -axj 通常可以查看父子间的依赖关系<br> -aux查看的是当前操作系统的所有信息</p> 
+<h3><a id="Linux_173"></a>Linux环境下的几种状态</h3> 
+<p><img src="https://images2.imgbox.com/0e/c3/UAhQzGix_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="R_176"></a>R状态–运行状态</h4> 
+<p>测试用例：<br> <img src="https://images2.imgbox.com/84/bf/ZUxOTwvJ_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/d6/e9/ZdWDvHlg_o.png" alt="在这里插入图片描述"><br> 首先明确一个概念：R状态是不是程序一定在运行？<br> <img src="https://images2.imgbox.com/18/3a/K0COJt2y_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="S__183"></a>S状态 --睡眠状态，可中断的</h4> 
+<p>为什么这块要强调一下它是可中断的睡眠呢？<br> 因为下面还有一个D状态，是不可中断的睡眠方式，后面会详述的。<br> 测试用例：<br> 可以看到，这里是一直在打印.字符<br> <img src="https://images2.imgbox.com/48/bb/Budqstcg_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/31/fb/z8xwuxxo_o.png" alt="在这里插入图片描述"><br> 这里可以看到程序处于S状态，为什么呢？我不是一直在打印.这个字符吗？<br> 这是因为cout打印涉及到了I/O，cpu的执行效率是远远大于I/O操作的，可以这么说吧，cpu用了1%的时间打印.这个字符，但99%的时间都在等I/O完成。所以虽然是个while(1)循环，其它的进程也可以照样执行的原因，这是因为<strong>进程的并发性的特性所决定的。它一段时间内不会单单只处理一个进程。</strong></p> 
+<h4><a id="D__192"></a>D状态 —磁盘休眠状态。</h4> 
+<p>这个不好演示，给大家画个图吧。<br> <img src="https://images2.imgbox.com/f8/8e/4Drg9y52_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="T_195"></a>T状态–暂停状态</h4> 
+<p>可以通过发送 SIGSTOP 信号给进程来停止（T）进程。这个被暂停的进程可<br> 以通过发送 SIGCONT 信号让进程继续运行。<br> 测试用例：<br> <img src="https://images2.imgbox.com/7e/3f/boaIVT7M_o.png" alt="在这里插入图片描述"><br> 命令<strong>kill -19 + 进程号（PID）</strong> 让程序暂停执行<br> <img src="https://images2.imgbox.com/9a/b1/Ng1GDktO_o.png" alt="在这里插入图片描述"><br> <strong>可以看到此时程序已经停止了，但程序依然存在于内存中。</strong> 类似于我们平时按下ctrl+z的操作一样，这也是为什么不推荐使用该命令的原因，它<strong>只是暂停程序，并没有终止程序</strong><br> 那怎么恢复呢？<br> kill -18 + 进程号（PID）<br> <img src="https://images2.imgbox.com/53/2f/YFqDW1sp_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="X__207"></a>X状态 --死亡状态</h4> 
+<p>一般来说我们是看不到死亡进程的，<strong>死亡进程会被立即置换出内存，这个过程是及其短暂的，所以很难追踪到</strong>。</p> 
+<h4><a id="_209"></a>孤儿进程</h4> 
+<h5><a id="_210"></a>孤儿进程的概念。</h5> 
+<p>父进程先退出，子进程就称之为“孤儿进程”<br> 孤儿进程被1号systemed进程领养，当然要有systemed进程回收喽。</p> 
+<h5><a id="_214"></a>孤儿进程的产生条件</h5> 
+<p>父进程先于子进程退出。子进程进入一个死循环，这样这个进程就变为了一个孤儿进程。<br> 测试用例：<br> <img src="https://images2.imgbox.com/fb/bf/QwQEFVup_o.png" alt="在这里插入图片描述"><br> 此时看现象：<br> <img src="https://images2.imgbox.com/ef/0a/QuQIZa0G_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/1d/c8/LKPcger9_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/4f/8d/wCVYCZTB_o.png" alt="在这里插入图片描述"><br> 这里解释一下为什么在孤儿进程的情况下仍可以运行bash命令行解释器？</p> 
+<p><img src="https://images2.imgbox.com/11/34/NU9kiaRV_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="Z_228"></a>Z状态，僵尸进程***</h4> 
+<p>僵尸进程的概念：<br> 1.僵死状态（Zombies）是一个比较特殊的状态。当进程退出并且父进程（使<br> 没有读取到子进程退出的返回代码时就会产生僵死(尸)进程<br> 2.僵死进程会以终止状态保持在进程表中，并且会一直在等待父进程读取退出状态代码。<br> 3.所以，<strong>只要子进程退出，父进程还在运行</strong>，但父进程没有读取子进程状态，子进程进入Z状态<br> 测试用例：<br> <img src="https://images2.imgbox.com/ad/b6/lFZMhrjj_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/d9/a1/ZVqrnMYE_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="_237"></a>僵尸进程的危害？</h5> 
+<p>1.进程的退出状态必须被维持下去，因为他要告诉关心它的进程（父进程），你交给我的任务，我办的怎么样了。可父进程如果一直不读取，那子进程就一直处于Z状态？是的！<br> 2.维护退出状态本身就是要用数据维护，也属于进程基本信息，所以保存在task_struct(PCB)中，换句话说， Z状态一直不退出， PCB一直都要维护？是的！<br> 3.那一个父进程创建了很多子进程，就是不回收，是不是就会造成内存资源的浪费？是的！因为数据结构对象本身就要占用内存，想想C中定义一个结构体变量（对象），是要在内存的某个位置进行开辟空间！便会造成<strong>内存泄漏</strong></p> 
+<h5><a id="_241"></a>为什么要提出僵尸进程的概念</h5> 
+<p>保存进程的基本退出原因，方便父进程读取，获取退出原因。<br> 进程死亡的话，操作系统通过系统调用来分析进程结束完后的基本信息，（1.是否正常运行完？2.是否异常？异常的原因）<br> <strong>让进程退出之时，不要立即释放资源，而是把资源维持一段时间去供操作系统进行读取。</strong></p> 
+<h5><a id="_245"></a>解决方案</h5> 
+<p>1.重启操作系统（众所周知，重启可以解决计算机90%的问题）–<strong>不推荐</strong><br> 2.<strong>干掉父进程，这样进程成功由僵尸进程转化为孤儿进程，它就会被1号进程所领养，最后回收资源。</strong>（重点）<br> 3.进程等待。</p> 
+<h5><a id="_249"></a>为什么会产生僵尸进程？</h5> 
+<p><strong>父进程创建一个子进程，子进程相对于父进程来说提前退出。子进程在退出的时候会向父进程发送一个信号(SIGCHLD),而父进程对于该信号是忽略处理的，导致子进程在退出时，没有进程来回收子进程的资源(PCB),子进程就变为了僵尸进程。</strong></p> 
+<h3><a id="_253"></a>解释一下什么是前台程序和后台程序</h3> 
+<p>一般来说比如进程状态后有‘+’符号的号，就是前台程序，没有的话就是后台程序。怎么理解前台程序和后台程序呢？<br> 比如你今天电脑中开了许多的app，比如qq、网易云、微信等程序，此时你正在网易云里面看视频（MV），那此时网易云便是你的前台程序，qq、微信，不是不运行了，而是由前台程序变为了后台程序。<br> 在linux’系统中，一般可以用ctrl+c终止的程序称为前台程序，不能的称为后台程序。孤儿进程中的父进程就相当于前台程序(在执行完后，等待子进程结束的时候)。<br> 怎么去让一个程序变为后台运行<br> <strong>./可执行程序名 &amp;</strong></p> 
+<h2><a id="_260"></a>环境变量–重点</h2> 
+<h3><a id="_261"></a>什么是环境变量</h3> 
+<p>环境变量(environment variables)一般是指在操作系统中用来指定操作系统运行环境的一些参数如：我们在编写C/C++代码的时候，在链接的时候，从来不知道我们的所链接的动态静态库在哪里，但是照样可以链接成功，生成可执行程序，原因就是有相关环境变量帮助编译器进行查找。环境变量通常具有某些特殊用途，还有在系统当中通常具有全局特性<br> 本质:<strong>就是将命令的可执行程序的路径保存起来</strong>。</p> 
+<h3><a id="_264"></a>环境变量的分类</h3> 
+<h4><a id="_265"></a>系统级的</h4> 
+<p>存在所有的环境变量，对所有用户都需要加载<br> /etc/bashrc ，<strong>一般不要对该文件下的内容进行修改。</strong><br> <img src="https://images2.imgbox.com/7f/18/tLLZ5uKh_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_269"></a>用户级的</h4> 
+<p>两个文件 ~./ bashrc<br> ~./ bash_profile<br> <img src="https://images2.imgbox.com/76/50/hx0W72XN_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="echo_273"></a>使用echo查看环境变量内容</h3> 
+<p><img src="https://images2.imgbox.com/d9/2a/24AwEGqM_o.png" alt="在这里插入图片描述"><br> 可以看到这就是PATH环境变量下存储的内容，一般存储的是可执行程序的路径。</p> 
+<h3><a id="_276"></a>常见的环境变量</h3> 
+<p><strong>PATH：指定可执行程序的搜索路径</strong> --重点<br> 测试用例：<br> 比如ls命令<br> <img src="https://images2.imgbox.com/83/0f/92V4B93u_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/c7/e9/eAyPoWYW_o.png" alt="在这里插入图片描述"><br> 总结：<strong>在不指定路径的情况下，在命令行输入一个命令，他会在PATH所存储的路径中依次查找，查找到就执行该可执行程序，查找不到就会报错，这也解释了为什么在当前目录下生成的可执行文件为什么要加上./才能执行，因为就告诉编译器我是在执行当前目录下可执行文件</strong><br> <strong>HOME</strong> :指定用户的主工作目录(即用户登录到LInux上时，默认的目录)<br> SHELL：当前的shell，通常是/bin/bash</p> 
+<h3><a id="env_286"></a>查看所有的环境变量env命令</h3> 
+<p><img src="https://images2.imgbox.com/91/a2/fqJUpw7L_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_289"></a>修改环境变量</h3> 
+<h4><a id="__290"></a>临时修改 使用命令</h4> 
+<p><strong>export +环境变量名称=$环境变量名称:新的路径</strong><br> $环境变量名称：<strong>为了保留之前的环境变量，类似于在之前环境变量的基础上添加，而不是直接修改</strong><br> 临时修改的特性：<strong>只在该系统使用时有效，重启后失效</strong>。<br> 测试用例：<br> <img src="https://images2.imgbox.com/a3/a1/oyEIhHls_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/f3/05/QhIQ5yVD_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/86/32/K3RPfv5M_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="__298"></a>永久修改 --用户级别的（针对当前用户）</h4> 
+<p>vim ./.bash_profile<br> <img src="https://images2.imgbox.com/89/40/mWOaUrtx_o.png" alt="在这里插入图片描述"><br> source ~/.bash_profile 是让主机重新读取环境变量<br> <img src="https://images2.imgbox.com/06/39/8wmgDWCj_o.png" alt="在这里插入图片描述"><br> 这里看到运行成功了<br> <img src="https://images2.imgbox.com/91/ba/8zcwpSe8_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_305"></a>环境变量的加载顺序</h3> 
+<p>先加载系统级的环境变量 /etc/bashrc<br> 再加载用户级中的 ~/.bashrc<br> 最后是 ~/.bash_profile<br> <img src="https://images2.imgbox.com/69/dd/zdyChycS_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/24/3e/GVykaLdH_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_311"></a>环境变量的组织格式</h3> 
+<p><img src="https://images2.imgbox.com/f7/70/kN3JTT3E_o.png" alt="在这里插入图片描述"><br> <strong>环境变量在底层是以指针数组存储的，每个指针指向一个环境变量，以NULL值作为结束标志。</strong><br> 底层是char*envp[] 指针数组，每个指针指向存储的一份环境变量。</p> 
+<h3><a id="main_315"></a>main()函数的几大参数</h3> 
+<p>int main(int argc,char<em>argv[],char</em>envp[]);<br> argc 为命令行参数的个数，本质上是argv的元素个数，默认情况为1，输出的是该程序的名字。<br> argv 为命令行参数<br> envp为环境变量</p> 
+<p>测试用例：<br> <img src="https://images2.imgbox.com/5c/29/66Huk6nr_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/f2/25/KEmQdBb8_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/37/77/KqpJCX5Q_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="environ_326"></a>通过第三方变量environ获取</h3> 
+<p>获取整个环境变量<br> <img src="https://images2.imgbox.com/71/2c/jmcXcVwK_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_329"></a>获取特定环境变量和修改环境变量</h3> 
+<h4><a id="getenv_330"></a>getenv</h4> 
+<p>头文件#include&lt;stdlib.h&gt;<br> 函数原型：char* getenv(const char*name);<br> name为需要查找环境变量的名称。<br> <img src="https://images2.imgbox.com/a5/23/aO1lNAbx_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/ef/93/pFMCFOsf_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="putenv_336"></a>putenv()函数</h4> 
+<p>头文件 #include&lt;stdlib.h&gt;<br> 函数原型 int putenv(char*string)<br> 返回值 修改成功返回0 ，失败返回非0值<br> 例子：不截图了</p> 
+<pre><code class="prism language-c">调用putenv去修改PATH
+<span class="token keyword">int</span> ret<span class="token operator">=</span><span class="token function">putenv</span><span class="token punctuation">(</span><span class="token string">"PATH=/usr/bin"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  cout<span class="token operator">&lt;&lt;</span><span class="token string">"success"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">else</span>
+<span class="token punctuation">{<!-- --></span>
+ cout<span class="token operator">&lt;&lt;</span><span class="token string">"change failed"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h2><a id="_354"></a>进程优先级</h2> 
+<h3><a id="_355"></a>区分一下优先级与权限的问题</h3> 
+<p>优先级：cpu资源的分配顺序，就是进程的优先级。<br> <strong>优先权高的具有优先被cpu’先执行的权力。</strong> 这很好理解，就像一个医院中来了一个感冒的病人和一个出了车祸的病人一样的，医生不会说因为你先到就给你先看完再去处理出车祸的病人。<br> Linux操作系统为抢占式的操作系统。<br> 那这里就有人会想了，既然为抢占式操作系统，那是不是优先级低的一直得不到cpu调度？<br> <strong>首先，优先级不是一成不变的，在Linux内部，一个任务的优先级是会随着时间的推移渐渐增长的，所以确保了那些优先级低的也有将来某一天被cpu调度的可能。</strong></p> 
+<p>权限：强调的是一个任务能不能被操作。</p> 
+<h3><a id="_363"></a>查看系统进程的优先级数</h3> 
+<p>ps -l 采取详细的格式来显示进程状况<br> ps -al 显示所有终端机下执行的程序，除了阶段作业领导者之外 ，并显示他们的详细的格式。<br> <img src="https://images2.imgbox.com/f6/39/HlLGhtVo_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="PRINI_367"></a>PRI与NI</h3> 
+<p>PRI也还是比较好理解的，即进程的优先级，或者通俗点说就是程序<strong>被CPU执行的先后顺序，此值越小进程的优先级别越高</strong><br> 那NI呢?就是我们所要说的nice值了，其表示进程可被执行的优先级的修正数值PRI值越小越快被执行，那么加入nice值后，将会使得PRI变为： <strong>PRI(new)=PRI(old)+nice</strong><br> 这样，当nice值为负值的时候，那么该程序将会优先级值将变小，即其优先级会变高，则其越快被执行所以，调整进程优先级，在Linux下，就是调整进程nice值，nice其取值范围是-20至19，一共40个级别。<br> 注：<strong>PRI的值不可直接修改，只可以通过修改其nice值达到修改PRI的目的。</strong></p> 
+<h3><a id="PRI_372"></a>修改进程的PRI</h3> 
+<p>这里只介绍一种最简单的，就是top命令，进入Linux 下的任务管理器。进入后按下r，接着输入进程pid(进程号) 接着输入修正Nice值。<br> 必须在root权限下进行。普通用户无法修改PRI。<br> 步骤：<br> <img src="https://images2.imgbox.com/07/88/j7WWEOJN_o.png" alt="在这里插入图片描述"><br> 记录z_fork()的pid，修改时候要用<br> <img src="https://images2.imgbox.com/12/9c/amjHNG4x_o.png" alt="在这里插入图片描述"><br> 按下r<br> <img src="https://images2.imgbox.com/8c/49/t9arNca4_o.png" alt="在这里插入图片描述"><br> 输入进程pid完成后<br> <img src="https://images2.imgbox.com/18/0f/UviaOmfk_o.png" alt="在这里插入图片描述"><br> 我们将NI设为-19，看结果图<br> <img src="https://images2.imgbox.com/b1/7f/Liz2MlST_o.png" alt="在这里插入图片描述"><br> 可以看到进程的优先级已经由80变为61了。</p> 
+<h3><a id="_386"></a>进程优先级的一些注意</h3> 
+<p>1.<strong>一般情况下不要去修改进程的优先级</strong>，专业人干专业事，操作系统有自己的调度策略，所以非必要情况下不要去修改。<br> 2.进程的优先级初始化PRI都是80，NI 都是0，我们只可以通过修改NI的方式达到修改PRI的目的。<br> 3.<strong>进程优先级是可以提升的</strong>。这里的提升不是说用户去提升它，而是操作系统对驻留在内存中的作业的优先级提升，一般随时间线性化增长。<br> 4.进程的优先级数值越大，优先级越低。<br> 5，进程PRI的取值范围，首先看一下NICE的取值范围[-20,19]。所以PRI的取值范围为[60,99];</p> 
+<h2><a id="_392"></a>进程状态转换问题</h2> 
+<p><img src="https://images2.imgbox.com/79/d9/SthCGU6c_o.jpg" alt="在这里插入图片描述"><br> 在Linux’系统下<br> <img src="https://images2.imgbox.com/d7/9e/Z93clqyn_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/10/75/0J8TmkvV_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_398"></a>结语</h2> 
+<p>希望大家多多支持，若博客有什么问题请大家不吝赐教。有博客中不懂的问题可以在评论区给出，我会尽我所能的一个一个给大家回答。本次博客我们进入到了系统编程中了，这只是一个开篇，后序的我会坚持更新。感谢访问！！</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/5f9ea8c91879c0c14d58282bcb4d77fa/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【WPF】绘图--《深入浅出WPF》by刘铁锰</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/17bea328da63f1662928a145151d7f0f/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">AirTest-Poco脚本</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

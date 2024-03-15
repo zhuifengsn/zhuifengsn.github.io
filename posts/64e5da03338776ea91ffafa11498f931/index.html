@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>CAS机制实现原理分析 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="CAS机制实现原理分析" />
+<meta property="og:description" content="学习方法：场景-&gt;需求-&gt;解决方案-&gt;应用-&gt;了解原理 一、CAS是什么？ CAS机制：CompareAndSwap 或 CompareAndExchange 或 CompareAndSet。
+CAS是一个能够进行比较和替换的方法，这个方法能够在多线程环境下保证对一个共享变量进行修改时的原子性不变。
+场景：i&#43;&#43; 保证原子性 为了更好的理解CAS机制，我们先看一个例子：
+public class S01_AtomicDemo { volatile int i=0; //加上 synchronized 关键字保证结果一定是 2000 正确的 public /*synchronized */ void incr(){ i&#43;&#43;; } public static void main(String[] args) throws InterruptedException { S01_AtomicDemo s01_atomicDemo = new S01_AtomicDemo(); Thread[] threads = new Thread[2]; for (int j=0; j &lt;2 ; j&#43;&#43;) { threads[j]=new Thread(()-&gt;{ for (int k = 0; k &lt; 1000; k&#43;&#43;) { s01_atomicDemo.incr(); } }); threads[j]." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/64e5da03338776ea91ffafa11498f931/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-10-02T12:07:11+08:00" />
+<meta property="article:modified_time" content="2022-10-02T12:07:11+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">CAS机制实现原理分析</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>学习方法：场景-&gt;需求-&gt;解决方案-&gt;应用-&gt;了解原理</h2> 
+<h2 id="%E4%B8%80%E3%80%81CAS%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9F">一、CAS是什么？</h2> 
+<p>CAS机制：CompareAndSwap 或 CompareAndExchange 或 CompareAndSet。<br> CAS是一个能够进行比较和替换的方法，这个方法能够在多线程环境下保证对一个共享变量进行修改时的原子性不变。</p> 
+<h3 id="%E5%9C%BA%E6%99%AF%EF%BC%9Ai%2B%2B%20%E4%BF%9D%E8%AF%81%E5%8E%9F%E5%AD%90%E6%80%A7">场景：i++ 保证原子性</h3> 
+<p>为了更好的理解CAS机制，我们先看一个例子：</p> 
+<pre><code class="language-java">public class S01_AtomicDemo {
+    volatile int i=0;
+    //加上 synchronized 关键字保证结果一定是 2000 正确的
+    public /*synchronized */ void incr(){
+        i++;
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        S01_AtomicDemo s01_atomicDemo = new S01_AtomicDemo();
+        Thread[] threads = new Thread[2];
+
+        for (int j=0; j &lt;2 ; j++) {
+            threads[j]=new Thread(()-&gt;{
+                for (int k = 0; k &lt; 1000; k++) {
+                    s01_atomicDemo.incr();
+
+                }
+            });
+
+            threads[j].start();
+        }
+
+        threads[0].join();//保证线程执行结束
+        threads[1].join();
+        System.out.println(s01_atomicDemo.i);
+
+        //期望结果是 两个线程分别执行 1000  i++,结果应该是 2000
+        //但是实际结果小于2000，这是原子性问题——可能第一个线程已经加到i=100了，第二个线程读的还是i=0
+    }
+}
+</code></pre> 
+<p>这个例子的结果：</p> 
+<ul><li>期望结果是 两个线程分别执行 1000 i++,结果应该是 2000</li><li>在不加synchronized锁的同步锁的情况下，实际结果小于2000，这是原子性问题——可能第一个线程已经加到i=100了，第二个线程读的还是i=0</li></ul> 
+<p>想到达结果正确，可以从两个方面考虑：</p> 
+<ul><li>① 不允许当前非原子指令在执行过程中被中断，也就是说保证i++操作在执行过程中不存在上下文切换。</li><li>② 多线程并发执行导致原子性问题可以通过一个互斥条件来实现串行执行</li></ul> 
+<p><strong>synchronized锁可以实现。增加synchronized锁之后可以保证原子性（结果正确），但是加锁会存在性能问题。</strong></p> 
+<h3>需求：那除了加锁，还有没有更好的方式呢？</h3> 
+<p>这个时候我们想到一种乐观锁的机制：在线程调用i++之前，先判断i的值和之前读取的 i 的预期值是否相等。如果相等，则说明 i 的值 没有被其他线程修改过，这个时候可以正常修改；否则，表示修改过，就要重新读取最新的 i 的值进行累加。</p> 
+<h3>解决方案：CAS就是解决这个问题的。</h3> 
+<h3>应用：getAndIncrement()方法</h3> 
+<pre><code class="language-java">public class S01_AtomicInteger {
+    public static void main(String[] args) throws InterruptedException {
+        AtomicInteger atomicInteger=new AtomicInteger(0);
+        Thread[] threads=new Thread[2];
+        for (int j = 0; j &lt; 2 ; j++) {
+            threads[j]=new Thread(()-&gt;{
+                for (int i = 0; i &lt; 1000; i++) {
+                    /**
+                     * getAndIncrement是原子累加方法，每次调用一次会在原来值的基础上+1，这个过程采用了CAS机制保证原子性。点进去看源码
+                     */
+                    atomicInteger.getAndIncrement();
+                }
+            });
+            threads[j].start();
+        }
+        threads[0].join(); //保证线程执行结束
+        threads[1].join();
+        System.out.println(atomicInteger); //结果是2000,没问题！
+    }
+}
+</code></pre> 
+<h2>二、CAS原理示意图</h2> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/7a/2d/1zlCe4gQ_o.png"></p> 
+<p>该图表示通过CAS对变量V进行原子更新操作。CAS方法中会传递三个参数，第一个参数V表示要更新的变量，第二个参数E表示期望值，第三个参数U表示更新后的值。更新的方式是，如果V==E，表示预期值和实际值相等，则将V修改成U并返回true，否则修改失败返回false。<br> 在Java中的Unsafe类中提供了CAS方法，针对int类型变量的CAS方法定义如下。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/88/f9/x32PO4HI_o.png"></p> 
+<p>﻿<br> 从方法定义中可以看到，它有四个参数：</p> 
+<ul><li>o，表示当前的实例对象。</li><li>offset，表示实例变量的内存地址偏移量（内存中实际值）。</li><li>expect，表示预期值（更新前的值）。</li><li>update，表示要更新的值（更新后的值）。</li></ul> 
+<p>expect和update比较好理解，offset表示目标变量X在实例对象o中内存地址的偏移量。简单来说，在预期值expect要和目标变量X进行比较是否相等的判断中，目标变量X的值就是通过该偏移量从内存中获得的。 </p> 
+<h2> 三、CAS在AtomicInteger中的应用以及源码分析</h2> 
+<p><br> z通过CAS在AtomicInteger中的应用来理解CAS机制和源码：</p> 
+<pre><code class="language-java">public class S01_AtomicInteger {
+    public AtomicInteger atomicInteger=new AtomicInteger(0);
+    public void add(){
+        /**
+         * getAndIncrement是原子累加方法，每次调用一次会在原来值的基础上+1，这个过程采用了CAS机制保证原子性。点进去看源码
+         */
+        atomicInteger.getAndIncrement();
+    }
+
+}</code></pre> 
+<p>其中，valueOffset表示AtomicInteger中的成员变量value在内存中的偏移量，后续会用它直接从内存中读取value属性当前的值。<br><strong>valueOffset的初始化方法如下( 点击valueOffset)： </strong></p> 
+<pre><code class="language-java">// setup to use Unsafe.compareAndSwapInt for updates
+private static final Unsafe unsafe = Unsafe.getUnsafe();
+private static final long valueOffset;
+
+static {
+    try {
+        valueOffset = unsafe.objectFieldOffset
+            (AtomicInteger.class.getDeclaredField("value"));
+    } catch (Exception ex) { throw new Error(ex); }
+}
+
+private volatile int value;</code></pre> 
+<p>valueOffset用到了unsafe.objectFieldOffset()方法，获取value字段在AtomicInteger.class中的偏移量。</p> 
+<blockquote> 
+ <p>个人理解： objectFieldOffset(AtomicInteger.class.getDeclaredField("value"))方法，使用反射（getDeclaredField）来获取value字段在AtomicInteger.class中的属性值。</p> 
+</blockquote> 
+<p>结合这段代码的分析，对前面提到的o和offset这两个字段的含义就不难理解了，o 表示当前的实例对象，offset 表示要更新的变量（个人理解：在AtomicInteger中是指value字段）。<br> 在CAS中，我们需要通过expect去和某个字段的值进行比较，而expect比较的目标值就是通过offset找到某个字段在内存中的实际值（在AtomicInteger中是指value字段），如果相等，就修改成update并返回true，否则返回false。<br> unsafe.getAndAddInt(this,valueOffset,1)的源码定义：  </p> 
+<pre><code class="language-java">public final int getAndAddInt(Object var1, long var2, int var4) {
+    int var5;
+    do {
+        var5 = this.getIntVolatile(var1, var2);
+    } while(!this.compareAndSwapInt(var1, var2, var5, var5 + var4));
+
+    return var5;
+}</code></pre> 
+<p>代码整理（形参名）：</p> 
+<p> </p> 
+<pre><code class="language-java">public final int getAndAddInt(Object o,long offset,int n){
+    int v;
+    do {
+        v=this.getIntVolatile(o,offset);
+    }while (!(this.compareAndSwapInt(o,offset,v,v+n)));
+    return v;
+}</code></pre> 
+<p> 代码实现逻辑分析如下：<br> ●“v = this.getIntVolatile(o, offset); ”表示根据value在对象o的偏移量来获得当前的值v。<br> ●使用compareAndSwapInt()方法实现比较和替换，如果value当前的值和v相等，说明数据没有被其他线程修改过，则把value修改成v+n。<br> ●这里采用了循环来实现，原因想必大家能猜测到。如果compareAndSwapInt()方法执行失败，则说明存在线程竞争，但是当前的方法是进行原子累加，所以必须要保证成功，为了达到这个目的，就只能不断地循环重试，直到修改成功后返回。<br> ●整体来说，CAS就是一种基于乐观锁机制来保证多线程环境下共享变量修改的原子性的解决方案。前面分析的案例虽然是在Java中的应用场景，但是它本质上和synchronized同步锁中用到的CAS是相同的，我们来看一下Unsafe类中CAS的定义。</p> 
+<pre><code class="language-java">public final native boolean compareAndSwapInt(Object o, long offset, int expect, int update);</code></pre> 
+<p>compareAndSwapInt()是一个native方法，该方法是在JVM中定义和实现的。</p> 
+<h2>四、总结：i++对应CAS示意图进行详解：</h2> 
+<blockquote> 
+ <p>在Java中的Unsafe类中提供了CAS方法，针对int类型变量的CAS方法定义如下。<br> ﻿</p> 
+ <p class="img-center"><img alt="" src="https://images2.imgbox.com/d7/00/2W03grWd_o.png"></p> 
+ <p>﻿<br> 从方法定义中可以看到，它有四个参数： ● o，表示当前的实例对象。 ● offset，表示实例变量的内存地址偏移量（内存中实际值）。 ● expect，表示预期值（更新前的值）。 ●update，表示要更新的值（更新后的值）。 expect和update比较好理解，offset表示目标变量X在实例对象o中内存地址的偏移量。简单来说，在预期值expect要和目标变量X进行比较是否相等的判断中，目标变量X的值就是通过该偏移量从内存中获得的。</p> 
+ <p> </p> 
+</blockquote> 
+<p>offset是要修改的value字段（内存中实际存的值），expect期望值是value字段从内存中取出来时存在的值（对i++操作来说，即是i进行++之前的值），如果相等，则修改为v+n。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/51/bb/DmDLBu9e_o.png"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/08546dd690c7dae3085e0860b9fe5b2d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">依赖示意图如何称之为模型</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ce3c53b4098ab93d84beddc9dfc8e0a9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">pytorch详细安装</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

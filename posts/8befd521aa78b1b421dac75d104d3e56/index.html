@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>spring为什么使用三级缓存而不是两级 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="spring为什么使用三级缓存而不是两级" />
+<meta property="og:description" content=" 首先先回答几个疑问：
+1.实际上代理类是相当于持有一个原对象（spring用的两种代理，Proxy和cglib都是一样）：先创建对象，再创建代理类，再初始化原对象，和初始化之后再创建代理类，是一样的。
+基于上述类写个main方法测试：
+先根据空对象创建代理类，再初始化空对象，执行代理类方法，没问题！（忽略get/set方法）
+2.尾部对象依赖前面对象，所以在尾部对象初始化时，就调用三级缓存中对象工厂的接口方法，即AbstractAutowireCapableBeanFactory#getEarlyBeanReference方法根据前面的空对象创建代理类，并设值给尾部对象。
+前面的对象在装配和初始化完成之后，spring通过这段代码，将二级缓存中的代理类取出返回，最后会设置到一级缓存中，从而保证尾部对象依赖的，和容器中的前面对象，是一个对象。
+下面说下我的结论：只用两级缓存可以解决循环依赖，甚至一级缓存就行（AOP也同样适用）。
+要理解下面的内容需要阅读过一定的spring源码，基础较弱的读者建议去看本回答的出处： 【超级干货】为什么spring一定要弄个三级缓存？。以免错过此次刷新你认知的机会（不是吹牛）。 不信你可以改下添加三级缓存的源码，直接加入第二层缓存或者第一层缓存里。
+启动正常，所以验证了上述结论 为什么呢？很简单，解决循环依赖只需要保证创建完成的bean和创建中与设置到其他相互引用的bean里的bean是同一个就行。
+没有代理的情况下（getEarlyBeanReference返回原对象）去创建AServiceImpl（简称AS）：
+反射创建AS的实例，并放入第一层缓存初始化AS实例时发现需要依赖注入BS，则获取BS的实例反射创建BS的实例，并放入第一层缓存初始化BS实例时发现需要依赖注入AS，则获取AS的实例，直接从第一层里获取BS实例初始化完成，放入第一层缓存（此时BS里的AS只是刚创建完，未初始化）回到第2步，AS实例初始化完成，放入第一层缓存（由于是同一个对象引用，所以BS里的AS也初始化完成） 有代理的情况下（getEarlyBeanReference返回代理对象）去创建AServiceImpl（给AServiceImpl和BServiceImpl都加上事务注解）：
+前面5步都没啥问题，只是第一层缓存里的是AS代理类（BS里的也是），第6步中，原AS对象初始化完成，则AS代理类其实也初始化完成，所以进行引用覆盖，返回缓存中的代理类即可。
+从技术的角度看一层缓存就能解决循环依赖，为什么spring要整的这么复杂呢？
+请大家换个角度，不要再站在spring使用者的角度去思考了，现在要假设自己是spring的开发者！
+不要在别人已经既定设计好的方案里去猜人家当时为什么这么设计，这就是从结果反推过程，说实话很容易潜意识认为就应该这样设计，从而变成想方设法圆他人所说。 先抛却掉这几级缓存，重新审视下创建和初始化bean实例的代码。
+一个bean在创建过程中可能会产生两个对象：
+一个是循环依赖时需要设值给与此bean相互引用的其他bean的对象（getEarlyBeanReference）一个是初始化后的对象（initializeBean） 如果现在要对bean做增强，比如实现切面，则需要生成代理类，所以spring在上述两个方法中通过BeanPostProcessor类提供了拓展点。
+假如我是spring这块代码的开发者，如果我这么设计（只用一层缓存）：
+假设spring没有提供AOP，需要使用spring的人自己去实现，那我就需要写个说明文档告诉他们：
+请实现BeanPostProcessor接口的两个方法：getEarlyBeanReference和postProcessAfterInitialization（假如我是设计者，按我的设计那我肯定都整合在一个接口里了，不会再整个SmartInstantiationAwareBeanPostProcessor）这两个方法在bean刚创建完成但还未初始化时，和已装配并执行初始化方法之后会被调用，方法的入参bean分别是空对象和已初始化后的对象这两个方法的返回最好是同一个对象，如果不一样，由于最后引用会重新赋值，以getEarlyBeanReference方法返回为最终值 相信这样的文档会很让使用者很困惑：
+这两个方法都会执行，而且第一个方法的返回值为优先，所以我实现第二个方法干嘛呢？第一个方法的入参还是个空对象，没有什么有用的信息啊？第二个方法的入参里有有用的信息，但是返回的对象还是会被第一个方法的覆盖啊？ 而且还暴露了很多内部设计细节，一个优秀的框架就是要让使用者对内部细节知道的越少越好，这样才便于迭代升级。 所以大家有没有发现，这种设计，让getEarlyBeanReference成为了创建bean时必会被调用的核心方法，而原本此处只是为了循环依赖时先给其他bean赋值！
+倘若我们压根都没有循环依赖，bean本身的创建流程就应该是先new（一般是通过反射创建）一个，再装配初始化，最后放入实例缓存，此种设计就成了本末倒置！
+那怎么调整呢？让getEarlyBeanReference延迟触发，只在有循环依赖时被引用的bean需要赋值当前bean时才触发！
+所以就有了对象工厂ObjectFactory，也就有了第三级缓存。
+而最理想的情况下，可以不用第二级缓存。
+举个例子，A依赖B，B依赖A和C和D，C和D又依赖A，创建A的时候初始化需要B，创建B的时候初始化需要A，拿到A的ObjectFactory后调用接口方法获取对象，B还需要C和D，它们又需要去调用A的ObjectFactory，所以就重复调用了getObject方法，其实只要getEarlyBeanReference方法实现保证同一个beanName返回同一个对象，就不需要第二级缓存。
+但是，这又暴露了内部实现细节，假如我弄个BeanPostProcessor实现类，spring也没有提示我要遵守上述约定，而我在getEarlyBeanReference方法里只是创建新对象返回，这就会导致B里面的是A1，C里面是A2，D里面是A3，那完了，芭比Q了！
+所以让实现者去做重复性判断是不可控的，很容易出现问题，于是乎引入了第二级缓存，当调用三级缓存里的对象工厂的getObject方法之后，spring就会把返回值放入二级缓存，删除三级缓存，这样C和D取的就是二级缓存里的A对象，和B里的是同一个。
+所以二级缓存和三级缓存其实是一套组合拳，不要拆成两个独立的东西去理解，出发点就不对。
+基于这种设计，没有发生循环依赖的bean就是正常的创建流程，有相互引用的bean（除链尾的那个，比如之前的BS）会触发getEarlyBeanReference。
+spring其实也不想你用框架前还要先了解循环引用，所以把getEarlyBeanReference方法设计在了SmartInstantiationAwareBeanPostProcessor接口中。从设计者这里的注释也能看出：此接口是一个专用接口，主要用于框架内的内部使用！
+AOP是spring内部集成的，它的开发者知道这些逻辑，所以AbstractAutoProxyCreator实现了SmartInstantiationAwareBeanPostProcessor接口，可以看看其对这两个方法的实现。
+循环引用的bean的创建过程会触发这两个方法，所以在getEarlyBeanReference方法中会打标记再去判断是否需要创建代理类（wrapIfNecessary），而postProcessAfterInitialization方法则需要先判断标记，以免重复执行wrapIfNecessary。
+也得亏根据空对象去创建代理类后再去初始化原对象，和根据已初始化后的对象创建代理类效果一样。 否则这里 getEarlyBeanReference方法就没啥用了，只能返回原对象，在postProcessAfterInitialization方法返回前加上把相互引用的其他bean的引用指向方法返回值的操作了，那就没现在这么简单了。 最后再对这三级缓存做个简单的总结：
+第一层缓存：最基础的缓存，创建完并初始化（createBean）后的bean实例会放入，项目启动完成后获取bean实例时从此获取第三层缓存：创建bean过程中用于处理循环依赖的临时缓存，由于只有在初始化时才知道有没有循环依赖，所以通过ObjectFactory临时“存储”刚创建完的bean，并延迟触发循环依赖时被引用的bean需要赋值当前bean时去获取当前bean的逻辑，且获取对象会作为当前bean的最终对象第二级缓存：创建bean过程中用于处理循环依赖的临时缓存，搭配第三层缓存，用于其ObjectFactory返回对象的缓存，保证多个关联对象对当前bean的引用为同一个 " />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/8befd521aa78b1b421dac75d104d3e56/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-09-19T09:56:20+08:00" />
+<meta property="article:modified_time" content="2022-09-19T09:56:20+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">spring为什么使用三级缓存而不是两级</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>首先先回答几个疑问：</p> 
+<p>1.实际上代理类是相当于持有一个原对象（spring用的两种代理，Proxy和cglib都是一样）：先创建对象，再创建代理类，再初始化原对象，和初始化之后再创建代理类，是一样的。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/2f/e5/alssci6k_o.jpg"></p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/20/53/pRRha5Qi_o.jpg"></p> 
+<p>基于上述类写个main方法测试：</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/8d/e2/VtyMdm2U_o.jpg"></p> 
+<p>先根据空对象创建代理类，再初始化空对象，执行代理类方法，没问题！（忽略get/set方法）</p> 
+<p>2.尾部对象依赖前面对象，所以在尾部对象初始化时，就调用三级缓存中对象工厂的接口方法，即AbstractAutowireCapableBeanFactory#getEarlyBeanReference方法根据前面的空对象创建代理类，并设值给尾部对象。</p> 
+<p>前面的对象在装配和初始化完成之后，spring通过这段代码，将二级缓存中的代理类取出返回，最后会设置到一级缓存中，从而保证尾部对象依赖的，和容器中的前面对象，是一个对象。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/5f/9f/8iGyEJRk_o.jpg"></p> 
+<hr> 
+<p>下面说下我的结论：只用两级缓存可以解决循环依赖，甚至一级缓存就行（AOP也同样适用）。</p> 
+<blockquote>
+  要理解下面的内容需要阅读过一定的spring源码，基础较弱的读者建议去看本回答的出处： 
+ <a href="https://zhuanlan.zhihu.com/p/496273636" rel="nofollow" title="【超级干货】为什么spring一定要弄个三级缓存？">【超级干货】为什么spring一定要弄个三级缓存？</a>。以免错过此次刷新你认知的机会（不是吹牛）。 
+</blockquote> 
+<p>不信你可以改下添加三级缓存的源码，直接加入第二层缓存或者第一层缓存里。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/a5/86/ojAuaMIu_o.jpg"></p> 
+<blockquote>
+  启动正常，所以验证了上述结论 
+</blockquote> 
+<p>为什么呢？很简单，解决循环依赖只需要保证创建完成的bean和创建中与设置到其他相互引用的bean里的bean是同一个就行。</p> 
+<p><strong>没有代理的情况下（getEarlyBeanReference返回原对象）去创建AServiceImpl（简称AS）：</strong></p> 
+<ol><li>反射创建AS的实例，并放入第一层缓存</li><li>初始化AS实例时发现需要依赖注入BS，则获取BS的实例</li><li>反射创建BS的实例，并放入第一层缓存</li><li><a href="https://www.zhihu.com/search?q=%E5%88%9D%E5%A7%8B%E5%8C%96BS&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="初始化BS">初始化BS</a>实例时发现需要依赖注入AS，则获取AS的实例，直接从第一层里获取</li><li>BS实例初始化完成，放入第一层缓存（此时BS里的AS只是刚创建完，未初始化）</li><li>回到第2步，AS实例初始化完成，放入第一层缓存（由于是同一个对象引用，所以BS里的AS也初始化完成）</li></ol> 
+<p><strong>有代理的情况下（getEarlyBeanReference返回代理对象）去创建AServiceImpl（给AServiceImpl和BServiceImpl都加上事务注解）：</strong></p> 
+<p>前面5步都没啥问题，只是第一层缓存里的是<a href="https://www.zhihu.com/search?q=AS%E4%BB%A3%E7%90%86%E7%B1%BB&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="AS代理类">AS代理类</a>（BS里的也是），第6步中，原AS对象初始化完成，则AS代理类其实也初始化完成，所以进行引用覆盖，返回缓存中的代理类即可。</p> 
+<hr> 
+<p>从技术的角度看一层缓存就能解决循环依赖，为什么spring要整的这么复杂呢？</p> 
+<p>请大家换个角度，不要再站在spring使用者的角度去思考了，现在要假设自己是spring的开发者！</p> 
+<blockquote>
+  不要在别人已经既定设计好的方案里去猜人家当时为什么这么设计，这就是从结果反推过程，说实话很容易潜意识认为就应该这样设计，从而变成想方设法圆他人所说。 
+</blockquote> 
+<p><strong>先抛却掉这几级缓存，重新审视下创建和初始化bean实例的代码。</strong></p> 
+<p>一个bean在创建过程中可能会产生两个对象：</p> 
+<ul><li>一个是循环依赖时需要设值给与此bean相互引用的其他bean的对象（getEarlyBeanReference）</li><li>一个是初始化后的对象（initializeBean）</li></ul> 
+<p>如果现在要对bean做增强，比如实现切面，则需要生成代理类，所以spring在上述两个方法中通过<a href="https://www.zhihu.com/search?q=BeanPostProcessor%E7%B1%BB&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="BeanPostProcessor类">BeanPostProcessor类</a>提供了拓展点。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/f5/e5/AHcPC8Nr_o.jpg"></p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/f4/f9/8cCLShse_o.jpg"></p> 
+<p>假如我是spring这块代码的开发者，如果我这么设计（只用一层缓存）：</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/4f/8a/PGx6MWY9_o.jpg"></p> 
+<p>假设spring没有提供AOP，需要使用spring的人自己去实现，那我就需要写个说明文档告诉他们：</p> 
+<ol><li>请实现BeanPostProcessor接口的两个方法：getEarlyBeanReference和postProcessAfterInitialization（假如我是设计者，按我的设计那我肯定都整合在一个接口里了，不会再整个SmartInstantiationAwareBeanPostProcessor）</li><li>这两个方法在bean刚创建完成但还未初始化时，和已装配并执行初始化方法之后会被调用，方法的入参bean分别是空对象和已初始化后的对象</li><li>这两个方法的返回最好是同一个对象，如果不一样，由于最后引用会重新赋值，以getEarlyBeanReference方法返回为最终值</li></ol> 
+<p>相信这样的文档会很让使用者很困惑：</p> 
+<ol><li>这两个方法都会执行，而且第一个方法的返回值为优先，所以我实现第二个方法干嘛呢？</li><li>第一个方法的入参还是个空对象，没有什么有用的信息啊？</li><li>第二个方法的入参里有有用的信息，但是返回的对象还是会被第一个方法的覆盖啊？</li></ol> 
+<blockquote>
+  而且还暴露了很多内部设计细节，一个优秀的框架就是要让使用者对内部细节知道的越少越好，这样才便于迭代升级。 
+</blockquote> 
+<p>所以大家有没有发现，这种设计，<strong>让getEarlyBeanReference成为了创建bean时必会被调用的核心方法</strong>，而原本此处只是为了循环依赖时先给其他bean赋值！</p> 
+<p>倘若我们压根都没有循环依赖，bean本身的创建流程就应该是先new（一般是通过反射创建）一个，再装配初始化，最后放入<a href="https://www.zhihu.com/search?q=%E5%AE%9E%E4%BE%8B%E7%BC%93%E5%AD%98&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="实例缓存">实例缓存</a>，此种设计就成了本末倒置！</p> 
+<p>那怎么调整呢？<strong>让getEarlyBeanReference延迟触发，只在有循环依赖时被引用的bean需要赋值当前bean时才触发！</strong></p> 
+<p>所以就有了对象工厂ObjectFactory，也就有了<a href="https://www.zhihu.com/search?q=%E7%AC%AC%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="第三级缓存">第三级缓存</a>。</p> 
+<p>而<strong>最理想的情况</strong>下，可以不用<a href="https://www.zhihu.com/search?q=%E7%AC%AC%E4%BA%8C%E7%BA%A7%E7%BC%93%E5%AD%98&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="第二级缓存">第二级缓存</a>。</p> 
+<p>举个例子，A依赖B，B依赖A和C和D，C和D又依赖A，创建A的时候初始化需要B，创建B的时候初始化需要A，拿到A的ObjectFactory后调用接口方法获取对象，B还需要C和D，它们又需要去调用A的ObjectFactory，所以就重复调用了getObject方法，其实只要getEarlyBeanReference方法实现保证同一个beanName返回同一个对象，就不需要第二级缓存。</p> 
+<p>但是，这又暴露了内部实现细节，假如我弄个BeanPostProcessor实现类，spring也没有提示我要遵守上述约定，而我在getEarlyBeanReference方法里只是创建新对象返回，这就会导致B里面的是A1，C里面是A2，D里面是A3，那完了，芭比Q了！</p> 
+<p>所以让实现者去做重复性判断是不可控的，很容易出现问题，于是乎引入了第二级缓存，当调用三级缓存里的对象工厂的getObject方法之后，spring就会把返回值放入二级缓存，删除三级缓存，这样C和D取的就是二级缓存里的A对象，和B里的是同一个。</p> 
+<p><strong>所以二级缓存和三级缓存其实是一套组合拳，不要拆成两个独立的东西去理解，出发点就不对。</strong></p> 
+<p>基于这种设计，没有发生循环依赖的bean就是正常的创建流程，有相互引用的bean（除链尾的那个，比如之前的BS）会触发getEarlyBeanReference。</p> 
+<p>spring其实也不想你用框架前还要先了解循环引用，所以把getEarlyBeanReference方法设计在了SmartInstantiationAwareBeanPostProcessor接口中。从设计者这里的注释也能看出：此接口是一个专用接口，主要用于框架内的内部使用！</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/83/15/quCxpbia_o.jpg"></p> 
+<hr> 
+<p>AOP是spring内部集成的，它的开发者知道这些逻辑，所以AbstractAutoProxyCreator实现了SmartInstantiationAwareBeanPostProcessor接口，可以看看其对这两个方法的实现。</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/e1/5b/xfW3v7Db_o.jpg"></p> 
+<p>循环引用的bean的创建过程会触发这两个方法，所以在getEarlyBeanReference方法中会打标记再去判断是否需要创建代理类（wrapIfNecessary），而postProcessAfterInitialization方法则需要先判断标记，以免重复执行wrapIfNecessary。</p> 
+<blockquote>
+  也得亏根据空对象去创建代理类后再去初始化原对象，和根据已初始化后的对象创建代理类效果一样。 
+ <br> 否则这里 
+ <a href="https://www.zhihu.com/search?q=getEarlyBeanReference%E6%96%B9%E6%B3%95&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="getEarlyBeanReference方法">getEarlyBeanReference方法</a>就没啥用了，只能返回原对象，在postProcessAfterInitialization方法返回前加上把相互引用的其他bean的引用指向方法返回值的操作了，那就没现在这么简单了。 
+</blockquote> 
+<p>最后再对这三级缓存做个简单的总结：</p> 
+<ul><li>第一层缓存：最基础的缓存，创建完并初始化（createBean）后的bean实例会放入，项目启动完成后获取bean实例时从此获取</li><li><a href="https://www.zhihu.com/search?q=%E7%AC%AC%E4%B8%89%E5%B1%82%E7%BC%93%E5%AD%98&amp;search_source=Entity&amp;hybrid_search_source=Entity&amp;hybrid_search_extra=%7B%22sourceType%22%3A%22answer%22%2C%22sourceId%22%3A2443911807%7D" rel="nofollow" title="第三层缓存">第三层缓存</a>：创建bean过程中用于处理循环依赖的临时缓存，由于只有在初始化时才知道有没有循环依赖，所以通过ObjectFactory临时“存储”刚创建完的bean，并延迟触发循环依赖时被引用的bean需要赋值当前bean时去获取当前bean的逻辑，且获取对象会作为当前bean的最终对象</li><li>第二级缓存：创建bean过程中用于处理循环依赖的临时缓存，搭配第三层缓存，用于其ObjectFactory返回对象的缓存，保证多个关联对象对当前bean的引用为同一个</li></ul>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2a85302a9bca5ab2256dd53f45808dee/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">一个UWP 框架开发的哔哩哔哩非官方应用</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/33832af5a6398fe7718cf4b733d4ea4c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">HL7入门收集</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

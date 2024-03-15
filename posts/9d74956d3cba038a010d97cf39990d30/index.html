@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>面试之 mysql 、Redis基础笔记 笔记 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="面试之 mysql 、Redis基础笔记 笔记" />
+<meta property="og:description" content="基础篇：MYSQL总结_helloworld-CSDN博客
+目录
+ACID 并发事务带来的问题：
+事务的隔离级别：
+索引
+1、myIsam
+2、innoDB
+为什么inonDB必须要创建索引、且整形自增主键：
+sql分析工具：
+一、expalin
+单表索引优化：
+两表索引优化：
+三表索引优化： 什么是覆盖索引：
+索引失效：
+二、show profile
+ACID A Atomicity 原子性：对数据的修改，要么都成功要么都不成功 C Consisent 一致性：在事务的开始和结束时，数据都必须保持一致，如：数据库金额字段累计200w，对于转账可以转来转去 但总金额200w是不会变化的I Isolation 隔离性：事务和事务之间是互相隔离、不可见的状态D Durable持久性： 事务完成后，保存到磁盘上 并发事务带来的问题： （可重复读）更新丢失：A对数据data修改，B也对data修改，B修改的结果覆盖了A修改的结果（两个事务彼此之间不知道对方的存在，事务提交后，后面事务修改的数据覆盖前事务）脏读：A读到了B修改后的数据但该数据还没提交，如果B事务回滚，那A读到的就不对不可重复读：A读取数据data,再次读时发现data改变了（因为B已完成修改了数据）。幻读：A读到了B新增的数据。如：A查询符合条件的是10条，再次查询发现能查出11条 事务的隔离级别： mysql默认可重复读
+级别脏读 不可重复读幻读未提交读Read uncommitted是是是已提交读 Read committed否是是可重复度 Repeatable read否否是可序列号 Serializble否否否 我们来看看在不同的隔离级别下，事务 A 会有哪些不同的返回结果，也就是图里面 V1、V2、V3 的返回值分别是什么。
+若隔离级别是“读未提交”， 则 V1 的值就是 2。这时候事务 B 虽然还没有提交，但是结果已经被 A 看到了。因此，V2、V3 也都是 2。
+若隔离级别是“读提交”，则 V1 是 1，V2 的值是 2。事务 B 的更新在提交后才能被 A 看到。所以， V3 的值也是 2。若隔离级别是“可重复读”，则 V1、V2 是 1，V3 是 2。之所以 V2 还是 1，遵循的就是这个要求：事务在执行期间看到的数据前后必须是一致的。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9d74956d3cba038a010d97cf39990d30/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-12-01T16:55:36+08:00" />
+<meta property="article:modified_time" content="2023-12-01T16:55:36+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">面试之 mysql 、Redis基础笔记 笔记</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>基础篇：<a href="https://blog.csdn.net/qq_42356416/article/details/102758343" title="MYSQL总结_helloworld-CSDN博客">MYSQL总结_helloworld-CSDN博客</a></p> 
+<p id="main-toc"><strong>目录</strong></p> 
+<p id="ACID%C2%A0-toc" style="margin-left:40px;"><a href="#ACID%C2%A0" rel="nofollow">ACID </a></p> 
+<p id="%E5%B9%B6%E5%8F%91%E4%BA%8B%E5%8A%A1%E5%B8%A6%E6%9D%A5%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%9A-toc" style="margin-left:40px;"><a href="#%E5%B9%B6%E5%8F%91%E4%BA%8B%E5%8A%A1%E5%B8%A6%E6%9D%A5%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%9A" rel="nofollow">并发事务带来的问题：</a></p> 
+<p id="%E4%BA%8B%E5%8A%A1%E7%9A%84%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB%EF%BC%9A-toc" style="margin-left:40px;"><a href="#%E4%BA%8B%E5%8A%A1%E7%9A%84%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB%EF%BC%9A" rel="nofollow">事务的隔离级别：</a></p> 
+<p id="%E7%B4%A2%E5%BC%95-toc" style="margin-left:0px;"><a href="#%E7%B4%A2%E5%BC%95" rel="nofollow">索引</a></p> 
+<p id="1%E3%80%81myIsam-toc" style="margin-left:0px;"><a href="#1%E3%80%81myIsam" rel="nofollow">1、myIsam</a></p> 
+<p id="2%E3%80%81innoDB-toc" style="margin-left:0px;"><a href="#2%E3%80%81innoDB" rel="nofollow">2、innoDB</a></p> 
+<p id="%C2%A0%E4%B8%BA%E4%BB%80%E4%B9%88inonDB%E5%BF%85%E9%A1%BB%E8%A6%81%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E3%80%81%E4%B8%94%E6%95%B4%E5%BD%A2%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%EF%BC%9A-toc" style="margin-left:40px;"><a href="#%C2%A0%E4%B8%BA%E4%BB%80%E4%B9%88inonDB%E5%BF%85%E9%A1%BB%E8%A6%81%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E3%80%81%E4%B8%94%E6%95%B4%E5%BD%A2%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%EF%BC%9A" rel="nofollow"> 为什么inonDB必须要创建索引、且整形自增主键：</a></p> 
+<p id="sql%E5%88%86%E6%9E%90%E5%B7%A5%E5%85%B7%EF%BC%9A-toc" style="margin-left:0px;"><a href="#sql%E5%88%86%E6%9E%90%E5%B7%A5%E5%85%B7%EF%BC%9A" rel="nofollow">sql分析工具：</a></p> 
+<p id="%E4%B8%80%E3%80%81expalin-toc" style="margin-left:40px;"><a href="#%E4%B8%80%E3%80%81expalin" rel="nofollow">一、expalin</a></p> 
+<p id="%E5%8D%95%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A-toc" style="margin-left:80px;"><a href="#%E5%8D%95%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A" rel="nofollow">单表索引优化：</a></p> 
+<p id="%E4%B8%A4%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A-toc" style="margin-left:80px;"><a href="#%E4%B8%A4%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A" rel="nofollow">两表索引优化：</a></p> 
+<p id="%E4%B8%89%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A%C2%A0-toc" style="margin-left:80px;"><a href="#%E4%B8%89%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A%C2%A0" rel="nofollow">三表索引优化： </a></p> 
+<p id="%E4%BB%80%E4%B9%88%E6%98%AF%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%EF%BC%9A-toc" style="margin-left:40px;"><a href="#%E4%BB%80%E4%B9%88%E6%98%AF%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%EF%BC%9A" rel="nofollow">什么是覆盖索引：</a></p> 
+<p id="%E7%B4%A2%E5%BC%95%E5%A4%B1%E6%95%88%EF%BC%9A-toc" style="margin-left:40px;"><a href="#%E7%B4%A2%E5%BC%95%E5%A4%B1%E6%95%88%EF%BC%9A" rel="nofollow">索引失效：</a></p> 
+<p id="%C2%A0%E4%BA%8C%E3%80%81show%20profile-toc" style="margin-left:40px;"><a href="#%C2%A0%E4%BA%8C%E3%80%81show%20profile" rel="nofollow"> 二、show profile</a></p> 
+<hr id="hr-toc"> 
+<h3 id="ACID%C2%A0">ACID </h3> 
+<p></p> 
+<ul><li>A Atomicity 原子性：对数据的修改，要么都成功要么都不成功 </li><li>C Consisent 一致性：在事务的开始和结束时，数据都必须保持一致，如：数据库金额字段累计200w，对于转账可以转来转去 但总金额200w是不会变化的</li><li>I Isolation 隔离性：事务和事务之间是互相隔离、不可见的状态</li><li>D Durable持久性： 事务完成后，保存到磁盘上</li></ul> 
+<h3 id="%E5%B9%B6%E5%8F%91%E4%BA%8B%E5%8A%A1%E5%B8%A6%E6%9D%A5%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%9A">并发事务带来的问题：</h3> 
+<ul><li>（可重复读）更新丢失：A对数据data修改，B也对data修改，B修改的结果<span style="color:#fe2c24;">覆盖</span>了A修改的结果（两个事务彼此之间不知道对方的存在，事务提交后，后面事务修改的数据覆盖前事务）</li><li>脏读：A读到了B<span style="color:#fe2c24;">修改</span>后的数据但该数据还没提交，如果B事务回滚，那A读到的就不对</li><li>不可重复读：A读取数据data,<span style="color:#fe2c24;">再次读</span>时发现data<span style="color:#fe2c24;">改变</span>了（因为B已完成修改了数据）。</li><li>幻读：A读到了B<span style="color:#fe2c24;">新增</span>的数据。如：A查询符合条件的是10条，再次查询发现能查出11条</li></ul> 
+<h3 id="%E4%BA%8B%E5%8A%A1%E7%9A%84%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB%EF%BC%9A">事务的隔离级别：</h3> 
+<p><span style="color:#38d8f0;">mysql默认</span><span style="color:#fe2c24;">可重复读</span><img alt="" height="72" src="https://images2.imgbox.com/dc/22/0SD70kRl_o.png" width="250"></p> 
+<p></p> 
+<table border="1" cellpadding="1" cellspacing="1" style="width:500px;"><tbody><tr><td>级别</td><td>脏读       </td><td>不可重复读</td><td>幻读</td></tr><tr><td>未提交读Read uncommitted</td><td>是</td><td>是</td><td>是</td></tr><tr><td>已提交读  Read committed</td><td>否</td><td>是</td><td>是</td></tr><tr><td>可重复度 Repeatable  read</td><td>否</td><td>否</td><td>是</td></tr><tr><td>可序列号 Serializble</td><td>否</td><td>否</td><td>否</td></tr></tbody></table> 
+<p></p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/84/82/yrYQ39Pi_o.png"></p> 
+<p> 我们来看看在不同的隔离级别下，事务 A 会有哪些不同的返回结果，也就是图里面 V1、V2、V3 的返回值分别是什么。</p> 
+<p>若隔离级别是“读未提交”， 则 V1 的值就是 2。这时候事务 B 虽然还没有提交，但是结果已经被 A 看到了。因此，V2、V3 也都是 2。</p> 
+<p>若隔离级别是“读提交”，则 V1 是 1，V2 的值是 2。事务 B 的更新在提交后才能被 A 看到。所以， V3 的值也是 2。若隔离级别是“可重复读”，则 V1、V2 是 1，V3 是 2。之所以 V2 还是 1，遵循的就是这个要求：<strong>事务在执行期间看到的数据前后必须是一致的</strong>。</p> 
+<p>若隔离级别是“串行化”，则在事务 B 执行“将 1 改成 2”的时候，会被锁住。直到事务 A 提交后，事务 B 才可以继续执行。所以从 A 的角度看， V1、V2 值是 1，V3 的值是 2。在实现上，数据库里面会创建一个视图，访问的时候以视图的逻辑结果为准。</p> 
+<p>在“可重复读”隔离级别下，这个视图是在事务启动时创建的，整个事务存在期间都用这个视图。在“读提交”隔离级别下，这个视图是在每个 SQL 语句开始执行的时候创建的。这里需要注意的是，“读未提交”隔离级别下直接返回记录上的最新值，没有视图概念；</p> 
+<p>而“串行化”隔离级别下直接用加锁的方式来避免并行访问。我们可以看到在不同的隔离级别下，数据库行为是有所不同的。Oracle 数据库的默认隔离级别其实就是“读提交”，因此对于一些从 Oracle 迁移到 MySQL 的应用，为保证数据库隔离级别的一致，你一定要记得将 MySQL 的隔离级别设置为“读提交”。</p> 
+<p></p> 
+<h2 id="%E7%B4%A2%E5%BC%95">索引</h2> 
+<ul><li>什么是<span style="background-color:#ffd900;">索引</span>：是帮助mysql高效获取数据，而维护的<span style="background-color:#ffd900;">一种排好序的数据结构</span>。</li><li><strong>主键列</strong>默认有索引。</li><li>为什么<strong>mysql的底层使用B+tree</strong>，而不是 二叉树、红黑树？</li></ul> 
+<p>        不适用二叉树的原因：因为容易造成单支的树，如 1-&gt;2-&gt;3-&gt;4 查询就会适用4次io</p> 
+<div style="text-align:center;"> 
+ <figure class="image"> 
+  <img alt="" height="236" src="https://images2.imgbox.com/13/69/XFvQKuf5_o.png" width="174"> 
+  <figcaption>
+    二叉树 
+  </figcaption> 
+ </figure> 
+</div> 
+<p></p> 
+<p></p> 
+<p>        不适用红黑树的原因：红黑树是一种平衡二叉树。比二叉树强不少，树的高度会随着大量数据导致树的深度过深（即使是 log2~N）。如下图 红黑树。</p> 
+<p>（数据结构可视化网站）<a href="https://www.cs.usfca.edu/~galles/visualization/Algorithms.html" rel="nofollow" title="Data Structure Visualization">Data Structure Visualization</a></p> 
+<figure class="image"> 
+ <img alt="红黑树" height="273" src="https://images2.imgbox.com/10/3f/Is1QuVNv_o.png" width="630"> 
+ <figcaption>
+   红黑树 
+ </figcaption> 
+</figure> 
+<p>红黑树的特点： </p> 
+<ol><li>每个节点都有一个颜色属性，可以是红色或黑色。</li><li>根节点是黑色的。</li><li>叶子节点（NIL节点）是黑色的。</li><li>如果一个节点是红色的，那么它的子节点必须是黑色的。</li><li>从根节点到叶子节点的每条路径上，黑色节点的数量是相同的，这个数量被称为黑色高度。</li><li>任意节点到其每个叶子节点的所有路径上，黑色节点的数量相同。</li></ol> 
+<p></p> 
+<div style="text-align:center;"> 
+ <figure class="image"> 
+  <img alt="B树" height="150" src="https://images2.imgbox.com/c6/63/diBb2Qrr_o.png" width="343"> 
+  <figcaption>
+    Btree 
+  </figcaption> 
+ </figure> 
+</div> 
+<p>（每个节点存储了 值 和 对应该值的那条记录的地址，于是通过该Btree树创建某列的索引可以快速查到某行记录） </p> 
+<p><img alt="" height="626" src="https://images2.imgbox.com/e2/91/2XczjdXo_o.png" width="1132"></p> 
+<p></p> 
+<p></p> 
+<div style="text-align:center;"> 
+ <figure class="image"> 
+  <img alt="" height="193" src="https://images2.imgbox.com/88/5f/ip2w9eT9_o.png" width="642"> 
+  <figcaption>
+    B+tree 
+  </figcaption> 
+ </figure> 
+</div> 
+<p></p> 
+<p> B树也叫B-树（<span style="color:#fe2c24;">每个叶子节点</span>存储了 <span style="color:#fe2c24;">值</span> 和 <span style="color:#fe2c24;">对应该值的那条记录整条数据</span>，于是通过该Btree树创建某列的索引可以快速查到某行记录） </p> 
+<p><img alt="" height="385" src="https://images2.imgbox.com/ac/6c/843ncobo_o.png" width="673"></p> 
+<p></p> 
+<p></p> 
+<p>综上，树的一层，几乎就代表一次磁盘io，可以看出来Btree是相比于红黑树 少了一层，数据量大时，更明显。所以使用Btree,而<span style="color:#fe2c24;">B+tree 存储的数据都在叶子节点</span>、并且可以 在叶子上多了指向下一个的指针，是为了快速顺序查找后面的数据，不用再从<strong>根</strong>重新查。 但存在部分数据冗余（非叶子节点是冗余的数据）</p> 
+<p>扩展：innodb默认的主键索引（聚族索引），假设表字段有啊A,B,C,D。当创建了 A_B_C这样的复合索引时，这时会再创建一个B+树的数据结构，其叶子节点存储的是，A,B,C和 该条数据所在记录的地址。<span style="color:#fe2c24;">即：创建复合索引后，这个索引树的叶子节点记录的不是整条记录了，而是存储 部分数据和用于查询整条数据的指针。该指针“回表”查询聚集索引。</span></p> 
+<h6>MySQL使用B+树而不使用B-树的主要原因有以下几点：</h6> 
+<p>1. 适合磁盘存储：B+树在设计上更适合磁盘存储，因为它的内部节点不存储数据，只存储索引信息，而叶子节点存储了所有的数据。这样可以减少磁盘I/O操作，提高查询效率。</p> 
+<p>2. 范围查询性能好：B+树的叶子节点形成一个有序链表，可以很方便地进行范围查询。而B-树由于内部节点也存储数据，范围查询时需要遍历内部节点，效率较低。</p> 
+<p>3. 减少树的高度：B+树的内部节点只存储索引信息，而B-树的内部节点存储数据，这样B+树的内部节点可以存储更多的索引信息，使得树的高度更低，减少了磁盘I/O操作的次数。</p> 
+<p>4. 提高磁盘顺序访问性能：B+树的叶子节点形成一个有序链表，可以提高磁盘的顺序访问性能。而B-树的内部节点也存储数据，导致磁盘访问变得更加随机，性能较差。</p> 
+<p>综上所述，B+树在磁盘存储和查询性能方面具有优势，因此MySQL选择使用B+树作为索引结构。</p> 
+<p><strong>哈希索引</strong></p> 
+<h4></h4> 
+<p>数据结构和  hashMap几乎一样，一个hash表，冲突的用链表追加到桶中。</p> 
+<p>优点：（where A="XX"  这种）等值查找，非常快。O(1)。</p> 
+<p>缺点：范围查找或者模糊查找，就很拉胯了。哈希索引自然也不支持多列联合索引的最左匹配规则。</p> 
+<p><strong>使用场景：</strong>如果存储的数据重复度很低（也就是说基数很大），对该列数据以等值查询为主，没有范围查询、没有排序的时候，特别适合采用哈希索引</p> 
+<p></p> 
+<p><a href="https://www.cnblogs.com/zengkefu/p/5647279.html" rel="nofollow" title="MySQL B+树索引和哈希索引的区别 - zengkefu - 博客园">MySQL B+树索引和哈希索引的区别 - zengkefu - 博客园</a></p> 
+<p></p> 
+<p></p> 
+<hr> 
+<h2>mysql 的2种搜索引擎：</h2> 
+<p>(数据库的每个表可以设置其搜搜索引擎)</p> 
+<p>MyISAM适合：(1)做很多count 的计算；(2)插入不频繁，查询非常频繁；(3)不支持事务。</p> 
+<p>InnoDB适合：(1)可靠性要求比较高，或者要求事务；(2)表更新和查询都相当的频繁，并且行锁定的机会比较大的情况。</p> 
+<h2 id="1%E3%80%81myIsam">1、myIsam搜索引擎</h2> 
+<p>不支持事务，支持表级锁不支持行级锁</p> 
+<p>myIsam的表，磁盘上会存储3个文件：表结构文件、表数据文件、表索引文件，如下：mysql安装目录下，data文件下有：tets_myisam表对应的三个文件。</p> 
+<p style="text-align:center;"><img alt="" height="79" src="https://images2.imgbox.com/99/cd/JetRWwBh_o.png" width="148"></p> 
+<p><span style="color:#38d8f0;"><strong>myIsam的B+tree的 叶子节点存储的 只要 key 和 该key所在记录地址值</strong></span></p> 
+<p> <img alt="" height="587" src="https://images2.imgbox.com/9e/82/cSbS50Dj_o.png" width="645"></p> 
+<p></p> 
+<p></p> 
+<h2 id="2%E3%80%81innoDB">2、innoDB搜索引擎</h2> 
+<p>支持事务，支持表锁、行级锁，所以支持高并发</p> 
+<p>innoDB的表,磁盘上会存储2个文件：表结构文件、表数据与表索引的文件 ，如下对应test_innodb表的物理存储文件：</p> 
+<p style="text-align:center;"><img alt="" height="48" src="https://images2.imgbox.com/5a/5c/zlfeXs4e_o.png" width="220"></p> 
+<p><img alt="" height="395" src="https://images2.imgbox.com/ba/96/RRAOvR7F_o.png" width="751">  </p> 
+<p><span style="color:#fe2c24;"><strong> </strong></span><span style="color:#38d8f0;"><strong>innoDb的B+tree的</strong></span><span style="color:#fe2c24;"><strong>每个叶子节点</strong></span><span style="color:#38d8f0;"><strong>存储了 key（主键） 和 key所在那条记录的整行数据，即：<u>叶子节点包含了完整的数据，所以又叫</u></strong></span><u><span style="color:#fe2c24;"><strong>聚集索引（或叫聚族索引）。一个表只有一个聚集索引。</strong></span></u><strong><em>（这也是为什么innod必须要创建主键的原因）</em></strong></p> 
+<p>而如果创建一个联合索引：则 该联合索引的 对应的 索引B+tree结构是：非叶子结点 均是 联合索引的 第一个值，而叶子结点 存储的 是：<strong><span style="color:#fe2c24;"> 该联合索引对应字段的值 和 该条记录的主键（用于走聚族索引，即回表查询）</span></strong></p> 
+<p>如：创建 a、b、c 联合索引，那么非叶子结点存储的 都是 a的值，叶子结点存储了 某条记录的 a、b、c字段的值 和 该条记录的主键值（用于回表 通过聚族索引查找其他的字段值）</p> 
+<pre><code class="language-sql">select * from user order b,c,d  //虽然联合索引的叶子结点存储了 b、c、d的值且排好序了，
+但还缺少a，需要个叶子节点再回表去查询 聚族索引，所以该sql不会走索引
+
+select b,c,d from user order b,c,d  //走索引
+
+
+主键索引不等价聚族索引，它强制表中的每一行具有唯一的主键值，并且允许通过主键快速查找特定的数据行
+
+主键索引是用于唯一标识每一行数据的索引，而聚集索引是决定表中数据物理存储顺序的索引，它们虽然有相似之处，但并不是完全相同的概念。</code></pre> 
+<p>聚族索引和主键索引的博客：<a href="https://blog.csdn.net/dl674756321/article/details/103637957" title="聚簇索引和非聚簇索引（主键索引和非主键索引）、回表查询_dl674756321的博客-CSDN博客_非聚簇索引一定会回表查询">聚簇索引和非聚簇索引（主键索引和非主键索引）、回表查询_dl674756321的博客-CSDN博客_非聚簇索引一定会回表查询</a></p> 
+<p>如下图：</p> 
+<p><img alt="" height="743" src="https://images2.imgbox.com/44/16/0I2zCg4T_o.png" width="1200"></p> 
+<p> 通过上图可以知道: </p> 
+<pre><code class="language-sql">//假设 已经创建联合索引a、b、c。  user表有 a、b、c、d四个字段 
+select * from user where a="XX" and b="XXX" and c="XXXX"  
+
+结合上图： 因为selec * 叶子结点只包含了 a、b、c的值，但是不知道d的值，所以要 回表查询，
+相当于自己创建的索引失效了 ，所以 少用  select *
+
+
+而
+select a,b,c from user where a="XX" and b="XXX" and c="XXXX"  //就不会导致索引失效，因为叶子节点直接存储了a、b、c的数据</code></pre> 
+<p>同理：范围查找也应该避免select *</p> 
+<pre><code class="language-sql">select a,b,c from user where a&gt;"xx"; //会走索引 因为叶子节点互相连接着（在同一层），可以直接取出 a这一列的值
+
+select * from user where a&gt;"XX"; //不会走索引 因为 虽然可以找到a这一列的值，但是select要的是 所有列，所有需要回表去查找所有的，所有还不如直接走 聚族索引！
+
+
+数据查找不是没走索引，innodb最少会走  聚族索引， 我们常说的没走索引 是没走自己创建的索引</code></pre> 
+<p> mySql的B+tree节点为什么是默认 16K,因为为了应对千万级的数据查询。</p> 
+<pre><code class="language-sql">show global status like 'Innodb_page_size'   //查看数据库默认的innode页大小</code></pre> 
+<h4>覆盖索引、组合索引、联合索引的区别？ </h4> 
+<p>1、覆盖索引是一种特别的联合索引。</p> 
+<p>覆盖索引只是特定于具体select语录而言的联合索引。也就是说<strong>一个联合索引对于某个select语句，通过索引可以直接获取查询结果，而<span style="color:#ff9900;">不再需要回表查询</span></strong>啦，就称该联合索引覆盖了这条select语句。</p> 
+<p>2、组合索引就是 联合索引 也叫 复合索引</p> 
+<p></p> 
+<p></p> 
+<p> 案例：<img alt="" height="308" src="https://images2.imgbox.com/1e/a7/A2NCsEoQ_o.png" width="1048"></p> 
+<h3 id="%C2%A0%E4%B8%BA%E4%BB%80%E4%B9%88inonDB%E5%BF%85%E9%A1%BB%E8%A6%81%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E3%80%81%E4%B8%94%E6%95%B4%E5%BD%A2%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%EF%BC%9A"> 为什么inonDB必须要创建索引、且<span style="color:#fe2c24;">整形自增主键</span>：</h3> 
+<p>因为innoDB 表本身就是 索引结构的文件，所以必须要建，减少数据库的性能负担。<strong>①占内存</strong>，如果用uuid占空间大一个非叶子节点存储不了多少个数据，<strong>②比大小需转义</strong>，字符串比大小慢（索引查找的时候要比较大小的）、<strong>③树分裂会耗时</strong>，外加<strong> 新增记录可能在叶子结点间移动耗时</strong>。一方面，非自增的uuid新插入记录时会可能导致树的调整分裂（概率分裂比较大），如果是自增主键很可能直接插到了树的后序节点（虽然叶会分裂但是很小概率会分裂）。所以 最好是设置  整形且自增的主键，另一方面，<span style="color:#fe2c24;"><strong>叶子结点叶可能存储了多条记录，这些记录也是按照递增顺序存放</strong></span>，如果有新的数据插入，但该数据有小于前面的一个数据，可能需要将记录移到另一个结点里。如下图（叶子结点，假设一页能存4条数据）：</p> 
+<p><img alt="" height="791" src="https://images2.imgbox.com/f6/f3/oBFWIhKf_o.png" width="877"></p> 
+<p></p> 
+<blockquote> 
+ <p>InnoDB磁盘管理的最小单位就是“页”，也就是说<span style="color:#ff9900;"><strong>无论是叶子节点、非叶子节点和行数据，都是存放在页当中</strong></span>。 页组成结构有头部数据、主体数据和尾部数据。 头部数据主要存的是页相关数据，例如上一页、下一页、当前页号等。是一个双向链表结构。 主体数据主要关注索引和数据的存储，也就是我们常说的索引和数据的存储位置。主体数据当中有一个“User Records”的概念，用来存储索引和数据，是一个单链表结构。 User Records根据节点的不同，User Records又分为四种不同类型：主键索引树叶子节点和非叶子节点，二级索引树叶子节点和非叶子节点。 有了页和User Records的认识，其实说叶子节点存的是页是一种笼统的回答，基于我的理解，我认为叶子节点（主键索引树叶子节点）存放的是行数据更为贴切。</p> 
+</blockquote> 
+<p><strong>普通索引，为什么要用回表，直接指向数据行，数据页不行吗？</strong></p> 
+<p>第一、主键索引和普通索引，实际指向的都是一个页地址，在每个页中，主键索引页每行的value存的是实际数据，普通索引页每行的value是主键id。</p> 
+<p>第二、如果普通索引页每行的value是主键索引页地址，那么在发生页分裂、页合并、主键索引重建的时候，需要遍历所有的普通索引，查找涉及到的普通索引key进行更新。</p> 
+<p>第三、可以理解为：使用id值，相当于对主键索引与普通索引进行了解耦，主键索引页的变更不会影响到其他的普通索引。 第四、关于解耦带来的好处，与查询上带来的性能损失之间的定量分析</p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p><img alt="" height="141" src="https://images2.imgbox.com/d2/dc/L0DVPBBb_o.png" width="838"></p> 
+<p></p> 
+<p>sql 提高篇：<img alt="" height="173" src="https://images2.imgbox.com/ab/7a/LL2hT5vB_o.png" width="248"></p> 
+<p></p> 
+<h3> 查询优化（均以Innodb为例）</h3> 
+<p>所有的优化都是想方设法让查询走索引，</p> 
+<h4>①没有创建索引的情况下查询大数据</h4> 
+<p>         随机by Id 查询，依据业务信息查询，如 记录的插入时间，更新时间，推断 id的范围，</p> 
+<p>如：查不动数据的：</p> 
+<pre><code>select * from XXXTable where update_at = "2023-02-22 00:00:00"</code></pre> 
+<p>改为：</p> 
+<pre><code>先随机查询一个 id
+select * from XXXTabe where id=66666
+
+得到：
+ id      name  update
+66666    李四    2023-01-02
+
+
+说明目标记录 大于 66666，则将id 改成 777777
+类似于以 二分法 最终 确定哥粗略范围
+
+最终执行：
+select * from XXXTable where id&gt;7000 and id&lt; 75000 update_at = "2023-02-22 00:00:00"
+
+总结：通过两次或者更多次 判断 目标记录所在区间，再查询 会很快，比较 id一定有索引！
+</code></pre> 
+<h4>②大数据分页查询 Limit</h4> 
+<pre><code>select * from table_name limit 10000,10
+
+这句 SQL 的执行逻辑是
+1.从数据表中读取第N条数据添加到数据集中
+2.重复第一步直到 N = 10000 + 10     //导致这句 SQL 速度慢的问题出现在第二步！这前面的 10000 条数据完全对本次查询没有意义，但是却占据了绝大部分的查询时间
+3.根据 offset 抛弃前面 10000 条数
+4.返回剩余的 10 条数据</code></pre> 
+<h3>Limit 查询 ：设法使用索引</h3> 
+<pre><code>
+//先查询出符合条件的id，再取limit
+Select * From table_name Where id in (Select id From table_name where ( user = xxx )) limit 10000, 10;
+
+
+//相比较结果是（500w条数据）：第一条花费平均耗时约为第二条的 1/3 左右。
+select * from table_name where( user = xxx ) limit 10000,10
+
+
+在数据量大的时候 in 操作的效率就不怎么样了，我们需要把 in 操作替换掉，使用 join 就是一个不错的选择
+select * from table_name inner join ( select id from table_name where (user = xxx) limit 10000,10) b using (id)</code></pre> 
+<p></p> 
+<p></p> 
+<h2 id="sql%E5%88%86%E6%9E%90%E5%B7%A5%E5%85%B7%EF%BC%9A">sql分析工具：</h2> 
+<p></p> 
+<h3 id="%E4%B8%80%E3%80%81expalin">一、expalin</h3> 
+<p>链接：https://pan.baidu.com/s/1q8TvAi4SWTi5f-e15TzHbw <br> 提取码：8888   详细资料查看</p> 
+<p> Explain分析示例：</p> 
+<p>sql性能调优 工具： <span style="color:#fe2c24;">expain</span></p> 
+<pre><code class="language-sql">explain  sql语句    //打印sql执行的详细信息</code></pre> 
+<p>例如：</p> 
+<p><img alt="" height="222" src="https://images2.imgbox.com/8c/38/nNbLzqNx_o.png" width="969"></p> 
+<p> 列代表的含义：</p> 
+<ul><li><span style="color:#fe2c24;"><strong> id</strong></span>：表示执行的顺序，id相同时，按顺序执行，id不相同时，id越大越先执行。</li><li>select_type: 查找的类型，作用不大</li><li>table: 表名，作用不大</li><li><strong><span style="color:#fe2c24;">type</span></strong>:  查找过程中类型，其值有一下： <strong>一般至少达到ref级别的</strong> 
+  <ul><li>system:表里只要一行记录</li><li>const:表示通过索引一次就查出来了</li><li>eq_ref:表示只有一条记录匹配。</li><li><span style="background-color:#38d8f0;">ref </span>: 返回匹配某个值的所有行。</li><li><span style="background-color:#38d8f0;">range</span>: 查询sql中包含了 range、or 、between and 、in 这种范围性的查找。如下：如果创建了  <pre><code class="language-sql">create index name_age_adr user(name,age,adress)  //创建复合索引</code></pre>  当查询sql写如下：（age&gt;19 这种会打断 ’最左匹配法则‘，使后面的无效。</li></ul></li></ul> 
+<pre><code class="language-sql">select  * from user where name='张三' and age&gt;19 and adress='河南省周口市'</code></pre> 
+<p>                </p> 
+<p></p> 
+<ul><li> 
+  <ul><li><span style="background-color:#38d8f0;">index</span>:使用索引查找</li><li><span style="background-color:#fe2c24;">ALL</span>:最坏的情况，一定要优化。</li></ul><p></p> <pre><code class="language-sql">select  * from user where name='张三' and age&gt;19 and adress='河南省周口市'</code></pre> <p></p> <p></p> <p>由上到下，性能越来越差</p> </li><li>possible_keys: 查找过程中可能用到的 字段。</li><li><strong><span style="color:#fe2c24;">key</span></strong> ：查找过程中实际使用到的key，是性能调优的主要依据</li><li><strong><span style="color:#fe2c24;">key_len</span></strong>：越短越好。</li><li>ref: 查找过程中的 查找类型: 这里要显示  index、range、 </li><li>rows:查找到的行</li><li>Extra: 关键信息： 
+  <ul><li>using where</li><li>using fileSort: 也是最坏情况，一定要优化。</li><li>Using temporary: 也是一定要优化的。</li><li>Using index: 不用优化</li><li>using join buffer ：使用了连接缓存</li><li><img alt="" height="333" src="https://images2.imgbox.com/5c/89/GvpQMUDf_o.png" width="435"></li></ul><p></p> </li></ul> 
+<p>创建index:</p> 
+<pre><code>create  index myIndex user(name,age)   //创建user表的中 name、age两个字段复合索引，命名为 myIndex</code></pre> 
+<h4>避免索引失效的原则：</h4> 
+<p>为什么索引快？因为不用全局扫描！为什么不用全局扫描？因为存储数据的结点<span style="color:#fe2c24;">有区间的连贯性！</span></p> 
+<h4>1、最左前缀匹配原则</h4> 
+<p>如创建索引 name，age，position 三个的联合索引，那么</p> 
+<p>select * from user where name="Bill" and age="28" and position =“北京”   会走索引，因为会很快找到Bill开头的数据，这一步就已经排除了很多不必要的结点，再去执行后面age、position字段的查找。即：在小的结果集里再查找当然很快了</p> 
+<p>select * from user where  age="28" and position =“北京”   不走索引，首先，age没法和非叶子结点进行比较（因为没有意义啊，非叶子结点存储的都是name）。如下图，age是在某个结点里是有序的，但在其他结点里age的序号与前面或者后面的结点的序号是乱！如图：30，31，32，28，22，30，30。以至于不能使用 B+树的区间查找的优势了，所以需要全部都扫一边，这时候就和全局扫描没啥区别了。</p> 
+<figure class="image"> 
+ <img alt="" height="406" src="https://images2.imgbox.com/d2/6e/3TcLayCP_o.png" width="1200"> 
+ <figcaption>
+   复合索引最本质的理解，可以解释索引的规则 
+ </figcaption> 
+</figure> 
+<p></p> 
+<h4 id="%E5%8D%95%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A">单表索引优化：</h4> 
+<p>创建的复合索引，复合索引的字段顺序，应该与 where 后条件拼接的顺序一样，这样按照最左匹配原则，就会使用索引。但是 如果其中含 范围类的（如 in、or、between and）则，后面的 拼接的条件 不会再安装索引的顺序。</p> 
+<h4 id="%E4%B8%A4%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A">两表索引优化：</h4> 
+<p>创建的索引，左连接 索引加到 右表、   右连接  索引加到 左表。</p> 
+<p>原因：根据左（右）连接的特性添加的，因为 左连接 ，左表的数据比较多，左边是一定有的，拿着右表的数据 给左表进行一个一个的匹配。</p> 
+<h4 id="%E4%B8%89%E8%A1%A8%E7%B4%A2%E5%BC%95%E4%BC%98%E5%8C%96%EF%BC%9A%C2%A0">三表索引优化： </h4> 
+<p>小表驱动大表，索引建在那些 数据少的表里。</p> 
+<p>有限优化嵌套内的字段。</p> 
+<p></p> 
+<h3 id="%E4%BB%80%E4%B9%88%E6%98%AF%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%EF%BC%9A">什么是覆盖索引：</h3> 
+<p>当sql语句的所求查询字段（select列）和查询条件字段（where子句）全都包含在一个索引中（联合索引），可以直接使用索引查询而不需要回表。这就是覆盖索引。</p> 
+<p>应用案例：</p> 
+<h3 id="%E7%B4%A2%E5%BC%95%E5%A4%B1%E6%95%88%EF%BC%9A">索引失效：</h3> 
+<p>有案例：<a href="https://blog.csdn.net/pjsdsg/article/details/95495045" title="MySQL高级性能优化---索引失效_盲流子的博客-CSDN博客_mysql 索引失效的原因有哪些">MySQL高级性能优化---索引失效_盲流子的博客-CSDN博客_mysql 索引失效的原因有哪些</a></p> 
+<ol><li>最左匹配原则                             例如： 创建了 name、age、adr 复合索引。使用的时也是<span style="color:#38d8f0;"><em>select * from user where name='张三' and  age='19'  and adr='河南省'</em></span>。  这种复合索引的顺<br> 序与 条件拼接的顺序 保持了一致。条件拼接的个数可以没有复合索引的个数保持一致，但是如果拼接了，那就要保持一致。中间跳过某个字段也属于不匹配，也会导致索引失效。总结：<span style="background-color:#ff9900;">带头大哥不能死，中间兄弟不能断。</span>中间兄弟可以乱</li><li>不要在索引列上做任何操作。                                  如：计算、类型转换、函数。       例如： <span style="color:#38d8f0;"><em>select * from user name='张三' </em></span>这是正常的。 但<span style="color:#38d8f0;"><em> select * from user left(name,2)='张三' </em></span> 就会导致失效。</li><li>范围的条件，之后的字段索引全失效。or 、like、  in、 不等于、%abc(以通配符开头的)。如果是 abc%， type会显示 range  。 如何解决：%abc% 有不让索引失效呢？使用覆盖索引解决。 </li><li>is null  、is  not null 也无法使用索引。</li><li>字符串不加单引号，导致索引失效。即：varchar类型不能失去单引号引值。因为可能结果也能查出，但底层会隐式类型转换。</li></ol> 
+<p></p> 
+<p></p> 
+<p>小表驱动大表的原则：如下</p> 
+<p>如 for(int i=0;i&lt;10000;i++)</p> 
+<p>        for(int j=o j&lt;10;j++) </p> 
+<p>肯定没有下面这个好，（因为匹配不完10000很可能就找到了）</p> 
+<p>for(int i=0;i&lt;100;i++)</p> 
+<p>        for(int j=o j&lt;10000;j++) </p> 
+<p>所以有如图结论：</p> 
+<p><img alt="" height="541" src="https://images2.imgbox.com/50/8e/q16yzNgp_o.png" width="977"></p> 
+<p>order by: </p> 
+<p> <img alt="" height="647" src="https://images2.imgbox.com/df/5d/VdNqNfkl_o.png" width="940"></p> 
+<h3 id="%C2%A0%E4%BA%8C%E3%80%81show%20profile"> 二、show profile</h3> 
+<p>explain解决不了的，应该用法show profile ,用于查看执行一条sql的 每个阶段执行的所消耗的资源。</p> 
+<p><img alt="" height="706" src="https://images2.imgbox.com/e7/3b/wRNADfkV_o.png" width="1200"></p> 
+<hr> 
+<h2>mysql的主从复制 </h2> 
+<p>不错的博客：<a href="https://www.cnblogs.com/phpstudy2015-6/p/6485819.html" rel="nofollow" title="MySQL主从复制与主主复制 - 那一叶随风 - 博客园">MySQL主从复制与主主复制 - 那一叶随风 - 博客园</a></p> 
+<p>带详细图：<a href="https://www.cnblogs.com/cocoxu1992/p/10670589.html" rel="nofollow" title="MySQL主从复制的实现过程 - Co~Co - 博客园">MySQL主从复制的实现过程 - Co~Co - 博客园</a></p> 
+<p>1、基本原理：slave会从master读取binlog来进行数据同步</p> 
+<p><img alt="" height="662" src="https://images2.imgbox.com/b5/11/U8CDKgqz_o.png" width="1200"></p> 
+<p>读写分离：</p> 
+<p>一般场景下，读多写少。</p> 
+<p>什么是分开分表？</p> 
+<p>垂直拆表：按业务类型或者按照字段 分表。 如 按照订单分一个库、按用户订单分一个库。他们之间查询靠api，而不能通过join。</p> 
+<p>水平拆分：拆分内容。如 建的两个库一模一样但是每次来请求 按取模来确定要查的表。</p> 
+<p>1、每个库（表）的结构都一样。</p> 
+<p>2、每个库（表）的数据都不一样。</p> 
+<p>3、每个库（(表)的并集是全量数据<br> 优点︰<br> 1、单库（表)的数据保持在一定的量（减少），有助于性能提高</p> 
+<p>2、提高了系统的稳定性和负载能力。<br> 3、切分的表的结构相同、<br> 缺点∶<br> 1、数据的扩容很有难度维护量大</p> 
+<p>2、拆分规则很难抽象出来<br> 3、分片事务的一致性的问题部分业务无法关联join、只能通过java程序接口去调用ACID分布式事务</p> 
+<p><br>  </p> 
+<h3>SQL中的锁</h3> 
+<p><strong>InnoDB支持表、行(默认)级锁</strong>（并发高，开销大）<strong>，而MyISAM支持表级锁</strong>（并发低，开销小）</p> 
+<p></p> 
+<p><strong>MySQL的表级锁有两种模式：</strong></p> 
+<p>表<strong>共享锁</strong>和表<strong>独占写锁</strong></p> 
+<p>当一个线程获得对一个表的写锁后，只有持有锁的线程可以对表进行更新操作。其他线程的读、写操作都会等待，直到锁被释放为止。</p> 
+<p>参考：<a href="https://blog.csdn.net/qq_35642036/article/details/89554721" title="Mysql数据库中的各种锁_张花生的博客-CSDN博客_数据库锁">Mysql数据库中的各种锁_张花生的博客-CSDN博客_数据库锁</a></p> 
+<h2>MVCC：多版本并发控制</h2> 
+<p>提高并发读写的性能，不用加锁就能让多个事务并发读写，</p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<h2>Buffer pool</h2> 
+<p></p> 
+<p>将物理磁盘的 b+tree树的节点（也称为页）放入 内存中，执行某条sql时，就会在磁盘找到这条记录所在的页，加载到内存中，对加载内存的数据进行 增删改查。 对Buffer pool中已经存在了页，由 free链表进行维护，对已经更新buffer pool 中某页的内存位置，由 flush链表维护</p> 
+<p></p> 
+<p><img alt="" height="822" src="https://images2.imgbox.com/00/5c/RKJEeEe3_o.png" width="1200"></p> 
+<p></p> 
+<h2>扩展：</h2> 
+<p>① 模糊查询，使用like %st1%   或者 使用 local(str1,str2)&gt;0   后者是 该条记录的字段str2如果包含str1 则返回 索引位置。即包含则&gt;0。    通常%代表任意，使用like查找的数据比 local（）查找的多。</p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<h2>Redis</h2> 
+<h3>支持的基本类型和应用场景</h3> 
+<table border="1" cellpadding="1" cellspacing="1" style="width:500px;"><tbody><tr><td style="width:82px;">类型</td><td style="width:156px;">特性</td><td style="width:260px;">应用场景</td></tr><tr><td style="width:82px;">string        </td><td style="width:156px;">set/get</td><td style="width:260px;">计数功能</td></tr><tr><td style="width:82px;">list</td><td style="width:156px;"></td><td style="width:260px;">消息队列</td></tr><tr><td style="width:82px;">set</td><td style="width:156px;">全局去重</td><td style="width:260px;">计算共同爱好、共同好友</td></tr><tr><td style="width:82px;">zset</td><td style="width:156px;">有序</td><td style="width:260px;">排行榜，取TOP N</td></tr><tr><td style="width:82px;">hash</td><td style="width:156px;"></td><td style="width:260px;">登录时模拟session，保存用户信息</td></tr></tbody></table> 
+<h3><span style="color:#333333;"><strong>redis</strong></span><span style="color:#333333;"><strong>的过期策略以及内存淘汰机制</strong></span></h3> 
+<p><span style="color:#333333;"><strong>默认删除策略：定期删除+惰性删除</strong></span></p> 
+<p><span style="color:#333333;">定期删除：随机选取，检查是否过期，过期则删除。</span></p> 
+<p><span style="color:#333333;">惰性删除：使用key时，检查一下是否过期，过期则删除。</span></p> 
+<p><span style="color:#333333;"><strong>存在的问题</strong>：随机也没选取到、且使用时也没选取到，会导致过期的没及时被删除，内存越来越高。</span></p> 
+<p><strong><span style="color:#333333;">解决方法：</span></strong><span style="color:#fe2c24;">redis.conf</span><span style="color:#333333;">中配置内存淘汰机制： <span style="background-color:#38d8f0;"> allkeys-lru </span>。 （</span>Least Recently Used<span style="color:#333333;">）</span></p> 
+<p><img alt="" height="23" src="https://images2.imgbox.com/db/b1/gkKPoHhS_o.png" width="255"></p> 
+<p><span style="color:#333333;">lru：内存不足时，又写入新数据，则淘汰最久未被使用的。（其他几种机制不推荐，就不学习了）</span></p> 
+<p></p> 
+<p></p> 
+<h3>缓存穿透</h3> 
+<p>访问一个不存在的key，缓存不起作用，请求会穿透到DB，流量大时DB会挂掉。<br> 解决方案:</p> 
+<ul><li><span style="color:#fe2c24;">采用布隆过滤器</span>，使用一个足够大的bitmap，用于存储可能访问的key，不存在的key直接被过滤;</li><li><span style="color:#fe2c24;">缓存空值</span>。访问key未在DB查询到值，也将空值写进缓存，但可以设置较短过期时间。</li></ul> 
+<h3>缓存雪崩</h3> 
+<p>大量的key设置了相同的过期时间，导致在缓存在同一时刻全部失效，造成瞬时DB请求量大、压力骤增，引起雪崩。<br> 解决方案：</p> 
+<ul><li>可以给缓存设置<span style="color:#fe2c24;">过期时间</span>加上一个<span style="color:#fe2c24;">随机</span>值时间，使得每个key的过期时间分布开来，不会集中在同一时刻失效;</li><li>采用<span style="color:#fe2c24;">限流</span>算法，限制流量; 
+  <ul><li>限流算法：计数法、漏斗发、令牌桶法。<a href="https://blog.csdn.net/u013372493/article/details/119892156" title="三种算法具体参考：面试之 微服务架构_飞花落雨的博客-CSDN博客">三种算法具体参考：面试之 微服务架构_飞花落雨的博客-CSDN博客</a></li></ul></li><li>采用分布式锁，加锁访问。</li></ul> 
+<p></p> 
+<h3>Redis的持久化？</h3> 
+<p>两种方式“：</p> 
+<p><span style="color:#ff9900;"><strong>AOF:</strong>原理是将Reids的操作日志以追加的方式写入文件</span></p> 
+<p><span style="color:#ff9900;"><strong>RDB:</strong>原理是将Reids在内存中的数据库记录定时dump到磁盘上的RDB持久化</span></p> 
+<p>RDB存在哪些优势呢？</p> 
+<ul><li>一旦系统出现灾难性故障，我们可以非常容易的进行恢复。因为只有一个文件</li><li>性能最大化。对于Redis的服务进程而言，在开始持久化时，它唯一需要做的只是fork出子进程，之后再由子进程完成这些持久化的工作，这样就可以极大的避免服务进程执行IO操作了。</li><li>RDB的启动效率会更高。</li></ul> 
+<p>RDB又存在哪些劣势呢？</p> 
+<p>1). 如果你想保证数据的高可用性，即最大限度的避免数据丢失，那么RDB将不是一个很好的选择。因为系统一旦在定时持久化之前出现宕机现象，此前没有来得及写入磁盘的数据都将丢失。</p> 
+<p>2). 由于RDB是通过fork子进程来协助完成数据持久化工作的，因此，如果当数据集较大时，可能会导致整个服务器停止服务几百毫秒，甚至是1秒钟。</p> 
+<p>AOF的优势有哪些呢？</p> 
+<p>1). 该机制可以带来更高的数据安全性，即数据持久性。Redis中提供了3中同步策略，即每秒同步、每修改同步和不同步。事实上，每秒同步也是异步完成的，其效率也是非常高的，所差的是一旦系统出现宕机现象，那么这一秒钟之内修改的数据将会丢失。而每修改同步，我们可以将其视为同步持久化，即每次发生的数据变化都会被立即记录到磁盘中。可以预见，这种方式在效率上是最低的。至于无同步，无需多言，我想大家都能正确的理解它。</p> 
+<p>2). 由于该机制对日志文件的写入操作采用的是append模式，因此在写入过程中即使出现宕机现象，也不会破坏日志文件中已经存在的内容。然而如果我们本次操作只是写入了一半数据就出现了系统崩溃问题，不用担心，在Redis下一次启动之前，我们可以通过redis-check-aof工具来帮助我们解决数据一致性的问题。</p> 
+<p>3). 如果日志过大，Redis可以自动启用rewrite机制。即Redis以append模式不断的将修改数据写入到老的磁盘文件中，同时Redis还会创建一个新的文件用于记录此期间有哪些修改命令被执行。因此在进行rewrite切换时可以更好的保证数据安全性。</p> 
+<p>4). AOF包含一个格式清晰、易于理解的日志文件用于记录所有的修改操作。事实上，我们也可以通过该文件完成数据的重建。</p> 
+<p>AOF的劣势有哪些呢？</p> 
+<p>1). 对于相同数量的数据集而言，AOF文件通常要大于RDB文件。RDB 在恢复大数据集时的速度比 AOF 的恢复速度要快。</p> 
+<p>2). 根据同步策略的不同，AOF在运行效率上往往会慢于RDB。总之，每秒同步策略的效率是比较高的，同步禁用策略的效率和RDB一样高效。</p> 
+<p>二者选择的标准，就是看系统是愿意牺牲一些性能，换取更高的缓存一致性（aof），还是愿意写操作频繁的时候，不启用备份来换取更高的性能，待手动运行save的时候，再做备份（rdb）。rdb这个就更有些 eventually consistent的意思了。</p> 
+<p>文章参考：<a href="https://www.cnblogs.com/chenliangcl/p/7240350.html" rel="nofollow" title="redis持久化的几种方式 - 仗剑走天涯| - 博客园">redis持久化的几种方式 - 仗剑走天涯| - 博客园</a></p> 
+<p></p> 
+<p></p> 
+<p>redies的实战使用：</p> 
+<p>使用场景：利用redis，防止重复消费 消息、 缓存搜索请求，降低调用第三方服务以降低成本</p> 
+<p>依赖：</p> 
+<pre><code>        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-data-redis&lt;/artifactId&gt;
+        &lt;/dependency&gt;</code></pre> 
+<p>单结点模式的配置：（此处使用的是该配置）</p> 
+<pre><code>#redis配置
+spring.redis.host=192.168.121.119
+spring.redis.port=6379
+spring.redis.database=0</code></pre> 
+<p>如果：把 集群的redis 按单节点配置，会报错： </p> 
+<pre><code>org.springframework.data.redis.RedisSystemException: Error in execution; nested exception is io.lettuce.core.RedisCommandExecutionException: MOVED 11949 192.168.11.191:6381</code></pre> 
+<p>集群模式的配置： （前提是 redis是配好的集群）</p> 
+<pre><code>spring.redis.database=0
+spring.redis.cluster.nodes=192.168.11.191:6379</code></pre> 
+<p>1、reids的工具类：</p> 
+<pre><code class="language-java">package com.patpat.product.utils;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
+
+
+@Component
+public class RedisUtil {
+
+    @Autowired
+    private final StringRedisTemplate stringRedisTemplate;
+
+    public RedisUtil(StringRedisTemplate stringRedisTemplate) {
+        this.stringRedisTemplate = stringRedisTemplate;
+    }
+
+    public void setValue(String key, String value, long timeout) {
+        ValueOperations&lt;String, String&gt; valueOperations = stringRedisTemplate.opsForValue();
+        valueOperations.set(key, value, timeout, TimeUnit.SECONDS);
+    }
+
+    public String getValue(String key) {
+        return stringRedisTemplate.opsForValue().get(key);
+    }
+
+}
+</code></pre> 
+<p>使用：</p> 
+<pre><code class="language-java">@Component
+class aaa{
+
+@Autowired
+
+private RedisUtil redisUtil;
+
+
+    pubilc void fun(){
+        redisUtil.set("12","hello word",5) //5秒过期
+
+        String sss= redisUtil.get("12");  
+        Systme.out.print(ss);//输出 hell word
+
+    }
+
+}</code></pre> 
+<p></p> 
+<p>额外的扩展：</p> 
+<p>group by XX 本质是 order by XX，只是取 XX出现的第一个。如：</p> 
+<p><img alt="" height="835" src="https://images2.imgbox.com/aa/3d/Heagkqnv_o.png" width="1200"></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<h2>2022年07月09日mysql学习笔记--极客时间-mysql实战45讲</h2> 
+<h2>1、开篇背景</h2> 
+<p>网上有时候找不到答案，就需要自己去看源码，但容易忘记，是因为没有一个知识网络，因此需要系统学习</p> 
+<h2>2、基础篇</h2> 
+<h3>①查询一条语句的流程</h3> 
+<p></p> 
+<p><img alt="" height="923" src="https://images2.imgbox.com/a8/ea/WysDj5zx_o.png" width="1200"></p> 
+<p> 知识点：</p> 
+<ul><li>mysql支持 <span style="color:#fe2c24;"><strong>InnoDB、MyISAM、Memory </strong></span>等多个存储引擎。现在最常用的存储引擎是 InnoDB，它从 MySQL 5.5.5 版本开始成为了默认存储引擎。如果想要指定引擎，则在创建表中使用  engine=memory，来指定使用内存引擎</li><li>连接了数据库，但没有后续操作，那么这个连接就是空闲状态，可以通过 show processlis查看：默认无操作则8小时自动断开，可有wait_timeout控制</li></ul> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/11/25/Xdqi1Geg_o.png"></p> 
+<p></p> 
+<h4>1、短连接和长连接</h4> 
+<p>短连接：每次执行几次查询就断开，下次查询再重新建立。</p> 
+<p>长连接：连接成功后，如果客户端持续有请求，则一直使用同一个连接。</p> 
+<p>建议，使用长连接。可是有时候会出现mysql占用内存涨的很快。</p> 
+<p>原因：mysql执行过程中临时使用的内存是管理这些连接对象，资源会在连接断开时才释放，长期积累下来的长连接，就会导致内存占用太大，出现oom</p> 
+<p><strong>解决方案：</strong></p> 
+<p>①定期断开长连接</p> 
+<p>②mysql5.7版本后，可以在每次执行一个比较大的操作后，通过执行<strong> mysql_reset_connection 来重新初始化连接资源</strong>。这个过程不需要重连和重新做权限验证，但是会将连接恢复到刚刚创建完时的状态。</p> 
+<h4></h4> 
+<h4>2、查询缓存</h4> 
+<p>我们写个select语句后，会先去缓存中查，key为sql语句，value为查询结果，如果缓存中找到key则，直接返回结果。</p> 
+<p><strong>但大多数不要使用缓存</strong></p> 
+<p>因为  查询缓存的失效频率很频繁，只要对表数据更新，就会清空缓存，所以很多时候<strong>查询缓存命中都很低</strong>，除非XX表是静态表，很久才会更新一次，如系统配置表。</p> 
+<p>配置：query_cache_type 设置为demand,但mysql8.0版本后就没这个查询缓存功能了</p> 
+<p></p> 
+<h4>3、分析器</h4> 
+<p>对sql进行解析，即：语法分析，判断你写的sql是不是符合语法、分析表是否存在、列是否存在</p> 
+<h4>4、优化器</h4> 
+<p>sql等价改写、使用哪个索引、连接表的顺序。以提高效率，优化器决定使用哪种改写方案！</p> 
+<h4>5、执行器</h4> 
+<p>开始执行sql，先判断你对此表的查询权限，如果没有则提示报错，如果有，打开表开始执行，匹配到的追加到结果集。最终把结果集返回给客户端。</p> 
+<p>疑问：判断权限是在执行器？ </p> 
+<p>答：因为有时候是触发器，在执行阶段才能确定，所以在优化器阶段是无能为力的</p> 
+<p></p> 
+<h3>②更新语句的执行流程：</h3> 
+<p>和查询语句的执行流程一样，先走一遍。不同点是：更新流程涉及<span style="color:#ff9900;"><strong>redo log 和binlog</strong></span><span style="color:#0d0016;">两个日志</span></p> 
+<p><img alt="" height="357" src="https://images2.imgbox.com/b3/41/VQ2GkW8B_o.png" width="454"></p> 
+<h4> redo log日志（InnoDB引擎特有）</h4> 
+<p>作用：提高效率、备份（crash-safe）</p> 
+<p>当有一条记录需要更新的时候，InnoDB 引擎就会先把记录写到 redo log里面，并更新内存，这个时候更新就算完成了。同时，InnoDB 引擎会在<strong>适当</strong>的时候，将这个操作记录更新到磁盘里面，而这个更新往往是在系统比较空闲的时候做。redo log记录不下了，就只好停下手中活儿，专门去同步到磁盘里，再清空redo log以便继续写入redo log。</p> 
+<p>记忆比喻：形如厕所积水，达到一定量，哗啦冲一下。</p> 
+<p>疑问：每次写入redo log不也要IO,怎么就效率高了？</p> 
+<p>redo log 也是在磁盘上，但与更新过程不同，更新过程是在磁盘上随机IO,而redo log是在磁盘上顺序IO，效率高。</p> 
+<p>redo log是循环写的。具体实现：使用循环队列，从头写到尾，再开头循环。innodb引擎特有。是物理日志，记录 一条sql的操作</p> 
+<p>bin log 是追加写入，写到一定大小后，切换到下一个，不会覆盖以前的日志。所有引擎都有。是逻辑日志，记录具体干了啥</p> 
+<p><img alt="" height="307" src="https://images2.imgbox.com/23/14/6aVQZfLB_o.png" width="341"></p> 
+<p> 有了red log，InnoDB就可以在数据库发生异常重启后，之前的记录都不会丢失，即：crash-cafe.</p> 
+<p>注：Myisam是没有crash-safe功能的。binlog 是 MySQL 的 Server 层实现的，所有引擎都可以使用。red log是innodb特有的。</p> 
+<h3>bin log日志 </h3> 
+<p>作用：备份。</p> 
+<p> bin log日志能用于归档。是记录了所有的操作日志。</p> 
+<p>redo log 更像是最近的会话的备份，bin log 更像是 真日志，记录了所有的操作。</p> 
+<p></p> 
+<pre><code>update T set c=c+1 where ID=2;</code></pre> 
+<p>执行流程：</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/7e/88/YoMg9B6N_o.png"></p> 
+<h2>事务 </h2> 
+<p><strong><span style="color:#0d0016;">1、</span></strong>务的特性：原子性、一致性、隔离性、持久性</p> 
+<p><span style="color:#0d0016;"><strong>2、</strong></span>多事务同时执行的时候，可能会出现的问题：脏读、不可重复读、幻读</p> 
+<p>        脏读：读到其他事务未提交的数据</p> 
+<p>        不可重复读：前后读取的记录内容不一致</p> 
+<p>       <strong> 幻读：前后读取的记录<span style="color:#fe2c24;">数量</span>不一致</strong></p> 
+<p>3、事务隔离级别：读未提交、读提交、可重复读、串行化</p> 
+<p>4、不同事务隔离级别的区别：</p> 
+<p>        <strong>读未提交</strong>：一个事务还未提交，它所做的变更就可以被别的事务看到</p> 
+<p>        <strong>读提交</strong>：一个事务提交之后，它所做的变更才可以被别的事务看到</p> 
+<p>        <strong>可重复读</strong>：一个事务执行过程中看到的数据是一致的。未提交的更改对其他事务是不可见的         串行化：对应一个记录会加读写锁，出现冲突的时候，后访问的事务必须等前一个事务执行完成才能继续执行。<span style="color:#fe2c24;"><strong>mysql的默认隔离界别</strong></span></p> 
+<p>5、配置方法：启动参数transaction-isolation</p> 
+<p>6、事务隔离的实现：每条记录在更新的时候都会同时记录一条回滚操作。同一条记录在系统中可以存在多个版本，这就是数据库的多版本并发控制（MVCC）。</p> 
+<p>7、回滚日志什么时候删除？系统会判断当没有事务需要用到这些回滚日志的时候，回滚日志会被删除。</p> 
+<p>8、什么时候不需要了？当系统里么有比这个回滚日志更早的read-view的时候。</p> 
+<p>9、为什么尽量不要使用长事务。长事务意味着系统里面会存在很老的事务视图，在这个事务提交之前，回滚记录都要保留，这会导致大量占用存储空间。除此之外，长事务还占用锁资源，可能会拖垮库。</p> 
+<p>10、事务启动方式：</p> 
+<p>        一、显式启动事务语句，begin或者start transaction,提交commit，回滚rollback；</p> 
+<p>        二、set autocommit=0，该命令会把这个线程的自动提交关掉。这样只要执行一个select语句，事务就启动，并不会自动提交，直到主动执行commit或rollback或断开连接。</p> 
+<p>11、<strong>建议使用显式启动事务</strong>语句，如果考虑多一次交互问题，可以使用commit work and chain语法。在autocommit=1的情况下用begin显式启动事务，如果执行commit则提交事务。如果执行commit work and chain则提交事务并自动启动下一个事务。 </p> 
+<p>问题：</p> 
+<p><strong>如何避免长事务对业务的影响？</strong></p> 
+<p><strong>①</strong>根据业务本身的预估，通过 SET MAX_EXECUTION_TIME 命令，来控制每个语句执行的最长时间，避免单个语句意外执行太长时间</p> 
+<p>②设置自动提交事务</p> 
+<p>③确认是否有不必要的事务开启，如select查询</p> 
+<p>④数据库运维方面，监控information_schema.Innodb_trx 表，如果发现达到设置的阀值，则报警或kill</p> 
+<h2> 索引</h2> 
+<h4><strong> 作用：</strong></h4> 
+<p>        提高查找销量，就像书本的目录一样。</p> 
+<p><strong>本质：</strong>每一张表其实就是一个主B+树和几个B+树（如果有建的话），树结点的key值就是某一行的主键，value是该行的其他数据。新建索引就是新增一个B+树，查询不走索引就是遍历主B+树。</p> 
+<h4><strong>实现方式</strong></h4> 
+<p>   <strong> <span style="color:#fe2c24;">  ①哈希表 。</span></strong> 多个key可能会冲突，可以使用拉出一个拉链解决。</p> 
+<p>            优缺点：因为不是有序的使用<span style="color:#fe2c24;"><strong>区间查询时，速度很慢</strong></span>。适合：等值查询场景，如nosql</p> 
+<p> <strong><span style="color:#fe2c24;">     ② 有序数组 </span>。</strong>（插入低效）</p> 
+<p>            优缺点：查询很高效，但就是插入新数据时，后面的所有记录要移动一下，只适合静态存储</p> 
+<p>   <strong><span style="color:#fe2c24;">   ③搜索树</span></strong></p> 
+<p><span style="color:#0d0016;">演变：二叉树可能会偏枝 引入平衡二叉树，平衡二叉树老自旋频繁耗性能 引入不严格的红黑树，红黑树面对过多数据，层级较高，导致io次数过多，引入 B+树</span></p> 
+<p><span style="color:#fe2c24;"><strong>        二叉树——》平衡二叉树——》红黑树——》多路树（B+树）</strong></span></p> 
+<h4><strong><span style="background-color:#a2e043;">主键索引（聚簇索引）的特点： </span></strong></h4> 
+<p> <strong>主键索引</strong>叶子节点存的是页，每页有多个<span style="color:#fe2c24;"><strong>整行数据（粗略说是整行数据，细说是 页，一页又能存几行数据）</strong></span></p> 
+<p><strong>非主键索引</strong>的叶子节点存储的是<span style="color:#fe2c24;"><strong>主键值</strong></span><span style="color:#0d0016;">，非主键索引也叫二级索引，即出去key，再去主键索引搜索，这个过程叫回表。 即：</span><span style="color:#ff9900;">基于非主键索引的查询需要多扫描一棵索引树。因此，我们在应用中应该尽量使用主键查询。</span></p> 
+<p><span style="color:#0d0016;"><strong>本节别人的总结：</strong></span></p> 
+<p>1.innodb支持RC和RR隔离级别实现是用的一致性视图(consistent read view)</p> 
+<p>2.事务在启动时会拍一个快照,这个快照是基于整个库的. 基于整个库的意思就是说一个事务内,整个库的修改对于该事务都是不可见的(对于快照读的情况) 如果在事务内select t表,另外的事务执行了DDL t表,根据发生时间,要嘛锁住要嘛报错(参考第六章)</p> 
+<p>3.事务是如何实现的MVCC呢?</p> 
+<p>(1)每个事务都有一个事务ID,叫做transaction id(严格递增)</p> 
+<p>(2)事务在启动时,找到已提交的最大事务ID记为up_limit_id。</p> 
+<p>(3)事务在更新一条语句时,比如id=1改为了id=2.会把id=1和该行之前的row trx_id写到undo log里, 并且在数据页上把id的值改为2,并且把修改这条语句的transaction id记在该行行头</p> 
+<p>(4)再定一个规矩,一个事务要查看一条数据时,必须先用该事务的up_limit_id与该行的transaction id做比对, 如果up_limit_id&gt;=transaction id,那么可以看.如果up_limit_id&lt;transaction id,则只能去undo log里去取。去undo log查找数据的时候,也需要做比对,必须up_limit_id&gt;transaction id,才返回数据</p> 
+<p>4.什么是当前读,由于当前读都是先读后写,只能读当前的值,所以为当前读.会更新事务内的up_limit_id为该事务的transaction id</p> 
+<p>5.为什么rr能实现可重复读而rc不能,</p> 
+<p>分两种情况 (1)快照读的情况下,rr不能更新事务内的up_limit_id, 而rc每次会把up_limit_id更新为快照读之前最新已提交事务的transaction id,则rc不能可重复读 (</p> 
+<p>2)当前读的情况下,rr是利用record lock+gap lock来实现的,而rc没有gap,所以rc不能可重复读 </p> 
+<h4>索引维护</h4> 
+<p>新增数据可能会导致B+树分裂，删除数据可能会导致B+树合并，这些都耗费性能的。</p> 
+<p><strong>为什么要推荐使用主键自增？</strong></p> 
+<p>从性能方面（树分裂方面来说）：因为这样是递增操作，即：每次追加到树上，不涉及挪到其他记录，也不会触发叶子节点分裂。而业务逻辑字段做主键，往往不能保证有序插入，这样数据成本较高。</p> 
+<p> 从存储空间来说：每个<strong>非主键索引的叶子节点上都是主键的值</strong>。如果用身份证号做主键，那么每个二级索引的叶子节点占用约 20 个字节，而如果用整型做主键，则只要 4 个字节，如果是长整型（bigint）则是 8 个字节。故：<span style="color:#ff9900;"><strong>主键长度越小，普通索引的叶子节点就越小，普通索引占用的空间也就越小。</strong></span></p> 
+<p><strong>那什么时候适合业务字段做主键呢？</strong></p> 
+<p> 只有一个索引，且该索引就是唯一索引，因为不用考虑其他索引的叶子节点大小问题。</p> 
+<p><strong> 别人的索引总结：</strong></p> 
+<p>1.索引的作用：提高数据查询效率</p> 
+<p>2.常见索引模型：哈希表、有序数组、搜索树</p> 
+<p>3.哈希表：键 - 值(key - value)。</p> 
+<p>4.哈希思路：把值放在数组里，用一个哈希函数把key换算成一个确定的位置，然后把value放在数组的这个位置</p> 
+<p>5.哈希冲突的处理办法：链表</p> 
+<p>6.哈希表适用场景：只有等值查询的场景</p> 
+<p>7.有序数组：按顺序存储。查询用二分法就可以快速查询，时间复杂度是：O(log(N))</p> 
+<p>8.有序数组查询效率高，插入效率低</p> 
+<p>9.有序数组的适用场景：静态存储引擎。</p> 
+<p>10.二叉搜索树：每个节点的左儿子小于父节点，父节点又小于右儿子</p> 
+<p>11.二叉搜索树：查询时间复杂度O(log(N))，更新时间复杂度O(log(N))</p> 
+<p>12.数据库存储大多不适用二叉树，因为树高过高，会适用N叉树</p> 
+<p>13.InnoDB中的索引模型：B+Tree</p> 
+<p>14.索引类型：主键索引、非主键索引 主键索引的叶子节点存的是整行的数据(聚簇索引)，非主键索引的叶子节点内容是主键的值(二级索引)</p> 
+<p>15.主键索引和普通索引的区别：主键索引只要搜索ID这个B+Tree即可拿到数据。普通索引先搜索索引拿到主键值，再到主键索引树搜索一次(回表)</p> 
+<p>16.一个数据页满了，按照B+Tree算法，新增加一个数据页，叫做页分裂，会导致性能下降。空间利用率降低大概50%。当相邻的两个数据页利用率很低的时候会做数据页合并，合并的过程是分裂过程的逆过程。</p> 
+<p>17.从性能和存储空间方面考量，自增主键往往是更合理的选择。</p> 
+<p><strong>思考题：</strong> 如果删除后，新建主键索引，会同时去修改普通索引对应的主键索引，性能消耗比较大。 删除重建普通索引貌似影响不大，不过要注意在业务低谷期操作，避免影响业务。</p> 
+<p>主键索引的叶子节点存储的行数据，<strong>主键索引删除，普通索引就失效了，因为普通索引叶子节点存储的是主键id</strong></p> 
+<pre><code>//重建普通索引
+alter table T drop index k;
+alter table T add index(k);
+
+//重建主键索引，因为会导致普通索引修改主键索引，所以性能大点
+alter table T drop primary key;
+alter table T add primary key(id);</code></pre> 
+<p><strong>“N叉树”的N值在MySQL中是可以被人工调整的么？曾经面试被问到过这问题，当时就懵逼了...</strong></p> 
+<p>1， 通过改变key值来调整 N叉树中非叶子节点存放的是索引信息，非叶子节点包含<span style="color:#ff9900;"><strong>Key和Point指针</strong></span>。Point指针固定为6个字节，假如Key为10个字节，那么单个索引节点就是16个字节。如果B+树中页大小为16K，那么一个页就可以存储1024个索引，此时N就等于1024。</p> 
+<p>我们<span style="color:#fe2c24;"><strong>通过改变Key的大小</strong></span>，就可以改变N的值 2， 改变页的大小 页越大，一页存放的索引就越多，N就越大。 </p> 
+<p></p> 
+<h2>MySQL 的全局锁和表级锁、行锁</h2> 
+<p><strong>全局锁的典型使用场景是，做全库逻辑<span style="color:#fe2c24;">备份</span></strong>。也就是把整库每个表都 select 出来存成文本。</p> 
+<h4>早期全局锁：</h4> 
+<p>以前，通过 <strong>FTWRL</strong> (Flush tables with read lock)让整个库处于只读状态。在主库备份，则备份期间不能更新，业务基本停摆，在从库备份，则不能执行主库同步过来的binlog，会导致主从延迟。</p> 
+<h4>最新全局锁：（只适用于支持事务的引擎 如innodb）</h4> 
+<p>官方自带的<span style="color:#fe2c24;">逻辑备份工具是 mysqldump</span>。当 mysqldump 使用参数<strong>–single-transaction </strong>的时候，导数据之前就会启动一个事务，来确保拿到一致性视图。而由于 MVCC 的支持，这个过程中数据是可以正常更新的。</p> 
+<p><strong>既然要全库只读，为什么不使用 set global readonly=true 的方式呢？</strong></p> 
+<p><strong>①</strong>readonly 的值会被用来做其他逻辑，比如用来判断一个库是主库还是备库。因此，修改 global 变量的方式影响面更大，因此不建议。</p> 
+<p>②FTWRL发生异常会自动释放锁，readonly则不会。</p> 
+<p><strong>表锁</strong></p> 
+<p><strong>（</strong>表锁一般在不支持行级锁的时候使用<strong>）</strong></p> 
+<p> 分两种</p> 
+<p>①表锁  表锁的语法是<strong> lock tables … read/write</strong></p> 
+<p>②元数据锁<span style="color:#fe2c24;"><strong>MDL</strong></span>（metadata lock) 。在 MySQL 5.5 版本中引入了 MDL，当对一个表做<strong>增删改查</strong>操作的时候，<strong>加 <span style="color:#fe2c24;">MDL 读锁</span></strong>；当要对<strong>表做结构变更</strong>操作的时候，<strong>加 <span style="color:#fe2c24;">MDL 写锁</span></strong>。</p> 
+<p class="img-center"><img alt="" height="360" src="https://images2.imgbox.com/83/fb/8Ko8AhN2_o.png" width="514"></p> 
+<p> 注：事务中的MDL锁，在开始执行时申请，直到<strong>整个事务提交</strong>后才释放。</p> 
+<p>因此，修改表结构，是会导致锁住线上查询和更新。</p> 
+<p><strong>如何安全地给小表加字段？</strong></p> 
+<p> 1、解决长事务，事务不提交，就会一直占着 MDL 锁。要考虑<strong>先暂停 DDL</strong>或者<strong> kill 掉这个长事务</strong></p> 
+<p>2、比较理想的机制是，<span style="color:#fe2c24;">在 alter table 语句里面设定等待时间</span>，如果在这个指定的等待时间里面能够拿到 MDL 写锁最好，拿不到也不要阻塞后面的业务语句，先放弃。之后开发人员或者 DBA 再通过重试命令重复这个过程。MariaDB 已经合并了 AliSQL 的这个功能，所以这两个开源分支目前都支持 DDL NOWAIT/WAIT n 这个语法。</p> 
+<pre><code>ALTER TABLE tbl_name NOWAIT add column ...
+ALTER TABLE tbl_name WAIT N add column ... </code></pre> 
+<h4>行锁 </h4> 
+<p>在 InnoDB 事务中，行锁是在需要的时候才加上的，但并不是不需要了就立刻释放，而是要等到事务结束时才释放。这个就是两阶段锁协议（即A开启事务，执行更新tableA，在A没提交的时候，再开启事务B对tableA更新，则 B是阻塞的，直到A事务提交）。 </p> 
+<p><span style="color:#fe2c24;"><strong>如果你的事务中需要锁多个行，要把最可能造成锁冲突、最可能影响并发度的锁尽量往后放</strong></span>。在并发编程中，我们在编写相应的并发程序时也要这么去考虑.</p> 
+<p><strong>死锁</strong></p> 
+<p>多个线程之间出现循环资源依赖，都等着其他线程释放资源时，就会无限等待。</p> 
+<p><strong>如何解决死锁？</strong></p> 
+<p><strong>①设置超时时间，</strong>innodb_lock_wait_timeout。超时设置过短容易误杀</p> 
+<p><strong>②发起死锁检测。</strong>发现死锁后，主动回滚，让出资源，让其他先执行。innodb_deadlock_detect 设置为 on.<span style="color:#fe2c24;"><strong>推荐使用。但耗cpu, 因为一个是o(n),n个则是n*n.</strong></span></p> 
+<p><strong><span style="color:#fe2c24;">mysql解决死锁耗cpu的方法</span></strong></p> 
+<p><span style="color:#fe2c24;">①保证业务没死锁则关闭死锁检测。</span></p> 
+<p><span style="color:#fe2c24;">②并发看着，使用中间件实现，即：排队</span></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<p><strong>本节别人的总结：</strong></p> 
+<p>根据加锁范围：MySQL里面的锁可以分为：全局锁、表级锁、行级锁</p> 
+<p><strong>一、全局锁： 对整个数据库实例加锁。</strong></p> 
+<p>MySQL提供加全局读锁的方法：Flush tables with read lock(FTWRL) 这个命令可以使整个库处于只读状态。使用该命令之后，数据更新语句、数据定义语句和更新类事务的提交语句等操作都会被阻塞。</p> 
+<p><strong>使用场景</strong>：全库逻辑备份。</p> 
+<p><strong>风险： </strong></p> 
+<p>1.如果在主库备份，在备份期间不能更新，业务停摆</p> 
+<p>2.如果在从库备份，备份期间不能执行主库同步的binlog，导致主从延迟 官方自带的逻辑备份工具mysqldump，当mysqldump使用参数--single-transaction的时候，会启动一个事务，确保拿到一致性视图。而由于MVCC的支持，这个过程中数据是可以正常更新的。 一致性读是好，但是前提是引擎要支持这个隔离级别。</p> 
+<p><strong>如果要全库只读，为什么不使用set global readonly=true的方式？ </strong></p> 
+<p>1.在有些系统中，readonly的值会被用来做其他逻辑，比如判断主备库。所以修改global变量的方式影响太大。</p> 
+<p>2.在异常处理机制上有差异。如果执行FTWRL命令之后由于客户端发生异常断开，那么MySQL会自动释放这个全局锁，整个库回到可以正常更新的状态。而将整个库设置为readonly之后，如果客户端发生异常，则数据库就会一直保持readonly状态，这样会导致整个库长时间处于不可写状态，风险较高。</p> 
+<p>二、表级锁 MySQL里面表级锁有两种，</p> 
+<p><span style="color:#fe2c24;"><strong>一种是表锁，一种是元数据所(meta data lock,MDL) </strong></span>表锁的语法是:lock tables ... read/write</p> 
+<p>可以用unlock tables主动释放锁，也可以在客户端断开的时候自动释放。</p> 
+<p>lock tables语法除了会限制别的线程的读写外，也限定了本线程接下来的操作对象。 对于InnoDB这种支持行锁的引擎，一般不使用lock tables命令来控制并发，毕竟锁住整个表的影响面还是太大。</p> 
+<p>MDL：不需要显式使用，在访问一个表的时候会被自动加上。</p> 
+<p>MDL的作用：保证读写的正确性。 在对一个表做增删改查操作的时候，加MDL读锁；当要对表做结构变更操作的时候，加MDL写锁。</p> 
+<p>读锁之间不互斥。读写锁之间，写锁之间是互斥的，用来保证变更表结构操作的安全性。</p> 
+<p>MDL 会直到事务提交才会释放，在做表结构变更的时候，一定要小心不要导致锁住线上查询和更新。</p> 
+<p>在 InnoDB 事务中，行锁是在需要的时候才加上的，但并不是不需要了就立刻释放， 而是要等到事务结束时才释放。 建议：如果你的事务中需要锁多个行，要把最可能造成锁冲突、最可能影响并发度的锁尽量往后放。</p> 
+<p><strong>死锁：</strong>当并发系统中不同线程出现循环资源依赖，涉及的线程都在等待别的线程释放资源时，就会导致这几个线程都进入无限等待的状态。</p> 
+<p><strong>解决方案：</strong> 1、通过参数 innodb_lock_wait_timeout 根据实际业务场景来设置超时时间，InnoDB引擎默认值是50s。</p> 
+<p>2、发起死锁检测，发现死锁后，主动回滚死锁链条中的某一个事务，让其他事务得以继续执行。将参数 innodb_deadlock_detect 设置为 on，表示开启这个逻辑（默认是开启状态）。</p> 
+<p><strong>如何解决热点行更新导致的性能问题？ </strong></p> 
+<p>1、如果你能确保这个业务一定不会出现死锁，可以临时把死锁检测关闭掉。一般不建议采用 2、控制并发度，对应相同行的更新，在进入引擎之前排队。这样在InnoDB内部就不会有大量的死锁检测工作了。 3、将热更新的行数据拆分成逻辑上的多行来减少锁冲突，但是业务复杂度可能会大大提高。 innodb行级锁是通过锁索引记录实现的，如果更新的列没建索引是会锁住整个表的。</p> 
+<p></p> 
+<p></p> 
+<h4></h4> 
+<h4>1、 普通索引和唯一索引，应该怎么选择？</h4> 
+<p>对于查询过程来说：</p> 
+<p>a、普通索引，查到满足条件的第一个记录后，继续查找下一个记录，知道第一个不满足条件的记录</p> 
+<p>b、唯一索引，由于索引唯一性，查到第一个满足条件的记录后，停止检索 但是，两者的性能差距微乎其微。因为InnoDB根据数据页来读写的。</p> 
+<p>对于更新过程来说：</p> 
+<p>概念：change buffer 当需要更新一个数据页，如果数据页在内存中就直接更新，如果不在内存中，在不影响数据一致性的前提下，InnoDB会将这些更新操作缓存在change buffer中。下次查询需要访问这个数据页的时候，将数据页读入内存，然后执行change buffer中的与这个页有关的操作。</p> 
+<p>change buffer是可以持久化的数据。在内存中有拷贝，也会被写入到磁盘上</p> 
+<p>purge:将change buffer中的操作应用到原数据页上，得到最新结果的过程，成为purge 访问这个数据页会触发purge，系统有后台线程定期purge，在数据库正常关闭的过程中，也会执行purge</p> 
+<p>唯一索引的更新不能使用change buffer</p> 
+<p>change buffer用的是buffer pool里的内存，change buffer的大小，可以通过参数innodb_change_buffer_max_size来动态设置。这个参数设置为50的时候，表示change buffer的大小最多只能占用buffer pool的50%。</p> 
+<p>将数据从磁盘读入内存涉及随机IO的访问，是数据库里面成本最高的操作之一。 change buffer 因为减少了随机磁盘访问，所以对更新性能的提升很明显。</p> 
+<p>change buffer使用场景</p> 
+<p>在一个数据页做purge之前，change buffer记录的变更越多，收益就越大。 对于写多读少的业务来说，页面在写完以后马上被访问到的概率比较小，此时change buffer的使用效果最好。这种业务模型常见的就是账单类、日志类的系统。 反过来，假设一个业务的更新模式是写入之后马上会做查询，那么即使满足了条件，将更新先记录在change buffer,但之后由于马上要访问这个数据页，会立即触发purge过程。 这样随机访问IO的次数不会减少，反而增加了change buffer的维护代价。所以，对于这种业务模式来说，change buffer反而起到了副作用。</p> 
+<p>索引的选择和实践：</p> 
+<p>尽可能使用普通索引。 redo log主要节省的是随机写磁盘的IO消耗(转成顺序写)，而change buffer主要节省的则是随机读磁盘的IO消耗。 思考题： change buffer不会丢失，因为change buffer是可以持久化的数据</p> 
+<p>如：身份证号码 是业务上保证是唯一的，你可以用其来作为主键吗？</p> 
+<p>答 ：不建议，因为身份证字段比较大，最好是 普通索引或者 唯一索引。</p> 
+<p>那么从性能上考虑：应该选择 普通索引 还是唯一索引呢？</p> 
+<blockquote> 
+ <p>首先了解。普通索引 和 唯一索引区别：</p> 
+ <p>普通索引跟唯一索引执行上的区别：<span style="color:#fe2c24;"> 普通索引的等值查询，会继续遍历到第一个不相等的值才会结束，而唯一索引等值查询，命中则结束</span>（性能差距微乎其微）。本质上还是 唯一索引是唯一的，因为有约束，它要“顾全大局”，普通索引就只管 按顺序等值比较了。</p> 
+</blockquote> 
+<h4><span style="color:#fe2c24;"><strong>扩展：change buffer</strong></span></h4> 
+<p>先记录要改动的数据，等待目标数据页进入内存对其修改（修改过程叫 merge），所做的变更会记录在redo log中。</p> 
+<blockquote> 
+ <p>当需要更新一个数据页时，如果数据页在内存中就直接更新，而如果这个数据页还没有在内存中的话，在不影响数据一致性的前提下，InnoDB 会将这些更新操作缓存在 change buffer 中，这样就不需要从磁盘中读入这个数据页了。在下次查询需要访问这个数据页的时候，将数据页读入内存，然后执行 change buffer 中与这个页有关的操作。</p> 
+</blockquote> 
+<p> 对于<span style="color:#ff9900;"><strong>唯一索引来说，所有的更新操作都要先判断这个操作是否违反唯一性约束</strong></span>。比如，要插入 (4,400) 这个记录，就要先判断现在表中是否已经存在 k=4 的记录，而这必须要将数据页读入内存才能判断。如果都已经读入到内存了，那直接更新内存会更快，就没必要使用 change buffer 了。<span style="color:#ff9900;"><strong>因此，</strong></span><span style="color:#fe2c24;"><strong>唯一索引的更新就不能使用 change buffer</strong></span><span style="color:#ff9900;"><strong>，实际上也只有普通索引可以使用, </strong></span><span style="color:#fe2c24;"><strong>普通索引和唯一索引的查询性能几乎一样, 但是写性能是普通索引快, 因为可以用到change buffer,<span style="color:#ff9900;"><strong> </strong></span>唯一索引会导致内存命中率下降。</strong></span><span style="color:#0d0016;"><strong>所以在大量的插入、更新数据操作时，普通索引的优势比较明显。</strong></span></p> 
+<p><span style="color:#0d0016;"><strong>总结：由于唯一索引用不上 change buffer 的优化机制，因此如果业务可以接受，从性能角度出发我建议你优先考虑非唯一索引.</strong></span></p> 
+<h2><strong>开启慢日志：</strong></h2> 
+<p>开启慢查询和显示慢查询日志 文件路径运行</p> 
+<p><span style="color:#fe2c24;"><strong>show variables like '%slow_query_log%'; </strong></span></p> 
+<p><span style="color:#fe2c24;"><strong>set global slow_query_log=1; set long_query_time=0; //之后凡是执行时间超过0的都会被记录</strong></span></p> 
+<h4>为什么mysql有时候会选错索引？</h4> 
+<p>索引的选择是由优化器决定的。优化器会根据：扫描行数、是否使用临时表、是否排序来综合判断。 </p> 
+<p>那它怎么知道要扫描多少行呢？因为它自己会估算"区分度",一个索引上不同的值越多，该索引的区分度越好，并且为了估算，而不是一行一行取数，而是 ”采用统计“，索引统计信息不准确导致的问题，你可以用<span style="color:#fe2c24;"> analyze table 命令</span>来解决</p> 
+<p></p> 
+<p><strong>原本可以执行得很快的 SQL 语句，执行速度却比你预期的慢很多，你应该怎么办呢？</strong></p> 
+<p>① 使用错了索引，<span style="color:#fe2c24;">强制指定索引</span>。1. 可以使用force index(key)进行校正。</p> 
+<p><img alt="" height="117" src="https://images2.imgbox.com/0d/25/ZF6sHdMK_o.png" width="1200">②2. 通过<span style="color:#fe2c24;">修改sql语句引导</span>优化器选择正确的索引，因为优化器选择索引会考虑三个因素，扫描函数、临时表和排序。</p> 
+<p>③3. 重新<span style="color:#fe2c24;">建立一个更合适的索引</span>。</p> 
+<h4><strong>怎么给字符串字段加索引？</strong></h4> 
+<p><span style="color:#fe2c24;"><strong>使用前缀索引，定义好长度</strong></span>，就可以做到既节省空间，又不用额外增加太多的查询成本。 </p> 
+<p>如：</p> 
+<pre><code>mysql&gt; alter table SUser add index index1(email);
+或
+mysql&gt; alter table SUser add index index2(email(6));
+
+使用时：
+select * from  Suser where email="zhangssxyz@xxx.com" 
+使用第一个索引时：
+1、从 index1 索引树找到满足索引值是’zhangssxyz@xxx.com’的这条记录，取得 ID2 的值；到主键上查到主2、键值是 ID2 的行，判断 email 的值是正确的，将这行记录加入结果集；
+3、取 index1 索引树上刚刚查到的位置的下一条记录（普通索引都会有该操作，但因为索引时候有序的，所以如果下一个不符合，那么之后的肯定都不会符合了； 如果是唯一性索引，那么就会直接跳过这一步），发现已经不满足 email='zhangssxyz@xxx.com’的条件了，循环结束。
+
+
+使用第二个索引时：
+1、从 index2 索引树找到满足索引值是’zhangs’的记录，找到的第一个是 ID1；
+2、到主键上查到主键值是 ID1 的行，判断出 email 的值不是’zhangssxyz@xxx.com’，这行记录丢弃；
+3、取 index2 上刚刚查到的位置的下一条记录，发现仍然是’zhangs’，取出 ID2，再到 ID 索引上取整行然后判断，这次值对了，将这行记录加入结果集；
+4、重复上一步，直到在 idxe2 上取到的值不是’zhangs’时，循环结束。在这个过程中，要回主键索引取 4 次数据，也就是扫描了 4 行。</code></pre> 
+<p> 结论：建立索引时关注的是区分度，区分度越高越好。因为区分度越高，意味着重复的键值越少。但使用前缀索引就用不上覆盖索引对查询性能的优化了，这也是你在选择是否使用前缀索引时需要考虑的一个因素。（因为前缀索引可能有多个匹配，无法定位到某个id对应的具体value）。</p> 
+<p>扩展：前缀过长，比较占空间，但是可以考虑①倒序存储身份证②使用hash字段</p> 
+<p></p> 
+<p>本节总结：</p> 
+<p>1、直接创建完整索引，这样可能比较占用空间；</p> 
+<p>2、创建前缀索引，节省空间，但会增加查询扫描次数，并且不能使用覆盖索引；</p> 
+<p>3、倒序存储，再创建前缀索引，用于绕过字符串本身前缀的区分度不够的问题；</p> 
+<p>4、创建 hash 字段索引，查询性能稳定，有额外的存储和计算消耗，跟第三种方式一样，都不支持范围扫描。在实际应用中，你要根据业务字段的特点选择使用哪种方式。</p> 
+<p></p> 
+<p>为什么有时候mysql某个查询语句突然慢了，又复现不了？</p> 
+<p>答：可能正在刷脏页。（内存的最新数据刷到磁盘上）</p> 
+<p><strong>当内存数据页跟磁盘数据页内容不一致的时候，我们称这个内存页为“脏页”。内存数据写入到磁盘后，内存和磁盘上的数据页的内容就一致了，称为“干净页”。</strong></p> 
+<p></p> 
+<h2> 为什么表数据删掉一半，表文件大小不变？</h2> 
+<p> 一个 InnoDB 表包含两部分，即：表结构定义和数据</p> 
+<p>(mysql8.0后，可以把表定义放到 数据表中了，因为表定义 占用很小)</p> 
+<p>首先要提到：<span style="color:#fe2c24;"><strong>innodb_file_per_table</strong></span> 参数设置为 OFF，表示跟数据字典放在一起<strong>。ON表示 每个InnoDB表数据存储在一个以.ibd为后缀的文件中（推荐）</strong></p> 
+<p> 建议你不论使用 MySQL 的哪个版本，都将这个值设置为 ON。因为，<span style="color:#ff9900;"><strong>一个表单独存储为一个文件更容易管理，而且在你不需要这个表的时候，通过 drop table 命令，系统就会直接删除这个文件。而如果是放在共享表空间中，即使表删掉了，空间也是不会回收的。</strong></span></p> 
+<p><span style="color:#0d0016;"><strong>答:</strong></span>mysql直接delete表后，数据大小不会变化，是因为delete之后其实是把各数据索引B+树的各个节点设置为“可复用”（<span style="color:#ff9900;"><strong>空洞</strong></span>）状态，而不是真正的表空间数据回收，所以数据依然是存在的，只是不能被再次查询出来。 因此，可以理解为可以被复用，而没有被回收，所以B+树仍然占据存储空间。只能使用表重建来清空存储的B+树。</p> 
+<p><strong>造成空洞的原因： </strong></p> 
+<p><strong>1、删除记录（等着被复用未被真清除）</strong></p> 
+<p><strong>2、插入记录 </strong></p> 
+<p><strong>3、更新索引值</strong></p> 
+<p></p> 
+<h4>Count（*）知识点</h4> 
+<p> 在不同的 MySQL 引擎中，count(*) 有不同的实现方式。</p> 
+<p>1. MyISAM 引擎把一个表的总行数存在了磁盘上，因此执行 count(*) 的时候会直接返回这个数，效率很高；</p> 
+<p>2. 而 InnoDB 引擎就麻烦了，它执行 count(*) 的时候，需要把数据一行一行地从引擎里面读出来，然后累积计数。 此外需要注意的是，我们在这篇文章里讨论的是没有过滤条件的 count(*)，如果加了 where 条件的话，MyISAM 表也是不能返回得这么快的。</p> 
+<h4>那为什么 InnoDB 不跟 MyISAM 一样，也把数字存起来呢</h4> 
+<p>这和 InnoDB 的事务设计有关系，可重复读是它默认的隔离级别，在代码上就是通过多版本并发控制，也就是 MVCC 来实现的。每一行记录都要判断自己是否对这个会话可见，因此对于 count(*) 请求来说，InnoDB 只好把数据一行一行地读出依次判断，可见的行才能够用于计算“基于这个查询”的表的总行数.</p> 
+<p>count(*)、count(主键 id) 和 count(1) 都表示返回满足条件的结果集的总行数；而 count(字段），则表示返回满足条件的数据行里面，参数“字段”不为 NULL 的总个数</p> 
+<p>count(字段）：遍历整张表，需要取值，判断 字段 != null，按行累加；</p> 
+<p>count(id) ：遍历整张表，需要取ID，判断 id !=null，按行累加；</p> 
+<p>count(1) ： 遍历整张表，【不需要】取值，返回的每一行放一个数字1，按行累加；</p> 
+<p>count(*) : 【不需要取字段】，count(*)，按行累加；</p> 
+<p>因为count(*) 和 count(1) 不取字段值，减少往 server层的数据返回，所以比其他count(字段)要返回值的【性能】较好；</p> 
+<p><span style="color:#ff9900;">结论：按照效率排序的话，<strong>count(字段)&lt;count(主键 id)&lt;count(1)≈count(*)</strong></span></p> 
+<p></p> 
+<p></p> 
+<h2><span style="color:#ff9900;"><strong>分库分表</strong></span></h2> 
+<h3>为什么需要分库分表？</h3> 
+<ol><li>性能提升，单表数据量过大，查询效率下降。</li><li>I/O瓶颈。mysql会将索引尽量加载到内存中，但内存放不下时采用（如LRU），使之后到sql查询产生磁盘IO。</li><li>扩展性。随着业务发展数据量增加，单一数据库不能支撑</li></ol> 
+<h3>分库分表带来的问题</h3> 
+<ol><li> <h4>分布式事务</h4> 解决手段： 
+  <ol><li>两段式提交（2PC）：协调者问所有参与者是否准备好，都准备好才提交事务，否则中止。缺点：虽然能保证原子性，但性能开销大，另外某参与者掉线，被阻塞影响性能。</li><li>3PC，多了个预提交</li></ol></li><li> <h4>跨库Join的问题</h4> </li></ol> 
+<p>                可能需要多次查询来解决，但可以在一定程度上缓解这个问题，如：</p> 
+<p>                        1、字段冗余</p> 
+<p>                        2、代码层面的组装。</p> 
+<ol><li> <h4>水平扩张ReHash</h4> </li></ol> 
+<p>                当遇到数据迁移时、动态增加表时，面临横向扩容的问题。解决办法：分片策略，如：基于范围分片、基于哈希芬片等，</p> 
+<ol><li> <h4>结果集合版、排序</h4> </li></ol> 
+<p>        </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/b164d2d294206e8cbcd4143de4c7e271/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">python &#43; mongodb使用入门</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/6bb148617d47eaf868b0bad7af1a00a1/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">迷你主机安装openwrt软路由系统（附启动盘制作教程&#43;ISO、IMG镜像文件）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

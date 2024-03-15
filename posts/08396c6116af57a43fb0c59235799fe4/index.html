@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>kubernetes基本概念和操作 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="kubernetes基本概念和操作" />
+<meta property="og:description" content="基本概念和操作 1.Namespace1.1概述1.2应用示例 2.Pod2.1概述2.2语法及应用示例 3.Label3.1概述3.2语法及应用示例 4.Deployment4.1概述4.2语法及应用示例 5.Service5.1概述5.2语法及应用示例5.2.1创建集群内部可访问的Service5.2.2创建集群外部可访问的Service5.2.3删除服务5.2.4对象配置方式 1.Namespace 1.1概述 Namespace是kubernetes系统中一种非常重要的资源，它的主要作用是用来实现多套系统的资源隔离或者多租户的资源隔离。
+默认情况下，kubernetes集群中的所有Pod都是可以相互访问的。但是在实际中，可能不想让两个Pod之间进行互相的访问，那么此时就可以将两个Pod划分到不同的Namespace下。kubernetes通过将集群内部的资源分配到不同的Namespace中，可以形成逻辑上的“组”，以方便不同的组的资源进行隔离使用和管理。
+可以通过kubernetes的授权机制，将不同的Namespace交给不同租户进行管理，这样就实现了多租户的资源隔离。此时还能结合kubernetes的资源配额机制，限定不同租户能占用的资源，例如CPU使用量、内存使用量等等，来实现租户可用资源的管理。
+kubernetes在集群启动之后，会默认创建几个namespace
+kubectl get namespace ● default：所有未指定的Namespace的对象都会被分配在default命名空间。
+● kube-node-lease：集群节点之间的心跳维护，v1.13开始引入。
+● kube-public：此命名空间的资源可以被所有人访问（包括未认证用户）。
+● kube-system：所有由kubernetes系统创建的资源都处于这个命名空间。
+1.2应用示例 查看所有名称空间
+kubectl get namespace 或 kubectl get ns 查看指定名称空间
+kubectl get namespace default 或 kubectl get ns default 指定命名空间的输出格式
+kubectl get ns default -o wide kubectl get ns default -o yaml # yaml格式输出 kubectl get ns default -o json # json格式输出 查看命名空间详情
+kubectl describe ns default 或 kubectl describe namespace default 创建命名空间" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/08396c6116af57a43fb0c59235799fe4/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-02T16:46:18+08:00" />
+<meta property="article:modified_time" content="2024-02-02T16:46:18+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">kubernetes基本概念和操作</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>基本概念和操作</h4> 
+ <ul><li><a href="#1Namespace_1" rel="nofollow">1.Namespace</a></li><li><ul><li><a href="#11_2" rel="nofollow">1.1概述</a></li><li><a href="#12_17" rel="nofollow">1.2应用示例</a></li></ul> 
+  </li><li><a href="#2Pod_74" rel="nofollow">2.Pod</a></li><li><ul><li><a href="#21_75" rel="nofollow">2.1概述</a></li><li><a href="#22_83" rel="nofollow">2.2语法及应用示例</a></li></ul> 
+  </li><li><a href="#3Label_160" rel="nofollow">3.Label</a></li><li><ul><li><a href="#31_161" rel="nofollow">3.1概述</a></li><li><a href="#32_188" rel="nofollow">3.2语法及应用示例</a></li></ul> 
+  </li><li><a href="#4Deployment_260" rel="nofollow">4.Deployment</a></li><li><ul><li><a href="#41_261" rel="nofollow">4.1概述</a></li><li><a href="#42_266" rel="nofollow">4.2语法及应用示例</a></li></ul> 
+  </li><li><a href="#5Service_362" rel="nofollow">5.Service</a></li><li><ul><li><a href="#51_363" rel="nofollow">5.1概述</a></li><li><a href="#52_370" rel="nofollow">5.2语法及应用示例</a></li><li><ul><li><a href="#521Service_371" rel="nofollow">5.2.1创建集群内部可访问的Service</a></li><li><a href="#522Service_391" rel="nofollow">5.2.2创建集群外部可访问的Service</a></li><li><a href="#523_411" rel="nofollow">5.2.3删除服务</a></li><li><a href="#524_421" rel="nofollow">5.2.4对象配置方式</a></li></ul> 
+  </li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="1Namespace_1"></a>1.Namespace</h2> 
+<h3><a id="11_2"></a>1.1概述</h3> 
+<ul><li> <p>Namespace是kubernetes系统中一种非常重要的资源，它的主要作用是用来实现多套系统的<code>资源隔离</code>或者<code>多租户的资源隔离</code>。</p> </li><li> <p>默认情况下，kubernetes集群中的所有Pod都是可以相互访问的。但是在实际中，可能不想让两个Pod之间进行互相的访问，那么此时就可以将两个Pod划分到<code>不同的Namespace</code>下。kubernetes通过将集群内部的资源分配到不同的Namespace中，可以形成逻辑上的“组”，以方便不同的组的资源进行隔离使用和管理。</p> </li><li> <p>可以通过kubernetes的授权机制，将不同的Namespace交给不同租户进行管理，这样就实现了多租户的资源隔离。此时还能结合kubernetes的<code>资源配额</code>机制，限定不同租户能占用的资源，例如CPU使用量、内存使用量等等，来实现租户可用资源的管理。</p> </li><li> <p>kubernetes在集群启动之后，会默认创建几个namespace</p> </li></ul> 
+<pre><code class="prism language-shell">kubectl get namespace
+</code></pre> 
+<p><img src="https://images2.imgbox.com/5b/6b/djVaDOAu_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>● default：所有未指定的Namespace的对象都会被分配在<code>default</code>命名空间。<br> ● kube-node-lease：集群节点之间的心跳维护，v1.13开始引入。<br> ● kube-public：此命名空间的资源可以被所有人访问（包括未认证用户）。<br> ● kube-system：所有由kubernetes系统创建的资源都处于这个命名空间。</p> 
+</blockquote> 
+<h3><a id="12_17"></a>1.2应用示例</h3> 
+<p><strong>查看所有名称空间</strong></p> 
+<pre><code class="prism language-shell">kubectl get namespace
+或
+kubectl get ns
+</code></pre> 
+<p><img src="https://images2.imgbox.com/60/f3/kRTJBHNz_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>查看指定名称空间</strong></p> 
+<pre><code class="prism language-shell">kubectl get namespace default
+或
+kubectl get ns default
+</code></pre> 
+<p><img src="https://images2.imgbox.com/db/bd/UpMlaChL_o.png" alt="在这里插入图片描述"><br> <strong>指定命名空间的输出格式</strong></p> 
+<pre><code class="prism language-shell">kubectl get ns default <span class="token parameter variable">-o</span> wide 
+kubectl get ns default <span class="token parameter variable">-o</span> yaml <span class="token comment"># yaml格式输出</span>
+kubectl get ns default <span class="token parameter variable">-o</span> json <span class="token comment"># json格式输出</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/54/d5/jAxOpNYQ_o.png" alt="在这里插入图片描述"><br> <strong>查看命名空间详情</strong></p> 
+<pre><code class="prism language-shell">kubectl describe ns default
+或
+kubectl describe namespace default
+</code></pre> 
+<p><img src="https://images2.imgbox.com/a0/9e/UQi2tcrt_o.png" alt="在这里插入图片描述"><br> <strong>创建命名空间</strong></p> 
+<pre><code class="prism language-shell">kubectl create ns defult
+或
+kubectl create namespace default
+</code></pre> 
+<p><img src="https://images2.imgbox.com/ed/f3/lGOgA609_o.png" alt="在这里插入图片描述"><br> <strong>删除命名空间</strong></p> 
+<pre><code class="prism language-shell">kubectl delete ns dev
+或
+kubectl delete namespace dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/c0/ab/KRz9X8Sy_o.png" alt="在这里插入图片描述"><br> <strong>命令式对象配置</strong></p> 
+<ul><li>新建ns-dev.yaml</li></ul> 
+<pre><code class="prism language-shell">apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+</code></pre> 
+<ul><li>通过命令式对象配置进行创建和删除</li></ul> 
+<pre><code class="prism language-shell">kubectl create <span class="token parameter variable">-f</span> ns-dev.yaml  <span class="token comment">#创建名称空间</span>
+kubectl delete <span class="token parameter variable">-f</span> ns-dev.yaml  <span class="token comment">#删除名称空间</span>
+</code></pre> 
+<h2><a id="2Pod_74"></a>2.Pod</h2> 
+<h3><a id="21_75"></a>2.1概述</h3> 
+<ul><li>Pod是kubernetes集群进行管理的<code>最小单元</code>，程序要运行必须部署在<code>容器</code>中，而容器必须存在于Pod中。</li><li><code>Pod可以认为是容器的封装，一个Pod中可以存在一个或多个容器</code></li><li>kubernetes在集群启动之后，集群中的各个组件也是以Pod方式运行的，可以通过下面的命令查看</li></ul> 
+<pre><code class="prism language-shell">kubectl get pods <span class="token parameter variable">-n</span> kube-system
+</code></pre> 
+<p><img src="https://images2.imgbox.com/b6/4a/9gxKXKwE_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="22_83"></a>2.2语法及应用示例</h3> 
+<p><strong>创建并运行Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl run <span class="token punctuation">(</span>Pod的名称<span class="token punctuation">)</span> <span class="token punctuation">[</span>参数<span class="token punctuation">]</span>
+<span class="token comment"># --image 指定Pod的镜像</span>
+<span class="token comment"># --port 指定端口</span>
+<span class="token comment"># --namespace 指定namespace</span>
+</code></pre> 
+<p><strong>示例：在名称为dev的namespace下创建一个Nginx的Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl run nginx <span class="token parameter variable">--image</span><span class="token operator">=</span>nginx:1.17.1 <span class="token parameter variable">--port</span><span class="token operator">=</span><span class="token number">80</span> <span class="token parameter variable">--namespace</span><span class="token operator">=</span>dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/f7/4a/BoaQDv5e_o.png" alt="在这里插入图片描述"><br> <strong>查看Pod的基本信息</strong></p> 
+<pre><code class="prism language-shell">kubectl get pods <span class="token punctuation">[</span>-n 命名空间的名称<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：查看名称空间为dev的namespace下所有的Pod的信息</strong></p> 
+<pre><code class="prism language-shell">kubectl get pods <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/90/cc/B3OdWUTZ_o.png" alt="在这里插入图片描述"><br> <strong>查看Pod的详细信息</strong></p> 
+<pre><code class="prism language-shell">kubectl describe pod pod的名称 <span class="token punctuation">[</span>-n 命名空间名称<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：查看名称为dev的namespace下的Pod的名称为nginx的详细信息</strong></p> 
+<pre><code class="prism language-shell">kubectl describe pod nginx <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/cf/d6/y8sZtzRi_o.png" alt="在这里插入图片描述"><br> <strong>Pod的访问</strong></p> 
+<pre><code class="prism language-shell"><span class="token comment"># 获取Pod的IP</span>
+kubectl get pods <span class="token punctuation">[</span>-n dev<span class="token punctuation">]</span> <span class="token parameter variable">-o</span> wide
+<span class="token comment"># 通过curl访问</span>
+<span class="token function">curl</span> ip:端口
+</code></pre> 
+<p><strong>示例：访问nginx的Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl get pods <span class="token parameter variable">-n</span> dev <span class="token parameter variable">-o</span> wide
+<span class="token function">curl</span> ip地址
+</code></pre> 
+<p><img src="https://images2.imgbox.com/a6/32/tpunzcaU_o.png" alt="在这里插入图片描述"><br> <strong>删除指定的Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl delete pod pod的名称 <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：删除nginx的Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl delete pod nginx <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/71/25/Q4j6toJ1_o.png" alt="在这里插入图片描述"><br> <strong>命令式对象配置</strong></p> 
+<ul><li>新建pod-nginx.yaml</li></ul> 
+<pre><code class="prism language-shell">apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: dev
+spec:
+  containers:
+  - image: nginx:1.20
+    imagePullPolicy: IfNotPresent pod
+    name: pod
+    ports: 
+    - name: nginx-port
+      containerPort: <span class="token number">80</span>
+      protocol: TCP
+</code></pre> 
+<ul><li>创建和删除命令</li></ul> 
+<pre><code class="prism language-shell">kubectl create <span class="token parameter variable">-f</span> pod-nginx.yaml  <span class="token comment"># 创建pod</span>
+kubectl delete <span class="token parameter variable">-f</span> pod-nginx.yaml  <span class="token comment"># 删除pod</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/3f/d1/sX25w3Pe_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="3Label_160"></a>3.Label</h2> 
+<h3><a id="31_161"></a>3.1概述</h3> 
+<ul><li> <p>Label是kubernetes的一个重要概念。它的作用就是在资源上添加标识，用来对它们进行区分和选择。</p> </li><li> <p>Label的特点：</p> 
+  <ul><li>一个Label会以key/value键值对的形式附加到各种对象上，如Node、Pod、Service等。</li><li>一个资源对象可以定义任意数量的Label，同一个Label也可以被添加到任意数量的资源对象上去。</li><li>Label通常在资源对象定义时确定，当然也可以在对象创建后动态的添加或删除。</li></ul> </li><li> <p>可以通过Label实现资源的多纬度分组，以便灵活、方便地进行资源分配、调度、配置和部署等管理工作。</p> </li></ul> 
+<blockquote> 
+ <p>一些常用的Label标签示例如下：<br> 版本标签：“version”:”release”,”version”:”stable”。。。<br> 环境标签：“environment”:”dev”,“environment”:”test”,“environment”:”pro”。。。<br> 架构标签：“tier”:”frontend”,”tier”:”backend”。。。</p> 
+</blockquote> 
+<ul><li>标签定义完毕之后，还要考虑到标签的选择，这就要用到Label Selector，即： 
+  <ul><li>Label用于给某个资源对象定义标识。</li><li>Label Selector用于查询和筛选拥有某些标签的资源对象。</li></ul> </li><li>当前有两种Label Selector： 
+  <ul><li>基于等式的Label Selector。 
+    <ul><li>name=slave：选择所有包含Label中的key=“name”并且value=“slave”的对象。</li><li>env!=production：选择所有包含Label中的key=“env”并且value!=“production”的对象。</li></ul> </li><li>基于集合的Label Selector。 
+    <ul><li>name in (master,slave)：选择所有包含Label中的key=“name”并且value=“master”或value=“slave”的对象。</li><li>name not in (master,slave)：选择所有包含Label中的key=“name”并且value!=“master”和value!=“slave”的对象。</li></ul> </li></ul> </li><li>标签的选择条件可以使用多个，此时将多个Label Selector进行组合，使用逗号（,）进行分隔即可。 
+  <ul><li>name=salve,env!=production。</li><li>name not in (master,slave),env!=production。</li></ul> </li></ul> 
+<h3><a id="32_188"></a>3.2语法及应用示例</h3> 
+<p><strong>为资源打标签</strong></p> 
+<pre><code class="prism language-shell">kubectl label pod xxx <span class="token assign-left variable">key</span><span class="token operator">=</span>value <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：为Nginx的Pod打上标签</strong></p> 
+<pre><code class="prism language-shell">kubectl label pod nginx <span class="token assign-left variable">version</span><span class="token operator">=</span><span class="token number">1.0</span> <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/7d/5b/7pp6V2iN_o.png" alt="在这里插入图片描述"><br> <strong>更新资源的标签</strong></p> 
+<pre><code class="prism language-shell">kubectl label pod xxx <span class="token assign-left variable">key</span><span class="token operator">=</span>value <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span> <span class="token parameter variable">--overwrite</span>
+</code></pre> 
+<p><strong>示例：为Nginx的Pod更新标签</strong></p> 
+<pre><code class="prism language-shell">kubectl label pod nginx <span class="token assign-left variable">version</span><span class="token operator">=</span><span class="token number">2.0</span> <span class="token parameter variable">-n</span> dev <span class="token parameter variable">--overwrite</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/f9/e2/AvSoADLI_o.png" alt="在这里插入图片描述"><br> <strong>查看标签</strong></p> 
+<pre><code class="prism language-shell">kubectl get pod xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span> --show-labels
+</code></pre> 
+<p><strong>示例：显示Nginx的Pod的标签</strong></p> 
+<pre><code class="prism language-shell">kubectl get pod nginx <span class="token parameter variable">-n</span> dev --show-labels
+</code></pre> 
+<p><img src="https://images2.imgbox.com/70/64/FzqyVp8q_o.png" alt="在这里插入图片描述"><br> <strong>筛选标签</strong></p> 
+<pre><code class="prism language-shell">kubectl get pod <span class="token parameter variable">-l</span> <span class="token assign-left variable">key</span><span class="token operator">=</span>value <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span> --show-labels
+</code></pre> 
+<p><strong>示例：筛选版本号是2.0的在名称为dev的namespace下的Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl get pod <span class="token parameter variable">-l</span> <span class="token assign-left variable">version</span><span class="token operator">=</span><span class="token number">2.0</span> <span class="token parameter variable">-n</span> dev --show-labels
+</code></pre> 
+<p><img src="https://images2.imgbox.com/08/a2/DLlsJzNU_o.png" alt="在这里插入图片描述"><strong>删除标签</strong></p> 
+<pre><code class="prism language-shell">kubectl label pod xxx key- <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：删除名称为dev的namespace下的Nginx的Pod上的标签</strong></p> 
+<pre><code class="prism language-shell">kubectl label pod nginx version- <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/cf/1a/OYc2rm0O_o.png" alt="在这里插入图片描述"><br> <strong>命令式对象配置</strong></p> 
+<ul><li>新建pod-nginx.yaml</li></ul> 
+<pre><code class="prism language-shell">apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: dev
+  labels:
+    version: <span class="token string">"3.0"</span>
+    env: <span class="token string">"test"</span>        
+spec:
+  containers:
+  - image: nginx:1.20
+    imagePullPolicy: IfNotPresent
+    name: pod
+    ports: 
+    - name: nginx-port
+      containerPort: <span class="token number">80</span>
+      protocol: TCP
+</code></pre> 
+<ul><li>创建和删除命令</li></ul> 
+<pre><code class="prism language-shell">kubectl create <span class="token parameter variable">-f</span> pod-nginx.yaml  <span class="token comment"># 创建标签</span>
+kubectl delete <span class="token parameter variable">-f</span> pod-nginx.yaml  <span class="token comment"># 删除标签</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/06/96/da6ewhVO_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="4Deployment_260"></a>4.Deployment</h2> 
+<h3><a id="41_261"></a>4.1概述</h3> 
+<ul><li>在kubernetes中，Pod是最小的控制单元，但是kubernetes很少直接控制Pod，一般都是通过Pod控制器来完成的。</li><li>Pod控制器用于Pod的管理，确保Pod资源符合预期的状态，当Pod的资源出现故障的时候，会尝试进行重启或重建Pod。</li><li>在kubernetes中Pod控制器的种类有很多，本章节只介绍一种：Deployment。</li></ul> 
+<h3><a id="42_266"></a>4.2语法及应用示例</h3> 
+<p><code>特别注意：在v1.18版之后，kubectl run nginx --image=nginx --replicas=2 --port=80，会反馈Flag --replicas has been deprecated, has no effect and will be removed in the future，并且只会创建一个Nginx容器实例</code></p> 
+<p><strong>创建指定名称的deployement</strong></p> 
+<pre><code class="prism language-shell">kubectl create deployment xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+或
+kubectl create deploy xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：在名称为dev的命名空间下创建名为nginx的deployment</strong></p> 
+<pre><code class="prism language-shell">kubectl create deployment nginx <span class="token parameter variable">--image</span><span class="token operator">=</span>nginx:1.17.1 <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/02/44/zv3a9fDh_o.png" alt="在这里插入图片描述"><br> <strong>根据指定的deplyment创建Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl scale deployment xxx <span class="token punctuation">[</span>--replicas<span class="token operator">=</span>正整数<span class="token punctuation">]</span> <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：在名称为dev的命名空间下根据名为nginx的deployment创建4个Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl scale deployment nginx <span class="token parameter variable">--replicas</span><span class="token operator">=</span><span class="token number">4</span> <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/47/cb/7RtxAnKY_o.png" alt="在这里插入图片描述"><br> <strong>命令式对象配置</strong></p> 
+<ul><li>创建一个deploy-nginx.yaml，内容如下</li></ul> 
+<pre><code class="prism language-shell">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: dev
+spec:
+  replicas: <span class="token number">3</span>
+  selector:
+    matchLabels:
+      run: nginx
+  template:
+    metadata:
+      labels:
+        run: nginx
+    spec:
+      containers:
+      - image: nginx:1.20
+        name: nginx
+        ports:
+        - containerPort: <span class="token number">80</span>
+          protocol: TCP
+</code></pre> 
+<ul><li>创建和执行命令</li></ul> 
+<pre><code class="prism language-shell">kubectl create <span class="token parameter variable">-f</span> deploy-nginx.yaml  <span class="token comment"># 创建deployment</span>
+kubectl delete <span class="token parameter variable">-f</span> deploy-nginx.yaml  <span class="token comment"># 删除deployment</span>
+</code></pre> 
+<p><strong>查看创建的Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl get pods <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>查看名称为dev的namespace下通过deployment创建的3个Pod</strong></p> 
+<pre><code class="prism language-shell">kubectl get pods <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/6d/2b/mbgNGtIj_o.png" alt="在这里插入图片描述"><br> <strong>查看deployment的信息</strong></p> 
+<pre><code class="prism language-shell">kubectl get deployment <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+或
+kubectl get deploy <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：查看名称为dev的namespace下的deployment</strong></p> 
+<pre><code class="prism language-shell">kubectl get deployment <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/a7/ee/TAFgdfJt_o.png" alt="在这里插入图片描述"><br> <strong>查看deployment的详细信息</strong></p> 
+<pre><code class="prism language-shell">kubectl describe deployment xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+或
+kubectl describe deploy xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：查看名为dev的namespace下的名为nginx的deployment的详细信息</strong></p> 
+<pre><code class="prism language-shell">kubectl describe deployment nginx <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/24/95/PlSQyFIZ_o.png" alt="在这里插入图片描述"><br> <strong>删除deployment</strong></p> 
+<pre><code class="prism language-shell">kubectl delete deployment xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+或
+kubectl delete deploy xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：删除名为dev的namespace下的名为nginx的deployment</strong></p> 
+<pre><code class="prism language-shell">kubectl delete deployment nginx <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/f3/b4/caZHZppj_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="5Service_362"></a>5.Service</h2> 
+<h3><a id="51_363"></a>5.1概述</h3> 
+<ul><li>我们已经能够利用Deployment来创建一组Pod来提供具有高可用性的服务，虽然每个Pod都会分配一个单独的Pod的IP地址，但是却存在如下的问题： 
+  <ul><li>Pod的IP会随着Pod的重建产生变化。</li><li>Pod的IP仅仅是集群内部可见的虚拟的IP，外部无法访问</li></ul> </li><li>这样对于访问这个服务带来了难度，因此，kubernetes设计了Service来解决这个问题。</li><li>Service可以看做是一组同类的Pod对外的访问接口，借助Service，应用可以方便的实现服务发现和负载均衡。<br> <img src="https://images2.imgbox.com/1e/27/o71puIk7_o.png" alt="在这里插入图片描述"></li></ul> 
+<h3><a id="52_370"></a>5.2语法及应用示例</h3> 
+<h4><a id="521Service_371"></a>5.2.1创建集群内部可访问的Service</h4> 
+<p><strong>暴露Service</strong></p> 
+<pre><code class="prism language-shell">kubectl expose deployment xxx <span class="token parameter variable">--name</span><span class="token operator">=</span>服务名 <span class="token parameter variable">--type</span><span class="token operator">=</span>ClusterIP <span class="token parameter variable">--port</span><span class="token operator">=</span>暴露的端口 --target-port<span class="token operator">=</span>指向集群中的Pod的端口 <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+<span class="token comment"># 会产生一个CLUSTER-IP，这个就是service的IP，在Service的生命周期内，这个地址是不会变化的</span>
+</code></pre> 
+<p><strong>示例：暴露名为test的namespace下的名为nginx的deployment，并设置服务名为svc-nginx1</strong></p> 
+<pre><code class="prism language-shell">kubectl expose deployment nginx <span class="token parameter variable">--name</span><span class="token operator">=</span>svc-nginx1 <span class="token parameter variable">--type</span><span class="token operator">=</span>ClusterIP <span class="token parameter variable">--port</span><span class="token operator">=</span><span class="token number">80</span> --target-port<span class="token operator">=</span><span class="token number">80</span> <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/ab/8f/QLCICQAw_o.png" alt="在这里插入图片描述"><br> <strong>查看Service</strong></p> 
+<pre><code class="prism language-shell">kubectl get <span class="token function">service</span> <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span> <span class="token punctuation">[</span>-o wide<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：查看名为dev的命名空间的所有Service</strong></p> 
+<pre><code class="prism language-shell">kubectl get <span class="token function">service</span> <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/59/a5/4909cLxG_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="522Service_391"></a>5.2.2创建集群外部可访问的Service</h4> 
+<p><strong>暴露Service</strong></p> 
+<pre><code class="prism language-shell">kubectl expose deployment xxx <span class="token parameter variable">--name</span><span class="token operator">=</span>服务名 <span class="token parameter variable">--type</span><span class="token operator">=</span>NodePort <span class="token parameter variable">--port</span><span class="token operator">=</span>暴露的端口 --target-port<span class="token operator">=</span>指向集群中的Pod的端口 <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+<span class="token comment"># 会产生一个外部也可以访问的Service</span>
+</code></pre> 
+<p><strong>示例：暴露名为dev的namespace下的名为nginx的deployment，并设置服务名为svc-nginx2</strong></p> 
+<pre><code class="prism language-shell">kubectl expose deploy nginx <span class="token parameter variable">--name</span><span class="token operator">=</span>svc-nginx2 <span class="token parameter variable">--type</span><span class="token operator">=</span>NodePort <span class="token parameter variable">--port</span><span class="token operator">=</span><span class="token number">80</span> --target-port<span class="token operator">=</span><span class="token number">80</span> <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><strong>查看Service</strong></p> 
+<pre><code class="prism language-shell">kubectl get <span class="token function">service</span> <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span> <span class="token punctuation">[</span>-o wide<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：查看名为test的命名空间的所有Service</strong></p> 
+<pre><code class="prism language-shell">kubectl get <span class="token function">service</span> <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/79/d0/OnlL4e4C_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/a9/71/XNrxyxbq_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="523_411"></a>5.2.3删除服务</h4> 
+<p><strong>删除服务</strong></p> 
+<pre><code class="prism language-shell">kubectl delete <span class="token function">service</span> xxx <span class="token punctuation">[</span>-n 命名空间<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>示例：删除服务</strong></p> 
+<pre><code class="prism language-shell">kubectl delete <span class="token function">service</span> svc-nginx1 <span class="token parameter variable">-n</span> dev
+</code></pre> 
+<p><img src="https://images2.imgbox.com/4f/02/AX4yjF6u_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="524_421"></a>5.2.4对象配置方式</h4> 
+<ul><li>新建svc-nginx.yaml，内容如下</li></ul> 
+<pre><code class="prism language-shell">apiVersion: v1
+kind: Service
+metadata:
+  name: svc-nginx
+  namespace: dev
+spec:
+  ports:
+  - port: <span class="token number">80</span>
+    protocol: TCP
+    targetPort: <span class="token number">80</span>
+  selector:
+    run: nginx
+  type: ClusterIP
+</code></pre> 
+<ul><li>创建和删除命令</li></ul> 
+<pre><code class="prism language-shell">kubectl  create  <span class="token parameter variable">-f</span>  svc-nginx.yaml  <span class="token comment"># 创建服务</span>
+kubectl  delete  <span class="token parameter variable">-f</span>  svc-nginx.yaml  <span class="token comment"># 删除服务</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/8d049e33e547ea8d341af45526dae424/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">ESP32光敏传感</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/055abadb9e1f206940ace1d6e3e55a9b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">研究生必备：从0到1使用Zotero</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Spring 源码篇-Spring Bean - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Spring 源码篇-Spring Bean" />
+<meta property="og:description" content="spring Bean 启动 使用BeanFactory启动Spring,使用xmlBeanFactory读取xml配置。 * BeanFactory：获取bean，判断bean是否存在，获取别名，scope确定等接口； * ListableBeanFactory：可以根据类型、注解批量获取bean，获取bean定义相关数据； * HierarchicalBeanFactory:分层bean，获取父beanFactory; * SimpleJndiBeanFactory:通过jndi配置获取； * AutowireCapableBeanFactory:实现自动装配的功能，提供了创建bean，销毁bean等操作； @Test public void test2(){ BeanFactory beanFactory=new XmlBeanFactory(new ClassPathResource(&#34;application.xml&#34;)); HelloService helloService=beanFactory.getBean(&#34;helloService&#34;, HelloService.class); System.out.println(helloService.hello(&#34;mixi&#34;)); } 使用ApplicationContext启动Spring 。 采用配置文件形式(classPathxml)。ApplicationContext继承 EnvironmentCapable, ListableBeanFactory, HierarchicalBeanFactory,MessageSource, ApplicationEventPublisher, ResourcePatternResolver接口，不仅实现了bean获取、分层bean的接口，还扩展了spring环境(配置参数、profile)、国际化支持(MessageSource),事件触发（bean创建事件、刷新事件等）、获取资源(资源可能为classPath,或者systemPath等等)。
+@Test public void test(){ ApplicationContext applicationContext=new ClassPathXmlApplicationContext(&#34;classpath:application.xml&#34;); System.out.println(applicationContext.getApplicationName()); HelloService helloService=applicationContext.getBean(&#34;helloService&#34;, HelloService.class); System.out.println(helloService.hello(&#34;mixi&#34;)); } 配置文件如下：
+&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt; &lt;beans xmlns=&#34;http://www.springframework.org/schema/beans&#34; xmlns:xsi=&#34;http://www.w3.org/2001/XMLSchema-instance&#34; xsi:schemaLocation=&#34;http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd&#34;&gt; &lt;bean id=&#34;helloService&#34; class=&#34;com.mixi.spring.demo.ioc.service.impl.HelloServiceImpl&#34;&gt;&lt;/bean&gt; &lt;/beans&gt; ClassPathXmlApplicationContext是从classpath xml配置文件下获取，其他的包括FileSystemXmlApplicationContext（从文件系统获取xml配置），XmlServletWebServerApplicationContext（从web应用的根目录读取配置文件，需要先在web.xml中配置）,AnnotationConfigServletWebServerApplicationContext(通过注解方式获取配置),ReactiveWebServerApplicationContext(响应式的web配置),AnnotationConfigReactiveWebServerApplicationContext(通过配置响应式配置),AnnotationConfigWebApplicationContext(注解形式),GroovyWebApplicationContext(groovy配置)
+ClassPathXmlApplicationContext 源码查看 public ClassPathXmlApplicationContext( String[] configLocations, boolean refresh, @Nullable ApplicationContext parent) throws BeansException { //设置父级applicationContext super(parent); //设置配置目录 setConfigLocations(configLocations); if (refresh) { //重点在刷新着,此方法可以手动调用，自己刷新 refresh(); } } public void refresh() throws BeansException, IllegalStateException { //同步块 synchronized (this." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/51a51823e68a6b9c9cc310573dbed9c5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-03-23T17:29:39+08:00" />
+<meta property="article:modified_time" content="2019-03-23T17:29:39+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Spring 源码篇-Spring Bean</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="spring_Bean_0"></a>spring Bean</h2> 
+<h4><a id="_1"></a>启动</h4> 
+<h6><a id="BeanFactorySpringxmlBeanFactoryxml_2"></a>使用BeanFactory启动Spring,使用xmlBeanFactory读取xml配置。</h6> 
+<pre><code>* BeanFactory：获取bean，判断bean是否存在，获取别名，scope确定等接口；
+* ListableBeanFactory：可以根据类型、注解批量获取bean，获取bean定义相关数据；
+* HierarchicalBeanFactory:分层bean，获取父beanFactory;
+* SimpleJndiBeanFactory:通过jndi配置获取；
+* AutowireCapableBeanFactory:实现自动装配的功能，提供了创建bean，销毁bean等操作；
+</code></pre> 
+<pre><code class="prism language-java"> <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">test2</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        BeanFactory beanFactory<span class="token operator">=</span><span class="token keyword">new</span> <span class="token class-name">XmlBeanFactory</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">ClassPathResource</span><span class="token punctuation">(</span><span class="token string">"application.xml"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        HelloService helloService<span class="token operator">=</span>beanFactory<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span><span class="token string">"helloService"</span><span class="token punctuation">,</span> HelloService<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        System<span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>helloService<span class="token punctuation">.</span><span class="token function">hello</span><span class="token punctuation">(</span><span class="token string">"mixi"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/21/21/Z7gJE0lw_o.png" alt="BeanFactory类图"></p> 
+<h6><a id="ApplicationContextSpring__17"></a>使用ApplicationContext启动Spring 。</h6> 
+<p>采用配置文件形式(classPathxml)。ApplicationContext继承 EnvironmentCapable, ListableBeanFactory, HierarchicalBeanFactory,MessageSource, ApplicationEventPublisher, ResourcePatternResolver接口，不仅实现了bean获取、分层bean的接口，还扩展了spring环境(配置参数、profile)、国际化支持(MessageSource),事件触发（bean创建事件、刷新事件等）、获取资源(资源可能为classPath,或者systemPath等等)。</p> 
+<pre><code class="prism language-java"> <span class="token annotation punctuation">@Test</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">test</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        ApplicationContext applicationContext<span class="token operator">=</span><span class="token keyword">new</span> <span class="token class-name">ClassPathXmlApplicationContext</span><span class="token punctuation">(</span><span class="token string">"classpath:application.xml"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        System<span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>applicationContext<span class="token punctuation">.</span><span class="token function">getApplicationName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        HelloService helloService<span class="token operator">=</span>applicationContext<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span><span class="token string">"helloService"</span><span class="token punctuation">,</span> HelloService<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        System<span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>helloService<span class="token punctuation">.</span><span class="token function">hello</span><span class="token punctuation">(</span><span class="token string">"mixi"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<p>配置文件如下：</p> 
+<pre><code class="prism language-xml"><span class="token prolog">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>beans</span> <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>xsi</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>http://www.w3.org/2001/XMLSchema-instance<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xsi:</span>schemaLocation</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>helloService<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>com.mixi.spring.demo.ioc.service.impl.HelloServiceImpl<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>bean</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>beans</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<p>ClassPathXmlApplicationContext是从classpath xml配置文件下获取，其他的包括FileSystemXmlApplicationContext（从文件系统获取xml配置），XmlServletWebServerApplicationContext（从web应用的根目录读取配置文件，需要先在web.xml中配置）,AnnotationConfigServletWebServerApplicationContext(通过注解方式获取配置),ReactiveWebServerApplicationContext(响应式的web配置),AnnotationConfigReactiveWebServerApplicationContext(通过配置响应式配置),AnnotationConfigWebApplicationContext(注解形式),GroovyWebApplicationContext(groovy配置)<br> <img src="https://images2.imgbox.com/05/27/uFAgtZMK_o.png" alt="ApplicationContext类图"></p> 
+<ul><li>ClassPathXmlApplicationContext 源码查看</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token function">ClassPathXmlApplicationContext</span><span class="token punctuation">(</span>
+			String<span class="token punctuation">[</span><span class="token punctuation">]</span> configLocations<span class="token punctuation">,</span> <span class="token keyword">boolean</span> refresh<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> ApplicationContext parent<span class="token punctuation">)</span>
+			<span class="token keyword">throws</span> BeansException <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">//设置父级applicationContext</span>
+		<span class="token keyword">super</span><span class="token punctuation">(</span>parent<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token comment">//设置配置目录</span>
+		<span class="token function">setConfigLocations</span><span class="token punctuation">(</span>configLocations<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>refresh<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token comment">//重点在刷新着,此方法可以手动调用，自己刷新</span>
+			<span class="token function">refresh</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">refresh</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> BeansException<span class="token punctuation">,</span> IllegalStateException <span class="token punctuation">{<!-- --></span>
+	<span class="token comment">//同步块</span>
+		<span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>startupShutdownMonitor<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token comment">//准备刷新,记录启动时间，配置文件重新初始化，applicationListener重新初始化</span>
+			<span class="token function">prepareRefresh</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+			<span class="token comment">// beanFactory刷新及获取，BeanDefinition 初始化，但未初始化bean</span>
+			ConfigurableListableBeanFactory beanFactory <span class="token operator">=</span> <span class="token function">obtainFreshBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+			<span class="token comment">//设置 BeanFactory 的类加载器，添加几个 BeanPostProcessor，手动注册几个特殊的 bean</span>
+			<span class="token function">prepareBeanFactory</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+			<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token comment">// 【这里需要知道 BeanFactoryPostProcessor 这个知识点，Bean 如果实现了此接口，</span>
+         <span class="token comment">// 那么在容器初始化以后，Spring 会负责调用里面的 postProcessBeanFactory 方法。】</span>
+ 
+         <span class="token comment">// 这里是提供给子类的扩展点，到这里的时候，所有的 Bean 都加载、注册完成了，但是都还没有初始化，可修改配置BeanDefinition </span>
+         <span class="token comment">// 具体的子类可以在这步的时候添加一些特殊的 BeanFactoryPostProcessor 的实现类或做点什么事</span>
+				<span class="token function">postProcessBeanFactory</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">// 执行postProcess beanFactory</span>
+				<span class="token function">invokeBeanFactoryPostProcessors</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">//注册 BeanPostProcessor 的实现类，注意看和 BeanFactoryPostProcessor 的区别</span>
+         <span class="token comment">// 此接口两个方法: postProcessBeforeInitialization 和 postProcessAfterInitialization</span>
+         <span class="token comment">// 两个方法分别在 Bean 初始化之前和初始化之后得到执行。注意，到这里 Bean 还没初始化</span>
+				<span class="token function">registerBeanPostProcessors</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">//初始化国际化</span>
+				<span class="token function">initMessageSource</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">//初始化事件广播器</span>
+				<span class="token function">initApplicationEventMulticaster</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				 <span class="token comment">// 从方法名就可以知道，典型的模板方法(钩子方法)，</span>
+         <span class="token comment">// 具体的子类可以在这里初始化一些特殊的 Bean（在初始化 singleton beans 之前）</span>
+				<span class="token function">onRefresh</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">// 注册事件监听器，监听器需要实现 ApplicationListener 接口</span>
+				<span class="token function">registerListeners</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">// 初始化所有的 singleton beans</span>
+         		<span class="token comment">//（lazy-init 的除外）</span>
+				<span class="token function">finishBeanFactoryInitialization</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">// 最后，广播事件，ApplicationContext 初始化完成</span>
+				<span class="token function">finishRefresh</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+
+			<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeansException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>logger<span class="token punctuation">.</span><span class="token function">isWarnEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					logger<span class="token punctuation">.</span><span class="token function">warn</span><span class="token punctuation">(</span><span class="token string">"Exception encountered during context initialization - "</span> <span class="token operator">+</span>
+							<span class="token string">"cancelling refresh attempt: "</span> <span class="token operator">+</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+
+				<span class="token comment">//异常结束，需要销毁已经初始化的 singleton 的 Beans，以免有些 bean 会一直占用资源</span>
+				<span class="token function">destroyBeans</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">//刷新失败</span>
+				<span class="token function">cancelRefresh</span><span class="token punctuation">(</span>ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				<span class="token comment">// Propagate exception to caller.</span>
+				<span class="token keyword">throw</span> ex<span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+
+			<span class="token keyword">finally</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token comment">// 清缓存</span>
+				<span class="token function">resetCommonCaches</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+</code></pre> 
+<p>创建beanFactory过程中，将初始化bean定义。源码如下</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> <span class="token keyword">final</span> <span class="token keyword">void</span> <span class="token function">refreshBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> BeansException <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">hasBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span><span class="token comment">//是否已经初始化了beanFactory,已经初始化了需要销毁bean，同时关闭BeanFactory</span>
+			<span class="token function">destroyBeans</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token function">closeBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>	
+			<span class="token comment">//创建BeanFactory</span>
+			DefaultListableBeanFactory beanFactory <span class="token operator">=</span> <span class="token function">createBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token comment">//设置序列化ID</span>
+			beanFactory<span class="token punctuation">.</span><span class="token function">setSerializationId</span><span class="token punctuation">(</span><span class="token function">getId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token comment">//自定义Factory，配置是否能够bean覆盖和循环应用</span>
+			<span class="token function">customizeBeanFactory</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token comment">//加载bean定义</span>
+			<span class="token function">loadBeanDefinitions</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token comment">//互斥设置</span>
+			<span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>beanFactoryMonitor<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory <span class="token operator">=</span> beanFactory<span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ApplicationContextException</span><span class="token punctuation">(</span><span class="token string">"I/O error parsing bean definition source for "</span> <span class="token operator">+</span> <span class="token function">getDisplayName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+</code></pre> 
+<p>加载bean定义过程，即loadBeanDefinitions(),先查看BeanDefinition,此类定义了bean加载的信息。</p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">BeanDefinition</span> <span class="token keyword">extends</span> <span class="token class-name">AttributeAccessor</span><span class="token punctuation">,</span> BeanMetadataElement <span class="token punctuation">{<!-- --></span>
+ 
+   <span class="token comment">// 我们可以看到，默认只提供 sington 和 prototype 两种，</span>
+   <span class="token comment">// 很多读者都知道还有 request, session, globalSession, application, websocket 这几种，</span>
+   <span class="token comment">// 不过，它们属于基于 web 的扩展。</span>
+   String SCOPE_SINGLETON <span class="token operator">=</span> ConfigurableBeanFactory<span class="token punctuation">.</span>SCOPE_SINGLETON<span class="token punctuation">;</span>
+   String SCOPE_PROTOTYPE <span class="token operator">=</span> ConfigurableBeanFactory<span class="token punctuation">.</span>SCOPE_PROTOTYPE<span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 比较不重要，直接跳过吧</span>
+   <span class="token keyword">int</span> ROLE_APPLICATION <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token keyword">int</span> ROLE_SUPPORT <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+   <span class="token keyword">int</span> ROLE_INFRASTRUCTURE <span class="token operator">=</span> <span class="token number">2</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 设置父 Bean，这里涉及到 bean 继承，不是 java 继承。请参见附录介绍</span>
+   <span class="token keyword">void</span> <span class="token function">setParentName</span><span class="token punctuation">(</span>String parentName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 获取父 Bean</span>
+   String <span class="token function">getParentName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 设置 Bean 的类名称</span>
+   <span class="token keyword">void</span> <span class="token function">setBeanClassName</span><span class="token punctuation">(</span>String beanClassName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 获取 Bean 的类名称</span>
+   String <span class="token function">getBeanClassName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+ 
+   <span class="token comment">// 设置 bean 的 scope</span>
+   <span class="token keyword">void</span> <span class="token function">setScope</span><span class="token punctuation">(</span>String scope<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   String <span class="token function">getScope</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 设置是否懒加载</span>
+   <span class="token keyword">void</span> <span class="token function">setLazyInit</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> lazyInit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token keyword">boolean</span> <span class="token function">isLazyInit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 设置该 Bean 依赖的所有的 Bean，注意，这里的依赖不是指属性依赖(如 @Autowire 标记的)，</span>
+   <span class="token comment">// 是 depends-on="" 属性设置的值。</span>
+   <span class="token keyword">void</span> <span class="token function">setDependsOn</span><span class="token punctuation">(</span>String<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> dependsOn<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 返回该 Bean 的所有依赖</span>
+   String<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token function">getDependsOn</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 设置该 Bean 是否可以注入到其他 Bean 中，只对根据类型注入有效，</span>
+   <span class="token comment">// 如果根据名称注入，即使这边设置了 false，也是可以的</span>
+   <span class="token keyword">void</span> <span class="token function">setAutowireCandidate</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> autowireCandidate<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 该 Bean 是否可以注入到其他 Bean 中</span>
+   <span class="token keyword">boolean</span> <span class="token function">isAutowireCandidate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 主要的。同一接口的多个实现，如果不指定名字的话，Spring 会优先选择设置 primary 为 true 的 bean</span>
+   <span class="token keyword">void</span> <span class="token function">setPrimary</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> primary<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 是否是 primary 的</span>
+   <span class="token keyword">boolean</span> <span class="token function">isPrimary</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 如果该 Bean 采用工厂方法生成，指定工厂名称。对工厂不熟悉的读者，请参加附录</span>
+   <span class="token keyword">void</span> <span class="token function">setFactoryBeanName</span><span class="token punctuation">(</span>String factoryBeanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token comment">// 获取工厂名称</span>
+   String <span class="token function">getFactoryBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token comment">// 指定工厂类中的 工厂方法名称</span>
+   <span class="token keyword">void</span> <span class="token function">setFactoryMethodName</span><span class="token punctuation">(</span>String factoryMethodName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token comment">// 获取工厂类中的 工厂方法名称</span>
+   String <span class="token function">getFactoryMethodName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 构造器参数</span>
+   ConstructorArgumentValues <span class="token function">getConstructorArgumentValues</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// Bean 中的属性值，后面给 bean 注入属性值的时候会说到</span>
+   MutablePropertyValues <span class="token function">getPropertyValues</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 是否 singleton</span>
+   <span class="token keyword">boolean</span> <span class="token function">isSingleton</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 是否 prototype</span>
+   <span class="token keyword">boolean</span> <span class="token function">isPrototype</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token comment">// 如果这个 Bean 原生是抽象类，那么不能实例化</span>
+   <span class="token keyword">boolean</span> <span class="token function">isAbstract</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+   <span class="token keyword">int</span> <span class="token function">getRole</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   String <span class="token function">getDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   String <span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   BeanDefinition <span class="token function">getOriginatingBeanDefinition</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3164d937abb43d284c59eda49efdcb01/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">大数据篇——回归、拟合</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f05869970d23a33c311c84d437bc977a/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">MySQL workbench几个常用快捷键</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

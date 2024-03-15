@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>树莓派3b&#43;控制舵机、伺服电机的驱动代码。 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="树莓派3b&#43;控制舵机、伺服电机的驱动代码。" />
+<meta property="og:description" content="舵机的控制一般需要一个20ms的时基脉冲，该脉冲的高电平部分一般为0.5ms~2.5ms范围内的角度控制脉冲部分。以180度角度舵机为例，那么对应的控制关系是这样的：
+0.5ms--------------0度；
+1.0ms------------45度；
+1.5ms------------90度；
+2.0ms-----------135度；
+2.5ms-----------180度；
+请看下形象描述吧:
+舵机的工作电压和电流：
+每一款舵机都有自己的参数，如TR213舵机的工作电压是4.8-7.2V，TR205舵机的工作电压是4.8-6V，电压不能超过这个范围，否则会很容易烧坏舵机，在不清楚舵机工作电压范围的情况下，建议使用5V给舵机供电。
+舵机的工作电流是根据舵机的实际情况而定的，如TR213舵机，在空载的时候电流几乎为0，而在正常负载的情况下，电流在0.5A左右，视实际情况而定。六足机器人需要18个TR213金属舵机，需要提高的电流大概在8A左右，如果电源功率不够会影响舵机的性能，最常见的现象是，当一个舵机负载的时候，其他舵机会出现混乱，无规律的乱摆。
+舵机的接线如下图：
+市场上90%的舵机中间那根线都是正级。
+基础知识介绍的差不多了，具体可以去百度看看舵机手册。
+下面我们来说说在树莓派中，如何用wiringPi库去驱动舵机随心所欲的转。为什么要用wiringPi库呢，因为博主不怎么喜欢写Python，博主喜欢写c/c&#43;&#43;代码。废话不多说，开始。
+第一：首先，我已经知道了舵机的pwm周期为20ms，然后是这样的
+0.5ms--------------0度；
+1.0ms------------45度；
+1.5ms------------90度；
+2.0ms-----------135度；
+2.5ms-----------180度；
+也就是说给它1.5ms的高电平，19.5ms的低电平转向0度位置。这里需要注意，是0度位置，不是舵机转0度，当然如果舵机怎么正好处于0度位置，当然也不转。这里可能就有人要问了，那啥位置算是0度位置呢？根据我对舵机的理解（180度的舵机），就是你向一个方向用手转动舵机，到一个你无法转动的地方，这个位置不是0度位置，就是180度位置。然后你用下面的代码运行一下就知道了。
+while(1)//turn to 0 { digitalWrite(15,HIGH); delayMicroseconds(500); digitalWrite(15,LOW); delayMicroseconds(19500); } 我这里就这样来模仿pwm的。这个代码一运行，舵机就自动到了0度位置。
+同理，想转到45度位置，90度位置，135度位置，180度位置的代码如下： while(1) //turn to 45 { digitalWrite(15,HIGH); delayMicroseconds(1000); digitalWrite(15,LOW); delayMicroseconds(19000); } while(1) //turn to 90 { digitalWrite(15,HIGH); delayMicroseconds(1500); digitalWrite(15,LOW); delayMicroseconds(18500); } while(1) //turn to 135 { digitalWrite(15,HIGH); delayMicroseconds(2000); digitalWrite(15,LOW); delayMicroseconds(18000); } while(1) //turn to 180 { digitalWrite(15,HIGH); delayMicroseconds(2500); digitalWrite(15,LOW); delayMicroseconds(17500); } 这里可能有人要说为啥不用delay()函数呢，因为delay函数精确到毫秒，当我传1." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/d890c661f4f4355746b27ab5e3d66af3/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2017-05-18T21:25:20+08:00" />
+<meta property="article:modified_time" content="2017-05-18T21:25:20+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">树莓派3b&#43;控制舵机、伺服电机的驱动代码。</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>舵机的控制一般需要一个20ms的时基脉冲，该脉冲的高电平部分一般为0.5ms~2.5ms范围内的角度控制脉冲部分。以180度角度舵机为例，那么对应的控制关系是这样的：<br> 0.5ms--------------0度；<br> 1.0ms------------45度；<br> 1.5ms------------90度；<br> 2.0ms-----------135度；<br> 2.5ms-----------180度；<br> 请看下形象描述吧:</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/d0/4a/vFA85z74_o.gif"><img alt="" class="has" src="https://images2.imgbox.com/ad/25/qbndc0eW_o.jpg"></p> 
+<p> </p> 
+<p>  舵机的工作电压和电流：</p> 
+<p>每一款舵机都有自己的参数，<span style="color:#ff0000;">如TR213</span>舵机的工作电压是4.8-7.2V，TR205舵机的工作电压是4.8-6V，电压不能超过这个范围，否则会很容易烧坏舵机，在不清楚舵机工作电压范围的情况下，建议使用5V给舵机供电。</p> 
+<p>舵机的工作电流是根据舵机的实际情况而定的，如TR213舵机，在空载的时候电流几乎为0，而在正常负载的情况下，电流在0.5A左右，视实际情况而定。六足机器人需要18个TR213金属舵机，需要提高的电流大概在8A左右，如果电源功率不够会影响舵机的性能，最常见的现象是，当一个舵机负载的时候，其他舵机会出现混乱，无规律的乱摆。</p> 
+<p>    舵机的接线如下图：</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/96/f5/HvGf3kkF_o.jpg"></p> 
+<p> </p> 
+<p>市场上90%的舵机中间那根线都是正级。</p> 
+<p> </p> 
+<p>基础知识介绍的差不多了，具体可以去百度看看舵机手册。</p> 
+<p> </p> 
+<p>下面我们来说说在树莓派中，如何用wiringPi库去驱动舵机随心所欲的转。为什么要用wiringPi库呢，因为博主不怎么喜欢写Python，博主喜欢写c/c++代码。废话不多说，开始。</p> 
+<p>    第一：首先，我已经知道了舵机的pwm周期为20ms，然后是这样的</p> 
+<p>0.5ms--------------0度；<br> 1.0ms------------45度；<br> 1.5ms------------90度；<br> 2.0ms-----------135度；<br> 2.5ms-----------180度；</p> 
+<p>也就是说给它1.5ms的高电平，19.5ms的低电平转向0度位置。这里需要注意，是0度位置，不是舵机转0度，当然如果舵机怎么正好处于0度位置，当然也不转。这里可能就有人要问了，那啥位置算是0度位置呢？根据我对舵机的理解（180度的舵机），就是你向一个方向用手转动舵机，到一个你无法转动的地方，这个位置不是0度位置，就是180度位置。然后你用下面的代码运行一下就知道了。</p> 
+<pre class="has"><code>        while(1)//turn to 0
+
+        {
+
+                digitalWrite(15,HIGH);
+
+                delayMicroseconds(500);
+
+                digitalWrite(15,LOW);
+
+                delayMicroseconds(19500);
+
+        }</code></pre> 
+<p>我这里就这样来模仿pwm的。这个代码一运行，舵机就自动到了0度位置。</p> 
+<p>    同理，想转到45度位置，90度位置，135度位置，180度位置的代码如下：<span style="color:#d4d4d4;"> </span></p> 
+<p><span style="color:#d4d4d4;"> </span></p> 
+<pre class="has"><code>while(1) //turn to 45
+
+        {
+
+                digitalWrite(15,HIGH);
+
+                delayMicroseconds(1000);
+
+                digitalWrite(15,LOW);
+
+                delayMicroseconds(19000);
+
+        }
+
+ while(1) //turn to 90
+
+        {
+
+                digitalWrite(15,HIGH);
+
+                delayMicroseconds(1500);
+
+                digitalWrite(15,LOW);
+
+                delayMicroseconds(18500);
+
+        }
+
+ while(1) //turn to 135
+
+        {
+
+                digitalWrite(15,HIGH);
+
+                delayMicroseconds(2000);
+
+                digitalWrite(15,LOW);
+
+                delayMicroseconds(18000);
+
+        }
+
+ while(1) //turn to 180
+
+        {
+
+                digitalWrite(15,HIGH);
+
+                delayMicroseconds(2500);
+
+                digitalWrite(15,LOW);
+
+                delayMicroseconds(17500);
+
+        }</code></pre> 
+<p> </p> 
+<p>这里可能有人要说为啥不用delay()函数呢，因为delay函数精确到毫秒，当我传1.5给它的时候，和传1给它的时候，你会发现舵机都是转向45度位置，因为delay（int x），当1.5传过去的时候精度丢失了。（我一开始就犯了这个错误，尴尬啊）</p> 
+<p> </p> 
+<p>    到这里我想你应该已经知道怎么旋转45度，90度，等等了吧。然后你可能发现舵机旋转的太快，可能不受自己的控制了。这里我就要给你提供一种思路，怎么去解决这个问题。</p> 
+<p>当然，本人能力有限，写的难免有错误，希望指正。</p> 
+<p>下面我给一个很不错的链接，想深入研究的可以去看看（他用的是单片机）</p> 
+<p>http://www.njliaohua.com/lhd_5xtsq7jr1e0088t3wpu3_1.html</p> 
+<p>    我是这样认为的。0.5ms转向0度，1ms转向45度，那个这其中是不是经历了0.5ms，而且转了45度，所以我就用0.5=500us,500us/45度。然后得出约为11.11us/度。</p> 
+<p>接下来我的代码是这样写的。</p> 
+<pre class="has"><code class="language-cpp">       int angle=0;
+
+       scanf(“%d”,&amp;angle);//从键盘输入要转的角度。
+
+        while(1)
+
+        {
+
+                x=11.11*i;
+    
+                digitalWrite(15,HIGH);
+
+                delayMicroseconds(500+x);
+
+                digitalWrite(15,LOW);
+
+                delayMicroseconds(19500-x);
+
+              if(i==angle)
+
+                 break;
+
+            i++;
+
+        }</code></pre> 
+<p><span style="color:#d4d4d4;"> </span></p> 
+<p>这样一来速度确实是降了下来，但是每次舵机都要先转向0度位置，然后才能转向我们输入的个角度位置，这其中道理我想你们应该懂吧。</p> 
+<p>    到这里你应该可以降低舵机的速度了吧，我就给你这么多思路，下面的路，让你自己走吧。</p> 
+<p>这里我给个demo吧。</p> 
+<p> </p> 
+<pre class="has"><code class="language-cpp">#include&lt;stdio.h&gt;
+#include&lt;wiringPi.h&gt;
+
+void init();
+int main()
+{
+        init();
+        int angle=0;
+        scanf("%d",&amp;angle);
+
+        int i=0;
+        float x=0;
+
+        int k=180;//180次循环的时间够了
+        while(k--)
+        {
+                x=11.11*i;
+                digitalWrite(15,HIGH);
+                delayMicroseconds(500+x);
+                digitalWrite(15,LOW);
+                delayMicroseconds(19500-x);
+                if(i==angle)
+                    break;
+
+                i++;
+         }
+        
+        return 0;
+}
+
+
+void init()
+{
+        wiringPiSetup();
+        pinMode(15,OUTPUT);
+}
+</code></pre> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p>下面是我们的公众号,欢迎喜欢树莓派的你加入：</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/aa/8e/UoyRBFw4_o.jpg"></p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d584f6205dfbb19965519bb45c3e2225/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">7-Linux内核配置编译及安装</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/baab4cf194187e6efd05217e1ab29e91/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">mysql workbench 常用快捷键</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

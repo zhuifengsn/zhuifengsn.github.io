@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>redis五种数据类型对应的底层数据结构 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="redis五种数据类型对应的底层数据结构" />
+<meta property="og:description" content="redis五种数据类型对应的底层数据结构 redis的五种数据类型redis核心对象redisObjecttype数据类型encoding编码类型ptr指针 redis五种数据类型对应的底层数据结构String字符串类型SDS hash哈希类型ziplist压缩列表hashtable哈希表 list列表类型ziplist压缩列表linkedlist、quicklist set集合类型intset整数集合hashtable哈希表 zset有序集合类型ziplist压缩列表skiplist跳跃表 redis是一种非关系型key-value内存数据库。 redis的五种数据类型 字符串：string；
+哈希（也叫哈希表、字典，下文中统一称为哈希。）：hash；
+列表：list；
+集合：set；
+有序集合：sorted set。
+这里的数据类型是针对于value来说的，key全是字符串类型。
+redis的这些数据类型在底层都是使用核心对象redisObject表示的。
+redis核心对象redisObject redisObject对象有以下属性：
+type、encoding、ptr、其它信息。
+type数据类型 对应的是value五种数据类型。
+字符串：REDIS_STRING；
+哈希：REDIS_HASH；
+列表：REDIS_LIST；
+集合：REDIS_SET；
+有序集合：REDIS_ZSET。
+encoding编码类型 表示的value保存的编码。
+要注意type和encoding不是一一对应的，是组合！
+ptr指针 指向了实际保存value的数据结构。
+redis五种数据类型对应的底层数据结构 String字符串类型 String类型的编码方式，即encoding有三种：int、embstr、raw。
+value的值是整数，encoding为int，没有对应底层数据结构；
+value长度小于32，encoding为embstr，长度大于，32编码为raw，embstr和raw都使用SDS数据结构存储。
+SDS SDS是简单动态字符串simple dynamic string的缩写。
+SDS有三个属性：
+struct sdshdr{ int len; // 字符串长度 int free; // 未使用的字节长度 char buf[]; // 保存字符串的字节数组 } c语言中的结构体struct，类似Java中的类class。
+redis是c语言实现的，
+c语言中的字符串类型不会记录自身长度，获取长度要通过遍历得到，时间复杂度是O(n)，需要n次，（最多）
+SDS只需读取len属性，时间复杂度是O(1)，也就是最多1次；
+SDS在修改前会根据free属性判断空间是否满足，不满足就会扩容，避免内存溢出；
+SDS提供’空间预分配’和’惰性空间释放’两种策略，在分配空间时，分配的空间比实际需要的多，
+避免频繁增加字符串长度导致多次扩容带来的成本升高，
+当字符串收缩的时候，不会立即回收不使用的空间，等以后使用时释放。
+hash哈希类型 哈希类型的编码方式有ziplist、ht两种，分别对应ziplist和hashtable两种底层数据结构，
+当哈希对象的键值对数量小于512，并且所有键值对的长度都小于64字节时，使用压缩列表ziplist，否则使用hashtable。
+ziplist压缩列表 压缩列表并不是说以某种算法压缩存储数据，它是一组连续的内存块，能够节省空间。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/37b6d6348bc6298073d33a60126df616/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-09-03T19:29:49+08:00" />
+<meta property="article:modified_time" content="2022-09-03T19:29:49+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">redis五种数据类型对应的底层数据结构</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>redis五种数据类型对应的底层数据结构</h4> 
+ <ul><li><a href="#redis_2" rel="nofollow">redis的五种数据类型</a></li><li><a href="#redisredisObject_12" rel="nofollow">redis核心对象redisObject</a></li><li><ul><li><a href="#type_15" rel="nofollow">type数据类型</a></li><li><a href="#encoding_22" rel="nofollow">encoding编码类型</a></li><li><a href="#ptr_27" rel="nofollow">ptr指针</a></li></ul> 
+  </li><li><a href="#redis_30" rel="nofollow">redis五种数据类型对应的底层数据结构</a></li><li><ul><li><a href="#String_31" rel="nofollow">String字符串类型</a></li><li><ul><li><a href="#SDS_36" rel="nofollow">SDS</a></li></ul> 
+   </li><li><a href="#hash_56" rel="nofollow">hash哈希类型</a></li><li><ul><li><a href="#ziplist_59" rel="nofollow">ziplist压缩列表</a></li><li><a href="#hashtable_74" rel="nofollow">hashtable哈希表</a></li></ul> 
+   </li><li><a href="#list_76" rel="nofollow">list列表类型</a></li><li><ul><li><a href="#ziplist_80" rel="nofollow">ziplist压缩列表</a></li><li><a href="#linkedlistquicklist_82" rel="nofollow">linkedlist、quicklist</a></li></ul> 
+   </li><li><a href="#set_86" rel="nofollow">set集合类型</a></li><li><ul><li><a href="#intset_89" rel="nofollow">intset整数集合</a></li><li><a href="#hashtable_99" rel="nofollow">hashtable哈希表</a></li></ul> 
+   </li><li><a href="#zset_103" rel="nofollow">zset有序集合类型</a></li><li><ul><li><a href="#ziplist_107" rel="nofollow">ziplist压缩列表</a></li><li><a href="#skiplist_109" rel="nofollow">skiplist跳跃表</a></li></ul> 
+  </li></ul> 
+ </li></ul> 
+</div> 
+<br> redis是一种非关系型key-value内存数据库。 
+<p></p> 
+<h2><a id="redis_2"></a>redis的五种数据类型</h2> 
+<p>字符串：string；<br> 哈希（也叫哈希表、字典，下文中统一称为哈希。）：hash；<br> 列表：list；<br> 集合：set；<br> 有序集合：sorted set。<br> <img src="https://images2.imgbox.com/54/b8/N38C5tOt_o.png" alt="在这里插入图片描述"><br> <strong>这里的数据类型是针对于value来说的，key全是字符串类型。</strong></p> 
+<p><strong>redis的这些数据类型在底层都是使用核心对象redisObject表示的。</strong></p> 
+<h2><a id="redisredisObject_12"></a>redis核心对象redisObject</h2> 
+<p>redisObject对象有以下属性：<br> type、encoding、ptr、其它信息。</p> 
+<h3><a id="type_15"></a>type数据类型</h3> 
+<p>对应的是value五种数据类型。<br> 字符串：REDIS_STRING；<br> 哈希：REDIS_HASH；<br> 列表：REDIS_LIST；<br> 集合：REDIS_SET；<br> 有序集合：REDIS_ZSET。</p> 
+<h3><a id="encoding_22"></a>encoding编码类型</h3> 
+<p>表示的value保存的编码。<br> <img src="https://images2.imgbox.com/bc/d0/LOPlNrkg_o.png" alt="在这里插入图片描述"><br> 要注意type和encoding不是一一对应的，是组合！<br> <img src="https://images2.imgbox.com/0f/a8/ypB0baWL_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="ptr_27"></a>ptr指针</h3> 
+<p>指向了实际保存value的数据结构。<br> <img src="https://images2.imgbox.com/6b/0d/jzVux8Hz_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="redis_30"></a>redis五种数据类型对应的底层数据结构</h2> 
+<h3><a id="String_31"></a>String字符串类型</h3> 
+<p>String类型的编码方式，即encoding有三种：int、embstr、raw。<br> value的值是整数，encoding为int，没有对应底层数据结构；<br> value长度小于32，encoding为embstr，长度大于，32编码为raw，embstr和raw都使用SDS数据结构存储。<br> <img src="https://images2.imgbox.com/70/f6/PEITHUq1_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="SDS_36"></a>SDS</h4> 
+<p>SDS是简单动态字符串simple dynamic string的缩写。<br> SDS有三个属性：</p> 
+<pre><code class="prism language-c"><span class="token keyword">struct</span> <span class="token class-name">sdshdr</span><span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">int</span> len<span class="token punctuation">;</span> <span class="token comment">// 字符串长度</span>
+	<span class="token keyword">int</span> free<span class="token punctuation">;</span> <span class="token comment">// 未使用的字节长度</span>
+	<span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span> <span class="token comment">// 保存字符串的字节数组</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>c语言中的结构体struct，类似Java中的类class。</p> 
+<p>redis是c语言实现的，<br> c语言中的字符串类型不会记录自身长度，获取长度要通过遍历得到，时间复杂度是O(n)，需要n次，（最多）<br> SDS只需读取len属性，时间复杂度是O(1)，也就是最多1次；<br> SDS在修改前会根据free属性判断空间是否满足，不满足就会扩容，避免内存溢出；<br> SDS提供’空间预分配’和’惰性空间释放’两种策略，在分配空间时，分配的空间比实际需要的多，<br> 避免频繁增加字符串长度导致多次扩容带来的成本升高，<br> 当字符串收缩的时候，不会立即回收不使用的空间，等以后使用时释放。<br> <img src="https://images2.imgbox.com/00/9c/dCNfH7Bd_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="hash_56"></a>hash哈希类型</h3> 
+<p>哈希类型的编码方式有ziplist、ht两种，分别对应ziplist和hashtable两种底层数据结构，<br> 当哈希对象的键值对数量小于512，并且所有键值对的长度都小于64字节时，使用压缩列表ziplist，否则使用hashtable。</p> 
+<h4><a id="ziplist_59"></a>ziplist压缩列表</h4> 
+<p>压缩列表并不是说以某种算法压缩存储数据，它是一组连续的内存块，能够节省空间。</p> 
+<p>压缩列表的内存结构：<br> zlbytes：4个字节大小，是压缩列表占用内存的字节数；<br> zltail：4个字节大小，记录表尾节点距离起始地址的偏移量，用于快速定位到尾节点地址；<br> zllen：2个字节大小，压缩列表中的节点数；<br> entry：列表中的每一个元素；<br> zlend：压缩列表的特殊结束符号’0xFF’。<br> <img src="https://images2.imgbox.com/b5/f8/sCYvNE1y_o.png" alt="在这里插入图片描述"><br> 一个entry节点包含以下三部分：<br> previous_entry_ength：记录前一个节点entry的长度，可用于计算前一个节点的起始地址，因为它们的地址是连续的；<br> encoding：content的内容类型和长度；<br> content：每个节点的内容。<br> <img src="https://images2.imgbox.com/a8/22/zAvkdVEc_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="hashtable_74"></a>hashtable哈希表</h4> 
+<p>hashtable和java中的hashmap相似。</p> 
+<h3><a id="list_76"></a>list列表类型</h3> 
+<p>redis3.2之前，列表类型使用ziplist、linkedlist两种底层数据结构存储，<br> 当列表的长度小于512，并且所有元素的长度都小于64时，使用ziplist，否则使用linkedlist。<br> redis3.2以后，则统一使用quicklist。</p> 
+<h4><a id="ziplist_80"></a>ziplist压缩列表</h4> 
+<p>上边说过了。</p> 
+<h4><a id="linkedlistquicklist_82"></a>linkedlist、quicklist</h4> 
+<p>linkedlist、quicklist是个双向链表，双向链表中的每个节点，分别持有对前一个和后一个节点的引用prev、next，<br> 头结点的prev引用、尾结点的next引用分别指向null。<br> <img src="https://images2.imgbox.com/66/35/YIO9eOo1_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="set_86"></a>set集合类型</h3> 
+<p>集合类型使用intset、hashtable这两种底层数据结构存储，<br> 如果集合中的所有元素都可以转换成整数值，且长度小于512，使用intset，否则用hashtable。</p> 
+<h4><a id="intset_89"></a>intset整数集合</h4> 
+<p>整数集合中的元素有三个属性：<br> encoding：编码方式，有INTSET_ENC_INT16、INTSET_ENC_INT32、INTSET_ENC_INT64三种；<br> contents[]：元素内容；<br> length：元素内容长度。</p> 
+<p>整数集合中新增元素时，若是超出了长度，就会进行升级：<br> 一、扩展数组contents的大小，并且数组的类型为新元素的类型；<br> 二、将原来数组中的元素转为新元素的类型，并放到新的数组中；<br> 三、整数集合在升级后就不会再降级，会一致保持升级后的状态。</p> 
+<h4><a id="hashtable_99"></a>hashtable哈希表</h4> 
+<p>上边说过了。<br> 有一点不同，<br> set中哈希表的value都是null，只用map的key实现集合。</p> 
+<h3><a id="zset_103"></a>zset有序集合类型</h3> 
+<p>zset有序集合与集合相比，区别在于有序集合中的元素多了一个score属性，即排名的权重。<br> 有序集合使用ziplist、skiplist这两种底层数据结构存储，<br> 当集合长度小于128，并且所有的元素长度都小于64字节时，使用ziplist，否则使用skiplist。</p> 
+<h4><a id="ziplist_107"></a>ziplist压缩列表</h4> 
+<p>上边说过了。</p> 
+<h4><a id="skiplist_109"></a>skiplist跳跃表</h4> 
+<p>跳跃表是具有层次结构的链表。<br> 它由很多层组成，每一层都是一个有序的链表，<br> 由上到下每层节点数逐渐密集，最上层的节点最稀疏，跨度也最大，<br> 下面这句话有点绕，但很重要：<br> <strong>每一层的每一个节点，都指向同一层下一位置的节点，和下一层同一位置的节点，</strong><br> 有点像mysql innodb的b+tree，支持范围查找，上层相当于索引层，下层是数据层，<br> bw是后退指针，在从下向上遍历的时候使用。<br> <img src="https://images2.imgbox.com/16/5c/JSdaOUa4_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>refs：</strong><br> java技术爱好者：<a href="https://zhuanlan.zhihu.com/p/344918922" rel="nofollow">Redis的五种数据类型底层实现原理是什么</a><br> 黎杜：<a href="https://zhuanlan.zhihu.com/p/148562122" rel="nofollow">最详细的Redis五种数据结构详解</a><br> 溪午闻璐：<a href="https://blog.csdn.net/sssxlxwbwz/article/details/123769262">Redis之跳跃表</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/21aafab5a9944279dea0c624b38ff6b1/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">SLAM十四讲中Sophus库的make报错 lvalue required as left operand of assignment unit_complex_.real()</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/0fbe70b4311f7ab8d64e7a18923fc734/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Java中 实体类（Entity，VO，DTO）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>jeecg代码阅读-使用shiro的例子 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="jeecg代码阅读-使用shiro的例子" />
+<meta property="og:description" content="最近在阅读jeecg的shiro权限那块，话说jeecg写的真是棒。
+pom依赖：
+&lt;!--JWT--&gt; &lt;dependency&gt; &lt;groupId&gt;com.auth0&lt;/groupId&gt; &lt;artifactId&gt;java-jwt&lt;/artifactId&gt; &lt;version&gt;3.7.0&lt;/version&gt; &lt;/dependency&gt; &lt;!--shiro--&gt; &lt;dependency&gt; &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt; &lt;artifactId&gt;shiro-spring-boot-starter&lt;/artifactId&gt; &lt;version&gt;1.5.3&lt;/version&gt; &lt;/dependency&gt; &lt;!-- shiro-redis --&gt; &lt;dependency&gt; &lt;groupId&gt;org.crazycake&lt;/groupId&gt; &lt;artifactId&gt;shiro-redis&lt;/artifactId&gt; &lt;version&gt;3.1.0&lt;/version&gt; &lt;exclusions&gt; &lt;exclusion&gt; &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt; &lt;artifactId&gt;shiro-core&lt;/artifactId&gt; &lt;/exclusion&gt; &lt;/exclusions&gt; &lt;/dependency&gt; Realm
+package org.jeecg.config.shiro; import cn.hutool.crypto.SecureUtil; import lombok.extern.slf4j.Slf4j; import org.apache.shiro.authc.AuthenticationException; import org.apache.shiro.authc.AuthenticationInfo; import org.apache.shiro.authc.AuthenticationToken; import org.apache.shiro.authc.SimpleAuthenticationInfo; import org.apache.shiro.authz.AuthorizationInfo; import org.apache.shiro.authz.SimpleAuthorizationInfo; import org.apache.shiro.realm.AuthorizingRealm; import org.apache.shiro.subject.PrincipalCollection; import org.jeecg.common.api.CommonAPI; import org.jeecg.common.constant.CacheConstant; import org.jeecg.common.constant.CommonConstant; import org.jeecg.common.system.util.JwtUtil; import org.jeecg.common.system.vo.LoginUser; import org.jeecg.common.util.RedisUtil; import org.jeecg.common.util.SpringContextUtils; import org.jeecg.common.util.oConvertUtils; import org.springframework.context.annotation.Lazy; import org." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/8e9b4435d829d1142bc0c0fcdcd686d8/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-11-06T14:05:45+08:00" />
+<meta property="article:modified_time" content="2020-11-06T14:05:45+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">jeecg代码阅读-使用shiro的例子</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <blockquote> 
+ <p>最近在阅读jeecg的shiro权限那块，话说jeecg写的真是棒。</p> 
+</blockquote> 
+<p>pom依赖：</p> 
+<pre><code class="language-XML">        &lt;!--JWT--&gt;
+		&lt;dependency&gt;
+			&lt;groupId&gt;com.auth0&lt;/groupId&gt;
+			&lt;artifactId&gt;java-jwt&lt;/artifactId&gt;
+			&lt;version&gt;3.7.0&lt;/version&gt;
+		&lt;/dependency&gt;
+
+		&lt;!--shiro--&gt;
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+			&lt;artifactId&gt;shiro-spring-boot-starter&lt;/artifactId&gt;
+			&lt;version&gt;1.5.3&lt;/version&gt;
+		&lt;/dependency&gt;
+		&lt;!-- shiro-redis --&gt;
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.crazycake&lt;/groupId&gt;
+			&lt;artifactId&gt;shiro-redis&lt;/artifactId&gt;
+			&lt;version&gt;3.1.0&lt;/version&gt;
+			&lt;exclusions&gt;
+				&lt;exclusion&gt;
+					&lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+					&lt;artifactId&gt;shiro-core&lt;/artifactId&gt;
+				&lt;/exclusion&gt;
+			&lt;/exclusions&gt;
+		&lt;/dependency&gt;</code></pre> 
+<p>Realm</p> 
+<pre><code class="language-java">package org.jeecg.config.shiro;
+
+import cn.hutool.crypto.SecureUtil;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.jeecg.common.api.CommonAPI;
+import org.jeecg.common.constant.CacheConstant;
+import org.jeecg.common.constant.CommonConstant;
+import org.jeecg.common.system.util.JwtUtil;
+import org.jeecg.common.system.vo.LoginUser;
+import org.jeecg.common.util.RedisUtil;
+import org.jeecg.common.util.SpringContextUtils;
+import org.jeecg.common.util.oConvertUtils;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Component;
+
+import javax.annotation.Resource;
+import java.util.Set;
+
+@Component
+@Slf4j
+public class ShiroRealm extends AuthorizingRealm {
+	@Lazy
+    @Resource
+    private CommonAPI commonAPI;
+
+    @Lazy
+    @Resource
+    private RedisUtil redisUtil;
+
+    /**
+     * 必须重写此方法，不然Shiro会报错
+     */
+    @Override
+    public boolean supports(AuthenticationToken token) {
+        return token instanceof JwtToken;
+    }
+
+    /**
+     * 权限信息认证(包括角色以及权限)是用户访问controller的时候才进行验证(redis存储的此处权限信息)
+     * 触发检测用户权限时才会调用此方法，例如checkRole,checkPermission
+     *
+     * @param principals 身份信息
+     * @return AuthorizationInfo 权限信息
+     */
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        log.info("===============Shiro权限认证开始============ [ roles、permissions]==========");
+        String username = null;
+        if (principals != null) {
+            LoginUser sysUser = (LoginUser) principals.getPrimaryPrincipal();
+            username = sysUser.getUsername();
+        }
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+
+        // 设置用户拥有的角色集合，比如“admin,test”
+        Set&lt;String&gt; roleSet = commonAPI.queryUserRoles(username);
+        System.out.println(roleSet.toString());
+        info.setRoles(roleSet);
+
+        // 设置用户拥有的权限集合，比如“sys:role:add,sys:user:add”
+        Set&lt;String&gt; permissionSet = commonAPI.queryUserAuths(username);
+        info.addStringPermissions(permissionSet);
+        System.out.println(permissionSet);
+        log.info("===============Shiro权限认证成功==============");
+        return info;
+    }
+
+    /**
+     * 用户信息认证是在用户进行登录的时候进行验证(不存redis)
+     * 也就是说验证用户输入的账号和密码是否正确，错误抛出异常
+     *
+     * @param auth 用户登录的账号密码信息
+     * @return 返回封装了用户信息的 AuthenticationInfo 实例
+     * @throws AuthenticationException
+     */
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken auth) throws AuthenticationException {
+        log.debug("===============Shiro身份认证开始============doGetAuthenticationInfo==========");
+        String token = (String) auth.getCredentials();
+        if (token == null) {
+            log.info("————————身份认证失败——————————IP地址:  "+ oConvertUtils.getIpAddrByRequest(SpringContextUtils.getHttpServletRequest()));
+            throw new AuthenticationException("token为空!");
+        }
+        // 校验token有效性
+        LoginUser loginUser = this.checkUserTokenIsEffect(token);
+        return new SimpleAuthenticationInfo(loginUser, token, getName());
+    }
+
+    /**
+     * 校验token的有效性
+     *
+     * @param token
+     */
+    public LoginUser checkUserTokenIsEffect(String token) throws AuthenticationException {
+        // 解密获得username，用于和数据库进行对比
+        String username = JwtUtil.getUsername(token);
+        if (username == null) {
+            throw new AuthenticationException("token非法无效!");
+        }
+
+        // 查询用户信息
+        log.debug("———校验token是否有效————checkUserTokenIsEffect——————— "+ token);
+        LoginUser loginUser = commonAPI.getUserByName(username);
+        if (loginUser == null) {
+            throw new AuthenticationException("用户不存在!");
+        }
+        // 判断用户状态
+        if (loginUser.getStatus() != 1) {
+            throw new AuthenticationException("账号已被锁定,请联系管理员!");
+        }
+        // 校验token是否超时失效 &amp; 或者账号密码是否错误
+        if (!jwtTokenRefresh(token, username, loginUser.getPassword())) {
+            throw new AuthenticationException("Token失效，请重新登录!");
+        }
+
+        return loginUser;
+    }
+
+    /**
+     * JWTToken刷新生命周期 （实现： 用户在线操作不掉线功能）
+     * 1、登录成功后将用户的JWT生成的Token作为k、v存储到cache缓存里面(这时候k、v值一样)，缓存有效期设置为Jwt有效时间的2倍
+     * 2、当该用户再次请求时，通过JWTFilter层层校验之后会进入到doGetAuthenticationInfo进行身份验证
+     * 3、当该用户这次请求jwt生成的token值已经超时，但该token对应cache中的k还是存在，则表示该用户一直在操作只是JWT的token失效了，程序会给token对应的k映射的v值重新生成JWTToken并覆盖v值，该缓存生命周期重新计算
+     * 4、当该用户这次请求jwt在生成的token值已经超时，并在cache中不存在对应的k，则表示该用户账户空闲超时，返回用户信息已失效，请重新登录。
+     * 注意： 前端请求Header中设置Authorization保持不变，校验有效性以缓存中的token为准。
+     *       用户过期时间 = Jwt有效时间 * 2。
+     *
+     * @param userName
+     * @param passWord
+     * @return
+     */
+    public boolean jwtTokenRefresh(String token, String userName, String passWord) {
+        String cacheToken = String.valueOf(redisUtil.get(CommonConstant.PREFIX_USER_TOKEN + token));
+        if (oConvertUtils.isNotEmpty(cacheToken)) {
+            // 校验token有效性
+            if (!JwtUtil.verify(cacheToken, userName, passWord)) {
+                String newAuthorization = JwtUtil.sign(userName, passWord);
+                // 设置超时时间
+                redisUtil.set(CommonConstant.PREFIX_USER_TOKEN + token, newAuthorization);
+                redisUtil.expire(CommonConstant.PREFIX_USER_TOKEN + token, JwtUtil.EXPIRE_TIME *2 / 1000);
+                log.info("——————————用户在线操作，更新token保证不掉线—————————jwtTokenRefresh——————— "+ token);
+            }
+            //update-begin--Author:scott  Date:20191005  for：解决每次请求，都重写redis中 token缓存问题
+//			else {
+//				// 设置超时时间
+//				redisUtil.set(CommonConstant.PREFIX_USER_TOKEN + token, cacheToken);
+//				redisUtil.expire(CommonConstant.PREFIX_USER_TOKEN + token, JwtUtil.EXPIRE_TIME / 1000);
+//			}
+            //update-end--Author:scott  Date:20191005   for：解决每次请求，都重写redis中 token缓存问题
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 清除当前用户的权限认证缓存
+     *
+     * @param principals 权限信息
+     */
+    @Override
+    public void clearCache(PrincipalCollection principals) {
+        super.clearCache(principals);
+    }
+
+}
+</code></pre> 
+<pre>AuthenticationToken:</pre> 
+<pre><code class="language-java">package org.jeecg.config.shiro;
+ 
+import org.apache.shiro.authc.AuthenticationToken;
+
+public class JwtToken implements AuthenticationToken {
+	
+	private static final long serialVersionUID = 1L;
+	private String token;
+ 
+    public JwtToken(String token) {
+        this.token = token;
+    }
+ 
+    @Override
+    public Object getPrincipal() {
+        return token;
+    }
+ 
+    @Override
+    public Object getCredentials() {
+        return token;
+    }
+}
+</code></pre> 
+<p>:Filter:</p> 
+<pre><code class="language-java">package org.jeecg.config.shiro.filters;
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.web.filter.authc.BasicHttpAuthenticationFilter;
+import org.jeecg.common.constant.CommonConstant;
+import org.jeecg.config.mybatis.TenantContext;
+import org.jeecg.config.shiro.JwtToken;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.RequestMethod;
+
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+
+@Slf4j
+public class JwtFilter extends BasicHttpAuthenticationFilter {
+
+    private boolean allowOrigin = true;
+
+    public JwtFilter(){}
+    public JwtFilter(boolean allowOrigin){
+        this.allowOrigin = allowOrigin;
+    }
+
+    /**
+     * 执行登录认证
+     *
+     * @param request
+     * @param response
+     * @param mappedValue
+     * @return
+     */
+    @Override
+    protected boolean isAccessAllowed(ServletRequest request, ServletResponse response, Object mappedValue) {
+        try {
+            executeLogin(request, response);
+            return true;
+        } catch (Exception e) {
+            throw new AuthenticationException("Token失效，请重新登录", e);
+        }
+    }
+
+    /**
+     *
+     */
+    @Override
+    protected boolean executeLogin(ServletRequest request, ServletResponse response) throws Exception {
+        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+        String token = httpServletRequest.getHeader(CommonConstant.X_ACCESS_TOKEN);
+
+        JwtToken jwtToken = new JwtToken(token);
+        // 提交给realm进行登入，如果错误他会抛出异常并被捕获
+        getSubject(request, response).login(jwtToken);
+        // 如果没有抛出异常则代表登入成功，返回true
+        return true;
+    }
+
+    /**
+     * 对跨域提供支持
+     */
+    @Override
+    protected boolean preHandle(ServletRequest request, ServletResponse response) throws Exception {
+        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+        HttpServletResponse httpServletResponse = (HttpServletResponse) response;
+        if(allowOrigin){
+            httpServletResponse.setHeader("Access-control-Allow-Origin", httpServletRequest.getHeader("Origin"));
+            httpServletResponse.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PUT,DELETE");
+            httpServletResponse.setHeader("Access-Control-Allow-Headers", httpServletRequest.getHeader("Access-Control-Request-Headers"));
+            //update-begin-author:scott date:20200907 for:issues/I1TAAP 前后端分离，shiro过滤器配置引起的跨域问题
+            // 是否允许发送Cookie，默认Cookie不包括在CORS请求之中。设为true时，表示服务器允许Cookie包含在请求中。
+            httpServletResponse.setHeader("Access-Control-Allow-Credentials", "true");
+            //update-end-author:scott date:20200907 for:issues/I1TAAP 前后端分离，shiro过滤器配置引起的跨域问题
+        }
+        // 跨域时会首先发送一个option请求，这里我们给option请求直接返回正常状态
+        if (httpServletRequest.getMethod().equals(RequestMethod.OPTIONS.name())) {
+            httpServletResponse.setStatus(HttpStatus.OK.value());
+            return false;
+        }
+        //update-begin-author:taoyan date:20200708 for:多租户用到
+        String tenant_id = httpServletRequest.getHeader(CommonConstant.TENANT_ID);
+        TenantContext.setTenant(tenant_id);
+        //update-end-author:taoyan date:20200708 for:多租户用到
+        return super.preHandle(request, response);
+    }
+}
+</code></pre> 
+<p>Config:</p> 
+<pre><code class="language-java">package org.jeecg.config.shiro;
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
+import org.apache.shiro.mgt.DefaultSubjectDAO;
+import org.apache.shiro.mgt.SecurityManager;
+import org.apache.shiro.spring.LifecycleBeanPostProcessor;
+import org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor;
+import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.crazycake.shiro.IRedisManager;
+import org.crazycake.shiro.RedisCacheManager;
+import org.crazycake.shiro.RedisClusterManager;
+import org.crazycake.shiro.RedisManager;
+import org.jeecg.common.constant.CommonConstant;
+import org.jeecg.common.util.oConvertUtils;
+import org.jeecg.config.shiro.filters.JwtFilter;
+import org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.core.env.Environment;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.util.StringUtils;
+import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.JedisCluster;
+
+import javax.annotation.Resource;
+import javax.servlet.Filter;
+import java.util.*;
+
+@Slf4j
+@Configuration
+public class ShiroConfig {
+
+    @Value("${jeecg.shiro.excludeUrls}")
+    private String excludeUrls;
+    @Resource
+    LettuceConnectionFactory lettuceConnectionFactory;
+    @Autowired
+    private Environment env;
+
+
+    /**
+     * Filter Chain定义说明
+     *
+     * 1、一个URL可以配置多个Filter，使用逗号分隔
+     * 2、当设置多个过滤器时，全部验证通过，才视为通过
+     * 3、部分过滤器可指定参数，如perms，roles
+     */
+    @Bean("shiroFilter")
+    public ShiroFilterFactoryBean shiroFilter(SecurityManager securityManager) {
+        ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+        shiroFilterFactoryBean.setSecurityManager(securityManager);
+        // 拦截器
+        Map&lt;String, String&gt; filterChainDefinitionMap = new LinkedHashMap&lt;String, String&gt;();
+        if(oConvertUtils.isNotEmpty(excludeUrls)){
+            String[] permissionUrl = excludeUrls.split(",");
+            for(String url : permissionUrl){
+                filterChainDefinitionMap.put(url,"anon");
+            }
+        }
+
+        //cas验证登录
+        filterChainDefinitionMap.put("/cas/client/validateLogin", "anon");
+        // 配置不会被拦截的链接 顺序判断
+        filterChainDefinitionMap.put("/sys/randomImage/**", "anon"); //登录验证码接口排除
+        filterChainDefinitionMap.put("/sys/checkCaptcha", "anon"); //登录验证码接口排除
+        filterChainDefinitionMap.put("/sys/login", "anon"); //登录接口排除
+        filterChainDefinitionMap.put("/sys/mLogin", "anon"); //登录接口排除
+        filterChainDefinitionMap.put("/sys/logout", "anon"); //登出接口排除
+        filterChainDefinitionMap.put("/thirdLogin/**", "anon"); //第三方登录
+        filterChainDefinitionMap.put("/sys/getEncryptedString", "anon"); //获取加密串
+        filterChainDefinitionMap.put("/sys/sms", "anon");//短信验证码
+        filterChainDefinitionMap.put("/sys/phoneLogin", "anon");//手机登录
+        filterChainDefinitionMap.put("/sys/user/checkOnlyUser", "anon");//校验用户是否存在
+        filterChainDefinitionMap.put("/sys/user/register", "anon");//用户注册
+        filterChainDefinitionMap.put("/sys/user/querySysUser", "anon");//根据手机号获取用户信息
+        filterChainDefinitionMap.put("/sys/user/phoneVerification", "anon");//用户忘记密码验证手机号
+        filterChainDefinitionMap.put("/sys/user/passwordChange", "anon");//用户更改密码
+        filterChainDefinitionMap.put("/auth/2step-code", "anon");//登录验证码
+        filterChainDefinitionMap.put("/sys/common/static/**", "anon");//图片预览 &amp;下载文件不限制token
+        //filterChainDefinitionMap.put("/sys/common/view/**", "anon");//图片预览不限制token
+        //filterChainDefinitionMap.put("/sys/common/download/**", "anon");//文件下载不限制token
+        filterChainDefinitionMap.put("/sys/common/pdf/**", "anon");//pdf预览
+        filterChainDefinitionMap.put("/generic/**", "anon");//pdf预览需要文件
+        filterChainDefinitionMap.put("/", "anon");
+        filterChainDefinitionMap.put("/doc.html", "anon");
+        filterChainDefinitionMap.put("/**/*.js", "anon");
+        filterChainDefinitionMap.put("/**/*.css", "anon");
+        filterChainDefinitionMap.put("/**/*.html", "anon");
+        filterChainDefinitionMap.put("/**/*.svg", "anon");
+        filterChainDefinitionMap.put("/**/*.pdf", "anon");
+        filterChainDefinitionMap.put("/**/*.jpg", "anon");
+        filterChainDefinitionMap.put("/**/*.png", "anon");
+        filterChainDefinitionMap.put("/**/*.ico", "anon");
+
+        // update-begin--Author:sunjianlei Date:20190813 for：排除字体格式的后缀
+        filterChainDefinitionMap.put("/**/*.ttf", "anon");
+        filterChainDefinitionMap.put("/**/*.woff", "anon");
+        filterChainDefinitionMap.put("/**/*.woff2", "anon");
+        // update-begin--Author:sunjianlei Date:20190813 for：排除字体格式的后缀
+
+        filterChainDefinitionMap.put("/druid/**", "anon");
+        filterChainDefinitionMap.put("/swagger-ui.html", "anon");
+        filterChainDefinitionMap.put("/swagger**/**", "anon");
+        filterChainDefinitionMap.put("/webjars/**", "anon");
+        filterChainDefinitionMap.put("/v2/**", "anon");
+
+        // update-begin--Author:sunjianlei Date:20190813 for：表单设计器不要一次性全排除
+        filterChainDefinitionMap.put("/desform/index/**", "anon");
+        filterChainDefinitionMap.put("/desform/ext/**", "anon");
+        filterChainDefinitionMap.put("/desform/add/**", "anon");
+        filterChainDefinitionMap.put("/desform/view/**", "anon");
+        filterChainDefinitionMap.put("/desform/edit/**", "anon");
+        filterChainDefinitionMap.put("/desform/detail/**", "anon");
+        // update-end--Author:sunjianlei Date:20190813 for：表单设计器不要一次性全排除
+
+        //报表设计器排除
+        filterChainDefinitionMap.put("/design/report/**", "anon");
+        filterChainDefinitionMap.put("/**/*.js.map", "anon");
+        filterChainDefinitionMap.put("/**/*.css.map", "anon");
+
+        //在线文档管理
+        filterChainDefinitionMap.put("/filemanage/**", "anon");
+        //在线聊天排除
+        filterChainDefinitionMap.put("/oa/im/**", "anon");
+        filterChainDefinitionMap.put("/im/dist/**", "anon");
+
+        //大屏设计器排除
+        filterChainDefinitionMap.put("/jmreport/bigscreen/**", "anon");
+        filterChainDefinitionMap.put("/test/bigScreen/**", "anon");
+        filterChainDefinitionMap.put("/bigscreen/**", "anon");
+
+        //测试示例
+        //filterChainDefinitionMap.put("/test/jeecgDemo/html", "anon"); //模板页面
+        //filterChainDefinitionMap.put("/test/jeecgDemo/redis/**", "anon"); //redis测试
+
+        //流程模块组件请求
+//		filterChainDefinitionMap.put("/act/process/**", "anon");
+//		filterChainDefinitionMap.put("/act/task/**", "anon");
+//		filterChainDefinitionMap.put("/act/model/**", "anon");
+        // 流程图请求地址
+        filterChainDefinitionMap.put("/act/task/traceImage", "anon");
+        filterChainDefinitionMap.put("/act/process/processPic", "anon");
+        filterChainDefinitionMap.put("/act/process/downProcessXml", "anon");
+        filterChainDefinitionMap.put("/act/process/resource", "anon");
+        filterChainDefinitionMap.put("/service/editor/**", "anon");
+        filterChainDefinitionMap.put("/service/model/**", "anon");
+        filterChainDefinitionMap.put("/service/model/**/save", "anon");
+        filterChainDefinitionMap.put("/editor-app/**", "anon");
+        filterChainDefinitionMap.put("/diagram-viewer/**", "anon");
+        filterChainDefinitionMap.put("/modeler.html", "anon");
+        filterChainDefinitionMap.put("/designer", "anon");
+        filterChainDefinitionMap.put("/designer/**", "anon");
+        filterChainDefinitionMap.put("/plug-in/**", "anon");
+
+        //排除Online请求
+        filterChainDefinitionMap.put("/auto/cgform/**", "anon");
+        //FineReport报表
+        filterChainDefinitionMap.put("/ReportServer**", "anon");
+
+        //websocket排除
+        filterChainDefinitionMap.put("/websocket/**", "anon");
+        filterChainDefinitionMap.put("/newsWebsocket/**", "anon");
+
+        //我的聊天排除
+        filterChainDefinitionMap.put("/oa/im/**","anon");
+        filterChainDefinitionMap.put("/im/dist/**","anon");
+        filterChainDefinitionMap.put("/eoaSocket/**","anon");
+
+        // VXE Table WebSocket 排除（前端vxe组件无痕刷新功能）
+        filterChainDefinitionMap.put("/vxeSocket/**", "anon");
+
+        //wps
+        filterChainDefinitionMap.put("/v1/**","anon");
+        //公文路径部分拦截
+        filterChainDefinitionMap.put("/officialdoc/oaOfficialdocTemp/editByFiledId","anon");
+        filterChainDefinitionMap.put("/officialdoc/oaOfficialdocOrgancode/getTemp","anon");
+        filterChainDefinitionMap.put("/officialdoc/oaOfficialdocTemp/getTempByFileId","anon");
+        filterChainDefinitionMap.put("/officialdoc/oaOfficialdocTemp/updateNameByFileId","anon");
+        //ureport报表拦截排除
+        filterChainDefinitionMap.put("/ureport/**","anon");
+        //插件商城排除
+        filterChainDefinitionMap.put("/pluginMall/**","anon");
+        // 添加自己的过滤器并且取名为jwt
+        Map&lt;String, Filter&gt; filterMap = new HashMap&lt;String, Filter&gt;(1);
+        //如果cloudServer为空 则说明是单体 需要加载跨域配置
+        Object cloudServer = env.getProperty(CommonConstant.CLOUD_SERVER_KEY);
+        filterMap.put("jwt", new JwtFilter(cloudServer==null));
+        shiroFilterFactoryBean.setFilters(filterMap);
+        // &lt;!-- 过滤链定义，从上向下顺序执行，一般将/**放在最为下边
+        filterChainDefinitionMap.put("/**", "jwt");
+
+        // 未授权界面返回JSON
+        shiroFilterFactoryBean.setUnauthorizedUrl("/sys/common/403");
+        shiroFilterFactoryBean.setLoginUrl("/sys/common/403");
+        shiroFilterFactoryBean.setFilterChainDefinitionMap(filterChainDefinitionMap);
+        return shiroFilterFactoryBean;
+    }
+
+    @Bean("securityManager")
+    public DefaultWebSecurityManager securityManager(ShiroRealm myRealm) {
+        DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager();
+        securityManager.setRealm(myRealm);
+
+        /*
+         * 关闭shiro自带的session，详情见文档
+         * http://shiro.apache.org/session-management.html#SessionManagement-
+         * StatelessApplications%28Sessionless%29
+         */
+        DefaultSubjectDAO subjectDAO = new DefaultSubjectDAO();
+        DefaultSessionStorageEvaluator defaultSessionStorageEvaluator = new DefaultSessionStorageEvaluator();
+        defaultSessionStorageEvaluator.setSessionStorageEnabled(false);
+        subjectDAO.setSessionStorageEvaluator(defaultSessionStorageEvaluator);
+        securityManager.setSubjectDAO(subjectDAO);
+        //自定义缓存实现,使用redis
+        securityManager.setCacheManager(redisCacheManager());
+        return securityManager;
+    }
+
+    /**
+     * 下面的代码是添加注解支持
+     * @return
+     */
+    @Bean
+    @DependsOn("lifecycleBeanPostProcessor")
+    public DefaultAdvisorAutoProxyCreator defaultAdvisorAutoProxyCreator() {
+        DefaultAdvisorAutoProxyCreator defaultAdvisorAutoProxyCreator = new DefaultAdvisorAutoProxyCreator();
+        defaultAdvisorAutoProxyCreator.setProxyTargetClass(true);
+        /**
+         * 解决重复代理问题 github#994
+         * 添加前缀判断 不匹配 任何Advisor
+         */
+        defaultAdvisorAutoProxyCreator.setUsePrefix(true);
+        defaultAdvisorAutoProxyCreator.setAdvisorBeanNamePrefix("_no_advisor");
+        return defaultAdvisorAutoProxyCreator;
+    }
+
+    @Bean
+    public static LifecycleBeanPostProcessor lifecycleBeanPostProcessor() {
+        return new LifecycleBeanPostProcessor();
+    }
+
+    @Bean
+    public AuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor(DefaultWebSecurityManager securityManager) {
+        AuthorizationAttributeSourceAdvisor advisor = new AuthorizationAttributeSourceAdvisor();
+        advisor.setSecurityManager(securityManager);
+        return advisor;
+    }
+
+    /**
+     * cacheManager 缓存 redis实现
+     * 使用的是shiro-redis开源插件
+     *
+     * @return
+     */
+    public RedisCacheManager redisCacheManager() {
+        log.info("===============(1)创建缓存管理器RedisCacheManager");
+        RedisCacheManager redisCacheManager = new RedisCacheManager();
+        redisCacheManager.setRedisManager(redisManager());
+        //redis中针对不同用户缓存(此处的id需要对应user实体中的id字段,用于唯一标识)
+        redisCacheManager.setPrincipalIdFieldName("id");
+        //用户权限信息缓存时间
+        redisCacheManager.setExpire(200000);
+        return redisCacheManager;
+    }
+
+    /**
+     * 配置shiro redisManager
+     * 使用的是shiro-redis开源插件
+     *
+     * @return
+     */
+    @Bean
+    public IRedisManager redisManager() {
+        log.info("===============(2)创建RedisManager,连接Redis..");
+        IRedisManager manager;
+        // redis 单机支持，在集群为空，或者集群无机器时候使用 add by jzyadmin@163.com
+        if (lettuceConnectionFactory.getClusterConfiguration() == null || lettuceConnectionFactory.getClusterConfiguration().getClusterNodes().isEmpty()) {
+            RedisManager redisManager = new RedisManager();
+            redisManager.setHost(lettuceConnectionFactory.getHostName());
+            redisManager.setPort(lettuceConnectionFactory.getPort());
+            redisManager.setTimeout(0);
+            if (!StringUtils.isEmpty(lettuceConnectionFactory.getPassword())) {
+                redisManager.setPassword(lettuceConnectionFactory.getPassword());
+            }
+            manager = redisManager;
+        }else{
+            // redis 集群支持，优先使用集群配置	add by jzyadmin@163.com
+            RedisClusterManager redisManager = new RedisClusterManager();
+            Set&lt;HostAndPort&gt; portSet = new HashSet&lt;&gt;();
+            lettuceConnectionFactory.getClusterConfiguration().getClusterNodes().forEach(node -&gt; portSet.add(new HostAndPort(node.getHost() , node.getPort())));
+            JedisCluster jedisCluster = new JedisCluster(portSet);
+            redisManager.setJedisCluster(jedisCluster);
+            manager = redisManager;
+        }
+        return manager;
+    }
+
+}
+</code></pre> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/6b34fce339701564aa1331ce34e4724c/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【C#dynamic 类型】常用用法示例。【转载】</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/d63530db8f08b30127ff9ab88697f31e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">计算机组成原理详解</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

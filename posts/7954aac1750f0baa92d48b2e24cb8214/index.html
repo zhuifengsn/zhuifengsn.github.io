@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>2024.2.21 模拟实现 RabbitMQ —— 实现转发规则 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="2024.2.21 模拟实现 RabbitMQ —— 实现转发规则" />
+<meta property="og:description" content="目录
+需求分析
+直接交换机（Direct ）
+主题交换机（Topic ）
+扇出交换机（Fanout ）
+Topic 交换机转发规则
+routingKey 组成
+bindingKey 组成
+匹配规则
+情况一
+情况二
+情况三
+实现 Router 类
+校验 bindingKey 和 routingKey
+消息匹配机制
+Topic 交换机匹配规则
+针对 Router 单元测试
+需求分析 直接交换机（Direct ） 通过设定 消息的 routingKey = 队列名，以此指定该消息需传给哪个队列 实例理解
+如下图所示，此时可直接无视绑定关系，直接从内存中拿到对应队列名的队列然后再将消息传给该队列即可 主题交换机（Topic ） 依据 Topic 交换机的转发规则，判定消息需传给哪些队列 扇出交换机（Fanout ） 给该交换机中所有绑定好的队列均传入消息 Topic 交换机转发规则 bindingKey：创建绑定时，给绑定指定的特殊字符串（相当于出题）routingKey：发布消息时，给消息上指定的特殊字符串（相当于做答案）当 routingKey 的答案能够与 bindingKey 相对应时，便可将消息转发给该队列 routingKey 组成 数字、字母、下划线使用 . 将整个 routingKey 分成多个部分 实例理解
+aaa.bbb.ccc 合法aaa.110.bbb 合法aaa 合法 bindingKey 组成 数字、字母、下划线使用 ." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/7954aac1750f0baa92d48b2e24cb8214/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-22T15:52:01+08:00" />
+<meta property="article:modified_time" content="2024-02-22T15:52:01+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">2024.2.21 模拟实现 RabbitMQ —— 实现转发规则</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p id="%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90-toc" style="margin-left:0px;"><strong><a href="#%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90" rel="nofollow">需求分析</a></strong></p> 
+<p id="%E7%9B%B4%E6%8E%A5%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Direct%20%EF%BC%89-toc" style="margin-left:80px;"><strong><a href="#%E7%9B%B4%E6%8E%A5%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Direct%20%EF%BC%89" rel="nofollow">直接交换机（Direct ）</a></strong></p> 
+<p id="%E4%B8%BB%E9%A2%98%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Topic%20%EF%BC%89-toc" style="margin-left:80px;"><strong><a href="#%E4%B8%BB%E9%A2%98%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Topic%20%EF%BC%89" rel="nofollow">主题交换机（Topic ）</a></strong></p> 
+<p id="%E6%89%87%E5%87%BA%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Fanout%20%EF%BC%89-toc" style="margin-left:80px;"><strong><a href="#%E6%89%87%E5%87%BA%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Fanout%20%EF%BC%89" rel="nofollow">扇出交换机（Fanout ）</a></strong></p> 
+<p id="Topic%20%E4%BA%A4%E6%8D%A2%E6%9C%BA%E8%BD%AC%E5%8F%91%E8%A7%84%E5%88%99-toc" style="margin-left:0px;"><strong><a href="#Topic%20%E4%BA%A4%E6%8D%A2%E6%9C%BA%E8%BD%AC%E5%8F%91%E8%A7%84%E5%88%99" rel="nofollow">Topic 交换机转发规则</a></strong></p> 
+<p id="routingKey%20%E7%BB%84%E6%88%90-toc" style="margin-left:80px;"><strong><a href="#routingKey%20%E7%BB%84%E6%88%90" rel="nofollow">routingKey 组成</a></strong></p> 
+<p id="bindingKey%20%E7%BB%84%E6%88%90-toc" style="margin-left:80px;"><strong><a href="#bindingKey%20%E7%BB%84%E6%88%90" rel="nofollow">bindingKey 组成</a></strong></p> 
+<p id="%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99-toc" style="margin-left:80px;"><strong><a href="#%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99" rel="nofollow">匹配规则</a></strong></p> 
+<p id="%E6%83%85%E5%86%B5%E4%B8%80-toc" style="margin-left:120px;"><strong><a href="#%E6%83%85%E5%86%B5%E4%B8%80" rel="nofollow">情况一</a></strong></p> 
+<p id="%E6%83%85%E5%86%B5%E4%BA%8C-toc" style="margin-left:120px;"><strong><a href="#%E6%83%85%E5%86%B5%E4%BA%8C" rel="nofollow">情况二</a></strong></p> 
+<p id="%E6%83%85%E5%86%B5%E4%B8%89-toc" style="margin-left:120px;"><strong><a href="#%E6%83%85%E5%86%B5%E4%B8%89" rel="nofollow">情况三</a></strong></p> 
+<p id="%E5%AE%9E%E7%8E%B0%20Router%20%E7%B1%BB-toc" style="margin-left:0px;"><strong><a href="#%E5%AE%9E%E7%8E%B0%20Router%20%E7%B1%BB" rel="nofollow">实现 Router 类</a></strong></p> 
+<p id="1.2.1%E3%80%81bindingKey%20%E5%92%8C%20routingKey%20%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C-toc" style="margin-left:80px;"><strong><a href="#1.2.1%E3%80%81bindingKey%20%E5%92%8C%20routingKey%20%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C" rel="nofollow">校验 bindingKey 和 routingKey</a></strong></p> 
+<p id="%E6%B6%88%E6%81%AF%E5%8C%B9%E9%85%8D%E6%9C%BA%E5%88%B6-toc" style="margin-left:80px;"><strong><a href="#%E6%B6%88%E6%81%AF%E5%8C%B9%E9%85%8D%E6%9C%BA%E5%88%B6" rel="nofollow">消息匹配机制</a></strong></p> 
+<p id="Topic%20%E4%BA%A4%E6%8D%A2%E6%9C%BA%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99-toc" style="margin-left:80px;"><strong><a href="#Topic%20%E4%BA%A4%E6%8D%A2%E6%9C%BA%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99" rel="nofollow">Topic 交换机匹配规则</a></strong></p> 
+<p id="%E9%92%88%E5%AF%B9%20Router%20%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-toc" style="margin-left:0px;"><strong><a href="#%E9%92%88%E5%AF%B9%20Router%20%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95" rel="nofollow">针对 Router 单元测试</a></strong></p> 
+<hr id="hr-toc"> 
+<h2>需求分析</h2> 
+<blockquote> 
+ <h4 id="%E7%9B%B4%E6%8E%A5%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Direct%20%EF%BC%89"><span style="color:#1c7331;"><strong>直接交换机（Direct ）</strong></span></h4> 
+ <ul><li><strong>通过设定 消息的 routingKey = 队列名，以此指定该消息需传给哪个队列</strong></li></ul> 
+ <p><strong>实例理解</strong></p> 
+ <ul><li><strong>如下图所示，此时可直接无视绑定关系，直接从内存中拿到对应队列名的队列</strong></li><li><strong>然后再将消息传给该队列即可</strong></li></ul> 
+ <p><img alt="" height="651" src="https://images2.imgbox.com/c8/5c/27Z3jvup_o.png" width="1200"></p> 
+ <hr> 
+ <h4 id="%E4%B8%BB%E9%A2%98%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Topic%20%EF%BC%89"><span style="color:#1c7331;"><strong>主题交换机（Topic ）</strong></span></h4> 
+ <ul><li><strong>依据 Topic 交换机的转发规则，判定消息需传给哪些队列</strong></li></ul> 
+ <hr> 
+ <h4 id="%E6%89%87%E5%87%BA%E4%BA%A4%E6%8D%A2%E6%9C%BA%EF%BC%88Fanout%20%EF%BC%89"><span style="color:#1c7331;"><strong>扇出交换机（Fanout ）</strong></span></h4> 
+ <ul><li><strong>给该交换机中所有绑定好的队列均传入消息</strong></li></ul> 
+</blockquote> 
+<h2 id="Topic%20%E4%BA%A4%E6%8D%A2%E6%9C%BA%E8%BD%AC%E5%8F%91%E8%A7%84%E5%88%99">Topic 交换机转发规则</h2> 
+<blockquote> 
+ <ul><li><strong>bindingKey：创建绑定时，给绑定指定的特殊字符串（相当于出题）</strong></li><li><strong>routingKey：发布消息时，给消息上指定的特殊字符串（相当于做答案）</strong></li><li><strong>当 routingKey 的答案能够与 bindingKey 相对应时，便可将消息转发给该队列 </strong></li></ul> 
+ <hr> 
+ <h4 id="routingKey%20%E7%BB%84%E6%88%90"><span style="color:#1c7331;">routingKey 组成</span></h4> 
+ <ol><li><strong>数字、字母、下划线</strong></li><li><strong>使用<span style="color:#fe2c24;"> .</span> 将整个 routingKey 分成多个部分</strong></li></ol> 
+ <p><strong>实例理解</strong></p> 
+ <ul><li><strong> aaa.bbb.ccc    合法</strong></li><li><strong>aaa.110.bbb     合法</strong></li><li><strong>aaa                   合法</strong></li></ul> 
+ <hr> 
+ <h4 id="bindingKey%20%E7%BB%84%E6%88%90"><span style="color:#1c7331;">bindingKey 组成</span></h4> 
+ <ol><li><strong>数字、字母、下划线</strong></li><li><strong>使用 <span style="color:#fe2c24;">. </span>将整个 bindingKey 分成多个部分</strong></li><li><strong>支持两种特殊的符号作为通配符（ * 和 # 必须是作为被 . 分割出来的独立的部分）</strong></li></ol> 
+ <ul><li><strong><span style="color:#fe2c24;"> * ——&gt; </span>可以匹配任何一个 独立的部分</strong></li><li><strong><span style="color:#fe2c24;"># ——&gt; </span>可以匹配任何 0 个或者多个独立的部分</strong></li></ul> 
+ <p><strong>实例理解</strong></p> 
+ <ul><li><strong>aaa.*.bbb       合法</strong></li><li><strong>aaa.*bb.ccc   非法</strong></li></ul> 
+ <hr> 
+ <h4 id="%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99"><span style="color:#1c7331;">匹配规则</span></h4> 
+ <h5 id="%E6%83%85%E5%86%B5%E4%B8%80"><span style="color:#fe2c24;"><strong>情况一</strong></span></h5> 
+ <ul><li><strong>当 bindingKey 中没有 * 或 # 这两个特殊符号时，必须要求 routingKey 和 bindingKey 一模一样，才能算匹配成功！</strong></li></ul> 
+ <p><strong>实例理解</strong></p> 
+ <ul><li><strong>bindingKey = aaa.bbb.ccc</strong></li><li><strong>routingKey = aaa.bbb.ccc （匹配成功）</strong></li><li><strong>routingKey = aaa.bbb.ccd （匹配失败）</strong></li></ul> 
+ <p><strong>注意：</strong></p> 
+ <ul><li><strong>情况一非常类似于 Direct 交换机的转发</strong></li><li><strong>尤其是将 bindingKey 设置成和队列名字相同，此时就完全等价于 Direct 交换机了！</strong></li></ul> 
+ <hr> 
+ <h5 id="%E6%83%85%E5%86%B5%E4%BA%8C"><span style="color:#fe2c24;"><strong>情况二</strong></span></h5> 
+ <ul><li><strong>当 bindingKey 中有特殊符号 * 时</strong></li></ul> 
+ <p><strong>实例理解</strong><strong> </strong></p> 
+ <ul><li><strong>bindingKey = aaa.*.ccc</strong></li><li><strong>routingKey = aaa.bbb.ccc （匹配成功）</strong></li><li><strong>routingKey = aaa.b.ccc （匹配成功）</strong></li><li><strong>routingKey = aaa.b.b.ccc（匹配失败） </strong></li></ul> 
+ <hr> 
+ <h5 id="%E6%83%85%E5%86%B5%E4%B8%89"><span style="color:#fe2c24;"><strong>情况三</strong></span></h5> 
+ <ul><li><strong>当 bindingKey 中有特殊符号 # 时</strong></li></ul> 
+ <p><strong>实例理解</strong></p> 
+ <ul><li><strong>bindingKey = aaa.#.ccc</strong></li><li><strong>routingKey = aaa.bbb.ccc （匹配成功）</strong></li><li><strong>routingKey = aaa.b.b.ccc （匹配成功）</strong></li><li><strong>routingKey = aaa.ccc（匹配成功）</strong></li><li><strong>routingKey = aaa.b.b.b（匹配失败）</strong></li></ul> 
+ <p><strong>问题：</strong></p> 
+ <ul><li><strong>将交换机中每个队列的 bindingKey 设置成一个 # 时，会有啥效果呢？</strong></li></ul> 
+ <p><strong>回答：</strong></p> 
+ <ul><li><strong>此时，该交换机中的 全部队列 都能匹配所有的 routingKey</strong></li><li><strong>即该交换机就相当于 Fanout 交换机了！</strong></li></ul> 
+ <hr> 
+ <p><strong>注意点一：</strong></p> 
+ <ul><li><strong>Direct 交换机 和 Fanout 交换机，均属于 Topic 交换机的 特例</strong></li></ul> 
+ <p><strong>注意点二：</strong></p> 
+ <ul><li><strong>上述规则都是 AMQP 协议所约定的！RabbitMQ 仅仅只是实现了该规则而已！</strong></li></ul> 
+</blockquote> 
+<h2 id="%E5%AE%9E%E7%8E%B0%20Router%20%E7%B1%BB">实现 Router 类</h2> 
+<blockquote> 
+ <h4 id="1.2.1%E3%80%81bindingKey%20%E5%92%8C%20routingKey%20%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C"><span style="color:#1c7331;">校验 bindingKey 和 routingKey </span></h4> 
+ <pre><code class="language-java">//    bindingKey 的构造规则：
+//    1、数字，字母，下划线
+//    2、使用 . 分割成若干部分
+//    3、允许使用 * 和 # 作为通配符，但是通配符只能作为独立的分段
+    public boolean checkBindingKey(String bindingKey) {
+        if(bindingKey.length() == 0) {
+//            空字符串也是合法情况，比如在使用 direct / fanout 交换机的时候，bindingKey 是用不上的
+//            因为我们在使用 direct 交换机时，是直接将 routingKey 作为 消息队列的名字，直接根据名字来进行匹配
+//            在使用 fanout 交换机时，无需匹配，直接将该消息转给交换机中绑定的所有消息队列
+            return true;
+        }
+//        检查字符串中不能存在非法字符
+        for (int i = 0;i &lt; bindingKey.length();i++) {
+            char ch = bindingKey.charAt(i);
+            if(ch &gt;= 'A' &amp;&amp; ch &lt;= 'Z') {
+                continue;
+            }
+            if(ch &gt;= 'a' &amp;&amp; ch &lt;= 'z') {
+                continue;
+            }
+            if(ch &gt;= '0' &amp;&amp; ch &lt;= '9') {
+                continue;
+            }
+            if(ch == '_' || ch == '.' || ch == '*' || ch == '#') {
+                continue;
+            }
+            return false;
+        }
+//        检查 * 或者 # 是否是独立的部分
+//        aaa.*.bbb 合法情况； aaa.a*.bbb 非法情况
+        String[] words = bindingKey.split("\\.");
+        for (String word : words) {
+//            检查 word 长度 &gt; 1 并且包含了 * 或者 #，就是非法的格式了
+            if(word.length() &gt; 1 &amp;&amp; (word.contains("*") || word.contains("#")) ) {
+                return false;
+            }
+        }
+//        约定一下，通配符之间的相邻关系 (人为约定的)
+//        为啥这么约定？因为前三种相邻的时候，实现匹配的逻辑会非常繁琐，同时功能性提升不大
+//        1、 aaa.#.#.bbb 非法情况
+//        2、 aaa.#.*.bbb 非法情况
+//        3、 aaa.*.#.bbb 非法情况
+//        4、 aaa.*.*.bbb 合法情况
+        for (int i = 0;i &lt; words.length;i++) {
+//            连续两个 ##
+            if(words[i].equals("#") &amp;&amp; words[i+1].equals("#")) {
+                return false;
+            }
+//            # *
+            if(words[i].equals("#") &amp;&amp; words[i+1].equals("*")) {
+                return false;
+            }
+//            * #
+            if(words[i].equals("*") &amp;&amp; words[i+1].equals("#")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+//    routingKey 的构造规则
+//    1、数字，字母，下划线
+//    2、使用 . 分割成若干部分
+    public boolean checkRoutingKey(String routingKey) {
+        if(routingKey.length() == 0) {
+//            空字符串，合法的情况，比如在使用 fanout 交换机的时候，routingKey 用不上，就可以设定为 ""
+            return true;
+        }
+        for (int i = 0;i&lt;routingKey.length();i++) {
+            char ch = routingKey.charAt(i);
+//            判定该字符是否是大写字母
+            if(ch &gt;= 'A' &amp;&amp; ch &lt;= 'Z') {
+                continue;
+            }
+//            判定该字符是否是小写字母
+            if(ch &gt;= 'a' &amp;&amp; ch &lt;= 'z') {
+                continue;
+            }
+//            判定该字符是否是阿拉伯数字
+            if(ch &gt;= '0' &amp;&amp; ch &lt;= '9') {
+                continue;
+            }
+//            判定是否是 _ 或者 .
+            if(ch == '_' || ch == '.') {
+                continue;
+            }
+//            该字符，不是上述任何一种合法情况，就直接返回 false
+            return false;
+        }
+//        把每个字符都检查过，没有遇到非法情况，此时直接返回 true
+        return true;
+    }</code></pre> 
+ <p><strong>问题：</strong></p> 
+ <ul><li><strong>观察下图，为啥 split 方法中的参数 "<span style="color:#fe2c24;">.</span>" 需要加两个反斜杠呢？</strong></li></ul> 
+ <p><img alt="" height="156" src="https://images2.imgbox.com/0b/ec/w3OANoik_o.png" width="763"></p> 
+ <p><strong>回答：</strong></p> 
+ <ul><li><strong>首先 "<span style="color:#fe2c24;">.</span>" 在正则表达式中，是一个特殊的符号，此处是将 <span style="color:#fe2c24;">. </span>作为原始文本来进行匹配</strong></li><li><strong>要想使用 <span style="color:#fe2c24;">.</span> 的原始文本，就需要进行转义，即 在正则中使用 "<span style="color:#fe2c24;">\.</span>" 的方式来表示</strong></li><li><strong>又因为在 Java 的字符串中，"\" 是一个特殊字符</strong></li><li><strong>所以要想写入 "<span style="color:#fe2c24;">\.</span>" 这样的文本，又得在其前面加上一个反斜杠来进行转义，即 "<span style="color:#fe2c24;">\\.</span>"</strong></li></ul> 
+ <hr> 
+ <h4 id="%E6%B6%88%E6%81%AF%E5%8C%B9%E9%85%8D%E6%9C%BA%E5%88%B6">消息匹配机制</h4> 
+ <p><img alt="" height="1200" src="https://images2.imgbox.com/24/ef/yWLayKXF_o.png" width="1200"></p> 
+ <pre><code class="language-java">//    这个方法用来判定该消息是否可以转发给这个绑定对应的队列
+    public boolean route(ExchangeType exchangeType,Binding binding,Message message) throws MqException {
+//        根据不同的 exhcangeType 使用不同的判定转发规则
+        if(exchangeType == ExchangeType.FANOUT) {
+//            如果是 fanout 类型，该交换机上绑定的所有队列都需要转发
+            return true;
+        }else if(exchangeType == ExchangeType.TOPIC) {
+//            如果是 topic 主题交换机，规则就要更复杂一些
+            return routeTopic(binding,message);
+        }else {
+//            其他情况是不应该存在的
+            throw new MqException("[Router] 交换机类型非法！ exchangeType = " + exchangeType);
+        }
+    }</code></pre> 
+ <ul><li><strong>当为 Fanout 交换机时，无需匹配 bindingKey 和 routingKey，直接返回 true</strong></li><li><strong>让该消息转发给所以绑定了 Fanout 交换机的队列</strong></li><li><strong>当为 Topic 交换机时，则需要进行 bindingKey 和 routingKey 的匹配</strong></li></ul> 
+ <hr> 
+ <h4 id="Topic%20%E4%BA%A4%E6%8D%A2%E6%9C%BA%E5%8C%B9%E9%85%8D%E8%A7%84%E5%88%99"><span style="color:#1c7331;">Topic 交换机匹配规则</span></h4> 
+ <p><span style="color:#fe2c24;"><strong>处理思路</strong></span></p> 
+ <ul><li><strong>此处我们采用 双指针算法 进行匹配</strong></li></ul> 
+ <p><img alt="" height="618" src="https://images2.imgbox.com/a4/6e/5uZWKGNz_o.png" width="1009"></p> 
+ <ul><li><strong>针对 bindingKey 的下标</strong><strong>，判定当前下标指向部分的具体情况：</strong></li></ul> 
+ <ol><li><strong>指向的是普通的字符串，此时要求和 routingKey 对应的下标指向的内容得完全一致！</strong></li><li><strong>指向的是 * ，此时无论  routingKey 这边指向的是啥，双方均同时下标前进</strong></li><li><strong>遇到了 # ，且 # 后面没有其他的内容了，直接返回 true，匹配成功！</strong></li><li><strong>遇到了 # ，但 # 后面还有其他的内容，拿着 # 后面的部分，去 routingKey 中查找，找到后面的部分，在 routingKey 中出现的位置</strong><strong>，如果后面的部分，在 routingKey 中不存在，直接认为匹配失败，返回 false！如果后面的部分，在 routingKey 中存在，就将 routingKey 的箭头指向这个位置之后，然后继续往后匹配</strong></li><li><strong>两个箭头移动过程中，如果同时到达双方的末尾，则返回 true，如果一个箭头先到了末尾，另一个箭头还没到，则返回 false！</strong></li></ol> 
+ <p><strong>代码实现：</strong></p> 
+ <p></p> 
+ <pre><code class="language-java">    private boolean routeTopic(Binding binding,Message message) {
+//        先把这两个 key 进行切分
+        String[] bindingTokens = binding.getBindingKey().split("\\.");
+        String[] routingTokens = message.getRoutingKey().split("\\.");
+
+//        引入两个下标，指向上述两个数字，初始情况下都为 0
+        int bindingIndex = 0;
+        int routingIndex = 0;
+//        此处使用 while 更合适，每次循环，下标不一定就是 +1，不适合使用 for
+        while (bindingIndex &lt; bindingTokens.length &amp;&amp; routingIndex &lt; routingTokens.length) {
+            if(bindingTokens[bindingIndex].equals("*")) {
+//                【情况二】如果遇到 * 号直接进入下一轮，* 可以匹配到任意一个部分！
+                bindingIndex++;
+                routingIndex++;
+                continue;
+            }else if(bindingTokens[bindingIndex].equals("#")) {
+//                如果遇到 # 先要看看有没有下一个位置
+                bindingIndex++;
+                if(bindingIndex == bindingTokens.length) {
+//                    【情况三】该 # 后面没有东西了，说明此时一定能匹配成功了！
+                    return true;
+                }
+//                # 【情况四】后面还有东西，拿着这个内容，去 routingKey 中往后找，找到对应的位置
+//                findNextMatch 这个方法用来查找该部分在 routingKey 的位置，返回该下标，没找到，就返回 -1
+                routingIndex = findNextMatch(routingTokens,routingIndex,bindingTokens[bindingIndex]);
+                if(routingIndex == -1) {
+//                    没找到匹配的结果，匹配失败
+                    return false;
+                }
+//                找到匹配的情况，继续往后匹配
+                bindingIndex++;
+                routingIndex++;
+            }else {
+//                【情况一】如果遇到普通字符串，要求两边的内容是一样的
+                if(!bindingTokens[bindingIndex].equals(routingTokens[routingIndex])) {
+                    return false;
+                }
+                bindingIndex++;
+                routingIndex++;
+            }
+        }
+//        【情况五】判断是否是双方同时到达末尾
+//        比如 aaa.bbb.ccc 和 aaa.bbb 是要匹配失败的
+        if(bindingIndex == bindingTokens.length &amp;&amp; routingIndex == routingTokens.length) {
+            return true;
+        }
+        return false;
+    }
+
+    private int findNextMatch(String[] routingTokens, int routingIndex, String bindingToken) {
+        for (int i = routingIndex; i &lt; routingTokens.length; i++) {
+            if(routingTokens[i].equals(bindingToken)) {
+                return i;
+            }
+        }
+        return -1;
+    }</code></pre> 
+</blockquote> 
+<h2 id="%E9%92%88%E5%AF%B9%20Router%20%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95">针对 Router 单元测试</h2> 
+<blockquote> 
+ <ul><li><strong>编写测试用例代码是十分重要的！</strong></li></ul> 
+ <pre><code class="language-java">package com.example.demo;
+
+import com.example.demo.common.MqException;
+import com.example.demo.mqserver.core.Binding;
+import com.example.demo.mqserver.core.ExchangeType;
+import com.example.demo.mqserver.core.Message;
+import com.example.demo.mqserver.core.Router;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+public class RouterTests {
+    private Router router = new Router();
+    private Binding binding = null;
+    private Message message = null;
+
+    @BeforeEach
+    public void setUp() {
+        binding = new Binding();
+        message = new Message();
+    }
+
+    @AfterEach
+    private void tearDown() {
+        binding = null;
+        message = null;
+    }
+
+//    【测试用例】
+//    bindingKey               routingKey               result
+//    aaa                      aaa                      true
+//    aaa.bbb                  aaa.bbb                  true
+//    aaa.bbb                  aaa.bbb.ccc              false
+//    aaa.bbb                  aaa.ccc                  false
+//    aaa.bbb.ccc              aaa.bbb.ccc              true
+//    aaa.*                    aaa.bbb                  true
+//    aaa.*.bbb                aaa.bbb.ccc              false
+//    *.aaa.bbb                aaa.bbb                  false
+//    #                        aaa.bbb.ccc              true
+//    aaa.#                    aaa.bbb                  true
+//    aaa.#                    aaa.bbb.ccc              true
+//    aaa.#.ccc                aaa.ccc                  true
+//    aaa.#.ccc                aaa.bbb.ccc              true
+//    aaa.#.ccc                aaa.aaa.bbb.ccc          true
+//    #.ccc                    ccc                      true
+//    #.ccc                    aaa.bbb.ccc              true
+
+    @Test
+    public void test1() throws MqException {
+        binding.setBindingKey("aaa");
+        message.setRoutingKey("aaa");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test2() throws MqException {
+        binding.setBindingKey("aaa.bbb");
+        message.setRoutingKey("aaa.bbb");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test3() throws MqException {
+        binding.setBindingKey("aaa.bbb");
+        message.setRoutingKey("aaa.bbb.ccc");
+        Assertions.assertFalse(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test4() throws MqException {
+        binding.setBindingKey("aaa.bbb");
+        message.setRoutingKey("aaa.ccc");
+        Assertions.assertFalse(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test5() throws MqException {
+        binding.setBindingKey("aaa.bbb.ccc");
+        message.setRoutingKey("aaa.bbb.ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test6() throws MqException {
+        binding.setBindingKey("aaa.*");
+        message.setRoutingKey("aaa.bbb");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test7() throws MqException {
+        binding.setBindingKey("aaa.*.bbb");
+        message.setRoutingKey("aaa.bbb.ccc");
+        Assertions.assertFalse(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test8() throws MqException {
+        binding.setBindingKey("*.aaa.bbb");
+        message.setRoutingKey("aaa.bbb");
+        Assertions.assertFalse(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test9() throws MqException {
+        binding.setBindingKey("#");
+        message.setRoutingKey("aaa.bbb.ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test10() throws MqException {
+        binding.setBindingKey("aaa.#");
+        message.setRoutingKey("aaa.bbb");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test11() throws MqException {
+        binding.setBindingKey("aaa.#");
+        message.setRoutingKey("aaa.bbb.ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test12() throws MqException {
+        binding.setBindingKey("aaa.#.ccc");
+        message.setRoutingKey("aaa.ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test13() throws MqException {
+        binding.setBindingKey("aaa.#.ccc");
+        message.setRoutingKey("aaa.bbb.ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test14() throws MqException {
+        binding.setBindingKey("aaa.#.ccc");
+        message.setRoutingKey("aaa.aaa.bbb.ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test15() throws MqException {
+        binding.setBindingKey("#.ccc");
+        message.setRoutingKey("ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+
+    @Test
+    public void test16() throws MqException {
+        binding.setBindingKey("#.ccc");
+        message.setRoutingKey("aaa.bbb.ccc");
+        Assertions.assertTrue(router.route(ExchangeType.TOPIC,binding,message));
+    }
+}
+</code></pre> 
+</blockquote>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/44eef07d8f89fc08c1be870dc4a4d258/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">dell戴尔电脑灵越系列Inspiron 15 3520原厂Win11系统中文版/英文版</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e31bcc4bff92ed0fda4210f892659ed6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">python子域名收集工具</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

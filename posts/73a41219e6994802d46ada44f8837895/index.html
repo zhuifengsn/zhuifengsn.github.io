@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>redis 底层数据结构详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="redis 底层数据结构详解" />
+<meta property="og:description" content="目录
+1.字符串
+1.1 SDS定义
+1.2 SDS1好处
+2.列表
+2.1 void 实现多态
+3 字典
+3.1 底层实现是hash表
+3.2 字典结构
+3.3 哈希算法
+3.3.1 rehash
+3.3.2 rehash的触发时机
+3.3.3 渐进式rehash
+扩展或收缩哈希表需要将ht[0]里面的所有键值对rehash到ht[1]里面，但是，这个rehash动作并不是一次性、集中式地完成的，而是分多次、渐进式地完成的。
+4.跳跃表
+4.1 跳跃表-zskiplistNode 4.2 跳跃表 - zskiplist
+5.压缩列表
+1.字符串 Redis没有直接使用C语言传统的字符串表示（以空字符结尾的字符数组，以下简称C字符串），而是自己构建了一种名为简单动态字符串（simple dynamic string，SDS）的抽象类型（对象），并将SDS用作Redis的默认字符串表示。在Redis里面，C字符串只会作为字符串字面量（string literal）用在一些无须对字符串值进行修改的地方，比如打印日志，当Redis需要的不仅仅是一个字符串字面量，而是一个可以被修改的字符串值时，Redis就会使用SDS来表示字符串值。除了用来保存数据库中的字符串值之外，SDS还被用作缓冲区（buffer）：AOF模块中的AOF缓冲区，以及客户端状态中的输入缓冲区，都是由SDS实现的 1.1 SDS定义 struct sdshdr { //SDS所保存字符串的长度 int len; // 记录buf数组中未使用字节的数量 int free; // 字节数组，用于保存字符串 char buf[]; }; 1.2 SDS1好处 C 语言的字符串如果想要得到他的长度，需要进行遍历，意味着时间复杂度为 o(N)。如果使用sds，我们的长度直接从len属性里获取，o(1). 本质上，其实就是多了一个len属性，保存了我们的字符串的长度；C语言的字符串如果进行我们的 扩展（增加字符串的长度） 或者 缩减（减少字符串的长度）。 进行扩展：我们必须要提前分配内存空间，一旦忘了分配，造成缓冲区溢出；进行缩减：必须要有意识的进行空间的释放，否则造成空间浪费。无论是进行扩展还是缩减，都需要进行内存的重新分配，耗时啊。 SDS 来说，他不会造成缓冲区溢出的问题，是封装好的对象，他已经为我们考虑了这部分内存的扩展及缩减问题。二进制安全问题。C 语言来说，他的字符串是二进制不安全的，因为C语言的 空字符 结尾的设计，如果一个字符串中间有空字符串，那么 c语言的字符串的二进制转化会遗弃第一个空字符出现的后边的所有内容。 举例： m \0 s g \0." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/73a41219e6994802d46ada44f8837895/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-04-09T14:35:05+08:00" />
+<meta property="article:modified_time" content="2023-04-09T14:35:05+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">redis 底层数据结构详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p> </p> 
+<p id="1.%E5%AD%97%E7%AC%A6%E4%B8%B2-toc" style="margin-left:0px;"><a href="#1.%E5%AD%97%E7%AC%A6%E4%B8%B2" rel="nofollow">1.字符串</a></p> 
+<p id="1.1%20SDS%E5%AE%9A%E4%B9%89-toc" style="margin-left:40px;"><a href="#1.1%20SDS%E5%AE%9A%E4%B9%89" rel="nofollow">1.1 SDS定义</a></p> 
+<p id="1.2%20SDS1%E5%A5%BD%E5%A4%84-toc" style="margin-left:40px;"><a href="#1.2%20SDS1%E5%A5%BD%E5%A4%84" rel="nofollow">1.2 SDS1好处</a></p> 
+<p id="2.%E5%88%97%E8%A1%A8-toc" style="margin-left:0px;"><a href="#2.%E5%88%97%E8%A1%A8" rel="nofollow">2.列表</a></p> 
+<p id="2.1%20void%20%E5%AE%9E%E7%8E%B0%E5%A4%9A%E6%80%81-toc" style="margin-left:40px;"><a href="#2.1%20void%20%E5%AE%9E%E7%8E%B0%E5%A4%9A%E6%80%81" rel="nofollow">2.1 void 实现多态</a></p> 
+<p id="3%20%E5%AD%97%E5%85%B8-toc" style="margin-left:0px;"><a href="#3%20%E5%AD%97%E5%85%B8" rel="nofollow">3 字典</a></p> 
+<p id="3.1%20%C2%A0%20%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0%E6%98%AFhash%E8%A1%A8-toc" style="margin-left:40px;"><a href="#3.1%20%C2%A0%20%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0%E6%98%AFhash%E8%A1%A8" rel="nofollow">3.1   底层实现是hash表</a></p> 
+<p id="3.2%20%E5%AD%97%E5%85%B8%E7%BB%93%E6%9E%84-toc" style="margin-left:40px;"><a href="#3.2%20%E5%AD%97%E5%85%B8%E7%BB%93%E6%9E%84" rel="nofollow">3.2 字典结构</a></p> 
+<p id="3.3%C2%A0%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95-toc" style="margin-left:40px;"><a href="#3.3%C2%A0%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95" rel="nofollow">3.3 哈希算法</a></p> 
+<p id="3.3.1%20rehash-toc" style="margin-left:80px;"><a href="#3.3.1%20rehash" rel="nofollow">3.3.1 rehash</a></p> 
+<p id="3.3.2%20rehash%E7%9A%84%E8%A7%A6%E5%8F%91%E6%97%B6%E6%9C%BA-toc" style="margin-left:80px;"><a href="#3.3.2%20rehash%E7%9A%84%E8%A7%A6%E5%8F%91%E6%97%B6%E6%9C%BA" rel="nofollow">3.3.2 rehash的触发时机</a></p> 
+<p id="3.3.3%C2%A0%E6%B8%90%E8%BF%9B%E5%BC%8Frehash-toc" style="margin-left:80px;"><a href="#3.3.3%C2%A0%E6%B8%90%E8%BF%9B%E5%BC%8Frehash" rel="nofollow">3.3.3 渐进式rehash</a></p> 
+<p id="%E6%89%A9%E5%B1%95%E6%88%96%E6%94%B6%E7%BC%A9%E5%93%88%E5%B8%8C%E8%A1%A8%E9%9C%80%E8%A6%81%E5%B0%86ht%5B0%5D%E9%87%8C%E9%9D%A2%E7%9A%84%E6%89%80%E6%9C%89%E9%94%AE%E5%80%BC%E5%AF%B9rehash%E5%88%B0ht%5B1%5D%E9%87%8C%E9%9D%A2%EF%BC%8C%E4%BD%86%E6%98%AF%EF%BC%8C%E8%BF%99%E4%B8%AArehash%E5%8A%A8%E4%BD%9C%E5%B9%B6%E4%B8%8D%E6%98%AF%E4%B8%80%E6%AC%A1%E6%80%A7%E3%80%81%E9%9B%86%E4%B8%AD%E5%BC%8F%E5%9C%B0%E5%AE%8C%E6%88%90%E7%9A%84%EF%BC%8C%E8%80%8C%E6%98%AF%E5%88%86%E5%A4%9A%E6%AC%A1%E3%80%81%E6%B8%90%E8%BF%9B%E5%BC%8F%E5%9C%B0%E5%AE%8C%E6%88%90%E7%9A%84%E3%80%82-toc" style="margin-left:80px;"><a href="#%E6%89%A9%E5%B1%95%E6%88%96%E6%94%B6%E7%BC%A9%E5%93%88%E5%B8%8C%E8%A1%A8%E9%9C%80%E8%A6%81%E5%B0%86ht%5B0%5D%E9%87%8C%E9%9D%A2%E7%9A%84%E6%89%80%E6%9C%89%E9%94%AE%E5%80%BC%E5%AF%B9rehash%E5%88%B0ht%5B1%5D%E9%87%8C%E9%9D%A2%EF%BC%8C%E4%BD%86%E6%98%AF%EF%BC%8C%E8%BF%99%E4%B8%AArehash%E5%8A%A8%E4%BD%9C%E5%B9%B6%E4%B8%8D%E6%98%AF%E4%B8%80%E6%AC%A1%E6%80%A7%E3%80%81%E9%9B%86%E4%B8%AD%E5%BC%8F%E5%9C%B0%E5%AE%8C%E6%88%90%E7%9A%84%EF%BC%8C%E8%80%8C%E6%98%AF%E5%88%86%E5%A4%9A%E6%AC%A1%E3%80%81%E6%B8%90%E8%BF%9B%E5%BC%8F%E5%9C%B0%E5%AE%8C%E6%88%90%E7%9A%84%E3%80%82" rel="nofollow">扩展或收缩哈希表需要将ht[0]里面的所有键值对rehash到ht[1]里面，但是，这个rehash动作并不是一次性、集中式地完成的，而是分多次、渐进式地完成的。</a></p> 
+<p id="4.%E8%B7%B3%E8%B7%83%E8%A1%A8-toc" style="margin-left:0px;"><a href="#4.%E8%B7%B3%E8%B7%83%E8%A1%A8" rel="nofollow">4.跳跃表</a></p> 
+<p id="4.1%20%E8%B7%B3%E8%B7%83%E8%A1%A8-zskiplistNode%C2%A0-toc" style="margin-left:40px;"><a href="#4.1%20%E8%B7%B3%E8%B7%83%E8%A1%A8-zskiplistNode%C2%A0" rel="nofollow">4.1 跳跃表-zskiplistNode </a></p> 
+<p id="4.2%C2%A0%E8%B7%B3%E8%B7%83%E8%A1%A8%20-%20zskiplist-toc" style="margin-left:40px;"><a href="#4.2%C2%A0%E8%B7%B3%E8%B7%83%E8%A1%A8%20-%20zskiplist" rel="nofollow">4.2 跳跃表 - zskiplist</a></p> 
+<p id="5.%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8-toc" style="margin-left:0px;"><a href="#5.%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8" rel="nofollow">5.压缩列表</a></p> 
+<hr id="hr-toc"> 
+<p></p> 
+<h2 id="1.%E5%AD%97%E7%AC%A6%E4%B8%B2">1.字符串</h2> 
+<ul><li>Redis没有直接使用C语言传统的字符串表示（以空字符结尾的字符数组，以下简称C字符串），而是自己构建了一种名为简单动态字符串（simple dynamic string，SDS）的抽象类型（对象），并将SDS用作Redis的默认字符串表示。</li><li>在Redis里面，C字符串只会作为字符串字面量（string literal）用在一些无须对字符串值进行修改的地方，比如打印日志，当Redis需要的不仅仅是一个字符串字面量，而是一个可以被修改的字符串值时，Redis就会使用SDS来表示字符串值。</li><li>除了用来保存数据库中的字符串值之外，SDS还被用作缓冲区（buffer）：AOF模块中的AOF缓冲区，以及客户端状态中的输入缓冲区，都是由SDS实现的</li></ul> 
+<h3 id="1.1%20SDS%E5%AE%9A%E4%B9%89">1.1 SDS定义</h3> 
+<pre><code class="language-cpp">struct sdshdr {
+    //SDS所保存字符串的长度
+    int len;
+
+    // 记录buf数组中未使用字节的数量
+    int free;
+
+    // 字节数组，用于保存字符串
+  char buf[];
+};
+</code></pre> 
+<h3 id="1.2%20SDS1%E5%A5%BD%E5%A4%84">1.2 SDS1好处</h3> 
+<ol><li>C 语言的字符串如果想要得到他的长度，需要进行遍历，意味着时间复杂度为 o(N)。如果使用sds，我们的长度直接从len属性里获取，o(1). 本质上，其实就是多了一个len属性，保存了我们的字符串的长度；</li><li>C语言的字符串如果进行我们的 扩展（增加字符串的长度） 或者 缩减（减少字符串的长度）。 进行扩展：我们必须要提前分配内存空间，一旦忘了分配，造成缓冲区溢出；进行缩减：必须要有意识的进行空间的释放，否则造成空间浪费。无论是进行扩展还是缩减，都需要进行内存的重新分配，耗时啊。 SDS 来说，他不会造成缓冲区溢出的问题，是封装好的对象，他已经为我们考虑了这部分内存的扩展及缩减问题。</li><li>二进制安全问题。C 语言来说，他的字符串是二进制不安全的，因为C语言的 空字符 结尾的设计，如果一个字符串中间有空字符串，那么 c语言的字符串的二进制转化会遗弃第一个空字符出现的后边的所有内容。 举例： m \0 s g \0.  如果是 C语言进行二进制转化，只对 m 进行转化； SDS 就不是啦，我们是自己封装的对象，我们能支持二进制的安全性，我能全部进行转化。</li></ol> 
+<h2 id="2.%E5%88%97%E8%A1%A8">2.列表</h2> 
+<p>列表键的底层实现就是一个链表，链表中的每个节点都保存了一个数值</p> 
+<pre><code class="language-cpp">typedef struct list {
+    // 表头节点
+    listNode * head;
+    // 表尾节点
+    listNode * tail;
+    // 链表所包含的节点数量
+    unsigned long len;
+    // 节点值复制函数
+    void *(*dup)(void *ptr);
+    // 节点值释放函数
+    void (*free)(void *ptr);
+    // 节点值对比函数
+    int (*match)(void *ptr,void *key);
+} list;
+
+typedef struct listNode {
+    // 前置节点
+    struct listNode * prev;
+    // 后置节点
+    struct listNode * next;
+    // 节点的值
+    void * value;
+}listNode;
+</code></pre> 
+<h3 id="2.1%20void%20%E5%AE%9E%E7%8E%B0%E5%A4%9A%E6%80%81">2.1 void 实现多态</h3> 
+<ul><li> void 这里代表的是 多态。     如果你在java里想复制一个值，那么你是不是要么 知道这个值的类型，要么你使用 object 。 对于 redis 来说，由于 list 里可以存放各种类型的数值，那么，如果你要进行多种类型值的一些统一操作的话，需要使用 void 的返回值类型，这里体现了 我们 多态的一个性质。</li></ul> 
+<h2 id="3%20%E5%AD%97%E5%85%B8">3 字典</h2> 
+<h3 id="3.1%20%C2%A0%20%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0%E6%98%AFhash%E8%A1%A8">3.1   底层实现是hash表</h3> 
+<p> Redis的字典使用哈希表作为底层实现，一个哈希表（dictht）里面可以有多个哈希表节点（dictEntry ），而每个哈希表节点（dictEntry ）就保存了字典中的一个键值对。</p> 
+<p>Redis字典所使用的哈希表由dict.h/dictht结构定义：</p> 
+<pre><code class="language-cpp">Redis字典所使用的哈希表由dict.h/dictht结构定义：
+typedef struct dictht {
+    // 哈希表节点组成的数组
+    dictEntry **table; // 
+    // 哈希表大小
+    unsigned long size;
+    //哈希表大小掩码，用于计算索引值 总是等于size-1
+    unsigned long sizemask;
+    // 该哈希表已有节点的数量（非null节点）
+    unsigned long used;
+} dictht;
+
+
+哈希表节点使用dictEntry结构表示，每个dictEntry结构都保存着一个键值对：
+typedef struct dictEntry {
+    // 键
+    void *key;
+    // 值
+    union{
+        void *val;
+        uint64_tu64;
+        int64_ts64;
+    } v;
+    // 指向下个哈希表节点，形成链表 （hash 冲突，链地址法）
+    struct dictEntry *next;
+} dictEntry;
+</code></pre> 
+<h3 id="3.2%20%E5%AD%97%E5%85%B8%E7%BB%93%E6%9E%84">3.2 字典结构</h3> 
+<p>字典，是基于 hash 表的结构上，再次进行的一层封装</p> 
+<pre><code class="language-cpp">Redis中的字典由dict.h/dict结构表示：  
+typedef struct dict {
+    // 类型特定函数
+    dictType *type;
+    // 私有数据
+    void *privdata;
+    // 哈希表数组，包含两个 dictht
+    dictht ht[2]; 
+    // rehash索引当rehash不在进行时，值为-1
+    int rehashidx; 
+} dict;
+
+
+type属性是一个指向dictType结构的指针，每个dictType结构保存了一簇用于操作特定类型键值对的函数，Redis会为用途不同的字典设置不同的类型特定函数。
+·而privdata属性则保存了需要传给那些类型特定函数的可选参数。
+typedef struct dictType {
+    // 计算哈希值的函数
+    unsigned int (*hashFunction)(const void *key);
+    // 复制键的函数
+    void *(*keyDup)(void *privdata, const void *key);
+    // 复制值的函数
+    void *(*valDup)(void *privdata, const void *obj);
+    // 对比键的函数
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    // 销毁键的函数
+    void (*keyDestructor)(void *privdata, void *key);
+</code></pre> 
+<ul><li>ht属性是一个包含两个哈希表的数组，数组中的每个项都是一个dictht哈希表，一般情况下，字典只使用ht[0]哈希表，ht[1]哈希表只会在对ht[0]哈希表进行rehash时使用。</li><li>除了ht[1]之外，另一个和rehash有关的属性就是rehashidx，它记录了rehash目前的进度，如果目前没有在进行rehash，那么它的值为-1。</li></ul> 
+<h3 id="3.3%C2%A0%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95">3.3 哈希算法</h3> 
+<p>当要将一个新的键值对添加到字典里面时，程序需要先根据键值对的键计算出哈希值和索引值，然后再根据索引值，将包含新键值对的哈希表节点放到哈希表数组的指定索引上面</p> 
+<ol><li>计算哈希值的函数 ：int hashValue = unsigned int (*hashFunction)(const void *key);</li><li>获取最终的hash 值 ： hashValue &amp;  ht[x].sizemask。</li></ol> 
+<h4 id="3.3.1%20rehash">3.3.1 rehash</h4> 
+<p>随着操作的不断执行，哈希表保存的键值对会逐渐地增多或者减少，为了让哈希表的负载因子（load factor）维持在一个合理的范围之内，当哈希表保存的键值对数量太多或者太少时，程序需要对哈希表的大小进行相应的扩展或者收缩。 扩展和收缩哈希表的工作可以通过执行rehash（重新散列）操作来完成，Redis对字典的哈希表执行rehash的步骤如下：</p> 
+<ol><li>为字典的dict.ht[1]哈希表分配空间 ·如果执行的是扩展操作，那么ht[1]的大小为第一个大于等于ht[0].used*2的2 n（2的n次方幂）；       ht0 中 used = 10；为ht1分配的大小是 10*2 = 20？2的4次方是 16， 2的 5次方是 32. 32 是第一个大于 20的并且是 2 的 n次幂，所以 ht1的空间分配大小为 32。 如果执行的是收缩操作，那么ht[1]的大小为第一个大于等于ht[0].used的2 n。      ht0 中 used = 10，那么 2的 4次方是 16， 16是第一个大于10的并且未 2的 n次幂的数字，所以此时 ht1的空间分配大小为 16.</li><li>将保存在ht[0]中的所有键值对rehash到ht[1]上面。 dictTyppe里边的第一个函数结果 &amp; sizemask （如果是扩展，sizemask = 31； 如果是收缩，sizemask = 15）</li><li>当ht[0]包含的所有键值对都迁移到了ht[1]之后（ht[0]变为空表），释放ht[0]，将ht[1]设置为ht[0]，并在ht[1]新创建一个空白哈希表，为下一次rehash做准备。</li></ol> 
+<h4 id="3.3.2%20rehash%E7%9A%84%E8%A7%A6%E5%8F%91%E6%97%B6%E6%9C%BA">3.3.2 rehash的触发时机</h4> 
+<p>当以下条件中的任意一个被满足时，程序会自动开始对哈希表执行扩展操作：</p> 
+<ol><li>服务器目前没有在执行BGSAVE命令或者BGREWRITEAOF命令，并且哈希表的负载因子大于等于1。 比如，我的hash表 size是 8， 现在有10个used（有hash冲突，肯定有链表结构），此时负载因子是 10 /8=1.25 &gt; 1 。并且没有bgsvae和 reWaof，此时触发 扩展 rehash。</li><li>服务器目前正在执行BGSAVE命令或者BGREWRITEAOF命令，并且哈希表的负载因子大于等于5。 比如 我的hash表 size是 8， 现在有10个used（有hash冲突，肯定有链表结构），此时负载因子是 10 /8=1.25 &gt; 1 ，这时候，由于有 bg和 bgre，所以不能触发。 但是随着时间的推移，我的 used 变成了 80， 此时负载因子是 80/8=10. 及时现在有bg和rebg，还是可以触发 rehash</li></ol> 
+<h4 id="3.3.3%C2%A0%E6%B8%90%E8%BF%9B%E5%BC%8Frehash">3.3.3 渐进式rehash</h4> 
+<ul><li> <h4 id="%E6%89%A9%E5%B1%95%E6%88%96%E6%94%B6%E7%BC%A9%E5%93%88%E5%B8%8C%E8%A1%A8%E9%9C%80%E8%A6%81%E5%B0%86ht%5B0%5D%E9%87%8C%E9%9D%A2%E7%9A%84%E6%89%80%E6%9C%89%E9%94%AE%E5%80%BC%E5%AF%B9rehash%E5%88%B0ht%5B1%5D%E9%87%8C%E9%9D%A2%EF%BC%8C%E4%BD%86%E6%98%AF%EF%BC%8C%E8%BF%99%E4%B8%AArehash%E5%8A%A8%E4%BD%9C%E5%B9%B6%E4%B8%8D%E6%98%AF%E4%B8%80%E6%AC%A1%E6%80%A7%E3%80%81%E9%9B%86%E4%B8%AD%E5%BC%8F%E5%9C%B0%E5%AE%8C%E6%88%90%E7%9A%84%EF%BC%8C%E8%80%8C%E6%98%AF%E5%88%86%E5%A4%9A%E6%AC%A1%E3%80%81%E6%B8%90%E8%BF%9B%E5%BC%8F%E5%9C%B0%E5%AE%8C%E6%88%90%E7%9A%84%E3%80%82">扩展或收缩哈希表需要将ht[0]里面的所有键值对rehash到ht[1]里面，但是，这个rehash动作并不是一次性、集中式地完成的，而是分多次、渐进式地完成的。</h4> </li><li>这样做的原因在于，如果哈希表里保存的键值对数量不是三四个，而是四百万、四千万甚至四亿个键值对，那么要一次性将这些键值对全部rehash到ht[1]的话，庞大的计算量可能会导致服务器在一段时间内停止服务。因此，为了避免rehash对服务器性能造成影响，服务器不是一次性将ht[0]里面的所有键值对全部rehash到ht[1]，而是分多次、渐进式地将ht[0]里面的键值对慢慢地rehash到ht[1]。</li></ul> 
+<p>哈希表渐进式rehash的详细步骤：</p> 
+<ol><li>为ht[1]分配空间，让字典同时持有ht[0]和ht[1]两个哈希表。</li><li>在字典中维持一个索引计数器变量rehashidx，并将它的值设置为0，表示rehash工作正式开始。 在rehash进行期间，每次对字典执行添加、删除、查找或者更新操作时，程序除了执行指定的操作以外，还会顺带将ht[0]哈希表在rehashidx索引上的所有键值对rehash到ht[1]，当rehash工作完成之后，程序将rehashidx属性的值增一。每迁移一个 keyvalue，就需要在 rehashidx 上自增 1. 如果有10万个值，我们 rehashidx会从0自增到 10万结束。</li><li>随着字典操作的不断执行，最终在某个时间点上，ht[0]的所有键值对都会被rehash至ht[1]，这时程序将rehashidx属性的值设为-1，表示rehash操作已完成。包括之前所说的 ，ht1成为了 ht0，再重新创建一个空的 ht1备用。</li></ol> 
+<h2 id="4.%E8%B7%B3%E8%B7%83%E8%A1%A8">4.跳跃表</h2> 
+<ul><li>跳跃表（skiplist）是一种有序数据结构，它通过在每个节点中维持多个指向其他节点的指针，从而达到快速访问节点的目的。跳跃表支持平均O（logN）、最坏O（N）复杂度的节点查找，还可以通过顺序性操作来批量处理节点。</li><li>Redis使用跳跃表作为有序集合键的底层实现之一，如果一个有序集合包含的元素数量比较多，又或者有序集合中元素的成员（member）是比较长的字符串时，Redis就会使用跳跃表来作为有序集合键的底层实现。 和链表、字典等数据结构被广泛地应用在Redis内部不同，Redis只在两个地方用到了跳跃表，一个是实现有序集合键，另一个是在集群节点中用作内部数据结构，除此之外，跳跃表在Redis里面没有其他用途。</li><li>Redis的跳跃表由redis.h/zskiplistNode和redis.h/zskiplist两个结构定义，其中zskiplistNode结构用于表示跳跃表节点，而zskiplist结构则用于保存跳跃表节点的相关信息。</li></ul> 
+<h3 id="4.1%20%E8%B7%B3%E8%B7%83%E8%A1%A8-zskiplistNode%C2%A0">4.1 跳跃表-zskiplistNode </h3> 
+<ul><li>跳跃表节点的level数组可以包含多个元素，每个元素都包含一个指向其他节点的指针，程序可以通过这些层来加快访问其他节点的速度，一般来说，层的数量越多，访问其他节点的速度就越快。每次创建一个新跳跃表节点的时候，随机生成一个介于1和32之间的值作为level数组的大小，这个大小就是层的“高度”</li><li>每个层都有一个指向表尾方向的前进指针（level[i].forward属性），用于从表头向表尾方向访问节点。</li><li>节点的后退指针（backward属性）用于从表尾向表头方向访问节点：跟可以一次跳过多个节点的前进指针不同，因为每个节点只有一个后退指针，所以每次只能后退至前一个节点。</li></ul> 
+<pre><code class="language-cpp">typedef struct zskiplistNode {
+    // 层
+    struct zskiplistLevel {
+        // 前进指针
+        struct zskiplistNode *forward;
+        // 跨度
+        unsigned int span;
+    } level[];
+
+    // 后退指针
+    struct zskiplistNode *backward;
+
+    // 分值（例：你的账号排名）
+    double score;
+
+    // 成员对象 （例： 你的游戏账号）
+    robj *obj;
+} zskiplistNode;
+</code></pre> 
+<h3 id="4.2%C2%A0%E8%B7%B3%E8%B7%83%E8%A1%A8%20-%20zskiplist">4.2 跳跃表 - zskiplist</h3> 
+<ul><li>header和tail指针分别指向跳跃表的表头和表尾节点，通过这两个指针，程序定位表头节点和表尾节点的复杂度为O（1）。</li><li>通过使用length属性来记录节点的数量，程序可以在O（1）复杂度内返回跳跃表的长度。 level属性则用于在O（1）复杂度内获取跳跃表中层高最大的那个节点的层数量</li></ul> 
+<pre><code class="language-cpp">typedef struct zskiplist {
+    // 
+表头节点和表尾节点
+    structz skiplistNode *header, *tail;
+    // 
+表中节点的数量
+    unsigned long length;
+    // 
+表中层数最大的节点的层数
+    int level;
+} zskiplist;
+</code></pre> 
+<h2 id="5.%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8">5.压缩列表</h2> 
+<ul><li>压缩列表（ziplist）是列表和哈希的底层实现之一。当一个列表键只包含少量列表项，并且每个列表项要么就是小整数值，要么就是长度比较短的字符串，那么Redis就会使用压缩列表来做列表键的底层实现。</li><li>压缩列表是Redis为了节约内存而开发的，是由一系列特殊编码的连续内存块组成的顺序型（sequential）数据结构。一个压缩列表可以包含任意多个节点（entry），每个节点可以保存一个字节数组或者一个整数值</li></ul> 
+<p><img alt="" height="634" src="https://images2.imgbox.com/cd/bc/gKasd8Up_o.png" width="1200"></p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/7b5055f1bbea2ee67d275224d1bbe557/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Redis7搭建主从&#43;哨兵通俗易懂</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/257f3f74c0de068fff06c9af178e0401/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">RocketMQ Docker部署</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

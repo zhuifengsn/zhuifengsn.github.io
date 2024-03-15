@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Spring AOP操作解析 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Spring AOP操作解析" />
+<meta property="og:description" content="首先需要使用@EnableAspectJAutoProxy注解，即为开启注解的aop模式
+此注解导入了AspectJAutoProxyRegistrar类。
+传入配置类，之后注册配置类，调用了refresh方法刷新容器在registerBeanPostProcessors(beanFactory)方法中注册了后置处理器来方便拦截bean的创建过程。创建AnnotationAwareAspectJAutoProxyCreator对象。 AnnotationAwareAspectJAutoProxyCreator在每一个bean创建之前，
+判断当前bean是否在advisedBeans中（保存了所有需要增强bean）
+判断当前bean是否是基础类型的Advice、Pointcut、Advisor、AopInfrastructureBean，或者是否是切面（@Aspect）
+判断是否需要跳过（获取候选的增强器（切面里面的通知方法【List candidateAdvisors】每一个封装的通知方法的增强器是 InstantiationModelAwarePointcutAdvisor；判断每一个增强器是否是 AspectJPointcutAdvisor 类型的；返回true
+如果不是，返回false）
+postProcessAfterInitialization如果需要的话，进行包装-&gt;
+return wrapIfNecessary(bean, beanName, cacheKey);
+如果当前bean需要增强，创建当前bean的代理对象；
+1）、获取所有增强器（通知方法）
+2）、保存到proxyFactory
+3）、创建代理对象：Spring自动决定 JdkDynamicAopProxy(config);jdk动态代理或ObjenesisCglibAopProxy(config);cglib的动态代理；
+生成代理之后给容器返回代理对象。执行目标方法的时候获取的就是代理对象。
+目标方法执行的时候
+CglibAopProxy.intercept();拦截目标方法的执行
+根据ProxyFactory对象获取将要执行的目标方法拦截器链；
+List chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
+1）、List interceptorList保存所有拦截器 5
+一个默认的ExposeInvocationInterceptor 和 4个增强器；
+2）、遍历所有的增强器，将其转为Interceptor；
+registry.getInterceptors(advisor);
+3）、将增强器转为List；
+如果是MethodInterceptor，直接加入到集合中
+如果不是，使用AdvisorAdapter将增强器转为MethodInterceptor；
+转换完成返回MethodInterceptor数组；
+如果拦截器为空，直接执行目标方法即可，如果不为空把需要执行的目标对象，目标方法，拦截器链等信息传入创建一个 CglibMethodInvocation 对象，并调用 Object retVal = mi.proceed();
+链式获取每一个拦截器，拦截器执行invoke方法，每一个拦截器等待下一个拦截器执行完成返回以后再来执行；拦截器链的机制，保证通知方法与目标方法的执行顺序；
+正常执行：前置通知-》目标方法-》后置通知-》返回通知
+出现异常：前置通知-》目标方法-》后置通知-》异常通知
+具体执行方法如图所示。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/48c1b166560ea00da758ad32193baec4/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-12-07T21:20:20+08:00" />
+<meta property="article:modified_time" content="2020-12-07T21:20:20+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Spring AOP操作解析</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>首先需要使用@EnableAspectJAutoProxy注解，即为开启注解的aop模式<br> <img src="https://images2.imgbox.com/b4/90/1fCw3fjE_o.png" alt="在这里插入图片描述"><br> 此注解导入了AspectJAutoProxyRegistrar类。</p> 
+<ol><li>传入配置类，之后注册配置类，调用了refresh方法刷新容器</li><li>在registerBeanPostProcessors(beanFactory)方法中注册了后置处理器来方便拦截bean的创建过程。创建AnnotationAwareAspectJAutoProxyCreator对象。</li></ol> 
+<p>AnnotationAwareAspectJAutoProxyCreator在每一个bean创建之前，<br> 判断当前bean是否在advisedBeans中（保存了所有需要增强bean）<br> 判断当前bean是否是基础类型的Advice、Pointcut、Advisor、AopInfrastructureBean，或者是否是切面（@Aspect）<br> 判断是否需要跳过（获取候选的增强器（切面里面的通知方法【List candidateAdvisors】每一个封装的通知方法的增强器是 InstantiationModelAwarePointcutAdvisor；判断每一个增强器是否是 AspectJPointcutAdvisor 类型的；返回true<br> 如果不是，返回false）<br> postProcessAfterInitialization如果需要的话，进行包装-&gt;<br> <code>return wrapIfNecessary(bean, beanName, cacheKey);</code><br> 如果当前bean需要增强，创建当前bean的代理对象；<br> 1）、获取所有增强器（通知方法）<br> 2）、保存到proxyFactory<br> 3）、创建代理对象：Spring自动决定 JdkDynamicAopProxy(config);jdk动态代理或ObjenesisCglibAopProxy(config);cglib的动态代理；<br> 生成代理之后给容器返回代理对象。执行目标方法的时候获取的就是代理对象。</p> 
+<p>目标方法执行的时候<br> CglibAopProxy.intercept();拦截目标方法的执行<br> 根据ProxyFactory对象获取将要执行的目标方法拦截器链；<br> List chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);<br> 1）、List interceptorList保存所有拦截器 5<br> 一个默认的ExposeInvocationInterceptor 和 4个增强器；<br> 2）、遍历所有的增强器，将其转为Interceptor；<br> registry.getInterceptors(advisor);<br> 3）、将增强器转为List；<br> 如果是MethodInterceptor，直接加入到集合中<br> 如果不是，使用AdvisorAdapter将增强器转为MethodInterceptor；<br> 转换完成返回MethodInterceptor数组；<br> 如果拦截器为空，直接执行目标方法即可，如果不为空把需要执行的目标对象，目标方法，拦截器链等信息传入创建一个 CglibMethodInvocation 对象，并调用 Object retVal = mi.proceed();<br> 链式获取每一个拦截器，拦截器执行invoke方法，每一个拦截器等待下一个拦截器执行完成返回以后再来执行；拦截器链的机制，保证通知方法与目标方法的执行顺序；<br> 正常执行：前置通知-》目标方法-》后置通知-》返回通知<br> 出现异常：前置通知-》目标方法-》后置通知-》异常通知<br> <img src="https://images2.imgbox.com/03/3f/K03Meter_o.png" alt="红色标号即为顺序"></p> 
+<p>具体执行方法如图所示。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/96225f1de2f79d31fe71b9e225a01c0b/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">安卓版火狐浏览器好用插件_相见恨晚，这几个良心好用的插件，让你的浏览器成功逆袭...</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/d3093b6bd5f0eefc70205aea11d50789/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">极简shiro入门</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

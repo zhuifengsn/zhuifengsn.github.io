@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>init进程启动流程 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="init进程启动流程" />
+<meta property="og:description" content="提示：文章写完后，目录可以自动生成，如何生成可参考右边的帮助文档
+文章目录 前言一、1.解析init进程启动过程二、2.解析service服务总结 前言 1.init简介(本文基于android12)
+init进程是Android系统中用户空间的第一个进程，作为第一个进程，它被赋予了很多极其重要的工作职责，比如创建zygote(孵化器)和属性服务等。init进程是由多个源文件共同组成的，这些文件位于源码目录system/core/init。本文将基于Android12源码来分析Init进程。
+2.引入init进程
+说到init进程，首先要提到Android系统启动流程的前几步：
+1.启动电源以及系统启动
+当电源按下时引导芯片代码开始从预定义的地方（固化在ROM）开始执行。加载引导程序Bootloader到RAM，然后执行。
+2.引导程序Bootloader
+引导程序是在Android操作系统开始运行前的一个小程序，它的主要作用是把系统OS拉起来并运行。
+3.linux内核启动
+内核启动时，设置缓存、被保护存储器、计划列表，加载驱动。当内核完成系统设置，它首先在系统文件中寻找”init”文件，然后启动root进程或者系统的第一个进程。
+4.init进程启动
+一、1.解析init进程启动过程 init进程启动过程
+android12流程和之前的有所区别首先进入main.cpp 只选取主要的过程 /system/core/init/main.cpp 51 int main(int argc, char** argv) { 61 if (argc &gt; 1) { ... 73 if (!strcmp(argv[1], &#34;second_stage&#34;)) { 74 return SecondStageMain(argc, argv);2 75 } 76 } 78 return FirstStageMain(argc, argv);1 79 } /system/core/init/first_stage_init.cpp FirstStageMain //创建文件并挂载 202 CHECKCALL(mkdir(&#34;/dev/pts&#34;, 0755)); 203 CHECKCALL(mkdir(&#34;/dev/socket&#34;, 0755)); 204 CHECKCALL(mkdir(&#34;/dev/dm-user&#34;, 0755)); /system/core/init/init.cpp SecondStageMain 787 PropertyInit();1 初始化属性相关资源 805 Epoll epoll; 806 if (auto result = epoll." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f77524355c54fc9037ebb7ac244799c9/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-01-13T17:05:57+08:00" />
+<meta property="article:modified_time" content="2023-01-13T17:05:57+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">init进程启动流程</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <blockquote> 
+ <p>提示：文章写完后，目录可以自动生成，如何生成可参考右边的帮助文档</p> 
+</blockquote> 
+<p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#_7" rel="nofollow">前言</a></li><li><a href="#1init_26" rel="nofollow">一、1.解析init进程启动过程</a></li><li><a href="#2service_130" rel="nofollow">二、2.解析service服务</a></li><li><a href="#_180" rel="nofollow">总结</a></li></ul> 
+</div> 
+<p></p> 
+<hr> 
+<h2><a id="_7"></a>前言</h2> 
+<p>1.init简介(本文基于android12)<br> init进程是Android系统中用户空间的第一个进程，作为第一个进程，它被赋予了很多极其重要的工作职责，比如创建zygote(孵化器)和属性服务等。init进程是由多个源文件共同组成的，这些文件位于源码目录system/core/init。本文将基于Android12源码来分析Init进程。<br> 2.引入init进程<br> 说到init进程，首先要提到Android系统启动流程的前几步：<br> 1.启动电源以及系统启动<br> 当电源按下时引导芯片代码开始从预定义的地方（固化在ROM）开始执行。加载引导程序Bootloader到RAM，然后执行。<br> 2.引导程序Bootloader<br> 引导程序是在Android操作系统开始运行前的一个小程序，它的主要作用是把系统OS拉起来并运行。<br> 3.linux内核启动<br> 内核启动时，设置缓存、被保护存储器、计划列表，加载驱动。当内核完成系统设置，它首先在系统文件中寻找”init”文件，然后启动root进程或者系统的第一个进程。<br> 4.init进程启动</p> 
+<hr> 
+<h2><a id="1init_26"></a>一、1.解析init进程启动过程</h2> 
+<p>init进程启动过程<br> <img src="https://images2.imgbox.com/2c/02/QMomxG8Y_o.png" alt="在这里插入图片描述"></p> 
+<pre><code>android12流程和之前的有所区别首先进入main.cpp 只选取主要的过程
+/system/core/init/main.cpp
+51  int main(int argc, char** argv) {
+61      if (argc &gt; 1) {
+...
+73          if (!strcmp(argv[1], "second_stage")) {
+74              return SecondStageMain(argc, argv);2
+75          }
+76      }
+78      return FirstStageMain(argc, argv);1
+79  }
+
+/system/core/init/first_stage_init.cpp FirstStageMain
+//创建文件并挂载
+202      CHECKCALL(mkdir("/dev/pts", 0755));
+203      CHECKCALL(mkdir("/dev/socket", 0755));
+204      CHECKCALL(mkdir("/dev/dm-user", 0755));
+
+/system/core/init/init.cpp SecondStageMain
+787      PropertyInit();1 初始化属性相关资源
+805      Epoll epoll;
+806      if (auto result = epoll.Open(); !result.ok()) {
+807          PLOG(FATAL) &lt;&lt; result.error();
+808      }
+810      InstallSignalFdHandler(&amp;epoll);2 通过epoll监听signal 
+811      InstallInitNotifier(&amp;epoll);
+812      StartPropertyService(&amp;property_fd);3 启动属性服务
+840      LoadBootScripts(am, sm);4 解析init.rc
+854      am.QueueBuiltinAction(TestPerfEventSelinuxAction, "TestPerfEventSelinux");
+855      am.QueueEventTrigger("early-init");5 解析完的服务等等加入队列
+888      while (true) {
+900          if (!(prop_waiter_state.MightBeWaiting() || Service::is_exec_service_running())) {
+901              am.ExecuteOneCommand();6 执行解析完的命令
+
+6最后回调到/system/core/init/action.cpp的ExecuteCommand()然后result = command.InvokeFunc(subcontext_);调用对应的func函数，下面进入LoadBootScripts看下是如何解析init.rc文件的
+
+首先先了解下init.rc的文件格式
+/system/core/rootdir/init.rc
+15 on early-init
+119 on init
+468 on late-init
+496     trigger zygote-start
+948 on zygote-start &amp;&amp; property:ro.crypto.state=unencrypted
+949     wait_for_prop odsign.verification.done 1
+950     # A/B update verifier that marks a successful boot.
+951     exec_start update_verifier_nonencrypted
+952     start statsd
+953     start netd
+954     start zygote
+955     start zygote_secondary
+1086 on nonencrypted
+1087     class_start main//这里的main指zygote
+1088     class_start late_start
+
+/system/core/init/init.cpp
+303  static void LoadBootScripts(ActionManager&amp; action_manager, ServiceList&amp; service_list) {
+304      Parser parser = CreateParser(action_manager, service_list);
+306      std::string bootscript = GetProperty("ro.boot.init_rc", "");
+307      if (bootscript.empty()) {
+308          parser.ParseConfig("/system/etc/init/hw/init.rc");
+309          if (!parser.ParseConfig("/system/etc/init")) {
+310              late_import_paths.emplace_back("/system/etc/init");
+311          }
+...
+324      } else {
+325          parser.ParseConfig(bootscript);
+326      }
+327  }
+
+/system/core/init/parser.cpp
+184  bool Parser::ParseConfig(const std::string&amp; path) {
+185      if (is_dir(path.c_str())) {
+186          return ParseConfigDir(path);
+187      }
+188      return ParseConfigFile(path);
+189  }
+
+43  void Parser::ParseData(const std::string&amp; filename, std::string* data) {
+73      for (;;) {
+74          switch (next_token(&amp;state)) {
+75              case T_EOF:
+83              case T_NEWLINE: {
+...         ParseSection() //这个方法会走不同的cpp的ParseSection方法根据之前传入的类型
+                        EndSection();
+124              }
+125              case T_TEXT:
+126                  args.emplace_back(state.text);
+127                  break;
+128          }
+129      }
+130  }
+
+就不详细展开了有兴趣可以自己看下源码，如果学过编译原理看起来不难下面拿service 的parse举例
+628  Result&lt;void&gt; ServiceParser::EndSection() {
+672      service_list_-&gt;AddService(std::move(service_)); //解析完加入队列中
+674      return {};
+675  }
+</code></pre> 
+<h2><a id="2service_130"></a>二、2.解析service服务</h2> 
+<p><img src="https://images2.imgbox.com/9d/e7/lZxtNacK_o.png" alt="在这里插入图片描述"></p> 
+<pre><code>前面说了会调用do_class_start方法
+/system/core/init/builtins.cpp
+161  static Result&lt;void&gt; do_class_start(const BuiltinArguments&amp; args) {
+167      for (const auto&amp; service : ServiceList::GetInstance()) {
+168          if (service-&gt;classnames().count(args[1])) {
+169              if (auto result = service-&gt;StartIfNotDisabled(); !result.ok()) {
+170                  LOG(ERROR) &lt;&lt; "Could not start service '" &lt;&lt; service-&gt;name()
+171                             &lt;&lt; "' as part of class '" &lt;&lt; args[1] &lt;&lt; "': " &lt;&lt; result.error();
+172              }
+173          }
+174      }
+175      return {};
+176  }
+
+/system/core/init/service.cpp
+625  Result&lt;void&gt; Service::StartIfNotDisabled() {
+626      if (!(flags_ &amp; SVC_DISABLED)) {
+627          return Start();
+628      } 
+631      return {};
+632  }
+
+/system/core/init/service.cpp  Start()
+506      pid_t pid = -1;
+507      if (namespaces_.flags) {
+508          pid = clone(nullptr, nullptr, namespaces_.flags | SIGCHLD, nullptr);
+509      } else {
+510          pid = fork();//创建一个新的进程，fork
+511      }
+513      if (pid == 0) {//子线程
+514          umask(077);//设置权限
+542          if (!ExpandArgsAndExecv(args_, sigstop_)) {
+543              PLOG(ERROR) &lt;&lt; "cannot execv('" &lt;&lt; args_[0]
+544                          &lt;&lt; "'). See the 'Debugging init' section of init's README.md for tips";
+545          }
+547          _exit(127);
+548      }
+
+105  static bool ExpandArgsAndExecv(const std::vector&lt;std::string&gt;&amp; args, bool sigstop) {
+125      return execv(c_strings[0], c_strings.data()) == 0;//exec 函数值去执行那个可执行文件
+126  }
+</code></pre> 
+<p>fork 创建一个新的进程，系统调用，fork 了之后子进程会继承父进程的资源，exec 是不会的，fork读时共享写时复制,简单来说fork出来的子进程读时共享父进程的资源，但是写入时会复制一份新的不会影响父进程的资源。<br> execv zygote的func会进入到/frameworks/base/cmds/app_process/app_main.cpp<br> main函数这个我们下次再说。</p> 
+<h2><a id="_180"></a>总结</h2> 
+<p>总结起来init进程主要做了几件事：<br> 1.创建一些文件夹并挂载设备<br> 2.初始化和启动属性服务<br> 3.解析init.rc配置文件<br> 4.启动相关服务</p> 
+<p>有时候看源码是很痛苦的事情，我感觉这是在锻炼我的内心，心够不够静是不是很烦躁。因为很多东西你是看不懂的。就像我几年看的数据结构与算法当时根本不知道他在说什么，看的时候很容易分心，也不知道学它有什么意义，就是单纯的自己感兴趣，后来看了多次也敲了代码，很多东西也都理解了。<br> 我的意思就是第一遍看不懂没关系，多看几遍，积累linux内核 c++ 等等相关知识过一段时间就会觉得不难，修心提升自己。我们不要抱怨环境怎么样，努力提升自己，对人对事也都是如此。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/cb08a1687a7a68943965a8440520bfcd/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">（一）.NET的历史介绍</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/612f2e55a577a2abd1fa8c6ab2032235/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">R语言实现牛顿插值</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

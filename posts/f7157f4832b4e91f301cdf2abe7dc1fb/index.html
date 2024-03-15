@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【Vue 快速入门系列】如何更优雅的使用vuex进行组件间通信 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【Vue 快速入门系列】如何更优雅的使用vuex进行组件间通信" />
+<meta property="og:description" content="文章目录 前言一、vuex是什么？二、vuex的使用三、四个重要的映射函数四、多组件数据共享五、模块化使用vuex 前言 前面介绍过几种可以实现组件间通信的方式props、ref、自定义事件绑定、全局事件总线、插槽…，这些要么就是实现组件间通信只能在特定条件下使用，要么就是实现起来太复杂，今天介绍到的vuex是Vue中一款强大的插件，使用vuex后可以实现任意组件间通信，并且支持模块化管理。接下来将会围绕一个计数案例进行展开，逐步引入vuex如何使用。
+核心代码：
+&lt;template&gt; &lt;div&gt; &lt;h2&gt;目前的数值结果是：{{n}}&lt;/h2&gt; &lt;div class=&#34;container1&#34;&gt; &lt;select v-model.number=&#34;step&#34;&gt; &lt;option value=&#34;1&#34;&gt;1&lt;/option&gt; &lt;option value=&#34;2&#34;&gt;2&lt;/option&gt; &lt;option value=&#34;3&#34;&gt;3&lt;/option&gt; &lt;/select&gt; &lt;button @click=&#34;addNum&#34;&gt;增加&lt;/button&gt; &lt;button @click=&#34;subNum&#34;&gt;减少&lt;/button&gt; &lt;button @click=&#34;oddNum&#34;&gt;偶数再加&lt;/button&gt; &lt;button @click=&#34;longTimeAdd&#34;&gt;延迟增加&lt;/button&gt; &lt;/div&gt; &lt;/div&gt; &lt;/template&gt; &lt;script&gt; export default { // eslint-disable-next-line vue/multi-word-component-names name:&#34;Counts&#34;, data(){ return { n:0, step:1 } }, methods:{ addNum(){ this.n&#43;=this.step }, subNum(){ this.n-=this.step }, oddNum(){ if (this.n%2==0){ this.n&#43;=this.step } }, longTimeAdd(){ setTimeout(() =&gt; { this.n&#43;=this.step }, 1000); } } } &lt;/script&gt; &lt;style&gt; ." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f7157f4832b4e91f301cdf2abe7dc1fb/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-12-23T15:44:42+08:00" />
+<meta property="article:modified_time" content="2022-12-23T15:44:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【Vue 快速入门系列】如何更优雅的使用vuex进行组件间通信</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#_1" rel="nofollow">前言</a></li><li><a href="#vuex_61" rel="nofollow">一、vuex是什么？</a></li><li><a href="#vuex_104" rel="nofollow">二、vuex的使用</a></li><li><a href="#_213" rel="nofollow">三、四个重要的映射函数</a></li><li><a href="#_282" rel="nofollow">四、多组件数据共享</a></li><li><a href="#vuex_438" rel="nofollow">五、模块化使用vuex</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_1"></a>前言</h2> 
+<p>前面介绍过几种可以实现组件间通信的方式props、ref、自定义事件绑定、全局事件总线、插槽…，这些要么就是实现组件间通信只能在特定条件下使用，要么就是实现起来太复杂，今天介绍到的vuex是Vue中一款强大的插件，使用vuex后可以实现任意组件间通信，并且支持模块化管理。接下来将会围绕一个计数案例进行展开，逐步引入vuex如何使用。<br> <img src="https://images2.imgbox.com/51/e9/LtnDK1yX_o.gif" alt="在这里插入图片描述"><br> 核心代码：</p> 
+<pre><code class="prism language-js"><span class="token operator">&lt;</span>template<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span>div<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>目前的数值结果是：<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>n<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>div <span class="token keyword">class</span><span class="token operator">=</span><span class="token string">"container1"</span><span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>select v<span class="token operator">-</span>model<span class="token punctuation">.</span>number<span class="token operator">=</span><span class="token string">"step"</span><span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"1"</span><span class="token operator">&gt;</span><span class="token number">1</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"2"</span><span class="token operator">&gt;</span><span class="token number">2</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"3"</span><span class="token operator">&gt;</span><span class="token number">3</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span><span class="token operator">/</span>select<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"addNum"</span><span class="token operator">&gt;</span>增加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"subNum"</span><span class="token operator">&gt;</span>减少<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"oddNum"</span><span class="token operator">&gt;</span>偶数再加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"longTimeAdd"</span><span class="token operator">&gt;</span>延迟增加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>template<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Counts"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">n</span><span class="token operator">:</span><span class="token number">0</span><span class="token punctuation">,</span>
+            <span class="token literal-property property">step</span><span class="token operator">:</span><span class="token number">1</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">addNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>n<span class="token operator">+=</span><span class="token keyword">this</span><span class="token punctuation">.</span>step
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">subNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>n<span class="token operator">-=</span><span class="token keyword">this</span><span class="token punctuation">.</span>step
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">oddNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>n<span class="token operator">%</span><span class="token number">2</span><span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">this</span><span class="token punctuation">.</span>n<span class="token operator">+=</span><span class="token keyword">this</span><span class="token punctuation">.</span>step
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">longTimeAdd</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token function">setTimeout</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">this</span><span class="token punctuation">.</span>n<span class="token operator">+=</span><span class="token keyword">this</span><span class="token punctuation">.</span>step
+            <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>style<span class="token operator">&gt;</span>
+<span class="token punctuation">.</span>container1<span class="token operator">&gt;</span><span class="token operator">*</span><span class="token punctuation">{<!-- --></span>
+    margin<span class="token operator">-</span>left<span class="token operator">:</span> 10px<span class="token punctuation">;</span> 
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>style<span class="token operator">&gt;</span>
+</code></pre> 
+<h2><a id="vuex_61"></a>一、vuex是什么？</h2> 
+<blockquote> 
+ <p>简单点说：是一个数据仓库，用于数据存储，数据共享，可以进行数据存放与获取，并全程监视数据的动向</p> 
+</blockquote> 
+<p>使用官方语言入下：<br> Vuex 是一个专为 Vue.js 应用程序开发的状态管理模式 + 库。它采用集中式存储管理应用的所有组件的状态，并以相应的规则保证状态以一种可预测的方式发生变化。<br> 这个状态自管理应用包含以下几个部分：</p> 
+<ul><li>状态，驱动应用的数据源；</li><li>视图，以声明方式将状态映射到视图；</li><li>操作，响应在视图上的用户输入导致的状态变化。<br> <img src="https://images2.imgbox.com/69/16/OlIfEkRY_o.png" alt="在这里插入图片描述"></li></ul> 
+<p>但是，当我们的应用遇到多个组件共享状态时，单向数据流的简洁性很容易被破坏：</p> 
+<ul><li>多个视图依赖于同一状态。</li><li>来自不同视图的行为需要变更同一状态。<br> 对于问题一，传参的方法对于多层嵌套的组件将会非常繁琐，并且对于兄弟组件间的状态传递无能为力。对于问题二，我们经常会采用父子组件直接引用或者通过事件来变更和同步状态的多份拷贝。以上的这些模式非常脆弱，通常会导致无法维护的代码。</li></ul> 
+<p>因此，我们为什么不把组件的共享状态抽取出来，以一个全局单例模式管理呢？在这种模式下，我们的组件树构成了一个巨大的“视图”，不管在树的哪个位置，任何组件都能获取状态或者触发行为！</p> 
+<p>通过定义和隔离状态管理中的各种概念并通过强制规则维持视图和状态间的独立性，我们的代码将会变得更结构化且易维护。</p> 
+<p>这就是 Vuex 背后的基本思想，借鉴了 Flux、Redux 和 The Elm Architecture。与其他模式不同的是，Vuex 是专门为 Vue.js 设计的状态管理库，以利用 Vue.js 的细粒度数据响应机制来进行高效的状态更新。<br> <img src="https://images2.imgbox.com/74/48/nBj92upT_o.png" alt="在这里插入图片描述"><br> vuex适用于大型单页应用的开发，如果是小型的不推荐使用。<br> 其中vuex3适配vue2，vuex4适配vue3。</p> 
+<p>vue工作原理：</p> 
+<ul><li>vuex中主要包含三个部分</li></ul> 
+<blockquote> 
+ <p>Actions：相当于对数据的预处理（可以在这里使用异步加载进行数据校验等）<br> Mutations （跟开发者工具关系密切）<br> State （存放数据的地方，经过校验与变换的数据都存放在这里）</p> 
+</blockquote> 
+<ul><li>vuex中的两种数据操作</li></ul> 
+<blockquote> 
+ <p>dispatch：将数据交给Actions<br> commit：将数据交给Mutations</p> 
+</blockquote> 
+<p>vuex在项目中使用</p> 
+<blockquote> 
+ <p>大致有两种（实质上一样）：</p> 
+ <ul><li>1.vuex/store.js 创建vuex文件夹，将代码放进store.js中</li><li>2.store/index.js 创建store文件夹，将代码放进index.js中</li></ul> 
+</blockquote> 
+<p>安装vuex</p> 
+<pre><code class="prism language-bash"><span class="token function">npm</span> i vuex
+</code></pre> 
+<h2><a id="vuex_104"></a>二、vuex的使用</h2> 
+<p>继续从以下三个模块与两个方法讲起：</p> 
+<ul><li>三个模块：</li></ul> 
+<blockquote> 
+ <p>Actions：相当于对数据的预处理（可以在这里使用异步加载进行数据校验等）<br> Mutations （跟开发者工具关系密切）<br> State （存放数据的地方，经过校验与变换的数据都存放在这里）</p> 
+</blockquote> 
+<ul><li>两个方法：</li></ul> 
+<blockquote> 
+ <p>dispatch：将数据交给Actions<br> commit：将数据交给Mutations</p> 
+</blockquote> 
+<p>如果调用vuex的dispatch方法会将数据提交到Actions中的函数，此时数据并不是最终的结果，在Actions中可以对数据进行进一步加工，然后调用commit方法提交，在Actions与Mutations中定义的函数可以获取到上下文找到state对象中存储的数据。<br> 接下来结合代码看一下vuex如何使用（这一段代码暴露出去一个可以使用的vuex对象）：</p> 
+<pre><code class="prism language-js"><span class="token keyword">import</span> Vue <span class="token keyword">from</span> <span class="token string">"vue"</span>
+<span class="token keyword">import</span> Vuex <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+Vue<span class="token punctuation">.</span><span class="token function">use</span><span class="token punctuation">(</span>Vuex<span class="token punctuation">)</span>
+<span class="token keyword">const</span> actions<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token function">odd_Num</span><span class="token punctuation">(</span><span class="token parameter">comtext<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 可以通过上下文comtext找到commit方法，dispatch方法</span>
+        <span class="token comment">// 可以找到state对象，并找到其中的属性</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>comtext<span class="token punctuation">.</span>state<span class="token punctuation">.</span>n<span class="token operator">%</span><span class="token number">2</span><span class="token operator">===</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            comtext<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span>value<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token function">long_Time_Add</span><span class="token punctuation">(</span><span class="token parameter">comtext<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">setTimeout</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{<!-- --></span>
+            comtext<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span>value<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">const</span> mutations<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token function">add_Num</span><span class="token punctuation">(</span><span class="token parameter">state<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 这里的state被称为上下文，这里可以拿到state中的数据</span>
+        <span class="token comment">// console.log(state,value)</span>
+        state<span class="token punctuation">.</span>n<span class="token operator">+=</span>value
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token function">sub_Num</span><span class="token punctuation">(</span><span class="token parameter">state<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// console.log(state,value)</span>
+        state<span class="token punctuation">.</span>n<span class="token operator">-=</span>value
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+<span class="token comment">//数据源，源数据</span>
+<span class="token keyword">const</span> state<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token literal-property property">n</span><span class="token operator">:</span><span class="token number">0</span>
+<span class="token punctuation">}</span>
+<span class="token comment">//创建一个vuex对象</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token keyword">new</span> <span class="token class-name">Vuex<span class="token punctuation">.</span>Store</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span>
+    actions<span class="token punctuation">,</span>
+    mutations<span class="token punctuation">,</span>
+    state
+<span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre> 
+<p>以下代码是使用vuex:<br> main.js</p> 
+<pre><code class="prism language-js"><span class="token keyword">import</span> App <span class="token keyword">from</span> <span class="token string">"./App"</span>
+<span class="token comment">//这个便是刚才封装的vuex对象</span>
+<span class="token keyword">import</span> store <span class="token keyword">from</span> <span class="token string">"./store"</span>
+<span class="token keyword">import</span> Vue <span class="token keyword">from</span> <span class="token string">"vue"</span>
+<span class="token keyword">new</span> <span class="token class-name">Vue</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span>
+    <span class="token literal-property property">el</span><span class="token operator">:</span><span class="token string">"#App"</span><span class="token punctuation">,</span>
+    store<span class="token punctuation">,</span>
+    <span class="token function-variable function">render</span><span class="token operator">:</span><span class="token parameter">h</span><span class="token operator">=&gt;</span><span class="token function">h</span><span class="token punctuation">(</span>App<span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre> 
+<p>功能性组件：</p> 
+<pre><code class="prism language-js"><span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Counts"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">step</span><span class="token operator">:</span><span class="token number">1</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">computed</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">n</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span>state<span class="token punctuation">.</span>n
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">addNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">subNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"sub_Num"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">oddNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">dispatch</span><span class="token punctuation">(</span><span class="token string">"odd_Num"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">longTimeAdd</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">dispatch</span><span class="token punctuation">(</span><span class="token string">"long_Time_Add"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>除此之外vuex还有一个重要的模块供我们使用getters，这里面的方法通常用于获取定制后的state中的属性<br> 比如下面一个实例，就是将state中的n扩大10倍后返回了出去。</p> 
+<pre><code class="prism language-js"><span class="token keyword">const</span> getters<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token function">numBig</span><span class="token punctuation">(</span><span class="token parameter">state</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> state<span class="token punctuation">.</span>n<span class="token operator">*</span><span class="token number">10</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h2><a id="_213"></a>三、四个重要的映射函数</h2> 
+<p>如果vuex中的函数较多时，一个一个引入会相当麻烦，官方给出了四个映射函数，可以根据自己的需求将想要的函数一下引进来，分别是：mapState,mapGetters,mapActions,mapMutations。<br> 以下两种写法，在使用时效果是一样的<br> 不使用映射函数：</p> 
+<pre><code class="prism language-js"><span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Counts"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">step</span><span class="token operator">:</span><span class="token number">1</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">computed</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">n</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span>state<span class="token punctuation">.</span>n
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">bigNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token comment">// 以下两种写法均可以</span>
+            <span class="token comment">// return this.$store.getters["numBig"]</span>
+            <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span>getters<span class="token punctuation">.</span>numBig
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">addNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">subNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"sub_Num"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">oddNum</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">dispatch</span><span class="token punctuation">(</span><span class="token string">"odd_Num"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token function">longTimeAdd</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">dispatch</span><span class="token punctuation">(</span><span class="token string">"long_Time_Add"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>step<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+</code></pre> 
+<p>使用映射函数：</p> 
+<pre><code class="prism language-js"><span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{<!-- --></span>mapState<span class="token punctuation">,</span>mapGetters<span class="token punctuation">,</span>mapActions<span class="token punctuation">,</span>mapMutations<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Counts"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">step</span><span class="token operator">:</span><span class="token number">1</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">computed</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token operator">...</span><span class="token function">mapState</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">"n"</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapGetters</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">bigNum</span><span class="token operator">:</span><span class="token string">"numBig"</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+    <span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 传入对象是常规写法，当对象中的键值相等时，可以用传入列表的方式进行传参</span>
+        <span class="token comment">// 例如上面的mapState(["n"])</span>
+        <span class="token operator">...</span><span class="token function">mapMutations</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">addNum</span><span class="token operator">:</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span><span class="token literal-property property">subNum</span><span class="token operator">:</span><span class="token string">"sub_Num"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapActions</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">oddNum</span><span class="token operator">:</span><span class="token string">"odd_Num"</span><span class="token punctuation">,</span><span class="token literal-property property">longTimeAdd</span><span class="token operator">:</span><span class="token string">"long_Time_Add"</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+</code></pre> 
+<h2><a id="_282"></a>四、多组件数据共享</h2> 
+<p>经过将多个组件使用到的数据提取到vuex，可以实现多组件间的数据共享，也就是说在a组件修改共享数据之后，在b组件可以渲染出数据改变后的结果，同样b组件中修改a组件也可以渲染。<br> 以下案例一个计数组件负责计数，一个person组件，负责将人员列表渲染出来，person组件支持增加用户，我们要做的就是person组件中进行人员添加后，计数组件感应到人数变动，重新渲染列表，将总人数进行改变。<br> <img src="https://images2.imgbox.com/79/08/S383GfAY_o.gif" alt="在这里插入图片描述"><br> vuex插件</p> 
+<pre><code class="prism language-js"><span class="token keyword">import</span> Vue <span class="token keyword">from</span> <span class="token string">"vue"</span>
+<span class="token keyword">import</span> Vuex <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+<span class="token keyword">import</span> <span class="token punctuation">{<!-- --></span>nanoid<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">"nanoid"</span>
+Vue<span class="token punctuation">.</span><span class="token function">use</span><span class="token punctuation">(</span>Vuex<span class="token punctuation">)</span>
+<span class="token keyword">const</span> actions<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token function">odd_Num</span><span class="token punctuation">(</span><span class="token parameter">comtext<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 可以通过上下文comtext找到commit方法，dispatch方法</span>
+        <span class="token comment">// 可以找到state对象，并找到其中的属性</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>comtext<span class="token punctuation">.</span>state<span class="token punctuation">.</span>n<span class="token operator">%</span><span class="token number">2</span><span class="token operator">===</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            comtext<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span>value<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token function">long_Time_Add</span><span class="token punctuation">(</span><span class="token parameter">comtext<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">setTimeout</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{<!-- --></span>
+            comtext<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span>value<span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token function">add_Person</span><span class="token punctuation">(</span><span class="token parameter">context<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">var</span> someone<span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">id</span><span class="token operator">:</span><span class="token function">nanoid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token literal-property property">name</span><span class="token operator">:</span>value<span class="token punctuation">}</span>
+        context<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token string">"add_Person"</span><span class="token punctuation">,</span>someone<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">const</span> mutations<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token function">add_Num</span><span class="token punctuation">(</span><span class="token parameter">state<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 这里的state被称为上下文，这里可以拿到state中的数据</span>
+        <span class="token comment">// console.log(state,value)</span>
+        state<span class="token punctuation">.</span>n<span class="token operator">+=</span>value
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token function">sub_Num</span><span class="token punctuation">(</span><span class="token parameter">state<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// console.log(state,value)</span>
+        state<span class="token punctuation">.</span>n<span class="token operator">-=</span>value
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token function">add_Person</span><span class="token punctuation">(</span><span class="token parameter">state<span class="token punctuation">,</span>value</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        state<span class="token punctuation">.</span>personList<span class="token punctuation">.</span><span class="token function">unshift</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">const</span> state<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token literal-property property">n</span><span class="token operator">:</span><span class="token number">0</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">personList</span><span class="token operator">:</span><span class="token punctuation">[</span>
+        <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">id</span><span class="token operator">:</span><span class="token string">"0001"</span><span class="token punctuation">,</span>
+            <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"张三"</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">const</span> getters<span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token function">numBig</span><span class="token punctuation">(</span><span class="token parameter">state</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> state<span class="token punctuation">.</span>n<span class="token operator">*</span><span class="token number">10</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token function">personNum</span><span class="token punctuation">(</span><span class="token parameter">state</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> state<span class="token punctuation">.</span>personList<span class="token punctuation">.</span>length
+        <span class="token comment">// console.log("index"+state.personList.length)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token keyword">new</span> <span class="token class-name">Vuex<span class="token punctuation">.</span>Store</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span>
+    actions<span class="token punctuation">,</span>
+    mutations<span class="token punctuation">,</span>
+    state<span class="token punctuation">,</span>
+    getters
+<span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre> 
+<p>计数组件</p> 
+<pre><code class="prism language-js"><span class="token operator">&lt;</span>template<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span>div<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>目前的数值结果是：<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>n<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>放大后的数值结果是：<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>bigNum<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>div <span class="token keyword">class</span><span class="token operator">=</span><span class="token string">"container1"</span><span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>select v<span class="token operator">-</span>model<span class="token punctuation">.</span>number<span class="token operator">=</span><span class="token string">"step"</span><span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"1"</span><span class="token operator">&gt;</span><span class="token number">1</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"2"</span><span class="token operator">&gt;</span><span class="token number">2</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"3"</span><span class="token operator">&gt;</span><span class="token number">3</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span><span class="token operator">/</span>select<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"addNum(step)"</span><span class="token operator">&gt;</span>增加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"subNum(step)"</span><span class="token operator">&gt;</span>减少<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"oddNum(step)"</span><span class="token operator">&gt;</span>偶数再加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"longTimeAdd(step)"</span><span class="token operator">&gt;</span>延迟增加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>当前的总人数为<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>personNum<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>template<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{<!-- --></span>mapState<span class="token punctuation">,</span>mapGetters<span class="token punctuation">,</span>mapActions<span class="token punctuation">,</span>mapMutations<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Counts"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">step</span><span class="token operator">:</span><span class="token number">1</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">computed</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token operator">...</span><span class="token function">mapState</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">"n"</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapGetters</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">bigNum</span><span class="token operator">:</span><span class="token string">"numBig"</span><span class="token punctuation">,</span><span class="token literal-property property">personNum</span><span class="token operator">:</span><span class="token string">"personNum"</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+    <span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 传入对象是常规写法，当对象中的键值相等时，可以用传入列表的方式进行传参</span>
+        <span class="token comment">// 例如上面的mapState(["n"])</span>
+        <span class="token operator">...</span><span class="token function">mapMutations</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">addNum</span><span class="token operator">:</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span><span class="token literal-property property">subNum</span><span class="token operator">:</span><span class="token string">"sub_Num"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapActions</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">oddNum</span><span class="token operator">:</span><span class="token string">"odd_Num"</span><span class="token punctuation">,</span><span class="token literal-property property">longTimeAdd</span><span class="token operator">:</span><span class="token string">"long_Time_Add"</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>style<span class="token operator">&gt;</span>
+<span class="token punctuation">.</span>container1<span class="token operator">&gt;</span><span class="token operator">*</span><span class="token punctuation">{<!-- --></span>
+    margin<span class="token operator">-</span>left<span class="token operator">:</span> 10px<span class="token punctuation">;</span> 
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>style<span class="token operator">&gt;</span>
+</code></pre> 
+<p>person组件</p> 
+<pre><code class="prism language-js"><span class="token operator">&lt;</span>template<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span>div<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>目前的计算结果为<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>n<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token comment">//监听的键盘事件，当输入enter时添加用户</span>
+      <span class="token operator">&lt;</span>input v<span class="token operator">-</span>model<span class="token operator">=</span><span class="token string">"tempname"</span> @keydown<span class="token punctuation">.</span>enter<span class="token operator">=</span><span class="token string">"add_Person(tempname)"</span><span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>ul<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>li v<span class="token operator">-</span><span class="token keyword">for</span><span class="token operator">=</span><span class="token string">"p in personList"</span> <span class="token operator">:</span>key<span class="token operator">=</span><span class="token string">"p.id"</span><span class="token operator">&gt;</span>
+              <span class="token literal-property property">学生id</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>p<span class="token punctuation">.</span>id<span class="token punctuation">}</span><span class="token punctuation">}</span> 学生姓名<span class="token operator">:</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>p<span class="token punctuation">.</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span>
+          <span class="token operator">&lt;</span><span class="token operator">/</span>li<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span><span class="token operator">/</span>ul<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>template<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{<!-- --></span>mapState<span class="token punctuation">,</span>mapActions<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Persons"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">tempname</span><span class="token operator">:</span><span class="token string">""</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">computed</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token operator">...</span><span class="token function">mapState</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">"n"</span><span class="token punctuation">,</span><span class="token string">"personList"</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token operator">...</span><span class="token function">mapActions</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token string">"add_Person"</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>style<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span><span class="token operator">/</span>style<span class="token operator">&gt;</span>
+</code></pre> 
+<h2><a id="vuex_438"></a>五、模块化使用vuex</h2> 
+<p>如果不按照数据功能对数据进行模块划分，那么vuex将会显得非常杂乱，我们希望vuex可以根据数据的不同作用将其进行模块化，便于我们管理，对于接下来的代码大家需要熟悉的是如何使用划分后的函数、函数映射。<br> 划分后的代码大概长这个样子，其中store中的index会将count.js与person.js引入并使用。vue代码中使用vuex依旧是引入index.js，值得注意的是进行模块划分后的vuex，在使用时跟以往有了不同。详细看代码<br> <img src="https://images2.imgbox.com/c5/a3/e5Of8uUC_o.png" alt="在这里插入图片描述"><br> index.js</p> 
+<pre><code class="prism language-js"><span class="token keyword">import</span> Vue <span class="token keyword">from</span> <span class="token string">"vue"</span>
+<span class="token keyword">import</span> Vuex <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+<span class="token keyword">import</span> counts <span class="token keyword">from</span> <span class="token string">"./count"</span>
+<span class="token keyword">import</span> person <span class="token keyword">from</span> <span class="token string">"./person"</span>
+Vue<span class="token punctuation">.</span><span class="token function">use</span><span class="token punctuation">(</span>Vuex<span class="token punctuation">)</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token keyword">new</span> <span class="token class-name">Vuex<span class="token punctuation">.</span>Store</span><span class="token punctuation">(</span><span class="token punctuation">{<!-- --></span>
+    <span class="token literal-property property">modules</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        counts<span class="token punctuation">,</span>
+        person
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre> 
+<p>count.js</p> 
+<pre><code class="prism language-js"><span class="token comment">// import axios from "axios"</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span><span class="token punctuation">{<!-- --></span>
+    <span class="token literal-property property">namespaced</span><span class="token operator">:</span><span class="token boolean">true</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">actions</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+    <span class="token comment">/* ... */</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">mutations</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+    <span class="token comment">/* ... */</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">state</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token literal-property property">n</span><span class="token operator">:</span><span class="token number">0</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">getters</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">numBig</span><span class="token punctuation">(</span><span class="token parameter">state</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">return</span> state<span class="token punctuation">.</span>n<span class="token operator">*</span><span class="token number">10</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>person.js</p> 
+<pre><code class="prism language-js"><span class="token keyword">import</span> <span class="token punctuation">{<!-- --></span>nanoid<span class="token punctuation">}</span>  <span class="token keyword">from</span> <span class="token string">"nanoid"</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span><span class="token punctuation">{<!-- --></span>
+    <span class="token literal-property property">namespaced</span><span class="token operator">:</span><span class="token boolean">true</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">actions</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+    <span class="token comment">/* ... */</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">mutations</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+    <span class="token comment">/* ... */</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">state</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token literal-property property">personList</span><span class="token operator">:</span><span class="token punctuation">[</span>
+            <span class="token punctuation">{<!-- --></span>
+                <span class="token literal-property property">id</span><span class="token operator">:</span><span class="token string">"0001"</span><span class="token punctuation">,</span>
+                <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"张三"</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">]</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">getters</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token function">personNum</span><span class="token punctuation">(</span><span class="token parameter">state</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">return</span> state<span class="token punctuation">.</span>personList<span class="token punctuation">.</span>length
+            <span class="token comment">// console.log("index"+state.personList.length)</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>count.vue</p> 
+<pre><code class="prism language-js"><span class="token operator">&lt;</span>template<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span>div<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>目前的数值结果是：<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>n<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>放大后的数值结果是：<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>bigNum<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>div <span class="token keyword">class</span><span class="token operator">=</span><span class="token string">"container1"</span><span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>select v<span class="token operator">-</span>model<span class="token punctuation">.</span>number<span class="token operator">=</span><span class="token string">"step"</span><span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"1"</span><span class="token operator">&gt;</span><span class="token number">1</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"2"</span><span class="token operator">&gt;</span><span class="token number">2</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+              <span class="token operator">&lt;</span>option value<span class="token operator">=</span><span class="token string">"3"</span><span class="token operator">&gt;</span><span class="token number">3</span><span class="token operator">&lt;</span><span class="token operator">/</span>option<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span><span class="token operator">/</span>select<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"addNum(step)"</span><span class="token operator">&gt;</span>增加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"subNum(step)"</span><span class="token operator">&gt;</span>减少<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"oddNum(step)"</span><span class="token operator">&gt;</span>偶数再加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>button @click<span class="token operator">=</span><span class="token string">"longTimeAdd(step)"</span><span class="token operator">&gt;</span>延迟增加<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>当前的总人数为<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>personNum<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>template<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{<!-- --></span>mapState<span class="token punctuation">,</span>mapGetters<span class="token punctuation">,</span>mapActions<span class="token punctuation">,</span>mapMutations<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Counts"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">step</span><span class="token operator">:</span><span class="token number">1</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">computed</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token operator">...</span><span class="token function">mapState</span><span class="token punctuation">(</span><span class="token string">"counts"</span><span class="token punctuation">,</span><span class="token punctuation">[</span><span class="token string">"n"</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapGetters</span><span class="token punctuation">(</span><span class="token string">"counts"</span><span class="token punctuation">,</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">bigNum</span><span class="token operator">:</span><span class="token string">"numBig"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapGetters</span><span class="token punctuation">(</span><span class="token string">"person"</span><span class="token punctuation">,</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">personNum</span><span class="token operator">:</span><span class="token string">"personNum"</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+    <span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 传入对象是常规写法，当对象中的键值相等时，可以用传入列表的方式进行传参</span>
+        <span class="token comment">// 例如上面的mapState(["n"])</span>
+        <span class="token operator">...</span><span class="token function">mapMutations</span><span class="token punctuation">(</span><span class="token string">"counts"</span><span class="token punctuation">,</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">addNum</span><span class="token operator">:</span><span class="token string">"add_Num"</span><span class="token punctuation">,</span><span class="token literal-property property">subNum</span><span class="token operator">:</span><span class="token string">"sub_Num"</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapActions</span><span class="token punctuation">(</span><span class="token string">"counts"</span><span class="token punctuation">,</span><span class="token punctuation">{<!-- --></span><span class="token literal-property property">oddNum</span><span class="token operator">:</span><span class="token string">"odd_Num"</span><span class="token punctuation">,</span><span class="token literal-property property">longTimeAdd</span><span class="token operator">:</span><span class="token string">"long_Time_Add"</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>style<span class="token operator">&gt;</span>
+<span class="token punctuation">.</span>container1<span class="token operator">&gt;</span><span class="token operator">*</span><span class="token punctuation">{<!-- --></span>
+    margin<span class="token operator">-</span>left<span class="token operator">:</span> 10px<span class="token punctuation">;</span> 
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>style<span class="token operator">&gt;</span>
+</code></pre> 
+<p>persons.vue</p> 
+<pre><code class="prism language-js"><span class="token operator">&lt;</span>template<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span>div<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>h2<span class="token operator">&gt;</span>目前的计算结果为<span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>n<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token operator">&lt;</span><span class="token operator">/</span>h2<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>input v<span class="token operator">-</span>model<span class="token operator">=</span><span class="token string">"tempname"</span> @keydown<span class="token punctuation">.</span>enter<span class="token operator">=</span><span class="token string">"addPerson(tempname)"</span><span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>button v<span class="token operator">-</span><span class="token keyword">if</span><span class="token operator">=</span><span class="token string">"tag"</span> @click<span class="token operator">=</span><span class="token string">"tag=!tag"</span><span class="token operator">&gt;</span>目前可增加任意姓氏<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>button v<span class="token operator">-</span><span class="token keyword">if</span><span class="token operator">=</span><span class="token string">"!tag"</span> @click<span class="token operator">=</span><span class="token string">"tag=!tag"</span><span class="token operator">&gt;</span>目前只可以添加王氏<span class="token operator">&lt;</span><span class="token operator">/</span>button<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span>ul<span class="token operator">&gt;</span>
+          <span class="token operator">&lt;</span>li v<span class="token operator">-</span><span class="token keyword">for</span><span class="token operator">=</span><span class="token string">"p in personList"</span> <span class="token operator">:</span>key<span class="token operator">=</span><span class="token string">"p.id"</span><span class="token operator">&gt;</span>
+              <span class="token literal-property property">学生id</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>p<span class="token punctuation">.</span>id<span class="token punctuation">}</span><span class="token punctuation">}</span> 学生姓名<span class="token operator">:</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">{<!-- --></span>p<span class="token punctuation">.</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span>
+          <span class="token operator">&lt;</span><span class="token operator">/</span>li<span class="token operator">&gt;</span>
+      <span class="token operator">&lt;</span><span class="token operator">/</span>ul<span class="token operator">&gt;</span>
+  <span class="token operator">&lt;</span><span class="token operator">/</span>div<span class="token operator">&gt;</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>template<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>script<span class="token operator">&gt;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{<!-- --></span>mapState<span class="token punctuation">,</span>mapActions<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">"vuex"</span>
+<span class="token keyword">export</span> <span class="token keyword">default</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// eslint-disable-next-line vue/multi-word-component-names</span>
+    <span class="token literal-property property">name</span><span class="token operator">:</span><span class="token string">"Persons"</span><span class="token punctuation">,</span>
+    <span class="token function">data</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token literal-property property">tag</span><span class="token operator">:</span><span class="token boolean">true</span><span class="token punctuation">,</span>
+            <span class="token literal-property property">tempname</span><span class="token operator">:</span><span class="token string">""</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">computed</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token operator">...</span><span class="token function">mapState</span><span class="token punctuation">(</span><span class="token string">"counts"</span><span class="token punctuation">,</span><span class="token punctuation">[</span><span class="token string">"n"</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token operator">...</span><span class="token function">mapState</span><span class="token punctuation">(</span><span class="token string">"person"</span><span class="token punctuation">,</span><span class="token punctuation">[</span><span class="token string">"personList"</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token literal-property property">methods</span><span class="token operator">:</span><span class="token punctuation">{<!-- --></span>
+        <span class="token operator">...</span><span class="token function">mapActions</span><span class="token punctuation">(</span><span class="token string">"person"</span><span class="token punctuation">,</span><span class="token punctuation">[</span><span class="token string">"add_Person"</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token function">addPerson</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>tempname<span class="token operator">===</span><span class="token string">""</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">return</span> <span class="token string">""</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>tag<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+                <span class="token comment">// 映射出来的函数</span>
+                <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">add_Person</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>tempname<span class="token punctuation">)</span>
+            <span class="token punctuation">}</span><span class="token keyword">else</span><span class="token punctuation">{<!-- --></span>
+<span class="token comment">//[Vue warn]: Error in v-on handler: "TypeError: this.addPersonWang is not a function"</span>
+<span class="token comment">// 如果没有使用映射的话，不能这样使用</span>
+<span class="token comment">// this.addPersonWang(this.tempname)</span>
+
+
+                <span class="token comment">// 正确的使用方式（使用模块命名空间进行限定）</span>
+                <span class="token keyword">this</span><span class="token punctuation">.</span>$store<span class="token punctuation">.</span><span class="token function">dispatch</span><span class="token punctuation">(</span><span class="token string">"person/addPersonWang"</span><span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">.</span>tempname<span class="token punctuation">)</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>tempname<span class="token operator">=</span><span class="token string">""</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token operator">&lt;</span><span class="token operator">/</span>script<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span>style<span class="token operator">&gt;</span>
+
+<span class="token operator">&lt;</span><span class="token operator">/</span>style<span class="token operator">&gt;</span>
+</code></pre> 
+<p>除此之外还可以通过下面方法获取到vuex中的state中的属性。<br> this.$store.state.模块名.属性<br> this.$store.state.loginModel.userInfo</p> 
+<hr> 
+<p>到此vuex的使用也就介绍完了，如果大家有什么好的想法欢迎评论区留言。<br> <img src="https://images2.imgbox.com/1b/98/QF1vFkc6_o.gif" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3f0d2c4e8cde4a2bae1aca0ef90c426a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">基于协同过滤的学生在线考试推荐系统</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ab9dacfcb82e02515fe1ca50391c585f/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【用pycharm安装第三方库时出现错误】【‘pip‘ 不是内部或外部命令，也不是可运行的程序或批处理文件。】</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

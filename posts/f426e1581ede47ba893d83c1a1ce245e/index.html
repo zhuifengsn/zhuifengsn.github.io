@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>GTest源码剖析（七）——断言 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="GTest源码剖析（七）——断言" />
+<meta property="og:description" content="GTest源码剖析——断言 GTest源码剖析断言 ASSERT_TRUE宏 1 ASSERT_TRUE宏 和 EXPECT_TRUE宏 的区别11 GTEST_MESSAGE_宏 12 AssertHelper类 2 ASSERT_TRUE宏的实现 21 AssertionResult类 1 ASSERT_TRUE宏 ASSERT_TRUE宏和ASSERT_FALSE宏几乎认为无区别，仅仅是参数取反而已。
+ASSERT_*宏定义如下：
+#define ASSERT_TRUE(condition) GTEST_TEST_BOOLEAN_((condition), #condition, false, true, GTEST_FATAL_FAILURE_) #define ASSERT_FALSE(condition) GTEST_TEST_BOOLEAN_(!(condition), #condition, true, false, GTEST_FATAL_FAILURE_) 1.1 ASSERT_TRUE宏 和 EXPECT_TRUE宏 的区别 EXPECT_TRUE宏和ASSERT_FALSE宏 几乎认为无区别，仅仅是参数取反而已；
+EXPECT_TRUE宏和ASSERT_FALSE宏 均使用GTEST_TEST_BOOLEAN_宏； 两者的区别仅仅是第五个参数不同 EXPECT_TRUE的参数是GTEST_NONFATAL_FAILURE_，而ASSERT_TRUE的参数是GTEST_FATAL_FAILURE_
+EXPECT_*宏定义如下：
+#define EXPECT_TRUE(condition) GTEST_TEST_BOOLEAN_((condition), #condition, false, true,GTEST_NONFATAL_FAILURE_) #define EXPECT_FALSE(condition) GTEST_TEST_BOOLEAN_(!(condition), #condition, true, false, GTEST_NONFATAL_FAILURE_) 3.对比一下 GTEST_FATAL_FAILURE_宏 和 GTEST_NONFATAL_FAILURE_宏 的区别可以发现，两者均使用GTEST_MESSAGE_宏， 区别在于使用了不同的TestPartResult的枚举值。
+宏定义如下：
+#define GTEST_FATAL_FAILURE_(message) return GTEST_MESSAGE_(message, ::testing::TestPartResult::kFatalFailure) #define GTEST_NONFATAL_FAILURE_(message) GTEST_MESSAGE_(message, ::testing::TestPartResult::kNonFatalFailure) TestPartResult类定义如下，仅仅是定义了三个枚举值而已。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f426e1581ede47ba893d83c1a1ce245e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2017-09-17T23:16:10+08:00" />
+<meta property="article:modified_time" content="2017-09-17T23:16:10+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">GTest源码剖析（七）——断言</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2 id="gtest源码剖析断言">GTest源码剖析——断言</h2> 
+<p></p> 
+<div class="toc"> 
+ <ul><li><a href="#gtest%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90%E6%96%AD%E8%A8%80" rel="nofollow noopener noreferrer" target="_blank">GTest源码剖析断言</a> 
+   <ul><li><a href="#1-asserttrue%E5%AE%8F" rel="nofollow noopener noreferrer" target="_blank">ASSERT_TRUE宏</a> 
+     <ul><li><a href="#11-asserttrue%E5%AE%8F-%E5%92%8C-expecttrue%E5%AE%8F-%E7%9A%84%E5%8C%BA%E5%88%AB" rel="nofollow noopener noreferrer" target="_blank">1 ASSERT_TRUE宏 和 EXPECT_TRUE宏 的区别</a></li><li><a href="#111-gtestmessage%E5%AE%8F" rel="nofollow noopener noreferrer" target="_blank">11 GTEST_MESSAGE_宏</a> 
+       <ul><li><a href="#112-asserthelper%E7%B1%BB" rel="nofollow noopener noreferrer" target="_blank">12 AssertHelper类</a></li></ul> </li><li><a href="#12-asserttrue%E5%AE%8F%E7%9A%84%E5%AE%9E%E7%8E%B0" rel="nofollow noopener noreferrer" target="_blank">2 ASSERT_TRUE宏的实现</a> 
+       <ul><li><a href="#121-assertionresult%E7%B1%BB" rel="nofollow noopener noreferrer" target="_blank">21 AssertionResult类</a></li></ul> </li></ul> </li></ul> </li></ul> 
+</div> 
+<p></p> 
+<h3 id="1-asserttrue宏">1 ASSERT_TRUE宏</h3> 
+<p>ASSERT_TRUE宏和ASSERT_FALSE宏几乎认为无区别，仅仅是参数取反而已。</p> 
+<p>ASSERT_*宏定义如下：</p> 
+<pre class="prettyprint"><code class="language-C++ hljs smalltalk">
+<span class="hljs-symbol">#define</span> <span class="hljs-class">ASSERT_TRUE</span>(condition) 
+  <span class="hljs-class">GTEST_TEST_BOOLEAN_</span>((condition), <span class="hljs-symbol">#condition</span>, <span class="hljs-keyword">false</span>, <span class="hljs-keyword">true</span>, <span class="hljs-class">GTEST_FATAL_FAILURE_</span>)
+
+<span class="hljs-symbol">#define</span> <span class="hljs-class">ASSERT_FALSE</span>(condition) 
+  <span class="hljs-class">GTEST_TEST_BOOLEAN_</span>(!(condition), <span class="hljs-symbol">#condition</span>, <span class="hljs-keyword">true</span>, <span class="hljs-keyword">false</span>, <span class="hljs-class">GTEST_FATAL_FAILURE_</span>)</code></pre> 
+<h4 id="11-asserttrue宏-和-expecttrue宏-的区别">1.1 ASSERT_TRUE宏 和 EXPECT_TRUE宏 的区别</h4> 
+<ol><li><p>EXPECT_TRUE宏和ASSERT_FALSE宏 几乎认为无区别，仅仅是参数取反而已；</p></li><li><p>EXPECT_TRUE宏和ASSERT_FALSE宏 均使用GTEST_TEST_BOOLEAN_宏； <br> 两者的区别仅仅是第五个参数不同 <br> EXPECT_TRUE的参数是GTEST_NONFATAL_FAILURE_，而ASSERT_TRUE的参数是GTEST_FATAL_FAILURE_</p></li></ol> 
+<p>EXPECT_*宏定义如下：</p> 
+<pre class="prettyprint"><code class="language-C++ hljs smalltalk">
+<span class="hljs-symbol">#define</span> <span class="hljs-class">EXPECT_TRUE</span>(condition) 
+  <span class="hljs-class">GTEST_TEST_BOOLEAN_</span>((condition), <span class="hljs-symbol">#condition</span>, <span class="hljs-keyword">false</span>, <span class="hljs-keyword">true</span>,<span class="hljs-class">GTEST_NONFATAL_FAILURE_</span>)
+
+<span class="hljs-symbol">#define</span> <span class="hljs-class">EXPECT_FALSE</span>(condition) 
+  <span class="hljs-class">GTEST_TEST_BOOLEAN_</span>(!(condition), <span class="hljs-symbol">#condition</span>, <span class="hljs-keyword">true</span>, <span class="hljs-keyword">false</span>, <span class="hljs-class">GTEST_NONFATAL_FAILURE_</span>)</code></pre> 
+<p>3.对比一下 GTEST_FATAL_FAILURE_宏 和 GTEST_NONFATAL_FAILURE_宏 的区别可以发现，两者均使用GTEST_MESSAGE_宏， <br> 区别在于使用了不同的TestPartResult的枚举值。</p> 
+<p>宏定义如下：</p> 
+<pre class="prettyprint"><code class="language-C++ hljs lasso">
+<span class="hljs-variable">#define</span> GTEST_FATAL_FAILURE_(message) 
+  <span class="hljs-keyword">return</span> GTEST_MESSAGE_(message, <span class="hljs-tag">::testing</span><span class="hljs-tag">::TestPartResult</span><span class="hljs-tag">::kFatalFailure</span>)
+
+<span class="hljs-variable">#define</span> GTEST_NONFATAL_FAILURE_(message) 
+  GTEST_MESSAGE_(message, <span class="hljs-tag">::testing</span><span class="hljs-tag">::TestPartResult</span><span class="hljs-tag">::kNonFatalFailure</span>)</code></pre> 
+<p>TestPartResult类定义如下，仅仅是定义了三个枚举值而已。</p> 
+<pre class="prettyprint"><code class="language-C++ hljs vala">
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">GTEST_API_</span> <span class="hljs-title">TestPartResult</span> 
+{<!-- --></span>
+<span class="hljs-keyword">public</span>:
+  <span class="hljs-keyword">enum</span> Type 
+  {
+    kSuccess,          <span class="hljs-comment">// Succeeded.</span>
+    kNonFatalFailure,  <span class="hljs-comment">// Failed but the test can continue.</span>
+    kFatalFailure      <span class="hljs-comment">// Failed and the test should be terminated.</span>
+  };</code></pre> 
+<h4 id="111-gtestmessage宏">1.1.1 GTEST_MESSAGE_宏</h4> 
+<ol><li>GTEST_MESSAGE_宏定义如下：</li></ol> 
+<pre class="prettyprint"><code class="language-C++ hljs php">
+<span class="hljs-comment">#define GTEST_MESSAGE_(message, result_type) </span>
+  GTEST_MESSAGE_AT_(<span class="hljs-keyword">__FILE__</span>, <span class="hljs-keyword">__LINE__</span>, message, result_type)</code></pre> 
+<ol><li>GTEST_MESSAGE_AT_宏定义如下：</li></ol> 
+<pre class="prettyprint"><code class="language-C++ hljs cs">
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> GTEST_MESSAGE_AT_(file, <span class="hljs-keyword">line</span>, message, result_type) </span>
+  ::testing::<span class="hljs-keyword">internal</span>::<span class="hljs-title">AssertHelper</span>(result_type, file, line, message) 
+    = ::testing::Message()</code></pre> 
+<h5 id="112-asserthelper类">1.1.2 AssertHelper类</h5> 
+<p>重载了void operator=(const Message&amp; message) const;利用它把断言的结果信息添加到TestResult中。</p> 
+<pre class="prettyprint"><code class="language-C++ hljs cs">
+class GTEST_API_ AssertHelper 
+{
+<span class="hljs-keyword">public</span>:
+  <span class="hljs-title">AssertHelper</span>(TestPartResult::Type type, <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* file, <span class="hljs-keyword">int</span> line, <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* message);
+  ~AssertHelper();
+
+  <span class="hljs-keyword">void</span> <span class="hljs-keyword">operator</span>=(<span class="hljs-keyword">const</span> Message&amp; message) <span class="hljs-keyword">const</span>;
+
+<span class="hljs-keyword">private</span>:
+  <span class="hljs-keyword">struct</span> AssertHelperData 
+  {
+    AssertHelperData(TestPartResult::Type t,
+                     <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* srcfile,
+                     <span class="hljs-keyword">int</span> line_num,
+                     <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* msg)
+        : type(t), file(srcfile), line(line_num), message(msg) { }
+
+    TestPartResult::Type <span class="hljs-keyword">const</span> type;
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* <span class="hljs-keyword">const</span> file;
+    <span class="hljs-keyword">int</span> <span class="hljs-keyword">const</span> line;
+    std::<span class="hljs-keyword">string</span> <span class="hljs-keyword">const</span> message;
+
+   <span class="hljs-keyword">private</span>:
+    <span class="hljs-title">GTEST_DISALLOW_COPY_AND_ASSIGN_</span>(AssertHelperData);
+  };
+
+  AssertHelperData* <span class="hljs-keyword">const</span> data_;
+
+  GTEST_DISALLOW_COPY_AND_ASSIGN_(AssertHelper);
+};
+
+
+<span class="hljs-comment">// AssertHelper constructor.</span>
+AssertHelper::AssertHelper(TestPartResult::Type type,
+                           <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* file,
+                           <span class="hljs-keyword">int</span> line,
+                           <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* message)
+    : data_(<span class="hljs-keyword">new</span> AssertHelperData(type, file, line, message)) 
+{
+}
+
+AssertHelper::~AssertHelper() 
+{
+  delete data_;
+}
+
+<span class="hljs-comment">// Message assignment, for assertion streaming support.</span>
+<span class="hljs-keyword">void</span> AssertHelper::<span class="hljs-keyword">operator</span>=(<span class="hljs-keyword">const</span> Message&amp; message) <span class="hljs-keyword">const</span> 
+{
+  UnitTest::GetInstance()-&gt;
+    AddTestPartResult(data_-&gt;type, data_-&gt;file, data_-&gt;line,
+                      AppendUserMessage(data_-&gt;message, message),
+                      UnitTest::GetInstance()-&gt;impl()
+                      -&gt;CurrentOsStackTraceExceptTop(<span class="hljs-number">1</span>)
+                      <span class="hljs-comment">// Skips the stack frame for this function itself.</span>
+                      );  <span class="hljs-comment">// NOLINT</span>
+}</code></pre> 
+<p>UnitTest::AddTestPartResult</p> 
+<pre class="prettyprint"><code class=" hljs cpp"><span class="hljs-keyword">void</span> UnitTest::AddTestPartResult(
+    TestPartResult::Type result_type,
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* file_name,
+    <span class="hljs-keyword">int</span> line_number,
+    <span class="hljs-keyword">const</span> <span class="hljs-built_in">std</span>::<span class="hljs-built_in">string</span>&amp; message,
+    <span class="hljs-keyword">const</span> <span class="hljs-built_in">std</span>::<span class="hljs-built_in">string</span>&amp; os_stack_trace) 
+{
+  Message msg;
+  msg &lt;&lt; message;
+
+  internal::MutexLock lock(&amp;mutex_);
+  <span class="hljs-keyword">if</span> (impl_-&gt;gtest_trace_stack().size() &gt; <span class="hljs-number">0</span>) 
+  {
+    msg &lt;&lt; <span class="hljs-string">"\n"</span> &lt;&lt; GTEST_NAME_ &lt;&lt; <span class="hljs-string">" trace:"</span>;
+
+    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">int</span> i = <span class="hljs-keyword">static_cast</span>&lt;<span class="hljs-keyword">int</span>&gt;(impl_-&gt;gtest_trace_stack().size()); i &gt; <span class="hljs-number">0</span>; --i) 
+    {
+      <span class="hljs-keyword">const</span> internal::TraceInfo&amp; trace = impl_-&gt;gtest_trace_stack()[i - <span class="hljs-number">1</span>];
+      msg &lt;&lt; <span class="hljs-string">"\n"</span> &lt;&lt; internal::FormatFileLocation(trace.file, trace.line)
+          &lt;&lt; <span class="hljs-string">" "</span> &lt;&lt; trace.message;
+    }
+  }
+}</code></pre> 
+<h4 id="12-asserttrue宏的实现">1.2 ASSERT_TRUE宏的实现</h4> 
+<pre class="prettyprint"><code class="language-C++ hljs lasso">
+<span class="hljs-variable">#define</span> GTEST_TEST_BOOLEAN_(expression, text, actual, expected, fail) 
+
+  GTEST_AMBIGUOUS_ELSE_BLOCKER_ 
+  <span class="hljs-keyword">if</span> (const <span class="hljs-tag">::testing</span><span class="hljs-tag">::AssertionResult</span> gtest_ar_ <span class="hljs-subst">=</span> 
+      <span class="hljs-tag">::testing</span><span class="hljs-tag">::AssertionResult</span>(expression)) 
+    ; 
+  <span class="hljs-keyword">else</span> 
+    fail(<span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::GetBoolAssertionFailureMessage</span>(
+        gtest_ar_, text, <span class="hljs-variable">#actual</span>, <span class="hljs-variable">#expected</span>)<span class="hljs-built_in">.</span>c_str())</code></pre> 
+<h5 id="121-assertionresult类">1.2.1 AssertionResult类</h5> 
+<pre class="prettyprint"><code class=" hljs cpp"><span class="hljs-keyword">class</span> GTEST_API_ AssertionResult 
+{
+<span class="hljs-keyword">public</span>:
+  AssertionResult(<span class="hljs-keyword">const</span> AssertionResult&amp; other);
+
+  GTEST_DISABLE_MSC_WARNINGS_PUSH_(<span class="hljs-number">4800</span> <span class="hljs-comment">/* forcing value to bool */</span>)
+
+  <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+  <span class="hljs-keyword">explicit</span> AssertionResult(
+      <span class="hljs-keyword">const</span> T&amp; success,
+      <span class="hljs-keyword">typename</span> internal::EnableIf&lt;
+          !internal::ImplicitlyConvertible&lt;T, AssertionResult&gt;::value&gt;::type*
+          <span class="hljs-comment">/*enabler*/</span> = NULL)
+      : success_(success) {}
+
+  GTEST_DISABLE_MSC_WARNINGS_POP_()
+
+  <span class="hljs-comment">// Assignment operator.</span>
+  AssertionResult&amp; <span class="hljs-keyword">operator</span>=(AssertionResult other) 
+  {
+    swap(other);
+    <span class="hljs-keyword">return</span> *<span class="hljs-keyword">this</span>;
+  }
+
+  <span class="hljs-keyword">operator</span> <span class="hljs-keyword">bool</span>() <span class="hljs-keyword">const</span> { <span class="hljs-keyword">return</span> success_; } 
+
+  AssertionResult <span class="hljs-keyword">operator</span>!() <span class="hljs-keyword">const</span>;
+
+  <span class="hljs-keyword">const</span> <span class="hljs-keyword">char</span>* message() <span class="hljs-keyword">const</span> 
+  {
+    <span class="hljs-keyword">return</span> message_.get() != NULL ?  message_-&gt;c_str() : <span class="hljs-string">""</span>;
+  }
+
+  <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt; AssertionResult&amp; <span class="hljs-keyword">operator</span>&lt;&lt;(<span class="hljs-keyword">const</span> T&amp; value) 
+  {
+    AppendMessage(Message() &lt;&lt; value);
+    <span class="hljs-keyword">return</span> *<span class="hljs-keyword">this</span>;
+  }
+
+  AssertionResult&amp; <span class="hljs-keyword">operator</span>&lt;&lt;(<span class="hljs-built_in">std</span>::ostream&amp; (*basic_manipulator)(::<span class="hljs-built_in">std</span>::ostream&amp; stream)) 
+  {
+    AppendMessage(Message() &lt;&lt; basic_manipulator);
+    <span class="hljs-keyword">return</span> *<span class="hljs-keyword">this</span>;
+  }
+
+<span class="hljs-keyword">private</span>:
+  <span class="hljs-keyword">void</span> AppendMessage(<span class="hljs-keyword">const</span> Message&amp; a_message) 
+  {
+    <span class="hljs-keyword">if</span> (message_.get() == NULL)
+      message_.reset(<span class="hljs-keyword">new</span> ::<span class="hljs-built_in">std</span>::<span class="hljs-built_in">string</span>);
+    message_-&gt;append(a_message.GetString().c_str());
+  }
+
+  <span class="hljs-keyword">void</span> swap(AssertionResult&amp; other);
+
+  internal::scoped_ptr&lt; ::<span class="hljs-built_in">std</span>::<span class="hljs-built_in">string</span>&gt; message_;
+};
+
+AssertionResult::AssertionResult(<span class="hljs-keyword">const</span> AssertionResult&amp; other)
+    : success_(other.success_),
+      message_(other.message_.get() != NULL ?
+               <span class="hljs-keyword">new</span> ::<span class="hljs-built_in">std</span>::<span class="hljs-built_in">string</span>(*other.message_) :
+               <span class="hljs-keyword">static_cast</span>&lt; ::<span class="hljs-built_in">std</span>::<span class="hljs-built_in">string</span>*&gt;(NULL)) 
+{
+}
+
+<span class="hljs-keyword">void</span> AssertionResult::swap(AssertionResult&amp; other) 
+{
+  <span class="hljs-keyword">using</span> <span class="hljs-built_in">std</span>::swap;
+  swap(success_, other.success_);
+  swap(message_, other.message_);
+}
+
+AssertionResult AssertionResult::<span class="hljs-keyword">operator</span>!() <span class="hljs-keyword">const</span> 
+{
+  AssertionResult negation(!success_);
+  <span class="hljs-keyword">if</span> (message_.get() != NULL)
+    negation &lt;&lt; *message_;
+
+  <span class="hljs-keyword">return</span> negation;
+}
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/ab7e0f5be189b8e3987390bf98346ba5/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">GTest源码剖析（三）——TEST_F宏</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/73d01337a161e2140bc9b32bbb392b7c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">拟合与回归</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

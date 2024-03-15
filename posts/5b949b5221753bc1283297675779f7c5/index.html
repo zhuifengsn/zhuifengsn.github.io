@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>stm32f1串口发送与接收 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="stm32f1串口发送与接收" />
+<meta property="og:description" content="目录
+串口配置
+串口发送
+1使用SendString函数发送
+2使用printf函数发送
+​串口接收
+串口配置 首先对串口进行初始化
+包括使能串口时钟，这里我使用的是usart2，使能GPIO时钟，这里我用的是A口，以及GPIO口的配置，这里我的串口输出是PA2，输入是PA3
+然后初始化usart2，再使能usart2，具体代码如下：
+/* 串口初始化 */ void STM_EVAL_COMInit(USART_InitTypeDef* USART_InitStruct) { GPIO_InitTypeDef GPIO_InitStructure; /* Enable GPIO clock */ RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);//GPIOA使能 RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);USART2时钟使能 /* Configure USART Tx as alternate function push-pull */ GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;//输出PA2 GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2; GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; GPIO_Init(GPIOA, &amp;GPIO_InitStructure); /* Configure USART Rx as input floating */ GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;//输入PA3 GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3; GPIO_Init(GPIOA, &amp;GPIO_InitStructure); /* USART configuration */ USART_Init(USART2, USART_InitStruct);//USART2初始化 /* Enable USART */ USART_Cmd(USART2, ENABLE);//使能USART2 } 之后需要配置串口的参数" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/5b949b5221753bc1283297675779f7c5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-04-06T08:59:41+08:00" />
+<meta property="article:modified_time" content="2022-04-06T08:59:41+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">stm32f1串口发送与接收</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p id="%E4%B8%B2%E5%8F%A3%E9%85%8D%E7%BD%AE-toc" style="margin-left:0px;"><a href="#%E4%B8%B2%E5%8F%A3%E9%85%8D%E7%BD%AE" rel="nofollow">串口配置</a></p> 
+<p id="%E4%B8%B2%E5%8F%A3%E5%8F%91%E9%80%81-toc" style="margin-left:0px;"><a href="#%E4%B8%B2%E5%8F%A3%E5%8F%91%E9%80%81" rel="nofollow">串口发送</a></p> 
+<p id="1%E4%BD%BF%E7%94%A8SendString%E5%87%BD%E6%95%B0%E5%8F%91%E9%80%81-toc" style="margin-left:40px;"><a href="#1%E4%BD%BF%E7%94%A8SendString%E5%87%BD%E6%95%B0%E5%8F%91%E9%80%81" rel="nofollow">1使用SendString函数发送</a></p> 
+<p id="2%E4%BD%BF%E7%94%A8printf%E5%87%BD%E6%95%B0%E5%8F%91%E9%80%81-toc" style="margin-left:40px;"><a href="#2%E4%BD%BF%E7%94%A8printf%E5%87%BD%E6%95%B0%E5%8F%91%E9%80%81" rel="nofollow">2使用printf函数发送</a></p> 
+<p id="%E2%80%8B%E4%B8%B2%E5%8F%A3%E6%8E%A5%E6%94%B6-toc" style="margin-left:0px;"><a href="#%E2%80%8B%E4%B8%B2%E5%8F%A3%E6%8E%A5%E6%94%B6" rel="nofollow">​串口接收</a></p> 
+<hr> 
+<h2> 串口配置</h2> 
+<p>首先对串口进行<strong><span style="background-color:#e6b223;">初始化</span></strong></p> 
+<p>包括使能串口时钟，这里我使用的是usart2，使能GPIO时钟，这里我用的是A口，以及GPIO口的配置，这里我的串口输出是PA2，输入是PA3</p> 
+<p>然后初始化usart2，再使能usart2，具体代码如下：</p> 
+<pre><code>/* 串口初始化 */
+
+void STM_EVAL_COMInit(USART_InitTypeDef* USART_InitStruct)
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+
+  /* Enable GPIO clock */
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);//GPIOA使能
+
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);USART2时钟使能
+
+  /* Configure USART Tx as alternate function push-pull */
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;//输出PA2
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(GPIOA, &amp;GPIO_InitStructure);
+
+  /* Configure USART Rx as input floating */
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;//输入PA3
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
+  GPIO_Init(GPIOA, &amp;GPIO_InitStructure);
+
+  /* USART configuration */
+  USART_Init(USART2, USART_InitStruct);//USART2初始化
+    
+  /* Enable USART */
+  USART_Cmd(USART2, ENABLE);//使能USART2
+}
+</code></pre> 
+<p>之后需要<span style="color:#0d0016;"><strong><span style="background-color:#e6b223;">配置串口的参数</span></strong></span></p> 
+<p>参数包括波特率，数据位个数，是否有校验位等</p> 
+<pre><code>void USART2_Init (void)
+{
+	USART_InitTypeDef USART_InitStructure;
+	NVIC_InitTypeDef NVIC_InitStructure; 
+	
+	USART_InitStructure.USART_BaudRate = 115200;                  //波特率
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;   //数据位个数=8
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;        //1个停止位
+  USART_InitStructure.USART_Parity = USART_Parity_No;           //没有校验位
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+  STM_EVAL_COMInit(&amp;USART_InitStructure);
+	
+	
+//数据接收的使能中断
+  /* Enable the USARTz Interrupt */
+  NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;//为USART2
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&amp;NVIC_InitStructure);
+	
+  /* Enable the USARTz Receive Interrupt */
+  USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);//
+}
+</code></pre> 
+<p>为了保证串口随时都能接收数据，需要开启中断</p> 
+<h2 id="%E4%B8%B2%E5%8F%A3%E5%8F%91%E9%80%81">串口发送</h2> 
+<p>串口发送是指，将stm32的数据发送给上位机（串口助手）</p> 
+<h3 id="1%E4%BD%BF%E7%94%A8SendString%E5%87%BD%E6%95%B0%E5%8F%91%E9%80%81">1使用SendString函数发送</h3> 
+<p>在.c文件里面定义SendString函数</p> 
+<p>对应USART数据发送有两个标志， 一个是TXE=发送数据寄存器空，另一个是TC=发送结束</p> 
+<pre><code>void SendString (char *s)
+{
+	while(*s)
+	{
+		USART_SendData(USART2, *s++);//依次发送
+
+  /* Loop until the end of transmission */
+  while (USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET)//TC标志位为reset发送结束
+  {}
+	}
+}</code></pre> 
+<p>在发送数据时出现第一个字符打印不出来的情况，例如发送“hello”，串口助手只接收到了“ello”，没有h</p> 
+<p>这是因为stm32的usart的sr寄存器的TC初始为1，导致第一次while时第一个数据被覆盖</p> 
+<p>这种情况，将TC修改为TXE即可</p> 
+<pre><code>void SendString (char *s)
+{
+	while(*s)
+	{
+		USART_SendData(USART2, *s++);
+
+  /* Loop until the end of transmission */
+  while (USART_GetFlagStatus(USART2, USART_FLAG_TXE) == RESET)
+  {}
+	}
+}</code></pre> 
+<p>在main.c文件里面调用SendString函数</p> 
+<pre><code>USART2_Init();//打开串口
+SendString("字符串");</code></pre> 
+<h3 id="2%E4%BD%BF%E7%94%A8printf%E5%87%BD%E6%95%B0%E5%8F%91%E9%80%81">2使用printf函数发送</h3> 
+<p>在使用printf函数之前需要先勾选微库</p> 
+<p style="text-align:center;"><img alt="" height="359" src="https://images2.imgbox.com/2f/f4/xcK52D53_o.png" width="461"></p> 
+<p>在.c文件里面定义printf函数 ，代码如下</p> 
+<pre><code>int fputc(int ch, FILE *f)
+{
+  /* Place your implementation of fputc here */
+  /* e.g. write a character to the USART */
+  USART_SendData(USART2, (uint8_t) ch);
+
+  /* Loop until the end of transmission */
+  while (USART_GetFlagStatus(USART2, USART_FLAG_TXE) == RESET)
+  {}
+
+  return ch;
+}</code></pre> 
+<p> 在main.c文件里面调用printf函数</p> 
+<pre><code>USART2_Init();
+ printf(" ", ); </code></pre> 
+<p>关于printf函数的使用方法可以参考下面的表格：</p> 
+<p style="text-align:center;"><img alt="" src="https://images2.imgbox.com/13/64/K4SmNMT3_o.png"></p> 
+<h2 id="%E2%80%8B%E4%B8%B2%E5%8F%A3%E6%8E%A5%E6%94%B6"><img alt="" src="https://images2.imgbox.com/19/02/aHGWNcve_o.png">串口接收</h2> 
+<p>串口接收是指，将上位机（串口助手）的数据发送给stm32，由stm32进行接收</p> 
+<p> USART_IT_RXNE为接收中断标志位，一旦接收数据，USART_IT_RXNE会置位</p> 
+<pre><code>u8 RxCounter = 0;//定义计数值
+u8	RxBuffer2[10];//定义缓冲区为10
+
+void USART2_IRQHandler(void)
+{
+  if(USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)//串口接收中断
+  {
+    USART_ClearITPendingBit(USART2, USART_IT_RXNE);//清除标志位
+		/* Read one byte from the receive data register */
+		
+    RxBuffer2[RxCounter++] = USART_ReceiveData(USART2);
+		
+		
+		if(RxCounter&gt;6)//定义接收的字节个数
+		{
+			RxCounter=0;
+		}
+}	
+}</code></pre> 
+<p>首先构建缓冲区和计数器</p> 
+<p>串口接收中断之后，清除 USART_IT_RXNE中断接收标志位，将串口接收到的数据存入缓冲区</p> 
+<p>可以通过debug里面的watch来看缓冲区数据是否正确</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/e73c6d46260863bffe86a393a68fe92e/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">下载NCBI的SRA数据 详细教程</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/8b76998b367e3fbd88db99468c3b742b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">因子分析全流程汇总</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

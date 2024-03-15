@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>GC回收机制 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="GC回收机制" />
+<meta property="og:description" content="首先gc回收的对象是堆区和方法区的垃圾对象，栈内的垃圾不在gc回收的范围内
+如何判断是否是垃圾
+引用计数法 为每个对象创建一个计数器，每被引用一次，计数器就&#43;1；没被释放一次，就-1。直到计数器等于0时，才标志为垃圾。
+缺点是无法避免循环引用的问题。即A引用B，B引用A，此时A、B永远无法被回收。
+可达性分析 不能通过引用链连接到gc root的对象，都可以标记为垃圾对象。gc root有四种 虚拟机栈，本地方法栈引用的对象，方法区中静态属性引用的对象，常量引用的对象。
+四大回收算法
+标记清楚法 将所有认为是非垃圾对象的标记出来，然后清楚剩下的对象。
+缺点
+回收后的内存空间碎片化严重，可能无法存放大体积的对象。 复制算法 为了解决碎片化的问题，首先将内存区域划分为两块。每次只使用一块，然后将这一块上所有标记可达对象复制到另一块区域连续内存上，并清除原来一块，从而解决碎片化的问题。
+缺点
+只能利用50%的内存区域如果可达对象多，复制的次数就过多，影响效率 标记整理法 基于标记清除法的算法，为了解决碎片化严重的问题，和内存最多只能利用50%的问题。再完成标记可达对象后，将这些对象都会压缩到内存的一边，然后清除剩下的垃圾对象。
+缺点
+比标记清除法的效率更低。
+分代收集算法 现代商业垃圾回收器的解决方案，针对不同区域，分别使用以上的算法。
+根据对象的生命周期，可以划分为新生代、老年代、永生代。
+新生代，通常新建的对象都在新生代。新生代内部按照8：1：1的比例划分为eden区和两个survivor区（from区和to区）。触发gc时，首先会将eden区存活对象复制到to区，from区的对象有两个去处，如果年龄到了阈值以后，就会转移到老生代，如果没有就会年龄&#43;1然后移到to区。然后清空eden区和from区。此时to区变成了from区，from区变成了空的to区。 新生代的gc叫做mirror gc，频率高，耗时短。
+老年代，在新生代经历了N次gc后依然存活的对象，可以认为是不太会被回收的，会转到老年代。大小是新生代的2倍左右。老年代的回收叫做full gc ，耗时长，频率低。永生代，用于存放一些静态文件，如java类和方法。 基于每个区域特性，时刻有大量垃圾对象被回收的新生代采用复制算法。大量对象存活，而只有小部分被回收的适合标记清除/整理法。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9c9f14e1c7e5decbc33f8c0d5f862db0/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-07-29T01:21:29+08:00" />
+<meta property="article:modified_time" content="2021-07-29T01:21:29+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">GC回收机制</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p style="margin-left:0;text-align:left;">首先gc回收的对象是堆区和方法区的垃圾对象，栈内的垃圾不在gc回收的范围内</p> 
+<p style="margin-left:0;text-align:left;"><strong><strong>如何判断是否是垃圾</strong></strong></p> 
+<ul><li style="text-align:justify;">引用计数法</li></ul> 
+<p style="margin-left:0;text-align:left;">为每个对象创建一个计数器，每被引用一次，计数器就+1；没被释放一次，就-1。直到计数器等于0时，才标志为垃圾。</p> 
+<p style="margin-left:0;text-align:left;">缺点是无法避免循环引用的问题。即A引用B，B引用A，此时A、B永远无法被回收。</p> 
+<ul><li style="text-align:justify;">可达性分析</li></ul> 
+<p style="margin-left:0;text-align:left;">不能通过引用链连接到gc root的对象，都可以标记为垃圾对象。gc root有四种 虚拟机栈，本地方法栈引用的对象，方法区中静态属性引用的对象，常量引用的对象。</p> 
+<p style="margin-left:0;text-align:left;"><strong><strong>四大回收算法</strong></strong></p> 
+<ol><li style="text-align:justify;">标记清楚法</li></ol> 
+<p style="margin-left:0;text-align:left;">将所有认为是非垃圾对象的标记出来，然后清楚剩下的对象。</p> 
+<p style="margin-left:0;text-align:left;">缺点</p> 
+<ol><li style="text-align:justify;">回收后的内存空间碎片化严重，可能无法存放大体积的对象。</li></ol> 
+<ol><li style="text-align:justify;">复制算法</li></ol> 
+<p style="margin-left:0;text-align:left;">为了解决碎片化的问题，首先将内存区域划分为两块。每次只使用一块，然后将这一块上所有标记可达对象复制到另一块区域连续内存上，并清除原来一块，从而解决碎片化的问题。</p> 
+<p style="margin-left:0;text-align:left;">缺点</p> 
+<ol><li style="text-align:justify;">只能利用50%的内存区域</li><li style="text-align:justify;">如果可达对象多，复制的次数就过多，影响效率</li></ol> 
+<ol><li style="text-align:justify;">标记整理法</li></ol> 
+<p style="margin-left:0;text-align:left;">基于标记清除法的算法，为了解决碎片化严重的问题，和内存最多只能利用50%的问题。再完成标记可达对象后，将这些对象都会压缩到内存的一边，然后清除剩下的垃圾对象。</p> 
+<p style="margin-left:0;text-align:left;">缺点</p> 
+<p style="margin-left:0;text-align:left;">比标记清除法的效率更低。</p> 
+<ol><li style="text-align:justify;">分代收集算法</li></ol> 
+<p style="margin-left:0;text-align:left;">现代商业垃圾回收器的解决方案，针对不同区域，分别使用以上的算法。</p> 
+<p style="margin-left:0;text-align:left;">根据对象的生命周期，可以划分为新生代、老年代、永生代。</p> 
+<ul><li style="text-align:justify;">新生代，通常新建的对象都在新生代。新生代内部按照8：1：1的比例划分为eden区和两个survivor区（from区和to区）。触发gc时，首先会将eden区存活对象复制到to区，from区的对象有两个去处，如果年龄到了阈值以后，就会转移到老生代，如果没有就会年龄+1然后移到to区。然后清空eden区和from区。此时to区变成了from区，from区变成了空的to区。</li></ul> 
+<p style="margin-left:0;text-align:left;">新生代的gc叫做mirror gc，频率高，耗时短。</p> 
+<ul><li style="text-align:justify;">老年代，在新生代经历了N次gc后依然存活的对象，可以认为是不太会被回收的，会转到老年代。大小是新生代的2倍左右。老年代的回收叫做full gc ，耗时长，频率低。</li><li style="text-align:justify;">永生代，用于存放一些静态文件，如java类和方法。</li></ul> 
+<p style="margin-left:0;text-align:left;">基于每个区域特性，时刻有大量垃圾对象被回收的新生代采用复制算法。大量对象存活，而只有小部分被回收的适合标记清除/整理法。</p> 
+<p style="margin-left:.0001pt;text-align:justify;"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/445b88dc58a1207d4b4dbcad07e85603/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">binderService如何实现acitivity和service的绑定</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/36beb2b70141d76cb9b2748e4b1ce551/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C语言十大操作符超全详解【建议收藏】</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

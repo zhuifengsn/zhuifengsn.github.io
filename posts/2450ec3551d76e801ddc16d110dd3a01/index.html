@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>如何在 Go (Golang) 中重用 HTTP 连接（复用TCP） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="如何在 Go (Golang) 中重用 HTTP 连接（复用TCP）" />
+<meta property="og:description" content="在Golang中想要复用之前的TCP连接，必须要把上一个连接的Body读取完毕才能复用
+检查工具：httptrace.ClientTrace
+测试代码：
+package main import ( &#34;context&#34; &#34;io&#34; &#34;io/ioutil&#34; &#34;log&#34; &#34;net/http&#34; &#34;net/http/httptrace&#34; ) func main() { // client trace to log whether the request&#39;s underlying tcp connection was re-used clientTrace := &amp;httptrace.ClientTrace{ GotConn: func(info httptrace.GotConnInfo) { log.Printf(&#34;conn was reused: %t&#34;, info.Reused) }, } traceCtx := httptrace.WithClientTrace(context.Background(), clientTrace) // 1st request req, err := http.NewRequestWithContext(traceCtx, http.MethodGet, &#34;http://test.com/test.php&#34;, nil) if err != nil { log.Fatal(err) } res, err := http.DefaultClient.Do(req) if err !" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2450ec3551d76e801ddc16d110dd3a01/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-01-21T10:17:16+08:00" />
+<meta property="article:modified_time" content="2022-01-21T10:17:16+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">如何在 Go (Golang) 中重用 HTTP 连接（复用TCP）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>在Golang中想要复用之前的TCP连接，<strong>必须要把上一个连接的Body读取完毕</strong>才能复用</p> 
+<p>检查工具：httptrace.ClientTrace<br> 测试代码：</p> 
+<pre><code class="prism language-go"><span class="token keyword">package</span> main
+
+<span class="token keyword">import</span> <span class="token punctuation">(</span>
+	<span class="token string">"context"</span>
+	<span class="token string">"io"</span>
+	<span class="token string">"io/ioutil"</span>
+	<span class="token string">"log"</span>
+	<span class="token string">"net/http"</span>
+	<span class="token string">"net/http/httptrace"</span>
+<span class="token punctuation">)</span>
+
+<span class="token keyword">func</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token comment">// client trace to log whether the request's underlying tcp connection was re-used</span>
+	clientTrace <span class="token operator">:=</span> <span class="token operator">&amp;</span>httptrace<span class="token punctuation">.</span>ClientTrace<span class="token punctuation">{<!-- --></span>
+		GotConn<span class="token punctuation">:</span> <span class="token keyword">func</span><span class="token punctuation">(</span>info httptrace<span class="token punctuation">.</span>GotConnInfo<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span> log<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"conn was reused: %t"</span><span class="token punctuation">,</span> info<span class="token punctuation">.</span>Reused<span class="token punctuation">)</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+	<span class="token punctuation">}</span>
+
+	traceCtx <span class="token operator">:=</span> httptrace<span class="token punctuation">.</span><span class="token function">WithClientTrace</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">Background</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> clientTrace<span class="token punctuation">)</span>
+
+	<span class="token comment">// 1st request</span>
+	req<span class="token punctuation">,</span> err <span class="token operator">:=</span> http<span class="token punctuation">.</span><span class="token function">NewRequestWithContext</span><span class="token punctuation">(</span>traceCtx<span class="token punctuation">,</span> http<span class="token punctuation">.</span>MethodGet<span class="token punctuation">,</span> <span class="token string">"http://test.com/test.php"</span><span class="token punctuation">,</span> <span class="token boolean">nil</span><span class="token punctuation">)</span>
+	<span class="token keyword">if</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{<!-- --></span>
+		log<span class="token punctuation">.</span><span class="token function">Fatal</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	res<span class="token punctuation">,</span> err <span class="token operator">:=</span> http<span class="token punctuation">.</span>DefaultClient<span class="token punctuation">.</span><span class="token function">Do</span><span class="token punctuation">(</span>req<span class="token punctuation">)</span>
+	<span class="token keyword">if</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{<!-- --></span>
+		log<span class="token punctuation">.</span><span class="token function">Fatal</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">defer</span> res<span class="token punctuation">.</span>Body<span class="token punctuation">.</span><span class="token function">Close</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token keyword">if</span> <span class="token boolean">_</span><span class="token punctuation">,</span> err <span class="token operator">:=</span> io<span class="token punctuation">.</span><span class="token function">Copy</span><span class="token punctuation">(</span>ioutil<span class="token punctuation">.</span>Discard<span class="token punctuation">,</span> res<span class="token punctuation">.</span>Body<span class="token punctuation">)</span><span class="token punctuation">;</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{<!-- --></span>
+		log<span class="token punctuation">.</span><span class="token function">Fatal</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>	<span class="token comment">// 或者 ioutil.ReadAll(res.Body)</span>
+	
+	<span class="token comment">// 2nd request</span>
+	req<span class="token punctuation">,</span> err <span class="token operator">=</span> http<span class="token punctuation">.</span><span class="token function">NewRequestWithContext</span><span class="token punctuation">(</span>traceCtx<span class="token punctuation">,</span> http<span class="token punctuation">.</span>MethodGet<span class="token punctuation">,</span> <span class="token string">"http://test.com/test.php"</span><span class="token punctuation">,</span> <span class="token boolean">nil</span><span class="token punctuation">)</span>
+	<span class="token keyword">if</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{<!-- --></span>
+		log<span class="token punctuation">.</span><span class="token function">Fatal</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	<span class="token boolean">_</span><span class="token punctuation">,</span> err <span class="token operator">=</span> http<span class="token punctuation">.</span>DefaultClient<span class="token punctuation">.</span><span class="token function">Do</span><span class="token punctuation">(</span>req<span class="token punctuation">)</span>
+	<span class="token keyword">if</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{<!-- --></span>
+		log<span class="token punctuation">.</span><span class="token function">Fatal</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2022/01/21 10:10:12 conn was reused: false<br> 2022/01/21 10:10:14 conn was reused: true</p> 
+<p><a href="https://golang.cafe/blog/how-to-reuse-http-connections-in-go.html" rel="nofollow">参考：如何在 Go (Golang) 中重用 HTTP 连接</a><br> <a href="https://golang.cafe/blog/golang-httptrace-example.html" rel="nofollow">关于Golang httptrace的示例</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d61cbbb1548c95cc299bd63b5f9ee14b/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Linux httpd配置</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/2c22dd4da53db3bb418d3b68a4d967ec/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">STM32F10X（库版本）串口发送字符串到上位机</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

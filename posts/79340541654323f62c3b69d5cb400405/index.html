@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>51单片机扫描按键短按、双击、长按功能 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="51单片机扫描按键短按、双击、长按功能" />
+<meta property="og:description" content="按键扫描是一个常见的任务，涉及到硬件交互和状态处理。本篇教程将讲解一个简单的51单片机按键扫描程序，基于状态机实现短按、双击、长按功能，并解释其实现原理。按键消抖采用的非阻塞式，这样可以大大提高单片机效率。
+1. 介绍 以下是一个基于51单片机的按键扫描程序，其中包括按键去抖动、短按、双击和长按检测。我们将一步步地解析该程序的实现原理。
+#include &lt;reg51.h&gt; sbit KEY = P1^0; typedef enum { IDLE, PRESSED, RELEASED, WAIT_DOUBLE_CLICK, DOUBLE_CLICKED, WAIT_LONG_PRESS, LONG_PRESSED } KeyState; unsigned char debounceCounter = 0; void checkKeyPress(KeyState *state); void main() { KeyState state = IDLE; while (1) { checkKeyPress(&amp;state); } } void checkKeyPress(KeyState *state) { switch (*state) { // 状态机处理逻辑在下文中给出 } } 2. 实现原理解析 2.1 状态机 按键扫描的实现基于状态机的概念，通过不同状态的切换来处理按键的各种操作。
+typedef enum { IDLE, PRESSED, RELEASED, WAIT_DOUBLE_CLICK, DOUBLE_CLICKED, WAIT_LONG_PRESS, LONG_PRESSED } KeyState; IDLE: 初始状态。PRESSED: 按键按下。RELEASED: 按键释放。WAIT_DOUBLE_CLICK: 等待第二次按下，检测双击。DOUBLE_CLICKED: 双击状态。WAIT_LONG_PRESS: 等待长按。LONG_PRESSED: 长按状态。 2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/79340541654323f62c3b69d5cb400405/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-12-14T17:25:33+08:00" />
+<meta property="article:modified_time" content="2023-12-14T17:25:33+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">51单片机扫描按键短按、双击、长按功能</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>按键扫描是一个常见的任务，涉及到硬件交互和状态处理。本篇教程将讲解一个简单的51单片机按键扫描程序，基于状态机实现短按、双击、长按功能，并解释其实现原理。按键消抖采用的非阻塞式，这样可以大大提高单片机效率。</p> 
+<h3><a id="1__4"></a>1. 介绍</h3> 
+<p>以下是一个基于51单片机的按键扫描程序，其中包括按键去抖动、短按、双击和长按检测。我们将一步步地解析该程序的实现原理。</p> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;reg51.h&gt;</span></span>
+
+sbit KEY <span class="token operator">=</span> P1<span class="token operator">^</span><span class="token number">0</span><span class="token punctuation">;</span>
+
+<span class="token keyword">typedef</span> <span class="token keyword">enum</span> <span class="token punctuation">{<!-- --></span>
+    IDLE<span class="token punctuation">,</span>
+    PRESSED<span class="token punctuation">,</span>
+    RELEASED<span class="token punctuation">,</span>
+    WAIT_DOUBLE_CLICK<span class="token punctuation">,</span>
+    DOUBLE_CLICKED<span class="token punctuation">,</span>
+    WAIT_LONG_PRESS<span class="token punctuation">,</span>
+    LONG_PRESSED
+<span class="token punctuation">}</span> KeyState<span class="token punctuation">;</span>
+
+<span class="token keyword">unsigned</span> <span class="token keyword">char</span> debounceCounter <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">checkKeyPress</span><span class="token punctuation">(</span>KeyState <span class="token operator">*</span>state<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    KeyState state <span class="token operator">=</span> IDLE<span class="token punctuation">;</span>
+
+    <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token function">checkKeyPress</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>state<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">checkKeyPress</span><span class="token punctuation">(</span>KeyState <span class="token operator">*</span>state<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">switch</span> <span class="token punctuation">(</span><span class="token operator">*</span>state<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 状态机处理逻辑在下文中给出</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="2__42"></a>2. 实现原理解析</h3> 
+<h4><a id="21__44"></a>2.1 状态机</h4> 
+<p>按键扫描的实现基于状态机的概念，通过不同状态的切换来处理按键的各种操作。</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">enum</span> <span class="token punctuation">{<!-- --></span>
+    IDLE<span class="token punctuation">,</span>
+    PRESSED<span class="token punctuation">,</span>
+    RELEASED<span class="token punctuation">,</span>
+    WAIT_DOUBLE_CLICK<span class="token punctuation">,</span>
+    DOUBLE_CLICKED<span class="token punctuation">,</span>
+    WAIT_LONG_PRESS<span class="token punctuation">,</span>
+    LONG_PRESSED
+<span class="token punctuation">}</span> KeyState<span class="token punctuation">;</span>
+</code></pre> 
+<ul><li><strong>IDLE</strong>: 初始状态。</li><li><strong>PRESSED</strong>: 按键按下。</li><li><strong>RELEASED</strong>: 按键释放。</li><li><strong>WAIT_DOUBLE_CLICK</strong>: 等待第二次按下，检测双击。</li><li><strong>DOUBLE_CLICKED</strong>: 双击状态。</li><li><strong>WAIT_LONG_PRESS</strong>: 等待长按。</li><li><strong>LONG_PRESSED</strong>: 长按状态。</li></ul> 
+<h4><a id="22__68"></a>2.2 按键去抖动</h4> 
+<p>为了解决硬件层面的按键抖动问题，引入了非阻塞式去抖动机制。在按键按下时，通过 <code>debounceCounter</code> 计数器进行计时，确保在一定时间内没有抖动。</p> 
+<pre><code class="prism language-c"><span class="token keyword">case</span> PRESSED<span class="token operator">:</span>
+    debounceCounter<span class="token operator">++</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>debounceCounter <span class="token operator">&gt;=</span> <span class="token number">10</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>  <span class="token comment">// 根据实际情况调整计数器阈值</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>KEY <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token operator">*</span>state <span class="token operator">=</span> RELEASED<span class="token punctuation">;</span>  <span class="token comment">// 进入释放状态</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token operator">*</span>state <span class="token operator">=</span> WAIT_DOUBLE_CLICK<span class="token punctuation">;</span>  <span class="token comment">// 进入等待双击状态</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">break</span><span class="token punctuation">;</span>
+</code></pre> 
+<h4><a id="23__85"></a>2.3 状态切换</h4> 
+<p>通过不同状态之间的切换，实现了各种按键操作的检测。</p> 
+<ul><li><strong>短按释放</strong>：从 <code>PRESSED</code> 到 <code>RELEASED</code>。</li><li><strong>双击检测</strong>：从 <code>WAIT_DOUBLE_CLICK</code> 到 <code>DOUBLE_CLICKED</code>。</li><li><strong>长按检测</strong>：从 <code>WAIT_LONG_PRESS</code> 到 <code>LONG_PRESSED</code>。</li></ul> 
+<h3><a id="3__93"></a>3. 总结</h3> 
+<p>通过这个简单的51单片机按键扫描程序，我们了解了按键扫描的基本原理。状态机的使用使得按键的各种操作变得清晰而可控，而去抖动机制则保证了按键信号的稳定性。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/22ee8e9aad022a2ebb9ccaa8f9f532b5/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">.NET源码分析之List</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/2ad53abf5f8e191a6bcd0d9584353620/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Java面试高频题汇总：消息中间件篇</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

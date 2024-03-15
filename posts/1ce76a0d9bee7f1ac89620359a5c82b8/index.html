@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux系统编程 多线程 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux系统编程 多线程" />
+<meta property="og:description" content="多线程 初识线程线程的概念线程的优缺点优点缺点 了解pid(轻量级线程号)与tgid(线程组id)进程与线程概念解释同一所属组下多线程之间共享与独立的空间进程与线程的对比多进程与多线程对比 线程控制线程的创建线程终止线程等待线程分离 线程安全线程互斥：锁的本质加锁的时机加锁的接口加锁所带来的弊端死锁死锁的概念线程产生的必要条件避免死锁 线程同步接口说明基于同步实现生产者与消费者模型 POSIX信号量接口说明基于环形队列实现 线程池线程池代码线程池中的惊群问题 初识线程 线程的概念 在一个程序里的一个执行路线就叫做线程（thread）。更准确的定义是：线程是“一个进程内部的控制序列”。
+一切进程至少都有一个执行线程
+线程在进程内部运行，本质是在进程地址空间内运行
+在Linux系统中，在CPU眼中，看到的PCB都要比传统的进程更加轻量化
+透过进程虚拟地址空间，可以看到进程的大部分资源，将进程资源合理分配给每个执行流，就形成了线程执行流
+线程的优缺点 优点 创建一个新线程的代价要比创建一个新进程小得多。 与进程之间的切换相比，线程之间的切换需要操作系统做的工作要少很多。 线程占用的资源要比进程少很多。 能充分利用多处理器的可并行数量。 在等待慢速I/O操作结束的同时，程序可执行其他的计算任务。 计算密集型应用，为了能在多处理器系统上运行，将计算分解到多个线程中实现。 I/O密集型应用，为了提高性能，将I/O操作重叠。线程可以同时等待不同的I/O操作。 缺点 1.频繁的线程切换会导致系统运行效率降低。
+2.健壮性(鲁棒性)相对于进程来说低。因为进程之间是独立的，而线程不具有这样的特性。一个线程崩溃，随之而来的便是整个进程的崩溃。
+3.多个线程在访问同一变量时，可能会造成二义性问题。
+了解pid(轻量级线程号)与tgid(线程组id) tgid为进程号，pid为线程号
+Lwp为轻量级进程(线程)，相比于多进程来说，轻量级进程可以与主进程共用一份地址空间，与普通进程相比，LWP与其它进程共享所有（或大部分）逻辑地址空间和系统资源，一个进程可以创建多个LWP，这样它们共享大部分资源；LWP有它自己的进程标识符。
+进程与线程概念解释 进程：是承担分配资源的基本实体，
+线程：是调度的一个基本单位，线程是进程里面的一个执行流。
+同一所属组下多线程之间共享与独立的空间 进程与线程的对比 1.从性质上来说：进程是承担资源分配的基本单位，而线程是cpu调度的一个基本单位
+2.从特性上来说，进程具有独立性，而线程不具有独立性。
+多进程与多线程对比 线程控制 线程的创建 1 #include&lt;iostream&gt; 2 #include&lt;unistd.h&gt; 3 #include&lt;pthread.h&gt; 4 using namespace std; 5 void *run(void *arg) 6 { 7 int *p=(int*)arg; 8 while(1) 9 { 10 cout&lt;&lt;&#34;i am thread1,~~~~~&#34;&lt;&lt;*p&lt;&lt;endl; 11 sleep(1); 12 } 13 } 14 int main() 15 { 16 pthread_t tid; 17 int i=10; 18 int ret=pthread_create(&amp;tid,NULL,run,(void*)&amp;i); 19 if(ret!" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/1ce76a0d9bee7f1ac89620359a5c82b8/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-07-23T14:26:42+08:00" />
+<meta property="article:modified_time" content="2021-07-23T14:26:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux系统编程 多线程</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>多线程</h4> 
+ <ul><li><a href="#_1" rel="nofollow">初识线程</a></li><li><ul><li><a href="#_2" rel="nofollow">线程的概念</a></li><li><a href="#_8" rel="nofollow">线程的优缺点</a></li><li><ul><li><a href="#_9" rel="nofollow">优点</a></li><li><a href="#_20" rel="nofollow">缺点</a></li></ul> 
+   </li><li><a href="#pidtgidid_26" rel="nofollow">了解pid(轻量级线程号)与tgid(线程组id)</a></li><li><a href="#_38" rel="nofollow">进程与线程概念解释</a></li><li><a href="#_44" rel="nofollow">同一所属组下多线程之间共享与独立的空间</a></li><li><a href="#_48" rel="nofollow">进程与线程的对比</a></li><li><a href="#_51" rel="nofollow">多进程与多线程对比</a></li></ul> 
+  </li><li><a href="#_54" rel="nofollow">线程控制</a></li><li><ul><li><a href="#_55" rel="nofollow">线程的创建</a></li><li><a href="#_163" rel="nofollow">线程终止</a></li><li><a href="#_226" rel="nofollow">线程等待</a></li><li><a href="#_281" rel="nofollow">线程分离</a></li></ul> 
+  </li><li><a href="#_336" rel="nofollow">线程安全</a></li><li><ul><li><a href="#_339" rel="nofollow">线程互斥：</a></li><li><a href="#_394" rel="nofollow">锁的本质</a></li><li><a href="#_398" rel="nofollow">加锁的时机</a></li><li><a href="#_401" rel="nofollow">加锁的接口</a></li><li><a href="#_465" rel="nofollow">加锁所带来的弊端</a></li><li><a href="#_468" rel="nofollow">死锁</a></li><li><ul><li><a href="#_523" rel="nofollow">死锁的概念</a></li><li><a href="#_525" rel="nofollow">线程产生的必要条件</a></li><li><a href="#_530" rel="nofollow">避免死锁</a></li></ul> 
+  </li></ul> 
+  </li><li><a href="#_534" rel="nofollow">线程同步</a></li><li><ul><li><a href="#_536" rel="nofollow">接口说明</a></li><li><a href="#_550" rel="nofollow">基于同步实现生产者与消费者模型</a></li></ul> 
+  </li><li><a href="#POSIX_745" rel="nofollow">POSIX信号量</a></li><li><ul><li><a href="#_756" rel="nofollow">接口说明</a></li><li><a href="#_784" rel="nofollow">基于环形队列实现</a></li></ul> 
+  </li><li><a href="#_906" rel="nofollow">线程池</a></li><li><ul><li><a href="#_909" rel="nofollow">线程池代码</a></li><li><a href="#_1068" rel="nofollow">线程池中的惊群问题</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_1"></a>初识线程</h2> 
+<h3><a id="_2"></a>线程的概念</h3> 
+<p>在一个程序里的<strong>一个执行路线</strong>就叫做线程（thread）。更准确的定义是：线程是“一<strong>个进程内部的控制序列</strong>”。<br> 一切进程至少都有一个执行线程<br> 线程在进程内部运行，<strong>本质是在进程地址空间内运行</strong><br> 在Linux系统中，在CPU眼中，看到的PCB都要比传统的进程更加轻量化<br> 透过进程虚拟地址空间，可以看到进程的大部分资源，将进程资源合理分配给每个执行流，就形成了线程执行流</p> 
+<h3><a id="_8"></a>线程的优缺点</h3> 
+<h4><a id="_9"></a>优点</h4> 
+<pre><code class="prism language-cpp">创建一个新线程的代价要比创建一个新进程小得多。
+与进程之间的切换相比，线程之间的切换需要操作系统做的工作要少很多。
+线程占用的资源要比进程少很多。
+能充分利用多处理器的可并行数量。
+在等待慢速I<span class="token operator">/</span>O操作结束的同时，程序可执行其他的计算任务。
+计算密集型应用，为了能在多处理器系统上运行，将计算分解到多个线程中实现。
+I<span class="token operator">/</span>O密集型应用，为了提高性能，将I<span class="token operator">/</span>O操作重叠。线程可以同时等待不同的I<span class="token operator">/</span>O操作。
+</code></pre> 
+<h4><a id="_20"></a>缺点</h4> 
+<p>1.频繁的线程切换会导致系统运行效率降低。<br> 2.健壮性(鲁棒性)相对于进程来说低。因为进程之间是独立的，而线程不具有这样的特性。一个线程崩溃，随之而来的便是整个进程的崩溃。<br> 3.多个线程在访问同一变量时，可能会造成二义性问题。</p> 
+<h3><a id="pidtgidid_26"></a>了解pid(轻量级线程号)与tgid(线程组id)</h3> 
+<p><img src="https://images2.imgbox.com/00/91/xTIPE40h_o.png" alt="在这里插入图片描述"><br> tgid为进程号，pid为线程号<br> <img src="https://images2.imgbox.com/eb/34/V0B9149k_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/c3/3e/buuf8fld_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/77/71/8iZawrkG_o.png" alt="在这里插入图片描述"><br> Lwp为<strong>轻量级进程(线程)</strong>，相比于多进程来说，轻量级进程可以与主进程共用一份地址空间，与普通进程相比，LWP与其它进程共享所有（或大部分）逻辑地址空间和系统资源，一个进程可以创建多个LWP，这样它们共享大部分资源；LWP有它自己的进程标识符。</p> 
+<h3><a id="_38"></a>进程与线程概念解释</h3> 
+<p>进程：<strong>是承担分配资源的基本实体，</strong><br> <img src="https://images2.imgbox.com/62/d7/s76pm4dL_o.png" alt="在这里插入图片描述"></p> 
+<p>线程：<strong>是调度的一个基本单位，线程是进程里面的一个执行流</strong>。<br> <img src="https://images2.imgbox.com/a7/1e/s0s5Ykz8_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_44"></a>同一所属组下多线程之间共享与独立的空间</h3> 
+<p><img src="https://images2.imgbox.com/0f/ac/g8HjYDwc_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/2a/77/90bZoqjb_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_48"></a>进程与线程的对比</h3> 
+<p>1.从性质上来说：进程是承担资源分配的基本单位，而线程是cpu调度的一个基本单位<br> 2.从特性上来说，进程具有独立性，而线程不具有独立性。</p> 
+<h3><a id="_51"></a>多进程与多线程对比</h3> 
+<p><img src="https://images2.imgbox.com/e0/da/Zjomdbwe_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_54"></a>线程控制</h2> 
+<h3><a id="_55"></a>线程的创建</h3> 
+<p><img src="https://images2.imgbox.com/b2/b7/N2wN7940_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">5</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+  <span class="token number">6</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">7</span>     <span class="token keyword">int</span> <span class="token operator">*</span>p<span class="token operator">=</span><span class="token punctuation">(</span><span class="token keyword">int</span><span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+  <span class="token number">8</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token number">9</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am thread1,~~~~~"</span><span class="token operator">&lt;&lt;</span><span class="token operator">*</span>p<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">11</span>         <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>     <span class="token punctuation">}</span>
+ <span class="token number">13</span> <span class="token punctuation">}</span>
+ <span class="token number">14</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">15</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">16</span>     pthread_t tid<span class="token punctuation">;</span>
+ <span class="token number">17</span>     <span class="token keyword">int</span> i<span class="token operator">=</span><span class="token number">10</span><span class="token punctuation">;</span>
+ <span class="token number">18</span>     <span class="token keyword">int</span> ret<span class="token operator">=</span><span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tid<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>run<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>i<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">19</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">!=</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">20</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">21</span>         <span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+ <span class="token number">22</span>     <span class="token punctuation">}</span>                                                                                                                                                                                 
+ <span class="token number">23</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">24</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">25</span>       cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am main thread"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>       <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">27</span>     <span class="token punctuation">}</span>
+ <span class="token number">28</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">29</span> <span class="token punctuation">}</span>
+
+</code></pre> 
+<p>makefile</p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> mythread<span class="token operator">:</span>test_creat<span class="token punctuation">.</span>cpp
+  <span class="token number">2</span>     g<span class="token operator">++</span> $<span class="token operator">^</span> <span class="token operator">-</span>o $@ <span class="token operator">-</span>lpthread
+  <span class="token number">3</span> <span class="token punctuation">.</span>PHONY<span class="token operator">:</span>clean
+  <span class="token number">4</span> clean<span class="token operator">:</span>
+  <span class="token number">5</span>     rm <span class="token operator">-</span>f mythread                                                                                                                                                                    
+
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/8a/96/FPVWxjVj_o.png" alt="在这里插入图片描述"></p> 
+<p>线程入口的参数传递规则：<br> <strong>规则1：线程入口的参数不可以传递临时变量<br> 规则2：传递的要是堆上开辟的空间，哪个线程用，哪个线程在用完后释放。<br> 规则3：线程入口参数既可以传递内置类型，也可以传递自定义类型。</strong></p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>                                                                                                                                                                    
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">6</span> <span class="token keyword">class</span> <span class="token class-name">mythread</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>     <span class="token keyword">public</span><span class="token operator">:</span>
+  <span class="token number">9</span>         <span class="token function">mythread</span><span class="token punctuation">(</span><span class="token keyword">int</span> key<span class="token punctuation">)</span>
+ <span class="token number">10</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">11</span>             i<span class="token operator">=</span>key<span class="token punctuation">;</span>
+ <span class="token number">12</span>         <span class="token punctuation">}</span>
+ <span class="token number">13</span>         <span class="token operator">~</span><span class="token function">mythread</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">14</span>         <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+ <span class="token number">15</span>         <span class="token keyword">void</span>  <span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">16</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">17</span>            <span class="token keyword">int</span> ret<span class="token operator">=</span> <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tid<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>run<span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">18</span>            <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">19</span>            <span class="token punctuation">{<!-- --></span>
+ <span class="token number">20</span>                <span class="token keyword">return</span> <span class="token punctuation">;</span>
+ <span class="token number">21</span>            <span class="token punctuation">}</span>
+ <span class="token number">22</span>         <span class="token punctuation">}</span>
+ <span class="token number">23</span>           <span class="token keyword">static</span> <span class="token keyword">void</span><span class="token operator">*</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+ <span class="token number">24</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">25</span>                 mythread<span class="token operator">*</span>pn<span class="token operator">=</span><span class="token punctuation">(</span>mythread<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+ <span class="token number">26</span>                 <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">27</span>                 <span class="token punctuation">{<!-- --></span>
+ <span class="token number">28</span> 
+ <span class="token number">29</span>                 cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am thread  "</span><span class="token operator">&lt;&lt;</span>pn<span class="token operator">-&gt;</span>i<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">30</span>                 <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">31</span>                 <span class="token punctuation">}</span>
+ <span class="token number">32</span>         <span class="token punctuation">}</span>
+ <span class="token number">33</span> 
+ <span class="token number">34</span>     <span class="token keyword">private</span><span class="token operator">:</span>
+ <span class="token number">35</span>     pthread_t tid<span class="token punctuation">;</span>
+ <span class="token number">36</span>     <span class="token keyword">int</span> i<span class="token punctuation">;</span>
+ <span class="token number">37</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">38</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">39</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">40</span>   mythread <span class="token operator">*</span>rd<span class="token operator">=</span><span class="token keyword">new</span> <span class="token function">mythread</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">41</span>   rd<span class="token operator">-&gt;</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">42</span>   <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">43</span>   <span class="token punctuation">{<!-- --></span>
+ <span class="token number">44</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">" i am main thread"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">45</span>    <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">46</span>   <span class="token punctuation">}</span>
+ <span class="token number">47</span>   <span class="token keyword">delete</span> rd<span class="token punctuation">;</span>
+ <span class="token number">48</span>   <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">49</span> <span class="token punctuation">}</span>             
+
+</code></pre> 
+<p>这个代码其实不是很好，因为没有考虑到让工作线程去释放。所以只供参考，不推荐写这样的代码<br> <img src="https://images2.imgbox.com/fb/69/a8a88EHD_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_163"></a>线程终止</h3> 
+<p>常见线程退出的几种方式：<br> <img src="https://images2.imgbox.com/98/b4/LDZ1GZH0_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span><span class="token operator">:</span> exit_thread<span class="token punctuation">.</span>cpp <span class="token operator">?</span> <span class="token operator">?</span>                                                                                                                                                       <span class="token operator">?</span><span class="token operator">?</span> buffers 
+  <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>                                                                                                                                                                    
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">6</span> <span class="token keyword">struct</span> <span class="token class-name">student</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>     <span class="token keyword">void</span> <span class="token function">set</span><span class="token punctuation">(</span><span class="token keyword">int</span> num<span class="token punctuation">)</span>
+  <span class="token number">9</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>         age<span class="token operator">=</span>num<span class="token punctuation">;</span>
+ <span class="token number">11</span>     <span class="token punctuation">}</span>
+ <span class="token number">12</span>     <span class="token keyword">int</span> age<span class="token punctuation">;</span>
+ <span class="token number">13</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">14</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+ <span class="token number">15</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">16</span>   student <span class="token operator">*</span>pn<span class="token operator">=</span><span class="token punctuation">(</span>student<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+ <span class="token number">17</span>   <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">18</span>   <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">19</span>   <span class="token punctuation">{<!-- --></span>
+ <span class="token number">20</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>count<span class="token operator">++</span><span class="token operator">==</span><span class="token number">20</span><span class="token punctuation">)</span>
+ <span class="token number">21</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">22</span>        <span class="token comment">// pthread_cancel(pthread_self());</span>
+ <span class="token number">23</span>       <span class="token comment">// pthread_exit(NULL);</span>
+ <span class="token number">24</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"我溜了，886"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">25</span>       <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+ <span class="token number">26</span>     <span class="token punctuation">}</span>
+ <span class="token number">27</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am work pthread "</span><span class="token operator">&lt;&lt;</span> pn<span class="token operator">-&gt;</span>age<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">28</span>   <span class="token punctuation">}</span>
+ <span class="token number">29</span> <span class="token punctuation">}</span>
+ <span class="token number">30</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">31</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">32</span> 
+ <span class="token number">33</span>     pthread_t tid<span class="token punctuation">;</span>
+ <span class="token number">34</span>     student <span class="token operator">*</span>pre<span class="token operator">=</span><span class="token keyword">new</span> student<span class="token punctuation">;</span>
+ <span class="token number">35</span>     pre<span class="token operator">-&gt;</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">36</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tid<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>run<span class="token punctuation">,</span>pre<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">37</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">38</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">39</span>        cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am main thread"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">40</span>        <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">41</span>     <span class="token punctuation">}</span>
+ <span class="token number">42</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">43</span> <span class="token punctuation">}</span>                                                                                                                                                                                     
+
+
+</code></pre> 
+<p>makefile</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> exit_thread<span class="token operator">:</span>exit_thread<span class="token punctuation">.</span>cpp
+  <span class="token number">2</span>     g<span class="token operator">++</span> $<span class="token operator">^</span> <span class="token operator">-</span>o $@ <span class="token operator">-</span>lpthread
+  <span class="token number">3</span> <span class="token punctuation">.</span>PHONY<span class="token operator">:</span>clean
+  <span class="token number">4</span> clean<span class="token operator">:</span>
+  <span class="token number">5</span>     rm <span class="token operator">-</span>f exit_thread   
+</code></pre> 
+<p><img src="https://images2.imgbox.com/46/f0/u34omB3e_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_226"></a>线程等待</h3> 
+<p><img src="https://images2.imgbox.com/fb/17/XW4Uz4ck_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">6</span> <span class="token keyword">struct</span> <span class="token class-name">student</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>     <span class="token keyword">void</span> <span class="token function">set</span><span class="token punctuation">(</span><span class="token keyword">int</span> num<span class="token punctuation">)</span>
+  <span class="token number">9</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>         age<span class="token operator">=</span>num<span class="token punctuation">;</span>
+ <span class="token number">11</span>     <span class="token punctuation">}</span>
+ <span class="token number">12</span>     <span class="token keyword">int</span> age<span class="token punctuation">;</span>
+ <span class="token number">13</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">14</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+ <span class="token number">15</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">16</span>   student <span class="token operator">*</span>pn<span class="token operator">=</span><span class="token punctuation">(</span>student<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+ <span class="token number">17</span>   <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">18</span>   <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">19</span>   <span class="token punctuation">{<!-- --></span>
+ <span class="token number">20</span>       <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//先让它睡1s，发现主线程仍旧不打印，证明为阻塞等                                                                                                                                                                     </span>
+ <span class="token number">21</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>count<span class="token operator">++</span><span class="token operator">==</span><span class="token number">20</span><span class="token punctuation">)</span>
+ <span class="token number">22</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">23</span>        <span class="token comment">// pthread_cancel(pthread_self());</span>
+ <span class="token number">24</span>       <span class="token comment">// pthread_exit(NULL);</span>
+ <span class="token number">25</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"我溜了，886"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>       <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+ <span class="token number">27</span>     <span class="token punctuation">}</span>
+ <span class="token number">28</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am work pthread "</span><span class="token operator">&lt;&lt;</span> pn<span class="token operator">-&gt;</span>age<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">29</span>   <span class="token punctuation">}</span>
+ <span class="token number">30</span> <span class="token punctuation">}</span>
+ <span class="token number">31</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">32</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">33</span> 
+ <span class="token number">34</span>     pthread_t tid<span class="token punctuation">;</span>
+ <span class="token number">35</span>     student <span class="token operator">*</span>pre<span class="token operator">=</span><span class="token keyword">new</span> student<span class="token punctuation">;</span>
+ <span class="token number">36</span>     pre<span class="token operator">-&gt;</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">37</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tid<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>run<span class="token punctuation">,</span>pre<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">38</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>tid<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">39</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token number">40</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">41</span>        cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am main thread"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">42</span>        <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">43</span>     <span class="token punctuation">}</span>
+ <span class="token number">44</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">45</span> <span class="token punctuation">}</span>         
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/35/1c/naMg878F_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_281"></a>线程分离</h3> 
+<p><img src="https://images2.imgbox.com/b5/69/4zLBpwEa_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/44/1d/VsqttuEW_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">6</span> <span class="token keyword">struct</span> <span class="token class-name">student</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>     <span class="token keyword">void</span> <span class="token function">set</span><span class="token punctuation">(</span><span class="token keyword">int</span> num<span class="token punctuation">)</span>
+  <span class="token number">9</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>         age<span class="token operator">=</span>num<span class="token punctuation">;</span>
+ <span class="token number">11</span>     <span class="token punctuation">}</span>
+ <span class="token number">12</span>     <span class="token keyword">int</span> age<span class="token punctuation">;</span>
+ <span class="token number">13</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">14</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+ <span class="token number">15</span> <span class="token punctuation">{<!-- --></span>
+       <span class="token comment">//自身分离</span>
+       <span class="token function">pthread_detach</span><span class="token punctuation">(</span><span class="token function">pthread_self</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">16</span>   student <span class="token operator">*</span>pn<span class="token operator">=</span><span class="token punctuation">(</span>student<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+ <span class="token number">17</span>   <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">18</span>   <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">19</span>   <span class="token punctuation">{<!-- --></span>
+ <span class="token number">20</span>       <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//先让它睡1s，发现主线程仍旧不打印，证明为阻塞等                                                                                                                                                                     </span>
+ <span class="token number">21</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>count<span class="token operator">++</span><span class="token operator">==</span><span class="token number">20</span><span class="token punctuation">)</span>
+ <span class="token number">22</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">23</span>        <span class="token comment">// pthread_cancel(pthread_self());</span>
+ <span class="token number">24</span>       <span class="token comment">// pthread_exit(NULL);</span>
+ <span class="token number">25</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"我溜了，886"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>       <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+ <span class="token number">27</span>     <span class="token punctuation">}</span>
+ <span class="token number">28</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am work pthread "</span><span class="token operator">&lt;&lt;</span> pn<span class="token operator">-&gt;</span>age<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">29</span>   <span class="token punctuation">}</span>
+ <span class="token number">30</span> <span class="token punctuation">}</span>
+ <span class="token number">31</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">32</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">33</span> 
+ <span class="token number">34</span>     pthread_t tid<span class="token punctuation">;</span>
+ <span class="token number">35</span>     student <span class="token operator">*</span>pre<span class="token operator">=</span><span class="token keyword">new</span> student<span class="token punctuation">;</span>
+ <span class="token number">36</span>     pre<span class="token operator">-&gt;</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">37</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tid<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>run<span class="token punctuation">,</span>pre<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">38</span>     <span class="token comment">//pthread_join(tid,NULL);</span>
+        <span class="token comment">//在主线程中设置分离属性</span>
+        <span class="token function">pthread_detach</span><span class="token punctuation">(</span>tid<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">39</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token number">40</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">41</span>        cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am main thread"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">42</span>        <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">43</span>     <span class="token punctuation">}</span>
+ <span class="token number">44</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">45</span> <span class="token punctuation">}</span> 
+</code></pre> 
+<h2><a id="_336"></a>线程安全</h2> 
+<p>示例：<br> <img src="https://images2.imgbox.com/49/c5/IrRh2Zun_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_339"></a>线程互斥：</h3> 
+<p>互斥：任何时刻，互斥保证有且只有一个执行流进入临界区，访问临界资源，通常对临界区起保护作用</p> 
+<p>为什么需要？</p> 
+<p>假设有两个线程同时进入临界区去访问临界资源时，假如两个线程都想对这个变量做一个++操作的话，此时因为他们同时拿到了这份资源，在执行完++操作后，本该两个执行流的++操作，其实最后只起到了一个执行流的效果。所以，当我们对临界区中的临界资源进行修改时，必须保证其原子性。而且必须保证拥有临界资源的执行流有且只有一个，这样可以避免运算结果的二义性。</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+    <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">4</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">5</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+    <span class="token number">6</span> <span class="token keyword">const</span> <span class="token keyword">int</span> num<span class="token operator">=</span><span class="token number">4</span><span class="token punctuation">;</span>
+    <span class="token number">7</span> <span class="token keyword">int</span> ticket<span class="token operator">=</span><span class="token number">1000</span><span class="token punctuation">;</span>
+W<span class="token operator">&gt;</span>  <span class="token number">8</span> <span class="token keyword">void</span> <span class="token operator">*</span> <span class="token function">getticket</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+    <span class="token number">9</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">10</span> 
+   <span class="token number">11</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+   <span class="token number">12</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">13</span>         <span class="token keyword">if</span><span class="token punctuation">(</span>ticket<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+   <span class="token number">14</span>         <span class="token punctuation">{<!-- --></span>
+W<span class="token operator">&gt;</span> <span class="token number">15</span>            <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"i am %p , i got a ticket %d\n"</span><span class="token punctuation">,</span><span class="token function">pthread_self</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>ticket<span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                           
+   <span class="token number">16</span>            <span class="token operator">--</span>ticket<span class="token punctuation">;</span>
+   <span class="token number">17</span>         <span class="token punctuation">}</span>
+   <span class="token number">18</span>         <span class="token keyword">else</span>
+   <span class="token number">19</span>         <span class="token punctuation">{<!-- --></span>
+   <span class="token number">20</span>             <span class="token keyword">break</span><span class="token punctuation">;</span>
+   <span class="token number">21</span>         <span class="token punctuation">}</span>
+   <span class="token number">22</span>     <span class="token punctuation">}</span>
+W<span class="token operator">&gt;</span> <span class="token number">23</span> <span class="token punctuation">}</span>
+   <span class="token number">24</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+   <span class="token number">25</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">26</span>    pthread_t  arr<span class="token punctuation">[</span>num<span class="token punctuation">]</span><span class="token punctuation">;</span>
+   <span class="token number">27</span>     <span class="token keyword">int</span> i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">28</span>     <span class="token keyword">for</span><span class="token punctuation">(</span><span class="token punctuation">;</span>i<span class="token operator">&lt;</span>num<span class="token punctuation">;</span><span class="token operator">++</span>i<span class="token punctuation">)</span>
+   <span class="token number">29</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">30</span>        <span class="token keyword">int</span> ret<span class="token operator">=</span> <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>arr<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>getticket<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">31</span>        <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+   <span class="token number">32</span>        <span class="token punctuation">{<!-- --></span>
+   <span class="token number">33</span>            cout<span class="token operator">&lt;&lt;</span><span class="token string">"create error"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+   <span class="token number">34</span>            <span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+   <span class="token number">35</span>        <span class="token punctuation">}</span>
+   <span class="token number">36</span>     <span class="token punctuation">}</span>
+   <span class="token number">37</span>     i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">38</span>     <span class="token keyword">for</span><span class="token punctuation">(</span><span class="token punctuation">;</span>i<span class="token operator">&lt;</span>num<span class="token punctuation">;</span><span class="token operator">++</span>i<span class="token punctuation">)</span>
+   <span class="token number">39</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">40</span>         <span class="token function">pthread_join</span><span class="token punctuation">(</span>arr<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">41</span>     <span class="token punctuation">}</span>
+   <span class="token number">42</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">43</span> <span class="token punctuation">}</span>        
+</code></pre> 
+<p>两个不同的人拿到了同一张票，这便是线程不安全的情况<br> <img src="https://images2.imgbox.com/e4/6b/8HErXUoF_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_394"></a>锁的本质</h3> 
+<p><img src="https://images2.imgbox.com/39/93/lBQeTCGN_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/d6/f0/mJH7ZoRU_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_398"></a>加锁的时机</h3> 
+<p><img src="https://images2.imgbox.com/68/04/d0iu2aEV_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_401"></a>加锁的接口</h3> 
+<p><img src="https://images2.imgbox.com/8e/be/XJoLDCaI_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/cb/8c/o3OeV112_o.png" alt="在这里插入图片描述"><br> 利用加锁解决掉上面拿到同一张票问题</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+    <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">4</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">5</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+    <span class="token number">6</span> <span class="token keyword">const</span> <span class="token keyword">int</span> num<span class="token operator">=</span><span class="token number">4</span><span class="token punctuation">;</span>
+    <span class="token comment">//定义一个全局变量的锁</span>
+    <span class="token number">7</span> pthread_mutex_t lock<span class="token punctuation">;</span>
+    <span class="token number">8</span> <span class="token keyword">int</span> ticket<span class="token operator">=</span><span class="token number">1000</span><span class="token punctuation">;</span>
+W<span class="token operator">&gt;</span>  <span class="token number">9</span> <span class="token keyword">void</span> <span class="token operator">*</span> <span class="token function">getticket</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+   <span class="token number">10</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">11</span> 
+   <span class="token number">12</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+   <span class="token number">13</span>     <span class="token punctuation">{<!-- --></span>
+                <span class="token comment">//上锁</span>
+   <span class="token number">14</span>         <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">15</span>         <span class="token keyword">if</span><span class="token punctuation">(</span>ticket<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+   <span class="token number">16</span>         <span class="token punctuation">{<!-- --></span>
+W<span class="token operator">&gt;</span> <span class="token number">17</span>            <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"i am %p , i got a   ticket%d\n"</span><span class="token punctuation">,</span><span class="token function">pthread_self</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>ticket<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">18</span>            <span class="token operator">--</span>ticket<span class="token punctuation">;</span>
+   <span class="token number">19</span>         <span class="token punctuation">}</span>
+   <span class="token number">20</span>         <span class="token keyword">else</span>
+   <span class="token number">21</span>         <span class="token punctuation">{<!-- --></span>
+                   <span class="token comment">//确保在退出之前归还锁</span>
+   <span class="token number">22</span>             <span class="token function">pthread_mutex_unlock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">23</span>             <span class="token keyword">break</span><span class="token punctuation">;</span>
+   <span class="token number">24</span>         <span class="token punctuation">}</span>
+                  <span class="token comment">//取完一次后也要归还锁</span>
+   <span class="token number">25</span>             <span class="token function">pthread_mutex_unlock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>                                             
+   <span class="token number">26</span>     <span class="token punctuation">}</span>
+   <span class="token number">27</span> 
+W<span class="token operator">&gt;</span> <span class="token number">28</span> <span class="token punctuation">}</span>
+   <span class="token number">29</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+   <span class="token number">30</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">31</span>    pthread_t  arr<span class="token punctuation">[</span>num<span class="token punctuation">]</span><span class="token punctuation">;</span>
+   <span class="token number">32</span>     <span class="token keyword">int</span> i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+           <span class="token comment">//锁的初始化，动态初始化的，所以必须要释放该锁资源</span>
+   <span class="token number">33</span>     <span class="token function">pthread_mutex_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">34</span>     <span class="token keyword">for</span><span class="token punctuation">(</span><span class="token punctuation">;</span>i<span class="token operator">&lt;</span>num<span class="token punctuation">;</span><span class="token operator">++</span>i<span class="token punctuation">)</span>
+   <span class="token number">35</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">36</span>        <span class="token keyword">int</span> ret<span class="token operator">=</span><span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>arr<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>getticket<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">37</span>        <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+   <span class="token number">38</span>        <span class="token punctuation">{<!-- --></span>
+   <span class="token number">39</span>            cout<span class="token operator">&lt;&lt;</span><span class="token string">"create error"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+   <span class="token number">40</span>            <span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+   <span class="token number">41</span>        <span class="token punctuation">}</span>
+   <span class="token number">42</span>     <span class="token punctuation">}</span>
+   <span class="token number">43</span>     i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">44</span>     <span class="token keyword">for</span><span class="token punctuation">(</span><span class="token punctuation">;</span>i<span class="token operator">&lt;</span>num<span class="token punctuation">;</span><span class="token operator">++</span>i<span class="token punctuation">)</span>
+   <span class="token number">45</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">46</span>         <span class="token function">pthread_join</span><span class="token punctuation">(</span>arr<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">47</span>     <span class="token punctuation">}</span>
+           <span class="token comment">//销毁该锁</span>
+   <span class="token number">48</span>     <span class="token function">pthread_mutex_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">49</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">50</span> <span class="token punctuation">}</span>              
+
+</code></pre> 
+<h3><a id="_465"></a>加锁所带来的弊端</h3> 
+<p><img src="https://images2.imgbox.com/c0/95/oREyMGEF_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_468"></a>死锁</h3> 
+<p>先构建出一个死锁情况</p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+    <span class="token number">2</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">4</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+    <span class="token number">5</span> pthread_mutex_t lock1<span class="token punctuation">;</span>
+    <span class="token number">6</span> pthread_mutex_t lock2<span class="token punctuation">;</span>
+    <span class="token number">7</span> 
+W<span class="token operator">&gt;</span>  <span class="token number">8</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">run1</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+    <span class="token number">9</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">10</span>   <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">11</span>   <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">12</span>   <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+W<span class="token operator">&gt;</span> <span class="token number">13</span> <span class="token punctuation">}</span>
+W<span class="token operator">&gt;</span> <span class="token number">14</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">run2</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+   <span class="token number">15</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">16</span>     <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">17</span>     <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">18</span>     <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">19</span> 
+W<span class="token operator">&gt;</span> <span class="token number">20</span> <span class="token punctuation">}</span>
+   <span class="token number">21</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+   <span class="token number">22</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">23</span>    <span class="token function">pthread_mutex_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">24</span>    <span class="token function">pthread_mutex_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">25</span>    pthread_t mid1<span class="token punctuation">,</span>mid2<span class="token punctuation">;</span>
+   <span class="token number">26</span>    <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>mid1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>run1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">27</span>    <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>mid2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>run2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">28</span>    <span class="token function">pthread_join</span><span class="token punctuation">(</span>mid1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">29</span>    <span class="token function">pthread_join</span><span class="token punctuation">(</span>mid2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">30</span>    <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+   <span class="token number">31</span>    <span class="token punctuation">{<!-- --></span>
+   <span class="token number">32</span>      <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                       
+   <span class="token number">33</span>    <span class="token punctuation">}</span>
+   <span class="token number">34</span>    <span class="token function">pthread_mutex_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">35</span>    <span class="token function">pthread_mutex_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">36</span> <span class="token punctuation">}</span>
+
+</code></pre> 
+<p>根据gdb理解死锁<br> <img src="https://images2.imgbox.com/15/2d/hrZSEnrN_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/bf/51/kU4oOXLu_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/19/c3/1XzLZg6W_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/e2/99/CymrYhsy_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/93/73/rmEVdVr3_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/cc/de/LEv2HC7G_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/93/00/XeNwVYAJ_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_523"></a>死锁的概念</h4> 
+<p>死锁是指在一组进程中的各个进程<strong>均占有不会释放的资源</strong>，但<strong>因互相申请被其他进程所站用不会释放的资源而处于的一种永久等待状态</strong></p> 
+<h4><a id="_525"></a>线程产生的必要条件</h4> 
+<p>互斥条件：一个资源每次<strong>只能被一个执行流</strong>使用<br> 请求与保持条件：一个执行流因请求资源而阻塞时，对已获得的资源<strong>保持不放</strong><br> 不剥夺条件:一个执行流已获得的资源，在末使用完之前，<strong>不能强行剥夺</strong><br> 循环等待条件:若干执行流之间形成一种头尾相接的<strong>循环等待资源</strong>的关系</p> 
+<h4><a id="_530"></a>避免死锁</h4> 
+<p><strong>1，资源一次性分配。<br> 2，避免锁未释放的场景<br> 3.加锁顺序一致。</strong></p> 
+<h2><a id="_534"></a>线程同步</h2> 
+<p><img src="https://images2.imgbox.com/36/fd/X6wUZYm1_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_536"></a>接口说明</h3> 
+<p>初始化接口<br> <img src="https://images2.imgbox.com/6f/b2/epGf68NL_o.png" alt="在这里插入图片描述"><br> 等待接口<br> <img src="https://images2.imgbox.com/51/a2/hvtFjOtA_o.png" alt="在这里插入图片描述"><br> 为什么第二个参数要传入锁？<br> <img src="https://images2.imgbox.com/cc/2a/HdJM8fiU_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/47/bb/jyA93Tzd_o.png" alt="在这里插入图片描述"></p> 
+<p>唤醒接口<br> <img src="https://images2.imgbox.com/c1/55/vC9SP9Di_o.png" alt="在这里插入图片描述"><br> 释放接口<br> int pthread_cond_destroy(pthread_cond_t *cond);<br> 将初始化的条件变量释放。</p> 
+<h3><a id="_550"></a>基于同步实现生产者与消费者模型</h3> 
+<p><img src="https://images2.imgbox.com/40/57/Y16kEOG5_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/87/a1/4WlPWvK7_o.png" alt="在这里插入图片描述"><br> 优势：<br> <img src="https://images2.imgbox.com/32/9b/2OdV7IlA_o.png" alt="在这里插入图片描述"><br> 阻塞队列<br> <img src="https://images2.imgbox.com/db/82/jlxyDDjf_o.png" alt="在这里插入图片描述"><br> 头文件：</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #pragma once                                                                                                                                                                          
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>queue<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> <span class="token keyword">class</span> <span class="token class-name">task</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>  <span class="token keyword">public</span><span class="token operator">:</span>
+  <span class="token number">9</span>      <span class="token keyword">int</span> x<span class="token punctuation">,</span>y<span class="token punctuation">;</span>
+ <span class="token number">10</span>  <span class="token keyword">public</span><span class="token operator">:</span>
+ <span class="token number">11</span>      <span class="token function">task</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">12</span>      <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+ <span class="token number">13</span>      <span class="token function">task</span><span class="token punctuation">(</span><span class="token keyword">int</span> _x<span class="token punctuation">,</span><span class="token keyword">int</span> _y<span class="token punctuation">)</span><span class="token operator">:</span><span class="token function">x</span><span class="token punctuation">(</span>_x<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">y</span><span class="token punctuation">(</span>_y<span class="token punctuation">)</span>
+ <span class="token number">14</span>      <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+ <span class="token number">15</span>      <span class="token keyword">int</span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">16</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">17</span>          <span class="token keyword">return</span> x<span class="token operator">+</span>y<span class="token punctuation">;</span>
+ <span class="token number">18</span>      <span class="token punctuation">}</span>
+ <span class="token number">19</span>      <span class="token operator">~</span><span class="token function">task</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">20</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">21</span> 
+ <span class="token number">22</span>      <span class="token punctuation">}</span>
+ <span class="token number">23</span>      
+ <span class="token number">24</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">25</span> <span class="token keyword">class</span> <span class="token class-name">Block_queue</span>
+ <span class="token number">26</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">27</span> <span class="token keyword">private</span><span class="token operator">:</span>
+ <span class="token number">28</span>     std<span class="token operator">::</span>queue<span class="token operator">&lt;</span>task<span class="token operator">&gt;</span>t<span class="token punctuation">;</span><span class="token comment">//运行队列</span>
+ <span class="token number">29</span>     size_t cap<span class="token punctuation">;</span><span class="token comment">//容量</span>
+ <span class="token number">30</span>     pthread_mutex_t lock<span class="token punctuation">;</span><span class="token comment">//设置一把互斥锁</span>
+ <span class="token number">31</span>     pthread_cond_t consumer<span class="token punctuation">;</span><span class="token comment">//消费者在该条件下等</span>
+ <span class="token number">32</span>     pthread_cond_t productor<span class="token punctuation">;</span><span class="token comment">//生产者在该条件下等</span>
+ <span class="token number">33</span> <span class="token keyword">public</span><span class="token operator">:</span>
+ <span class="token number">34</span>      <span class="token keyword">void</span>  <span class="token function">LockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">35</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">36</span>            <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">37</span>      <span class="token punctuation">}</span>
+ <span class="token number">38</span>     <span class="token keyword">void</span> <span class="token function">UnlockQueuue</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">39</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">40</span>           <span class="token function">pthread_mutex_unlock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">41</span>     <span class="token punctuation">}</span>
+ <span class="token number">42</span>     <span class="token keyword">bool</span> <span class="token function">isfull</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">43</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">44</span>         <span class="token keyword">return</span> t<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">==</span>cap<span class="token punctuation">;</span>
+ <span class="token number">45</span>     <span class="token punctuation">}</span>
+ <span class="token number">46</span>     <span class="token keyword">bool</span> <span class="token function">isempty</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">47</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">48</span>         <span class="token keyword">return</span> t<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">49</span>     <span class="token punctuation">}</span>
+ <span class="token number">50</span>     <span class="token keyword">void</span> <span class="token function">WakeConsumer</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">51</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">52</span>         std<span class="token operator">::</span>cout<span class="token operator">&lt;&lt;</span><span class="token string">"Wake up consumer"</span><span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span>
+ <span class="token number">53</span>         <span class="token function">pthread_cond_signal</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>consumer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">54</span>     <span class="token punctuation">}</span>
+ <span class="token number">55</span>     <span class="token keyword">void</span> <span class="token function">WakeProductor</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">56</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">57</span>         std<span class="token operator">::</span>cout<span class="token operator">&lt;&lt;</span><span class="token string">"Wake up productor"</span><span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span> 
+ <span class="token number">58</span>         <span class="token function">pthread_cond_signal</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>productor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">59</span>     <span class="token punctuation">}</span>
+ <span class="token number">60</span>     <span class="token keyword">void</span> <span class="token function">ProductorWait</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">61</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">62</span>         std<span class="token operator">::</span>cout<span class="token operator">&lt;&lt;</span><span class="token string">"productor wait"</span><span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span>
+ <span class="token number">63</span>         <span class="token function">pthread_cond_wait</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>productor<span class="token punctuation">,</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">64</span>     <span class="token punctuation">}</span>
+ <span class="token number">65</span>     <span class="token keyword">void</span> <span class="token function">ConsumerWait</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">66</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">67</span>         std<span class="token operator">::</span>cout<span class="token operator">&lt;&lt;</span><span class="token string">"consumer wait"</span><span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span>
+ <span class="token number">68</span>         <span class="token function">pthread_cond_wait</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>consumer<span class="token punctuation">,</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">69</span>     <span class="token punctuation">}</span>
+ <span class="token number">70</span> <span class="token keyword">public</span><span class="token operator">:</span>
+ <span class="token number">71</span>     <span class="token function">Block_queue</span><span class="token punctuation">(</span>size_t _cap<span class="token punctuation">)</span>
+ <span class="token number">72</span>     <span class="token punctuation">{<!-- --></span>                                                                                                                                                                                 
+ <span class="token number">73</span>         cap<span class="token operator">=</span>_cap<span class="token punctuation">;</span>
+ <span class="token number">74</span>         <span class="token function">pthread_mutex_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//初始化该锁</span>
+ <span class="token number">75</span>         <span class="token function">pthread_cond_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>consumer<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">76</span>         <span class="token function">pthread_cond_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>productor<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">77</span>     <span class="token punctuation">}</span>
+ <span class="token number">78</span>     <span class="token keyword">void</span> <span class="token function">put</span><span class="token punctuation">(</span>task t1<span class="token punctuation">)</span>
+ <span class="token number">79</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">80</span>         <span class="token function">LockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">81</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token function">isfull</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+ <span class="token number">82</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">83</span>             <span class="token function">WakeConsumer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">84</span>             <span class="token function">ProductorWait</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">85</span>         <span class="token punctuation">}</span>
+ <span class="token number">86</span>         t<span class="token punctuation">.</span><span class="token function">push</span><span class="token punctuation">(</span>t1<span class="token punctuation">)</span><span class="token punctuation">;</span> 
+ <span class="token number">87</span>         <span class="token function">UnlockQueuue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">88</span>     <span class="token punctuation">}</span>
+ <span class="token number">89</span>     <span class="token keyword">void</span> <span class="token function">get</span><span class="token punctuation">(</span>task <span class="token operator">&amp;</span>t1<span class="token punctuation">)</span>
+ <span class="token number">90</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">91</span>         <span class="token function">LockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">92</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token function">isempty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+ <span class="token number">93</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">94</span>             <span class="token function">WakeProductor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">95</span>             <span class="token function">ConsumerWait</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">96</span>         <span class="token punctuation">}</span>
+ <span class="token number">97</span>         t1<span class="token operator">=</span>t<span class="token punctuation">.</span><span class="token function">front</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">98</span>         t<span class="token punctuation">.</span><span class="token function">pop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">99</span>         <span class="token function">UnlockQueuue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token number">100</span>     <span class="token punctuation">}</span>
+<span class="token number">101</span>     <span class="token operator">~</span><span class="token function">Block_queue</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token number">102</span>     <span class="token punctuation">{<!-- --></span>
+<span class="token number">103</span>         <span class="token function">pthread_mutex_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token number">104</span>         <span class="token function">pthread_cond_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>consumer<span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                              
+<span class="token number">105</span>         <span class="token function">pthread_cond_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>productor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token number">106</span>     <span class="token punctuation">}</span>
+<span class="token number">107</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+
+
+</code></pre> 
+<p>main函数</p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token string">"c_p.hpp"</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">4</span> pthread_mutex_t lock1<span class="token punctuation">,</span>lock2<span class="token punctuation">;</span><span class="token comment">//lcok1为生产者锁，lock2为消费者锁</span>
+  <span class="token number">5</span> <span class="token keyword">void</span><span class="token operator">*</span> <span class="token function">pro_run</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span>arg<span class="token punctuation">)</span>
+  <span class="token number">6</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">7</span>    Block_queue <span class="token operator">*</span>rq<span class="token operator">=</span><span class="token punctuation">(</span>Block_queue<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+  <span class="token number">8</span>    <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token number">9</span>    <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>        <span class="token comment">//确保生产者先生产满</span>
+ <span class="token number">11</span>        <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>        <span class="token comment">//加的是生产者的锁</span>
+ <span class="token number">13</span>        <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">14</span>        <span class="token keyword">int</span> x<span class="token operator">=</span><span class="token function">rand</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">%</span><span class="token number">20</span><span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">;</span>
+ <span class="token number">15</span>        <span class="token keyword">int</span> y<span class="token operator">=</span><span class="token function">rand</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">%</span><span class="token number">30</span><span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">;</span>
+ <span class="token number">16</span>        task <span class="token function">t</span><span class="token punctuation">(</span>x<span class="token punctuation">,</span>y<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">17</span>        rq<span class="token operator">-&gt;</span><span class="token function">put</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">18</span>        cout<span class="token operator">&lt;&lt;</span><span class="token string">"productor send task"</span><span class="token operator">&lt;&lt;</span>x<span class="token operator">&lt;&lt;</span><span class="token string">"+"</span><span class="token operator">&lt;&lt;</span>y<span class="token operator">&lt;&lt;</span><span class="token string">" = ?"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">19</span>        <span class="token function">pthread_mutex_unlock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">20</span>        <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">21</span>    <span class="token punctuation">}</span>
+ <span class="token number">22</span> <span class="token punctuation">}</span>
+ <span class="token number">23</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">cu_run</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+ <span class="token number">24</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">25</span>   Block_queue <span class="token operator">*</span>rq<span class="token operator">=</span><span class="token punctuation">(</span>Block_queue<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+ <span class="token number">26</span>   <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">27</span>   <span class="token punctuation">{<!-- --></span>
+ <span class="token number">28</span>      <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">29</span>      task t<span class="token punctuation">;</span>
+ <span class="token number">30</span>      rq<span class="token operator">-&gt;</span><span class="token function">get</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                                                      
+ <span class="token number">31</span>      cout<span class="token operator">&lt;&lt;</span><span class="token string">"consumer get task"</span><span class="token operator">&lt;&lt;</span>t<span class="token punctuation">.</span>x<span class="token operator">&lt;&lt;</span><span class="token string">"+"</span><span class="token operator">&lt;&lt;</span>t<span class="token punctuation">.</span>y<span class="token operator">&lt;&lt;</span><span class="token string">"= "</span><span class="token operator">&lt;&lt;</span>t<span class="token punctuation">.</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">32</span>      <span class="token function">pthread_mutex_unlock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">33</span>   <span class="token punctuation">}</span>
+ <span class="token number">34</span> <span class="token punctuation">}</span>
+ <span class="token number">35</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">36</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">37</span>     pthread_t p1<span class="token punctuation">,</span>p2<span class="token punctuation">,</span>p3<span class="token punctuation">;</span><span class="token comment">//3个生产者</span>
+ <span class="token number">38</span>     pthread_t c1<span class="token punctuation">,</span>c2<span class="token punctuation">,</span>c3<span class="token punctuation">;</span><span class="token comment">//3个消费者</span>
+ <span class="token number">39</span>     <span class="token comment">//开辟一块新空间，这个空间中最多容纳5个元素</span>
+ <span class="token number">40</span>     Block_queue <span class="token operator">*</span>rq<span class="token operator">=</span><span class="token keyword">new</span> <span class="token function">Block_queue</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">41</span>     <span class="token comment">//初始化锁</span>
+ <span class="token number">42</span>     <span class="token function">pthread_mutex_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">43</span>     <span class="token function">pthread_mutex_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">44</span>     <span class="token comment">//3个生产者线程</span>
+ <span class="token number">45</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>p1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>pro_run<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">46</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>p2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>pro_run<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">47</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>p3<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>pro_run<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">48</span>     <span class="token comment">//3个消费者线程</span>
+ <span class="token number">49</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>c1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>cu_run<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">50</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>c2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>cu_run<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">51</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>c3<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>cu_run<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">52</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>p1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">53</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>p2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">54</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>p3<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">55</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>c1<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">56</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>c2<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">57</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>c3<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">58</span>     <span class="token keyword">delete</span> rq<span class="token punctuation">;</span>
+ <span class="token number">59</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">60</span> <span class="token punctuation">}</span>      
+</code></pre> 
+<p>makefile：</p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> main<span class="token operator">:</span>mymain<span class="token punctuation">.</span>cpp
+  <span class="token number">2</span>     g<span class="token operator">++</span> $<span class="token operator">^</span> <span class="token operator">-</span>o $@ <span class="token operator">-</span>lpthread
+  <span class="token number">3</span> <span class="token punctuation">.</span>PHONY<span class="token operator">:</span>clean
+  <span class="token number">4</span> clean<span class="token operator">:</span>
+  <span class="token number">5</span>     rm <span class="token operator">-</span>f main  
+</code></pre> 
+<p>运行结果<br> <img src="https://images2.imgbox.com/ab/1f/pF4oNynR_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="POSIX_745"></a>POSIX信号量</h2> 
+<p>POSIX信号量和SystemV信号量作用相同，都是用于同步操作，达到无冲突的访问共享资源目的。 <strong>但POSIX可以用于线程间同步</strong>。<br> <img src="https://images2.imgbox.com/c1/02/gQOKyjJ0_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/90/3e/QuD1V9lA_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/f3/3e/Ss0QQCqv_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/ec/ae/S9kQveLd_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/fc/9f/ANnrzd6D_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_756"></a>接口说明</h3> 
+<p>初始化接口</p> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;semaphore.h&gt;</span></span>
+<span class="token keyword">int</span> <span class="token function">sem_init</span><span class="token punctuation">(</span>sem_t <span class="token operator">*</span>sem<span class="token punctuation">,</span> <span class="token keyword">int</span> pshared<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">int</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+参数：
+pshared<span class="token operator">:</span><span class="token number">0</span>表示线程间共享，非零表示进程间共享
+value：信号量初始值
+</code></pre> 
+<p>信号量销毁</p> 
+<pre><code class="prism language-cpp"><span class="token keyword">int</span> <span class="token function">sem_destroy</span><span class="token punctuation">(</span>sem_t <span class="token operator">*</span>sem<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>等待信号量<br> p操作</p> 
+<pre><code class="prism language-cpp">功能：等待信号量，会将信号量的值减<span class="token number">1</span>
+<span class="token keyword">int</span> <span class="token function">sem_wait</span><span class="token punctuation">(</span>sem_t <span class="token operator">*</span>sem<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>归还信号量<br> v操作</p> 
+<pre><code class="prism language-cpp">功能：发布信号量，表示资源使用完毕，可以归还资源了。将信号量值加<span class="token number">1</span>。
+<span class="token keyword">int</span> <span class="token function">sem_post</span><span class="token punctuation">(</span>sem_t <span class="token operator">*</span>sem<span class="token punctuation">)</span>
+</code></pre> 
+<h3><a id="_784"></a>基于环形队列实现</h3> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #pragma once                                                                                                                                                                        
+    <span class="token number">2</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+    <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">4</span> #include<span class="token operator">&lt;</span>semaphore<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">5</span> #include<span class="token operator">&lt;</span>vector<span class="token operator">&gt;</span>
+    <span class="token number">6</span> #define NUM <span class="token number">10</span>
+    <span class="token number">7</span> <span class="token keyword">class</span> <span class="token class-name">Ring_Queue</span>
+    <span class="token number">8</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token number">9</span>     <span class="token keyword">private</span><span class="token operator">:</span>
+   <span class="token number">10</span>        <span class="token keyword">int</span> cap<span class="token punctuation">;</span>
+   <span class="token number">11</span>        std<span class="token operator">::</span>vector<span class="token operator">&lt;</span><span class="token keyword">int</span><span class="token operator">&gt;</span>p<span class="token punctuation">;</span>
+   <span class="token number">12</span>        <span class="token keyword">int</span> c_index<span class="token punctuation">;</span><span class="token comment">//生产者下标</span>
+   <span class="token number">13</span>        <span class="token keyword">int</span> p_index<span class="token punctuation">;</span><span class="token comment">//消费者下标</span>
+             sem_t lock<span class="token punctuation">;</span><span class="token comment">//加锁，</span>
+   <span class="token number">14</span>        sem_t sem_blank<span class="token punctuation">;</span><span class="token comment">//对应空格字</span>
+   <span class="token number">15</span>        sem_t sem_data<span class="token punctuation">;</span><span class="token comment">//格子中的数据</span>
+   <span class="token number">16</span>     <span class="token keyword">public</span><span class="token operator">:</span>
+   <span class="token number">17</span>        <span class="token keyword">void</span> <span class="token function">P</span><span class="token punctuation">(</span>sem_t <span class="token operator">&amp;</span>t<span class="token punctuation">)</span>
+   <span class="token number">18</span>        <span class="token punctuation">{<!-- --></span>
+   <span class="token number">19</span>            <span class="token function">sem_wait</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">20</span>        <span class="token punctuation">}</span>
+   <span class="token number">21</span>        <span class="token keyword">void</span> <span class="token function">V</span><span class="token punctuation">(</span>sem_t <span class="token operator">&amp;</span>t<span class="token punctuation">)</span>
+   <span class="token number">22</span>        <span class="token punctuation">{<!-- --></span>
+   <span class="token number">23</span>            <span class="token function">sem_post</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">24</span>        <span class="token punctuation">}</span>
+   <span class="token number">25</span>     <span class="token keyword">public</span><span class="token operator">:</span>
+W<span class="token operator">&gt;</span> <span class="token number">26</span>     <span class="token function">Ring_Queue</span><span class="token punctuation">(</span><span class="token keyword">int</span> _cap<span class="token operator">=</span>NUM<span class="token punctuation">)</span><span class="token operator">:</span><span class="token function">p</span><span class="token punctuation">(</span>_cap<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">cap</span><span class="token punctuation">(</span>_cap<span class="token punctuation">)</span>
+   <span class="token number">27</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">28</span>       <span class="token function">sem_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>sem_blank<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span>NUM<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//初始化生产者。默认情况下有 NUM个空各自</span>
+   <span class="token number">29</span>       <span class="token function">sem_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>sem_data<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//初始化消费者，默认情况下0个</span>
+            <span class="token function">sem_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//默认0/1起到加锁作用，读写只能一个</span>
+   <span class="token number">30</span>       c_index<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">31</span>       p_index<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">32</span>     <span class="token punctuation">}</span>
+   <span class="token number">33</span>     <span class="token keyword">void</span> <span class="token function">Put</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">int</span> <span class="token operator">&amp;</span>t<span class="token punctuation">)</span>
+   <span class="token number">34</span>     <span class="token punctuation">{<!-- --></span>
+              
+   <span class="token number">35</span>         <span class="token function">P</span><span class="token punctuation">(</span>sem_blank<span class="token punctuation">)</span><span class="token punctuation">;</span>
+              <span class="token function">sem_wait</span><span class="token punctuation">(</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">36</span>         p<span class="token punctuation">[</span>p_index<span class="token punctuation">]</span><span class="token operator">=</span>t<span class="token punctuation">;</span>
+   <span class="token number">37</span>         p_index<span class="token operator">++</span><span class="token punctuation">;</span>
+   <span class="token number">38</span>         p_index<span class="token operator">%=</span>NUM<span class="token punctuation">;</span>
+   <span class="token number">39</span>         <span class="token function">V</span><span class="token punctuation">(</span>sem_data<span class="token punctuation">)</span><span class="token punctuation">;</span>
+              <span class="token function">sem_post</span><span class="token punctuation">(</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">40</span>     <span class="token punctuation">}</span>
+   <span class="token number">41</span>     <span class="token keyword">void</span> <span class="token function">Get</span><span class="token punctuation">(</span><span class="token keyword">int</span> <span class="token operator">&amp;</span>t<span class="token punctuation">)</span>
+   <span class="token number">42</span>     <span class="token punctuation">{<!-- --></span>
+              
+   <span class="token number">43</span>         <span class="token function">P</span><span class="token punctuation">(</span>sem_data<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//必须判断有空间才可以拿锁，要不然拿锁后直接被放在等待队列中，此时假如说读线程想要进行读的话，此时它申请不到锁，就会造成死锁现象</span>
+              <span class="token function">sem_wait</span><span class="token punctuation">(</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">44</span>         t<span class="token operator">=</span>p<span class="token punctuation">[</span>c_index<span class="token punctuation">]</span><span class="token punctuation">;</span>
+   <span class="token number">45</span>         c_index<span class="token operator">++</span><span class="token punctuation">;</span>
+   <span class="token number">46</span>         c_index<span class="token operator">%=</span>NUM<span class="token punctuation">;</span>
+   <span class="token number">47</span>         <span class="token function">V</span><span class="token punctuation">(</span>sem_blank<span class="token punctuation">)</span><span class="token punctuation">;</span>
+              <span class="token function">sem_post</span><span class="token punctuation">(</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">48</span>     <span class="token punctuation">}</span>
+   <span class="token number">49</span>     <span class="token operator">~</span><span class="token function">Ring_Queue</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+   <span class="token number">50</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">51</span>         <span class="token function">sem_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>sem_blank<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">52</span>         <span class="token function">sem_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>sem_data<span class="token punctuation">)</span><span class="token punctuation">;</span>
+              <span class="token function">sem_destroy</span><span class="token punctuation">(</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">53</span>         c_index<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">54</span>         p_index<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">55</span>     <span class="token punctuation">}</span>
+   <span class="token number">56</span> 
+   <span class="token number">57</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>        
+</code></pre> 
+<p>main</p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token string">"ring.hpp"</span>
+  <span class="token number">2</span> <span class="token keyword">void</span> <span class="token operator">*</span><span class="token function">productor</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+  <span class="token number">3</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">4</span>   Ring_Queue <span class="token operator">*</span>rq<span class="token operator">=</span><span class="token punctuation">(</span>Ring_Queue<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+  <span class="token number">5</span>       <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+  <span class="token number">6</span>   <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token number">7</span>   <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>       rq<span class="token operator">-&gt;</span><span class="token function">Put</span><span class="token punctuation">(</span>count<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token number">9</span>       count<span class="token operator">++</span><span class="token punctuation">;</span>
+ <span class="token number">10</span>       <span class="token keyword">if</span><span class="token punctuation">(</span>count<span class="token operator">&gt;</span><span class="token number">10</span><span class="token punctuation">)</span>
+ <span class="token number">11</span>       <span class="token punctuation">{<!-- --></span>
+ <span class="token number">12</span>           count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>                                                                                                                                                                    
+ <span class="token number">13</span>       <span class="token punctuation">}</span>
+ <span class="token number">14</span>       std<span class="token operator">::</span> cout<span class="token operator">&lt;&lt;</span><span class="token string">"productor over"</span><span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span>
+ <span class="token number">15</span>   <span class="token punctuation">}</span>
+ <span class="token number">16</span> <span class="token punctuation">}</span>
+ <span class="token number">17</span> <span class="token keyword">void</span> <span class="token operator">*</span> <span class="token function">consumer</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+ <span class="token number">18</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">19</span>    Ring_Queue <span class="token operator">*</span>rq<span class="token operator">=</span><span class="token punctuation">(</span>Ring_Queue<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+ <span class="token number">20</span>    <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">21</span>    <span class="token punctuation">{<!-- --></span>
+ <span class="token number">22</span>        <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">23</span>        <span class="token keyword">int</span> data<span class="token punctuation">;</span>
+ <span class="token number">24</span>        rq<span class="token operator">-&gt;</span><span class="token function">Get</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">25</span>        std<span class="token operator">::</span>cout<span class="token operator">&lt;&lt;</span><span class="token string">"consumer get a data "</span><span class="token operator">&lt;&lt;</span>data<span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>    <span class="token punctuation">}</span>
+ <span class="token number">27</span> 
+ <span class="token number">28</span> <span class="token punctuation">}</span>
+ <span class="token number">29</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">30</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">31</span>     Ring_Queue <span class="token operator">*</span>rq<span class="token operator">=</span><span class="token keyword">new</span> <span class="token function">Ring_Queue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">32</span>     pthread_t c<span class="token punctuation">,</span>p<span class="token punctuation">;</span>
+ <span class="token number">33</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>consumer<span class="token punctuation">,</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">34</span>     <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>p<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>productor<span class="token punctuation">,</span>rq<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">35</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>c<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">36</span>     <span class="token function">pthread_join</span><span class="token punctuation">(</span>p<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">37</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">38</span> <span class="token punctuation">}</span>
+<span class="token operator">~</span>
+
+</code></pre> 
+<p>makefile</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> main<span class="token operator">:</span>main<span class="token punctuation">.</span>cpp
+  <span class="token number">2</span>     g<span class="token operator">++</span> $<span class="token operator">^</span> <span class="token operator">-</span>o $@ <span class="token operator">-</span>lpthread
+  <span class="token number">3</span> <span class="token punctuation">.</span>PHONY<span class="token operator">:</span>clean
+  <span class="token number">4</span> clean<span class="token operator">:</span>
+  <span class="token number">5</span>     rm <span class="token operator">-</span>f main   
+</code></pre> 
+<h2><a id="_906"></a>线程池</h2> 
+<p><img src="https://images2.imgbox.com/26/63/FVuH4XaT_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/6c/4f/MuaHWaIT_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_909"></a>线程池代码</h3> 
+<p>.hpp文件</p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #pragma once                                                                                                                                                                          
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>pthread<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>queue<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">7</span> #include<span class="token operator">&lt;</span>cmath<span class="token operator">&gt;</span>
+  <span class="token number">8</span> #define NUM <span class="token number">6</span>
+  <span class="token number">9</span> <span class="token keyword">class</span> <span class="token class-name">Task</span>
+ <span class="token number">10</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">11</span>   <span class="token keyword">private</span><span class="token operator">:</span>
+ <span class="token number">12</span>       <span class="token keyword">int</span> base<span class="token punctuation">;</span>
+ <span class="token number">13</span>   <span class="token keyword">public</span><span class="token operator">:</span>
+ <span class="token number">14</span>       <span class="token function">Task</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+ <span class="token number">15</span>       <span class="token function">Task</span><span class="token punctuation">(</span><span class="token keyword">int</span> _base<span class="token punctuation">)</span><span class="token operator">:</span><span class="token function">base</span><span class="token punctuation">(</span>_base<span class="token punctuation">)</span>
+ <span class="token number">16</span>       <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+ <span class="token number">17</span>       <span class="token keyword">void</span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">18</span>       <span class="token punctuation">{<!-- --></span>
+ <span class="token number">19</span>           std<span class="token operator">::</span>cout<span class="token operator">&lt;&lt;</span><span class="token string">"thread is ["</span><span class="token operator">&lt;&lt;</span><span class="token function">pthread_self</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">&lt;&lt;</span><span class="token string">"]"</span><span class="token operator">&lt;&lt;</span><span class="token string">"process this task"</span><span class="token operator">&lt;&lt;</span> <span class="token string">"pow("</span><span class="token operator">&lt;&lt;</span>base<span class="token operator">&lt;&lt;</span><span class="token string">",2)is"</span><span class="token operator">&lt;&lt;</span><span class="token function">pow</span><span class="token punctuation">(</span>base<span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span>
+ <span class="token number">20</span>       <span class="token punctuation">}</span>
+ <span class="token number">21</span>       <span class="token operator">~</span><span class="token function">Task</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+ <span class="token number">22</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">23</span> <span class="token keyword">class</span> <span class="token class-name">Thread_pool</span>
+ <span class="token number">24</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">25</span>     <span class="token keyword">private</span><span class="token operator">:</span>
+ <span class="token number">26</span>       std<span class="token operator">::</span>queue<span class="token operator">&lt;</span>Task<span class="token operator">*</span><span class="token operator">&gt;</span>v<span class="token punctuation">;</span>
+ <span class="token number">27</span>       <span class="token keyword">int</span> max_num<span class="token punctuation">;</span>
+ <span class="token number">28</span>       pthread_mutex_t lock<span class="token punctuation">;</span>
+ <span class="token number">29</span>       pthread_cond_t cond<span class="token punctuation">;</span>
+ <span class="token number">30</span>       <span class="token keyword">bool</span> quit<span class="token punctuation">;</span>
+ <span class="token number">31</span>     <span class="token keyword">public</span><span class="token operator">:</span>
+ <span class="token number">32</span>       <span class="token keyword">void</span> <span class="token function">thread_wait</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">33</span>       <span class="token punctuation">{<!-- --></span>
+ <span class="token number">34</span>           <span class="token function">pthread_cond_wait</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>cond<span class="token punctuation">,</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">35</span>       <span class="token punctuation">}</span>
+ <span class="token number">36</span>       <span class="token keyword">void</span> <span class="token function">LockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">37</span>       <span class="token punctuation">{<!-- --></span>
+ <span class="token number">38</span>         <span class="token function">pthread_mutex_lock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">39</span>       <span class="token punctuation">}</span>
+ <span class="token number">40</span>       <span class="token keyword">void</span> <span class="token function">UnlockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">41</span>       <span class="token punctuation">{<!-- --></span>
+ <span class="token number">42</span>         <span class="token function">pthread_mutex_unlock</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">43</span>       <span class="token punctuation">}</span>
+ <span class="token number">44</span>      <span class="token keyword">static</span> <span class="token keyword">void</span><span class="token operator">*</span><span class="token function">RUN</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>arg<span class="token punctuation">)</span>
+ <span class="token number">45</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">46</span>         Thread_pool <span class="token operator">*</span>this_p<span class="token operator">=</span><span class="token punctuation">(</span>Thread_pool<span class="token operator">*</span><span class="token punctuation">)</span>arg<span class="token punctuation">;</span>
+ <span class="token number">47</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span>
+ <span class="token number">48</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">49</span>             this_p<span class="token operator">-&gt;</span><span class="token function">LockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">50</span>             <span class="token keyword">while</span><span class="token punctuation">(</span>this_p<span class="token operator">-&gt;</span><span class="token function">Is_Empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+ <span class="token number">51</span>             <span class="token punctuation">{<!-- --></span>
+ <span class="token number">52</span>               this_p<span class="token operator">-&gt;</span> <span class="token function">thread_wait</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">53</span>             <span class="token punctuation">}</span>
+ <span class="token number">54</span>             Task t<span class="token punctuation">;</span>
+ <span class="token number">55</span>             this_p<span class="token operator">-&gt;</span><span class="token function">Get</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">56</span>             this_p<span class="token operator">-&gt;</span><span class="token function">UnlockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">57</span>             t<span class="token punctuation">.</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">58</span>         <span class="token punctuation">}</span>
+ <span class="token number">59</span>      <span class="token punctuation">}</span>
+ <span class="token number">60</span>      <span class="token keyword">bool</span> <span class="token function">Is_Empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">61</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">62</span>           <span class="token keyword">return</span> v<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">63</span>      <span class="token punctuation">}</span>
+ <span class="token number">64</span>      <span class="token keyword">void</span> <span class="token function">Thread_Wakeup</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">65</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">66</span>          <span class="token function">pthread_cond_signal</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>cond<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">67</span>      <span class="token punctuation">}</span>
+ <span class="token number">68</span>      <span class="token keyword">void</span> <span class="token function">Threads_Wake</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">69</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">70</span>          <span class="token function">pthread_cond_broadcast</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>cond<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">71</span>      <span class="token punctuation">}</span>
+ <span class="token number">72</span>     <span class="token keyword">public</span><span class="token operator">:</span>
+ <span class="token number">73</span>       <span class="token function">Thread_pool</span><span class="token punctuation">(</span><span class="token keyword">int</span> _max<span class="token operator">=</span>NUM<span class="token punctuation">)</span><span class="token operator">:</span><span class="token function">max_num</span><span class="token punctuation">(</span>_max<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">quit</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span>                                                                                                                             
+ <span class="token number">74</span>       <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+ <span class="token number">75</span>       <span class="token keyword">void</span> <span class="token function">Thread_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">76</span>       <span class="token punctuation">{<!-- --></span>
+ <span class="token number">77</span>           <span class="token function">pthread_mutex_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">78</span>           <span class="token function">pthread_cond_init</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>cond<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token number">79</span>           pthread_t t<span class="token punctuation">;</span>
+ <span class="token number">80</span>           <span class="token keyword">int</span> i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">81</span>           <span class="token keyword">for</span><span class="token punctuation">(</span><span class="token punctuation">;</span>i<span class="token operator">&lt;</span>max_num<span class="token punctuation">;</span><span class="token operator">++</span>i<span class="token punctuation">)</span>
+ <span class="token number">82</span>           <span class="token punctuation">{<!-- --></span>
+ <span class="token number">83</span>                <span class="token function">pthread_create</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>t<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span>RUN<span class="token punctuation">,</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">84</span>           <span class="token punctuation">}</span>
+ <span class="token number">85</span>       <span class="token punctuation">}</span>
+ <span class="token number">86</span>       <span class="token keyword">void</span> <span class="token function">Put</span><span class="token punctuation">(</span> Task <span class="token operator">&amp;</span>in<span class="token punctuation">)</span>
+ <span class="token number">87</span>       <span class="token punctuation">{<!-- --></span>
+ <span class="token number">88</span>           <span class="token function">LockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">89</span>           v<span class="token punctuation">.</span><span class="token function">push</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>in<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">90</span>           <span class="token function">UnlockQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">91</span>           <span class="token function">Thread_Wakeup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">92</span>       <span class="token punctuation">}</span>
+ <span class="token number">93</span>      <span class="token keyword">void</span> <span class="token function">Get</span><span class="token punctuation">(</span>Task <span class="token operator">&amp;</span>t<span class="token punctuation">)</span>
+ <span class="token number">94</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">95</span>         Task<span class="token operator">*</span>p<span class="token operator">=</span>v<span class="token punctuation">.</span><span class="token function">front</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">96</span>         t<span class="token operator">=</span><span class="token operator">*</span>p<span class="token punctuation">;</span>
+ <span class="token number">97</span>         v<span class="token punctuation">.</span><span class="token function">pop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">98</span>      <span class="token punctuation">}</span>
+ <span class="token number">99</span>      <span class="token keyword">void</span> <span class="token function">Thread_Quit</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token number">100</span>      <span class="token punctuation">{<!-- --></span>
+<span class="token number">101</span>          <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">Is_Empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token number">102</span>          <span class="token punctuation">{<!-- --></span>
+<span class="token number">103</span>              std<span class="token operator">::</span>cout<span class="token operator">&lt;&lt;</span><span class="token string">"queue is not empty,can not quit"</span><span class="token operator">&lt;&lt;</span>std<span class="token operator">::</span>endl<span class="token punctuation">;</span>
+<span class="token number">104</span>              <span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token number">105</span>          <span class="token punctuation">}</span>
+<span class="token number">106</span>          <span class="token keyword">else</span>
+<span class="token number">107</span>          <span class="token punctuation">{<!-- --></span>
+<span class="token number">108</span>              quit<span class="token operator">=</span><span class="token boolean">true</span><span class="token punctuation">;</span>
+<span class="token number">109</span>              <span class="token function">Threads_Wake</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token number">110</span>          <span class="token punctuation">}</span>
+<span class="token number">111</span>      <span class="token punctuation">}</span>
+<span class="token number">112</span>      <span class="token operator">~</span><span class="token function">Thread_pool</span><span class="token punctuation">(</span><span class="token punctuation">)</span>                                                                                                                                                                   
+<span class="token number">113</span>      <span class="token punctuation">{<!-- --></span>
+<span class="token number">114</span>          <span class="token function">pthread_mutex_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token number">115</span>          <span class="token function">pthread_cond_destroy</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>cond<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token number">116</span>      <span class="token punctuation">}</span>
+<span class="token number">117</span> 
+
+<span class="token number">118</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>  
+
+
+
+</code></pre> 
+<p>.cpp文件</p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> #include<span class="token string">"thread_pool.hpp"</span>
+  <span class="token number">2</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">3</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">4</span>     Thread_pool <span class="token operator">*</span>rq<span class="token operator">=</span><span class="token keyword">new</span> <span class="token function">Thread_pool</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                                
+  <span class="token number">5</span>     rq<span class="token operator">-&gt;</span><span class="token function">Thread_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token number">6</span> 
+  <span class="token number">7</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span>
+  <span class="token number">8</span>     <span class="token punctuation">{<!-- --></span>
+  <span class="token number">9</span>          <span class="token keyword">int</span> x<span class="token operator">=</span><span class="token function">rand</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">%</span><span class="token number">10</span><span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">;</span>
+ <span class="token number">10</span>          Task <span class="token function">t</span><span class="token punctuation">(</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">11</span>          rq<span class="token operator">-&gt;</span><span class="token function">Put</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>          <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">13</span>     <span class="token punctuation">}</span>
+ <span class="token number">14</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">15</span> <span class="token punctuation">}</span>
+<span class="token operator">~</span>
+<span class="token operator">~</span>
+
+</code></pre> 
+<p>makefile</p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> thread_pool<span class="token operator">:</span>main<span class="token punctuation">.</span>cpp
+  <span class="token number">2</span>     g<span class="token operator">++</span> $<span class="token operator">^</span> <span class="token operator">-</span>o $@ <span class="token operator">-</span>lpthread
+  <span class="token number">3</span> <span class="token punctuation">.</span>PHONY<span class="token operator">:</span>clean
+  <span class="token number">4</span> clean<span class="token operator">:</span>
+  <span class="token number">5</span>     rm <span class="token operator">-</span>f thread_pool                                                                                                                                                                 
+</code></pre> 
+<p><img src="https://images2.imgbox.com/92/1d/g5RI8AUR_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/08/72/5KmBQo2f_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_1068"></a>线程池中的惊群问题</h3> 
+<p>解释：简单地说：就是扔一块食物，所有鸽子来抢，但最终只一个鸽子抢到了食物。<br> 对应多线程就是：假如此时来了一个任务的话，所有线程池中休眠的线程均被唤醒。在多进程/多线程等待同一资源时，也会出现惊群。即当某一资源可用时，多个进程/线程会惊醒，竞争资源。这就是操作系统中的惊群。<br> 惊群效应所产生的坏处：<br> <strong>1.惊醒所有进程/线程，导致n-1个线程做了无效的调度，上下文切换，cpu瞬时增高(单个任务)<br> 2.多个进程/线程争抢资源，所以涉及到同步问题，需对资源进行加锁保护，加解锁加大系统CPU开销。</strong><br> 正常的用法：</p> 
+<p>所有线程共用一个锁，共用一个条件变量<br> 当pthread_cond_signal通知时，就可能会出现惊群<br> 解决惊群的方法：</p> 
+<p>所有线程共用一个锁，每个线程<strong>有自已的条件变量</strong>(在初始化传入的第二个参数)<br> pthread_cond_signal通知时，定向通知某个线程的条件变量，不会出现惊群。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/bd598496b21f906b900bcedde3d81569/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">VNC Viewer 设置屏幕分辨率-解决屏幕分辨率问题</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/96c3db1230a3d2e90d5667404b3bb5d7/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">计算机如何把文件设为隐藏,已知文件类型的扩展名如何设置显示与隐藏?</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

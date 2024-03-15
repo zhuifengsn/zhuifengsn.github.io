@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>微服务TraceId设计(SpringCloud OpenFeign) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="微服务TraceId设计(SpringCloud OpenFeign)" />
+<meta property="og:description" content="一、背景 在微服务框架下，需要通过traceId来定位到整个链路中每个细节的运行情况，这里不引用外部组件，自己来进行实现。当然还保证在多线程环境下的一致性。
+二、需求 1)接口入口侧如果有traceId，则获取；如果没有则生成；
+2)定义生成traceId的规则；
+3)traceId可以默认打印到log中，不需要自己显示定义；
+4)通过feign传输到后端服务中
+三、实现 3.1)TraceId生成算法
+参考：https://help.aliyun.com/document_detail/151840.html public static String genTraceId() { try { StringBuilder sb = new StringBuilder(); InetAddress addr = InetAddress.getLocalHost(); if (null == addr) { return TRACE_ID_VALUE_DEFAULT; } String addrStr = addr.getHostAddress(); if (null == addrStr) { return TRACE_ID_VALUE_DEFAULT; } String[] addrArr = addrStr.split(&#34;\\.&#34;); if (addrArr.length != 4) { return TRACE_ID_VALUE_DEFAULT; } sb.append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[0])) , 2, &#34;0&#34;)) .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[1])) , 2, &#34;0&#34;)) .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[2])) , 2, &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/5b23328a17d846a9ac586e5b541f3e8d/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-07-31T16:50:44+08:00" />
+<meta property="article:modified_time" content="2022-07-31T16:50:44+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">微服务TraceId设计(SpringCloud OpenFeign)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p></p> 
+<h2>一、背景</h2> 
+<p>     在微服务框架下，需要通过traceId来定位到整个链路中每个细节的运行情况，这里不引用外部组件，自己来进行实现。当然还保证在多线程环境下的一致性。</p> 
+<p></p> 
+<h2>二、需求</h2> 
+<p>1)接口入口侧如果有traceId，则获取；如果没有则生成；</p> 
+<p>2)定义生成traceId的规则；</p> 
+<p>3)traceId可以默认打印到log中，不需要自己显示定义；</p> 
+<p>4)通过feign传输到后端服务中</p> 
+<p></p> 
+<h2>三、实现</h2> 
+<p>3.1)TraceId生成算法</p> 
+<p>    参考：https://help.aliyun.com/document_detail/151840.html </p> 
+<pre><code class="language-java">public static String genTraceId()  {
+
+        try {
+            StringBuilder sb = new StringBuilder();
+            InetAddress addr = InetAddress.getLocalHost();
+            if (null == addr) {
+                return TRACE_ID_VALUE_DEFAULT;
+            }
+            String addrStr = addr.getHostAddress();
+            if (null == addrStr) {
+                return TRACE_ID_VALUE_DEFAULT;
+            }
+            String[] addrArr = addrStr.split("\\.");
+            if (addrArr.length != 4) {
+                return TRACE_ID_VALUE_DEFAULT;
+            }
+
+            sb.append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[0]))  , 2, "0"))
+                    .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[1]))  , 2, "0"))
+                    .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[2]))  , 2, "0"))
+                    .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[3]))  , 2, "0"))
+                    .append(System.currentTimeMillis())
+                    .append(RandomUtil.randomNumbers(4))
+                    .append(ProcessHandle.current().pid());
+
+            return sb.toString();
+        } catch (Exception e) {
+            return TRACE_ID_VALUE_DEFAULT;
+        }
+    }</code></pre> 
+<p>3.2)服务入口日志拦截</p> 
+<pre><code class="language-java">@EnableAspectJAutoProxy
+@Component
+@Aspect
+@Slf4j
+public class InterfaceLogAspect {
+
+    @Around("execution(* com.springboot.k8s.demo.interfaces.*.*(..))")
+    public Object interfaceAround(ProceedingJoinPoint joinPoint) {
+        String className = joinPoint.getTarget().getClass().getSimpleName();
+        Object[] args = joinPoint.getArgs();
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Parameter[] argNames = signature.getMethod().getParameters();
+        StringBuilder sb = new StringBuilder(className + "." + joinPoint.getSignature().getName() + " -- ");
+
+        //获取RequestAttributes
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        //从获取RequestAttributes中获取HttpServletRequest的信息
+        HttpServletRequest request = (HttpServletRequest) requestAttributes.resolveReference(RequestAttributes.REFERENCE_REQUEST);
+        TraceIdUtil.initTraceId(request);
+
+        StopWatch clock = new StopWatch();
+        clock.start();
+        Object retVal = null;
+        try {
+            Map&lt;String, Object&gt; paramMap = new HashMap&lt;&gt;();
+            for (int i = 0; i &lt; argNames.length; i++) {
+                paramMap.put(argNames[i].getName(), args[i]);
+            }
+            LoggerUtils.auditLogInfo(LogLabelEnum.REQUEST_IN.getLogLabel(), paramMap);
+            retVal = joinPoint.proceed(joinPoint.getArgs());
+        } catch (Throwable e) {
+            //..
+        } finally {
+            //..
+        }
+        return retVal;
+    }
+}</code></pre> 
+<p>3.3)FeignClient服务之间传递TraceId:</p> 
+<pre><code>@Service
+public class MyRequestInterceptor implements RequestInterceptor {
+    @Override
+    public void apply(RequestTemplate template) {
+        template.header(TraceIdUtil.TRACE_ID_KEY, TraceIdUtil.getTraceId());
+    }
+}
+</code></pre> 
+<p>3.4)logback.xml</p> 
+<pre><code>&lt;appender name="consoleLog" class="ch.qos.logback.core.ConsoleAppender"&gt;
+        &lt;layout class="ch.qos.logback.classic.PatternLayout"&gt;
+            &lt;pattern&gt;[%-5level][%date{yyyy-MM-dd HH:mm:ss:SSS}][%logger:%line] &amp;#45;&amp;#45;%mdc{client} %msg||traceId=%X{Trace-Id}%n&lt;/pattern&gt;
+
+        &lt;/layout&gt;
+    &lt;/appender&gt;</code></pre> 
+<p>备注："%X{Trace-Id}"即将<strong>MDC</strong>中的以Trace-Id为key的值同步到日志中，也就是TraceIdUtil.TRACE_ID_KEY。</p> 
+<p></p> 
+<p>完整的TraceIdUtill为：</p> 
+<pre><code class="language-java">public class TraceIdUtil {
+
+    public static final String TRACE_ID_KEY = "Trace-Id";
+
+    public static final String TRACE_ID_VALUE_DEFAULT = "000000";
+
+    public static void setTraceId(String traceId) {
+        //如果参数为空，则设置默认traceId
+        //将traceId放到MDC中
+        MDC.put(TRACE_ID_KEY, traceId);
+    }
+
+    public static String getTraceId() {
+        String traceId = MDC.get(TRACE_ID_KEY);
+
+        return StringUtils.isNotBlank(traceId) ? traceId : TRACE_ID_VALUE_DEFAULT;
+    }
+
+    /**
+     * generate traceId: https://help.aliyun.com/document_detail/151840.html
+     */
+    public static String genTraceId()  {
+
+        try {
+            StringBuilder sb = new StringBuilder();
+            InetAddress addr = InetAddress.getLocalHost();
+            if (null == addr) {
+                return TRACE_ID_VALUE_DEFAULT;
+            }
+            String addrStr = addr.getHostAddress();
+            if (null == addrStr) {
+                return TRACE_ID_VALUE_DEFAULT;
+            }
+            String[] addrArr = addrStr.split("\\.");
+            if (addrArr.length != 4) {
+                return TRACE_ID_VALUE_DEFAULT;
+            }
+
+            sb.append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[0]))  , 2, "0"))
+                    .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[1]))  , 2, "0"))
+                    .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[2]))  , 2, "0"))
+                    .append(StringUtils.leftPad(Integer.toHexString(Integer.valueOf(addrArr[3]))  , 2, "0"))
+                    .append(System.currentTimeMillis())
+                    .append(RandomUtil.randomNumbers(4))
+                    .append(ProcessHandle.current().pid());
+
+            return sb.toString();
+        } catch (Exception e) {
+            return TRACE_ID_VALUE_DEFAULT;
+        }
+    }
+
+    public static void initTraceId(HttpServletRequest request) {
+        String traceId = "";
+        if (request != null) {
+            //get traceId from request
+            traceId = request.getHeader(TraceIdUtil.TRACE_ID_KEY);
+        }
+        //generate new traceId
+        if (StringUtils.isBlank(traceId) || TRACE_ID_VALUE_DEFAULT.equals(traceId)){
+            traceId = TraceIdUtil.genTraceId();
+        }
+
+        TraceIdUtil.setTraceId(traceId);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(TraceIdUtil.genTraceId());
+    }
+}</code></pre> 
+<p></p> 
+<h2>四、多线程TraceId复制</h2> 
+<p>4.1)线程配置</p> 
+<pre><code>@Configuration
+public class ThreadPoolConfig {
+
+    public static final String ASYNC_EXECUTOR_NAME = "threadPoolTaskExecutor";
+
+    @Bean(name=ASYNC_EXECUTOR_NAME)
+    public ThreadPoolTaskExecutor threadPoolTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        // for passing in request scope context
+        executor.setTaskDecorator(new ContextCopyingDecorator());
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(20);
+        executor.setQueueCapacity(100);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setThreadNamePrefix("SeelAsyncThread-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.initialize();
+        return executor;
+    }
+}</code></pre> 
+<p>4.2)定义TaskDecorator</p> 
+<pre><code class="language-java">public class ContextCopyingDecorator implements TaskDecorator {
+
+    @Override
+    public Runnable decorate(Runnable runnable) {
+        RequestAttributes context = RequestContextHolder.currentRequestAttributes();
+        Map&lt;String, String&gt; contextMap = MDC.getCopyOfContextMap();
+        return  () -&gt; {
+            try {
+                RequestContextHolder.setRequestAttributes(context);
+                MDC.setContextMap(contextMap);
+                runnable.run();
+            } finally {
+                RequestContextHolder.resetRequestAttributes();
+            }
+        };
+    }
+}</code></pre> 
+<p>Author：忆之独秀</p> 
+<p>Email：leaguenew@qq.com</p> 
+<p>转载注明出处：</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3c8e1189d22b9bcf055116426f056178/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">C语言练习第3天---期末练习题</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f7d29e2a5c6976d9b50acb407cdd7ac6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">使用mosquitto过程中的问题解决</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

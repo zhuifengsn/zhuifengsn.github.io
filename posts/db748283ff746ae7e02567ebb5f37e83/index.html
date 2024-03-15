@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Spring Cloud Ribbon自定义负载均衡算法 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Spring Cloud Ribbon自定义负载均衡算法" />
+<meta property="og:description" content="上篇介绍了Ribbon的几种负载均衡算法，在实际工作中有可能会用自己定义的算法，根据自己的编写的算法来进行负载均衡
+Ribbon是客户端的负载均衡技术，即消费者微服务端的负载均衡
+启动项目查看Eureka Server:
+一个微服务有3个不同的实例
+先来针对一个服务使用不同的负载均衡策略。关键注解:@RibbonClient，此注解是放在启动类上
+上面截图@RibbonClient的意思是，针对YPPCLOUD-DEPT这个微服务使用MyRibbon我们自己定义的负载均衡策略以及算法
+注意一点:自定义负载均衡的策略以及算法不能放在@ComponentScan所扫描的包下，不然会被所有Ribbon所共享(即所有的微服务都会使用该策略，包含YPPCLOUD-DEPT)
+复习Spring Boot知识:都知道启动类自动扫描启动类平级以及子包里面所有的配置信息以及bean。关键点在于@SpringBootApplication这个注解，点击@SpringBootApplication注解进去看，是用了@ComponentScan。
+所以我们要新建一个包,用上我们自定义的负载均衡类:
+MyRibbon.java:
+package com.ypp.myribbon; import org.springframework.context.annotation.Bean; import org.springframework.context.annotation.Configuration; import com.netflix.loadbalancer.IRule; import com.netflix.loadbalancer.RandomRule; @Configuration public class MyRibbon { @Bean public IRule rule(){ return new RandomRule(); } } Ribbon默认使用的轮训的负载均衡策略，MyRibbon这里我们使用的是随机的负载均衡策略，但是这个随机负载均衡策略是针对YPPCLOUD-DEPT这个微服务下面的实例,其他的微服务还是使用的默认的轮训负载均衡策略，因为我们刚才启动类配置只针对YPPCLOUD-DEPT它配置的MyRibbon。
+访问下YPPCLOUD-DEPT，看看下面的实例是否以随机进行访问
+ypp-springcloud3代表8003这个实例，数据库也是ypp-springcloud3
+ypp-springcloud2代表8002这个实例，数据库也是ypp-springcloud2
+ypp-springcloud代表8001这个实例，数据库也是ypp-springcloud
+每个实例我都是单独的数据库，以下是访问的结果，显而易见是随机，并没有任何规则或者顺序
+自定义负载均衡策略的算法
+Ribbon提供了一个规范核心组件IRule，这个在上篇文章有说，就像java的JPA，然后hibernate来进行实现。
+我们来对IRule进行自己的策略和算法，源码地址在github有。地址:https://github.com/Netflix/ribbon/tree/master/ribbon-loadbalancer/src/main/java/com/netflix/loadbalancer
+就拿默认的轮训来定义我们自己的，比如每个实例访问5次或者10次，或者一个实例访问是5天，然后是其他的实例每个也是5天这样的规则
+RoundRobinRule这是默认轮训的源码，我们在它的基础上更改，改源码要比看源码更牛。不是只会调用API，多年工作经验的只会使用以及调用API等，那不是有多年工作经验，而是一个经验用了多年，差距甚大。这也就是同样的工作经验，为什么别人那么牛，为什么能当架构师，而自己只能一直成为码农的区别。作为程序员，至少都要有一个目标，成为码神，才能走得更远
+RoundRobinRule继承了AbstractLoadBalancerRule，AbstractLoadBalancerRule 实现了IRule，源码自己去看，不多说
+我们自定义一个MyRoundRobinRule类，也来继承AbstractLoadBalancerRule,然后把RoundRobinRule里面的源码直接拷贝过来自己更改
+更改后的MyRoundRobinRule.java:
+package com.ypp.myribbon; import java.util.List; import java.util.concurrent.atomic.AtomicInteger; import org.slf4j.Logger; import org.slf4j.LoggerFactory; import org.springframework.context.annotation.Configuration; import com.netflix.client.config.IClientConfig; import com.netflix.loadbalancer.AbstractLoadBalancerRule; import com.netflix.loadbalancer.ILoadBalancer; import com." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/db748283ff746ae7e02567ebb5f37e83/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-03-07T18:01:06+08:00" />
+<meta property="article:modified_time" content="2019-03-07T18:01:06+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Spring Cloud Ribbon自定义负载均衡算法</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>上篇介绍了Ribbon的几种负载均衡算法，在实际工作中有可能会用自己定义的算法，根据自己的编写的算法来进行负载均衡</p> 
+<p>Ribbon是客户端的负载均衡技术，即消费者微服务端的负载均衡</p> 
+<p>启动项目查看Eureka Server:</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/5a/4c/vqqmbJ3k_o.png"></p> 
+<p>一个微服务有3个不同的实例</p> 
+<p> </p> 
+<p>先来针对一个服务使用不同的负载均衡策略。关键注解:@RibbonClient，此注解是放在启动类上</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/4d/0e/xka6bcZ0_o.png"></p> 
+<p>上面截图@RibbonClient的意思是，针对<strong>YPPCLOUD-DEPT这个微服务使用MyRibbon我们自己定义的负载均衡策略以及算法</strong></p> 
+<p>注意一点:自定义负载均衡的策略以及算法不能放在@ComponentScan所扫描的包下，不然会被所有Ribbon所共享(即所有的微服务都会使用该策略，包含<strong>YPPCLOUD-DEPT)</strong></p> 
+<p>复习Spring Boot知识:都知道启动类自动扫描启动类平级以及子包里面所有的配置信息以及bean。关键点在于@SpringBootApplication这个注解，点击@SpringBootApplication注解进去看，是用了@ComponentScan。</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/ed/6d/QEahZwUL_o.png"></p> 
+<p>所以我们要新建一个包,用上我们自定义的负载均衡类:</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/45/bb/VirklPNm_o.png"></p> 
+<p> </p> 
+<p>MyRibbon.java:</p> 
+<pre class="has"><code class="language-java">package com.ypp.myribbon;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import com.netflix.loadbalancer.IRule;
+import com.netflix.loadbalancer.RandomRule;
+
+@Configuration
+public class MyRibbon {
+
+	@Bean
+	public IRule rule(){
+		return new RandomRule();
+	}
+}
+</code></pre> 
+<p>Ribbon默认使用的轮训的负载均衡策略，MyRibbon这里我们使用的是随机的负载均衡策略，但是这个随机负载均衡策略是针对<strong>YPPCLOUD-DEPT</strong>这个微服务下面的实例,其他的微服务还是使用的默认的轮训负载均衡策略，因为我们刚才启动类配置只针对<strong>YPPCLOUD-DEPT它配置的</strong>MyRibbon。</p> 
+<p>访问下YPPCLOUD-DEPT，看看下面的实例是否以随机进行访问</p> 
+<p>ypp-springcloud3代表8003这个实例，数据库也是ypp-springcloud3</p> 
+<p>ypp-springcloud2代表8002这个实例，数据库也是ypp-springcloud2</p> 
+<p>ypp-springcloud代表8001这个实例，数据库也是ypp-springcloud</p> 
+<p>每个实例我都是单独的数据库，以下是访问的结果，显而易见是随机，并没有任何规则或者顺序</p> 
+<p><img alt="" class="has" height="488" src="https://images2.imgbox.com/39/a4/sDEsIZh1_o.gif" width="934"></p> 
+<p> </p> 
+<p><strong>自定义负载均衡策略的算法</strong></p> 
+<p>Ribbon提供了一个规范核心组件IRule，这个在上篇文章有说，就像java的JPA，然后hibernate来进行实现。</p> 
+<p>我们来对IRule进行自己的策略和算法，源码地址在github有。地址:<a href="https://github.com/Netflix/ribbon/tree/master/ribbon-loadbalancer/src/main/java/com/netflix/loadbalancer">https://github.com/Netflix/ribbon/tree/master/ribbon-loadbalancer/src/main/java/com/netflix/loadbalancer</a></p> 
+<p>就拿默认的轮训来定义我们自己的，比如每个实例访问5次或者10次，或者一个实例访问是5天，然后是其他的实例每个也是5天这样的规则</p> 
+<p>RoundRobinRule这是默认轮训的源码，我们在它的基础上更改，改源码要比看源码更牛。不是只会调用API，多年工作经验的只会使用以及调用API等，那不是有多年工作经验，而是一个经验用了多年，差距甚大。这也就是同样的工作经验，为什么别人那么牛，为什么能当架构师，而自己只能一直成为码农的区别。作为程序员，至少都要有一个目标，成为码神，才能走得更远</p> 
+<p>RoundRobinRule继承了AbstractLoadBalancerRule，AbstractLoadBalancerRule 实现了IRule，源码自己去看，不多说</p> 
+<p>我们自定义一个MyRoundRobinRule类，也来继承AbstractLoadBalancerRule,然后把RoundRobinRule里面的源码直接拷贝过来自己更改</p> 
+<p>更改后的MyRoundRobinRule.java:</p> 
+<pre class="has"><code class="language-java">package com.ypp.myribbon;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Configuration;
+
+import com.netflix.client.config.IClientConfig;
+import com.netflix.loadbalancer.AbstractLoadBalancerRule;
+import com.netflix.loadbalancer.ILoadBalancer;
+import com.netflix.loadbalancer.RoundRobinRule;
+import com.netflix.loadbalancer.Server;
+
+@Configuration
+public class MyRoundRobinRule extends AbstractLoadBalancerRule {
+
+	private AtomicInteger nextServerCyclicCounter;
+	private static final boolean AVAILABLE_ONLY_SERVERS = true;
+	private static final boolean ALL_SERVERS = false;
+
+	// 总共被调用的次数，目前要求每台被调用5次
+	private int total = 0;
+	// 当前提供服务的机器号
+	private int currentIndex = 0;
+
+	private static Logger log = LoggerFactory.getLogger(RoundRobinRule.class);
+
+	public MyRoundRobinRule() {
+		nextServerCyclicCounter = new AtomicInteger(0);
+	}
+
+	public MyRoundRobinRule(ILoadBalancer lb) {
+		this();
+		setLoadBalancer(lb);
+	}
+
+	public Server choose(ILoadBalancer lb, Object key) {
+		if (lb == null) {
+			log.warn("no load balancer");
+			return null;
+		}
+
+		Server server = null;
+		int count = 0;
+		while (server == null &amp;&amp; count++ &lt; 10) {
+			List&lt;Server&gt; upList = lb.getReachableServers();
+			List&lt;Server&gt; allServers = lb.getAllServers();
+			int upCount = upList.size();
+			int serverCount = allServers.size();
+
+			if ((upCount == 0) || (serverCount == 0)) {
+				log.warn("No up servers available from load balancer: " + lb);
+				return null;
+			}
+			if (total &lt; 5) {
+				server = upList.get(currentIndex);
+				total++;
+			} else {
+				total = 0;
+				currentIndex++;
+				if (currentIndex &gt;= upList.size()) {
+					currentIndex = 0;
+				}
+			}
+
+			if (server == null) {
+				/* Transient. */
+				Thread.yield();
+				continue;
+			}
+
+			if (server.isAlive() &amp;&amp; (server.isReadyToServe())) {
+				return (server);
+			}
+
+			// Next.
+			server = null;
+		}
+
+		if (count &gt;= 10) {
+			log.warn("No available alive servers after 10 tries from load balancer: " + lb);
+		}
+		return server;
+	}
+
+	/**
+	 * Inspired by the implementation of {@link AtomicInteger#incrementAndGet()}
+	 * .
+	 *
+	 * @param modulo
+	 *            The modulo to bound the value of the counter.
+	 * @return The next value.
+	 */
+	private int incrementAndGetModulo(int modulo) {
+		for (;;) {
+			int current = nextServerCyclicCounter.get();
+			int next = (current + 1) % modulo;
+			if (nextServerCyclicCounter.compareAndSet(current, next))
+				return next;
+		}
+	}
+
+	@Override
+	public Server choose(Object key) {
+		return choose(getLoadBalancer(), key);
+	}
+
+	@Override
+	public void initWithNiwsConfig(IClientConfig arg0) {
+
+	}
+}
+</code></pre> 
+<p>以上代码我定义的每个实例访问5次的轮训，核心代码:</p> 
+<pre class="has"><code>if (total &lt; 5) {
+				server = upList.get(currentIndex);
+				total++;
+			} else {
+				total = 0;
+				currentIndex++;
+				if (currentIndex &gt;= upList.size()) {
+					currentIndex = 0;
+				}
+			}</code></pre> 
+<p>然后修改我们自己的Ribbon配置类为:</p> 
+<p><img alt="" class="has" src="https://images2.imgbox.com/0c/56/FAXI1jDK_o.png"></p> 
+<p>再次请求访问，看看是不是每个实例访问5次的轮训</p> 
+<p><img alt="" class="has" height="488" src="https://images2.imgbox.com/fa/2b/R3ABWTVy_o.gif" width="934"></p> 
+<p>成功</p> 
+<p>源码地址:<a href="https://pan.baidu.com/s/1K0vykAELrZ8S_JlYt4LotA" rel="nofollow">https://pan.baidu.com/s/1K0vykAELrZ8S_JlYt4LotA</a>   提取码:w9hk</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/a9f7f7a73fd94322d720153a742c6bdd/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Docker -- 安装（三）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/409759482a8a7130083d3b7b5429b708/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">不要使用 Dispatcher.Invoke，因为它可能在你的延迟初始化 Lazy 中导致死锁</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

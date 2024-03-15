@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>RabbitMQ (4) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="RabbitMQ (4)" />
+<meta property="og:description" content="RabbitMQ (4)
+文章目录 1. 死信的概念2. 死信的来源3. 死信代码案例3.1 TTL 过期时间3.2 超过队列最大长度3.3 拒绝消息 前言
+上文我们已经学习完 交换机 ，知道了几个交换机的使用 ，下面我们来学习一下 死信队列
+1. 死信的概念 先从概念解释上搞清楚这个定义，死信，顾名思义就是无法被消费的消息，字面意思可以这样理解，一般来说，producer 将消息投递到 broker 或者直接到queue 里了，consumer 从 queue 取出消息 进行消费，但某些时候由于特定的原因导致 queue 中的某些消息无法被消费，这样的消息如果没有后续的处理，就变成了死信，有死信自然就有了死信队列。
+应用场景：为了保证订单业务的消息数据不丢失，需要使用到 RabbitMQ 的死信队列机制，当消息消费发生异常时，将消息投入死信队列中。还有比如说：用户在商城下单成功并点击去支付后在指定时间未支付时自动失效。
+2. 死信的来源 消息 TTL 过期 : TTL 是 Time To Live 的缩写， TTL 就是 生存时间队列达到最长长度 : 队列满了 ， 无法添加数据到 MQ 中消息被拒绝 （basic.reject 或 basic.nack） 并且 requeue = false 3. 死信代码案例 这里 创建一个 direct 交换机 ，两个消费者 ， 一个生产者 ， 两个 队列 (一个为 消息队列 ， 一个为死信队列)" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/0ce35d563d685d1dde00a6df23209f6e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-10-26T19:56:42+08:00" />
+<meta property="article:modified_time" content="2023-10-26T19:56:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">RabbitMQ (4)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>RabbitMQ (4)</p> 
+<p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#1__16" rel="nofollow">1. 死信的概念</a></li><li><a href="#2__26" rel="nofollow">2. 死信的来源</a></li><li><a href="#3__36" rel="nofollow">3. 死信代码案例</a></li><li><ul><li><a href="#31_TTL__59" rel="nofollow">3.1 TTL 过期时间</a></li><li><a href="#32__243" rel="nofollow">3.2 超过队列最大长度</a></li><li><a href="#33__430" rel="nofollow">3.3 拒绝消息</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<p>前言<br>  </p> 
+<blockquote> 
+ <p>上文我们已经学习完 交换机 ，知道了几个交换机的使用 ，下面我们来学习一下 死信队列</p> 
+</blockquote> 
+<p> </p> 
+<h2><a id="1__16"></a>1. 死信的概念</h2> 
+<p> <br> 先从概念解释上搞清楚这个定义，死信，顾名思义就是无法被消费的消息，字面意思可以这样理解，一般来说，producer 将消息投递到 broker 或者直接到queue 里了，consumer 从 queue 取出消息 进行消费，但某些时候由于特定的原因<strong>导致 queue 中的某些消息无法被消费</strong>，这样的消息如果没有后续的处理，就变成了死信，有死信自然就有了死信队列。<br>  <br> 应用场景：为了保证订单业务的消息数据不丢失，需要使用到 RabbitMQ 的死信队列机制，当消息消费发生异常时，将消息投入死信队列中。还有比如说：用户在商城下单成功并点击去支付后在指定时间未支付时自动失效。</p> 
+<p> </p> 
+<h2><a id="2__26"></a>2. 死信的来源</h2> 
+<p> </p> 
+<ol><li>消息 TTL 过期 : TTL 是 Time To Live 的缩写， TTL 就是 生存时间</li><li>队列达到最长长度 : 队列满了 ， 无法添加数据到 MQ 中</li><li>消息被拒绝 （basic.reject 或 basic.nack） 并且 requeue = false</li></ol> 
+<p> </p> 
+<h2><a id="3__36"></a>3. 死信代码案例</h2> 
+<p> </p> 
+<p>这里 创建一个 direct 交换机 ，两个消费者 ， 一个生产者 ， 两个 队列 (一个为 消息队列 ， 一个为死信队列)</p> 
+<p> <br> 图:</p> 
+<p><img src="https://images2.imgbox.com/ed/d4/mlxht6fi_o.png" alt="在这里插入图片描述"></p> 
+<p> <br> 代码 :</p> 
+<p> </p> 
+<h3><a id="31_TTL__59"></a>3.1 TTL 过期时间</h3> 
+<p> </p> 
+<p>生产者：</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>seven</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">AMQP</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>utils<span class="token punctuation">.</span></span><span class="token class-name">RabbitMQUtils</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span><span class="token class-name">IOException</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>concurrent<span class="token punctuation">.</span></span><span class="token class-name">TimeoutException</span></span><span class="token punctuation">;</span>
+
+<span class="token comment">// 生产者</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Producer</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 普通交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"normal_exchange"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">TimeoutException</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMQUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 设置消息的过期时间 （TTL） 单位是 ms --&gt; 设置消息的过期时间为 10s</span>
+        <span class="token class-name">AMQP<span class="token punctuation">.</span>BasicProperties</span> properties <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">AMQP<span class="token punctuation">.</span>BasicProperties</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">expiration</span><span class="token punctuation">(</span><span class="token string">"10000"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> <span class="token number">11</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">String</span> message <span class="token operator">=</span> <span class="token string">"info"</span> <span class="token operator">+</span> i<span class="token punctuation">;</span>
+            channel<span class="token punctuation">.</span><span class="token function">basicPublish</span><span class="token punctuation">(</span><span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"zhangsan"</span><span class="token punctuation">,</span> properties<span class="token punctuation">,</span> message<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p> </p> 
+<p>消费者 c1 （启动之后关闭该消费者， 模拟其接受不到消息）</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>seven</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">BuiltinExchangeType</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">DeliverCallback</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>utils<span class="token punctuation">.</span></span><span class="token class-name">RabbitMQUtils</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span><span class="token class-name">IOException</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">HashMap</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">Map</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">Objects</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>concurrent<span class="token punctuation">.</span></span><span class="token class-name">TimeoutException</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Consumer01</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 普通交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"normal_exchange"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 死信交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"dead_change"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 普通队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_QUEUE</span> <span class="token operator">=</span> <span class="token string">"normal_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 死刑队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_QUEUE</span> <span class="token operator">=</span> <span class="token string">"dead_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">TimeoutException</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMQUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明死信和普通交换机 , 类型为 direct （直接交换机）</span>
+
+        <span class="token comment">// 普通交换机</span>
+        channel<span class="token punctuation">.</span><span class="token function">exchangeDeclare</span><span class="token punctuation">(</span><span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token class-name">BuiltinExchangeType</span><span class="token punctuation">.</span><span class="token constant">DIRECT</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 死信交换机</span>
+        channel<span class="token punctuation">.</span><span class="token function">exchangeDeclare</span><span class="token punctuation">(</span><span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">,</span> <span class="token class-name">BuiltinExchangeType</span><span class="token punctuation">.</span><span class="token constant">DIRECT</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明普通队列</span>
+        <span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">&gt;</span></span> arguments <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 过期时间 10s 由生产者指定 更加灵活</span>
+<span class="token comment">//        arguments.put("x-message-ttl", 10000);</span>
+
+        <span class="token comment">// 正常的队列设置死信交换机</span>
+        arguments<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"x-dead-letter-exchange"</span><span class="token punctuation">,</span> <span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 设置死信 路由键 (routingKey)</span>
+        arguments<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"x-dead-letter-routing-key"</span><span class="token punctuation">,</span> <span class="token string">"lisi"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> arguments<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 申明死刑队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 绑定普通的交换机与队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueBind</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"zhangsan"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 绑定死信的交换机与死信的队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueBind</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"lisi"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"等待接受消息"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">DeliverCallback</span> deliverCallback <span class="token operator">=</span> <span class="token punctuation">(</span>tag<span class="token punctuation">,</span> message<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"C1 接收到的消息为: "</span> <span class="token operator">+</span> <span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"UTF-8"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+        channel<span class="token punctuation">.</span><span class="token function">basicConsume</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> deliverCallback<span class="token punctuation">,</span> <span class="token punctuation">(</span>tag<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p> </p> 
+<p>先启动消费者 C1，创建出队列，然后停止该 C1 的运行，则 C1 将无法收到队列的消息，无法收到的消息 10 秒后进入死信队列。启动生产者 producer 生产消息</p> 
+<p><img src="https://images2.imgbox.com/24/d4/pXAPYJPJ_o.png" alt="在这里插入图片描述"></p> 
+<p> <br> c1 看完，我们在来写 c2 消费者 ，将进入到死信队列的消息 进行消费.</p> 
+<p> <br> <font color="ddii">消费者c2</font></p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>seven</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">DeliverCallback</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>utils<span class="token punctuation">.</span></span><span class="token class-name">RabbitMQUtils</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span><span class="token class-name">IOException</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>concurrent<span class="token punctuation">.</span></span><span class="token class-name">TimeoutException</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Consumer02</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 死信队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_QUEUE</span> <span class="token operator">=</span> <span class="token string">"dead_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">TimeoutException</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMQUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"等待接受死信消息......"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">DeliverCallback</span> deliverCallback <span class="token operator">=</span> <span class="token punctuation">(</span>tag<span class="token punctuation">,</span> message<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"C2 接收到的消息： "</span> <span class="token operator">+</span> <span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"UTF-8"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+        channel<span class="token punctuation">.</span><span class="token function">basicConsume</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> deliverCallback<span class="token punctuation">,</span><span class="token punctuation">(</span>tag<span class="token punctuation">)</span><span class="token operator">-&gt;</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p> <br> 图:</p> 
+<p><img src="https://images2.imgbox.com/43/b0/j965ufnl_o.png" alt="在这里插入图片描述"></p> 
+<p> <br> <font color="ooddoo">看完 消息过期后 ，消息转发到 死信队列 被 c2 消费，下面我们来 尝试使用 死信最大长度 (队列满了，将多的消息转发到死信队列中） </font></p> 
+<p> </p> 
+<h3><a id="32__243"></a>3.2 超过队列最大长度</h3> 
+<p> </p> 
+<p>消息生产者代码 去掉 TTL 属性 ， 将 <code>basicPublish</code> 的第三个参数改为 <code>null</code></p> 
+<p> <br> 生产者:</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>seven</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">AMQP</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>utils<span class="token punctuation">.</span></span><span class="token class-name">RabbitMQUtils</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span><span class="token class-name">IOException</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>concurrent<span class="token punctuation">.</span></span><span class="token class-name">TimeoutException</span></span><span class="token punctuation">;</span>
+
+<span class="token comment">// 生产者</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Producer</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 普通交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"normal_exchange"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">TimeoutException</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMQUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 设置消息的过期时间 （TTL） 单位是 ms --&gt; 设置消息的过期时间为 10s</span>
+<span class="token comment">//        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder().expiration("10000").build();</span>
+
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> <span class="token number">11</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">String</span> message <span class="token operator">=</span> <span class="token string">"info"</span> <span class="token operator">+</span> i<span class="token punctuation">;</span>
+<span class="token comment">//            channel.basicPublish(NORMAL_EXCHANGE, "zhangsan", properties, message.getBytes());</span>
+            channel<span class="token punctuation">.</span><span class="token function">basicPublish</span><span class="token punctuation">(</span><span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"zhangsan"</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">,</span> message<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p> <br> c1 消费者 (<strong>启动之后关闭该消费者 模拟其接收不到消息</strong>)</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>seven</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">BuiltinExchangeType</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">DeliverCallback</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>utils<span class="token punctuation">.</span></span><span class="token class-name">RabbitMQUtils</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span><span class="token class-name">IOException</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">HashMap</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">Map</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">Objects</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>concurrent<span class="token punctuation">.</span></span><span class="token class-name">TimeoutException</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Consumer01</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 普通交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"normal_exchange"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 死信交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"dead_change"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 普通队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_QUEUE</span> <span class="token operator">=</span> <span class="token string">"normal_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 死刑队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_QUEUE</span> <span class="token operator">=</span> <span class="token string">"dead_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">TimeoutException</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMQUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明死信和普通交换机 , 类型为 direct （直接交换机）</span>
+
+        <span class="token comment">// 普通交换机</span>
+        channel<span class="token punctuation">.</span><span class="token function">exchangeDeclare</span><span class="token punctuation">(</span><span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token class-name">BuiltinExchangeType</span><span class="token punctuation">.</span><span class="token constant">DIRECT</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 死信交换机</span>
+        channel<span class="token punctuation">.</span><span class="token function">exchangeDeclare</span><span class="token punctuation">(</span><span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">,</span> <span class="token class-name">BuiltinExchangeType</span><span class="token punctuation">.</span><span class="token constant">DIRECT</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明普通队列</span>
+        <span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">&gt;</span></span> arguments <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 过期时间 10s 由生产者指定 更加灵活</span>
+<span class="token comment">//        arguments.put("x-message-ttl", 10000);</span>
+
+        <span class="token comment">// 正常的队列设置死信交换机</span>
+        arguments<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"x-dead-letter-exchange"</span><span class="token punctuation">,</span> <span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 设置死信 路由键 (routingKey)</span>
+        arguments<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"x-dead-letter-routing-key"</span><span class="token punctuation">,</span> <span class="token string">"lisi"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 设置队列的限制 , 例如 发送 10 个消息 , 6 个为正常 , 4 个为死信</span>
+        arguments<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"x-max-length"</span><span class="token punctuation">,</span> <span class="token number">6</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> arguments<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 申明死刑队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 绑定普通的交换机与队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueBind</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"zhangsan"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 绑定死信的交换机与死信的队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueBind</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"lisi"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"等待接受消息"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">DeliverCallback</span> deliverCallback <span class="token operator">=</span> <span class="token punctuation">(</span>tag<span class="token punctuation">,</span> message<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"C1 接收到的消息为: "</span> <span class="token operator">+</span> <span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"UTF-8"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+        channel<span class="token punctuation">.</span><span class="token function">basicConsume</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> deliverCallback<span class="token punctuation">,</span> <span class="token punctuation">(</span>tag<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p> <br> <font color="ddii" size="4">注意:</font><br>  <br> 这参数改变了(没有设置 ttl 时间，新增了 队列的 最大长度限制 为 6) ，所以 需要把原来队列删除</p> 
+<p> <br> 消费者c2 代码不变</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>seven</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">DeliverCallback</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>utils<span class="token punctuation">.</span></span><span class="token class-name">RabbitMQUtils</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span><span class="token class-name">IOException</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>concurrent<span class="token punctuation">.</span></span><span class="token class-name">TimeoutException</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Consumer02</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 死信队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_QUEUE</span> <span class="token operator">=</span> <span class="token string">"dead_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">TimeoutException</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMQUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"等待接受死信消息......"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">DeliverCallback</span> deliverCallback <span class="token operator">=</span> <span class="token punctuation">(</span>tag<span class="token punctuation">,</span> message<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"C2 接收到的消息： "</span> <span class="token operator">+</span> <span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"UTF-8"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+        channel<span class="token punctuation">.</span><span class="token function">basicConsume</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> deliverCallback<span class="token punctuation">,</span><span class="token punctuation">(</span>tag<span class="token punctuation">)</span><span class="token operator">-&gt;</span><span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p> <br> 效果:</p> 
+<p><img src="https://images2.imgbox.com/a0/e9/LX1AaGcY_o.png" alt="在这里插入图片描述"></p> 
+<p> <br> 这里 之所以要启动 c1 后在关闭，是为了展示 6个消息放到 普通队列 ，4个消息放到死信队列， 如果不这么做，发送的 10个消息 都会被 c1 消费 ，（消息发送到 队列后 , 立马 转发给 c1 导致 队列就不会达到 6 个 ，队列不会满 ，也就不会将消息转化给 死信队列).</p> 
+<p><img src="https://images2.imgbox.com/0e/7b/QnN3D5nn_o.png" alt="在这里插入图片描述"></p> 
+<p> </p> 
+<h3><a id="33__430"></a>3.3 拒绝消息</h3> 
+<p> <br> 消息生产者 和 消费者 c2 与上面的代码一样</p> 
+<p>这里我们 拒绝 info7 消息 ，想要 拒绝 info7 消息，我们可以采用手动应答.</p> 
+<p> <br> 消费者c1</p> 
+<pre><code class="prism language-java"><span class="token keyword">package</span> <span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>seven</span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">BuiltinExchangeType</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">Channel</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">com<span class="token punctuation">.</span>rabbitmq<span class="token punctuation">.</span>client<span class="token punctuation">.</span></span><span class="token class-name">DeliverCallback</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>example<span class="token punctuation">.</span>utils<span class="token punctuation">.</span></span><span class="token class-name">RabbitMQUtils</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>io<span class="token punctuation">.</span></span><span class="token class-name">IOException</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">HashMap</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">Map</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span></span><span class="token class-name">Objects</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">java<span class="token punctuation">.</span>util<span class="token punctuation">.</span>concurrent<span class="token punctuation">.</span></span><span class="token class-name">TimeoutException</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Consumer01</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 普通交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"normal_exchange"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 死信交换机的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_EXCHANGE</span> <span class="token operator">=</span> <span class="token string">"dead_change"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 普通队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">NORMAL_QUEUE</span> <span class="token operator">=</span> <span class="token string">"normal_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 死刑队列的名称</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> <span class="token constant">DEAD_QUEUE</span> <span class="token operator">=</span> <span class="token string">"dead_queue"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">TimeoutException</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMQUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明死信和普通交换机 , 类型为 direct （直接交换机）</span>
+
+        <span class="token comment">// 普通交换机</span>
+        channel<span class="token punctuation">.</span><span class="token function">exchangeDeclare</span><span class="token punctuation">(</span><span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token class-name">BuiltinExchangeType</span><span class="token punctuation">.</span><span class="token constant">DIRECT</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 死信交换机</span>
+        channel<span class="token punctuation">.</span><span class="token function">exchangeDeclare</span><span class="token punctuation">(</span><span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">,</span> <span class="token class-name">BuiltinExchangeType</span><span class="token punctuation">.</span><span class="token constant">DIRECT</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 声明普通队列</span>
+        <span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">&gt;</span></span> arguments <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 过期时间 10s 由生产者指定 更加灵活</span>
+<span class="token comment">//        arguments.put("x-message-ttl", 10000);</span>
+
+        <span class="token comment">// 正常的队列设置死信交换机</span>
+        arguments<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"x-dead-letter-exchange"</span><span class="token punctuation">,</span> <span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 设置死信 路由键 (routingKey)</span>
+        arguments<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span><span class="token string">"x-dead-letter-routing-key"</span><span class="token punctuation">,</span> <span class="token string">"lisi"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 设置队列的限制 , 例如 发送 10 个消息 , 6 个为正常 , 4 个为死信</span>
+<span class="token comment">//        arguments.put("x-max-length", 6);</span>
+
+        <span class="token comment">// 声明队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> arguments<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 申明死刑队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 绑定普通的交换机与队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueBind</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token constant">NORMAL_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"zhangsan"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">// 绑定死信的交换机与死信的队列</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueBind</span><span class="token punctuation">(</span><span class="token constant">DEAD_QUEUE</span><span class="token punctuation">,</span> <span class="token constant">DEAD_EXCHANGE</span><span class="token punctuation">,</span> <span class="token string">"lisi"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"等待接受消息"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">DeliverCallback</span> deliverCallback <span class="token operator">=</span> <span class="token punctuation">(</span>tag<span class="token punctuation">,</span> message<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">String</span> msg <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getBody</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"UTF-8"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>msg<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span><span class="token string">"info7"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"C1 接收到消息为: "</span> <span class="token operator">+</span> msg <span class="token operator">+</span> <span class="token string">" 此消息被 C1 拒绝"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment">//requeue 设置为 false 代表拒绝重新入队 该队列如果配置了死信交换机将发送到死信队列中</span>
+                channel<span class="token punctuation">.</span><span class="token function">basicReject</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getEnvelope</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeliveryTag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"C1 接收到的消息为: "</span> <span class="token operator">+</span> msg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                channel<span class="token punctuation">.</span><span class="token function">basicAck</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">getEnvelope</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeliveryTag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token comment">//        channel.basicConsume(NORMAL_QUEUE, true, deliverCallback, (tag) -&gt; {});</span>
+        <span class="token comment">// 开启 手动应答</span>
+        channel<span class="token punctuation">.</span><span class="token function">basicConsume</span><span class="token punctuation">(</span><span class="token constant">NORMAL_QUEUE</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> deliverCallback<span class="token punctuation">,</span> <span class="token punctuation">(</span>tag<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/98/a7/idZFGEGl_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4ea53667ab7af436bac078590e2cfd06/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">C# 海康威视平台API接入 和网页摄像头部署</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/6d6e22683cae5084bf0b36d80cb982ea/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C# 使用Microsoft Edge WebView2的相关总结</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>微信网页授权之使用完整服务解决方案 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="微信网页授权之使用完整服务解决方案" />
+<meta property="og:description" content="目录
+微信网页授权能力调整造成的问题
+能力调整的内容和理由
+原有运行方案
+is_snapshotuser字段 改造原有方案
+如何复现测试场景
+小结
+微信网页授权能力调整造成的问题 依附于第三方的开发，做为开发者经常会遇到第三方进行规范和开发的调整，如开发腾讯微信的相关应用。我所经历的如小程序隐私政策调整、信息备案调整、微信授权获取个人信息限制调整等。
+最近我们的一些项目因为微信页面授权能力的调整出现了一些问题，对于新用户未经授权前，微信开发团队给出的输出是快照页，该页内所获取的openId等均为虚拟账号数据，并在屏幕下方非常不明显的显示“使用完整服务”，如下图所示：
+此图即是微信给出的授权提示，也是我们折中的解决方案，图中所示的提示框源自己于我们通过携带的参数反馈给用户的提示，以引导用户点击下方的“使用完整服务”链接，并进行授权。
+能力调整的内容和理由 微信团队给出的解释是当开发者在网页中在不规范使用发起 snsapi_userinfo 网页授权时，微信将默认打开网页快照页模式进行基础浏览。
+微信网页授权规范
+授权流程需引导清晰、准确：在申请获取用户信息的弹窗出现前，应该清晰、准确地告知用户获取信息的范围及获取信息的目的；必要场景申请：在必须获取用户信息时才申请，而不是用户尚未了解服务前就强制弹窗。如使用医院挂号时才需要获取用户信息；不强制登录：提供游客模式，供用户了解网页提供的基础服务，不强制用户允许网页获取用户信息后才能使用网页服务。 常见的微信网页授权不规范使用案例
+强制登录：在用户打开网页时立即要求用户授权，用户拒绝后无法使用网页提供的服务；违规收集个人信息：未在网页提前告知使用个人信息的目的、方式和范围；非必要收集：非必要获取用户信息的网页，如文章、视频等，要求用户在浏览内容前登录；差别对待微信用户：同样的网页在浏览器内可以无需登录直接访问，在微信内却要求用户先登录才可访问。 原有运行方案 微信OA2授权访问地址如下(示例url为C#字符串)：
+https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx7964497eb8bad783&amp;amp;redirect_uri=https%3A//www.leadihr.com/weixin/oa2.aspx%3F&amp;amp;response_type=code&amp;amp;scope=snsapi_userinfo&amp;amp;state=1#wechat_redirect&amp;amp;connect_redirect = 1 重定向接收地址 OA2.ASPX程序 （C#版本）
+using System; using System.Collections.Generic; using System.IO; using System.Linq; using System.Text; using System.Web; using System.Web.Security; using System.Web.UI; using System.Web.UI.WebControls; using System.Xml; using System.Collections; using System.Net; using System.Text.RegularExpressions; using Newtonsoft.Json; using Newtonsoft.Json.Linq; using LitJson; using System.Data; using System.Data.SqlClient; using CosysJaneCommonAPI; using System.Web.Script.Serialization; using System." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/4394780dd8b63c32f93e529a1cdf17c3/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-04T21:51:01+08:00" />
+<meta property="article:modified_time" content="2024-02-04T21:51:01+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">微信网页授权之使用完整服务解决方案</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p id="%E5%BE%AE%E4%BF%A1%E7%BD%91%E9%A1%B5%E6%8E%88%E6%9D%83%E8%83%BD%E5%8A%9B%E8%B0%83%E6%95%B4%E9%80%A0%E6%88%90%E7%9A%84%E9%97%AE%E9%A2%98-toc" style="margin-left:40px;"><a href="#%E5%BE%AE%E4%BF%A1%E7%BD%91%E9%A1%B5%E6%8E%88%E6%9D%83%E8%83%BD%E5%8A%9B%E8%B0%83%E6%95%B4%E9%80%A0%E6%88%90%E7%9A%84%E9%97%AE%E9%A2%98" rel="nofollow">微信网页授权能力调整造成的问题</a></p> 
+<p id="%E8%83%BD%E5%8A%9B%E8%B0%83%E6%95%B4%E7%9A%84%E5%86%85%E5%AE%B9%E5%92%8C%E7%90%86%E7%94%B1-toc" style="margin-left:80px;"><a href="#%E8%83%BD%E5%8A%9B%E8%B0%83%E6%95%B4%E7%9A%84%E5%86%85%E5%AE%B9%E5%92%8C%E7%90%86%E7%94%B1" rel="nofollow">能力调整的内容和理由</a></p> 
+<p id="%E5%8E%9F%E6%9C%89%E8%BF%90%E8%A1%8C%E6%96%B9%E6%A1%88-toc" style="margin-left:40px;"><a href="#%E5%8E%9F%E6%9C%89%E8%BF%90%E8%A1%8C%E6%96%B9%E6%A1%88" rel="nofollow">原有运行方案</a></p> 
+<p id="is_snapshotuser%E5%AD%97%E6%AE%B5%C2%A0-toc" style="margin-left:40px;"><a href="#is_snapshotuser%E5%AD%97%E6%AE%B5%C2%A0" rel="nofollow">is_snapshotuser字段 </a></p> 
+<p id="%E6%94%B9%E9%80%A0%E5%8E%9F%E6%9C%89%E6%96%B9%E6%A1%88-toc" style="margin-left:40px;"><a href="#%E6%94%B9%E9%80%A0%E5%8E%9F%E6%9C%89%E6%96%B9%E6%A1%88" rel="nofollow">改造原有方案</a></p> 
+<p id="%E5%A6%82%E4%BD%95%E5%A4%8D%E7%8E%B0%E6%B5%8B%E8%AF%95%E5%9C%BA%E6%99%AF-toc" style="margin-left:40px;"><a href="#%E5%A6%82%E4%BD%95%E5%A4%8D%E7%8E%B0%E6%B5%8B%E8%AF%95%E5%9C%BA%E6%99%AF" rel="nofollow">如何复现测试场景</a></p> 
+<p id="%E5%B0%8F%E7%BB%93-toc" style="margin-left:40px;"><a href="#%E5%B0%8F%E7%BB%93" rel="nofollow">小结</a></p> 
+<hr id="hr-toc"> 
+<p></p> 
+<h3>微信网页授权能力调整造成的问题</h3> 
+<p>依附于第三方的开发，做为开发者经常会遇到第三方进行规范和开发的调整，如开发腾讯微信的相关应用。我所经历的如小程序隐私政策调整、信息备案调整、微信授权获取个人信息限制调整等。</p> 
+<p>最近我们的一些项目因为微信页面授权能力的调整出现了一些问题，对于新用户未经授权前，微信开发团队给出的输出是快照页，该页内所获取的openId等均为虚拟账号数据，并在屏幕下方非常不明显的显示“使用完整服务”，如下图所示：</p> 
+<p class="img-center"><img alt="" height="721" src="https://images2.imgbox.com/59/23/8tYOghWG_o.png" width="309"></p> 
+<p>此图即是微信给出的授权提示，也是我们折中的解决方案，图中所示的提示框源自己于我们通过携带的参数反馈给用户的提示，以引导用户点击下方的“使用完整服务”链接，并进行授权。</p> 
+<h4 id="%E8%83%BD%E5%8A%9B%E8%B0%83%E6%95%B4%E7%9A%84%E5%86%85%E5%AE%B9%E5%92%8C%E7%90%86%E7%94%B1">能力调整的内容和理由</h4> 
+<p>微信团队给出的解释是当开发者在网页中在不规范使用发起 snsapi_userinfo 网页授权时，微信将默认打开网页快照页模式进行基础浏览。</p> 
+<p>微信网页授权规范</p> 
+<ol><li>授权流程需引导清晰、准确：在申请获取用户信息的弹窗出现前，应该清晰、准确地告知用户获取信息的范围及获取信息的目的；</li><li>必要场景申请：在必须获取用户信息时才申请，而不是用户尚未了解服务前就强制弹窗。如使用医院挂号时才需要获取用户信息；</li><li>不强制登录：提供游客模式，供用户了解网页提供的基础服务，不强制用户允许网页获取用户信息后才能使用网页服务。</li></ol> 
+<p>常见的微信网页授权不规范使用案例</p> 
+<ol><li>强制登录：在用户打开网页时立即要求用户授权，用户拒绝后无法使用网页提供的服务；</li><li>违规收集个人信息：未在网页提前告知使用个人信息的目的、方式和范围；</li><li>非必要收集：非必要获取用户信息的网页，如文章、视频等，要求用户在浏览内容前登录；</li><li>差别对待微信用户：同样的网页在浏览器内可以无需登录直接访问，在微信内却要求用户先登录才可访问。</li></ol> 
+<h3 id="%E5%8E%9F%E6%9C%89%E8%BF%90%E8%A1%8C%E6%96%B9%E6%A1%88">原有运行方案</h3> 
+<p>微信OA2授权访问地址如下(示例url为C#字符串)：</p> 
+<pre><code class="language-cs">https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx7964497eb8bad783&amp;amp;redirect_uri=https%3A//www.leadihr.com/weixin/oa2.aspx%3F&amp;amp;response_type=code&amp;amp;scope=snsapi_userinfo&amp;amp;state=1#wechat_redirect&amp;amp;connect_redirect = 1</code></pre> 
+<p>重定向接收地址 OA2.ASPX程序 （C#版本）</p> 
+<pre><code class="language-cs">using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Web;
+using System.Web.Security;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Xml;
+using System.Collections;
+using System.Net;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using LitJson;
+using System.Data;
+using System.Data.SqlClient;
+using CosysJaneCommonAPI;
+using System.Web.Script.Serialization;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
+
+public partial class oa2 : System.Web.UI.Page
+{
+
+
+    string Appid = "";
+    string appsecret = "";
+
+    string domain = "";
+
+
+    
+    public class OAuth_Token
+    {
+        public OAuth_Token()
+        {
+        }
+        //access_token  网页授权接口调用凭证,注意：此access_token与基础支持的access_token不同  
+        //expires_in    access_token接口调用凭证超时时间，单位（秒）  
+        //refresh_token 用户刷新access_token  
+        //openid    用户唯一标识，请注意，在未关注公众号时，用户访问公众号的网页，也会产生一个用户和公众号唯一的OpenID  
+        //scope 用户授权的作用域，使用逗号（,）分隔  
+        public string access_token { get; set; }
+        public string expires_in { get; set; }
+        public string refresh_token { get; set; }
+        public string openid { get; set; }
+        public string scope { get; set; }
+
+    }
+
+
+    public class OAuthUser
+    {
+        public OAuthUser()
+        { }
+        #region 数据库字段
+        private string _openID;
+        private string _searchText;
+        private string _unionid;
+        private string _nickname;
+        private string _sex;
+        private string _province;
+        private string _city;
+        private string _country;
+        private string _headimgUrl;
+//        private string _privilege;
+        #endregion
+
+        #region 字段属性
+        /// &lt;summary&gt;  
+        /// 用户的唯一标识  
+        /// &lt;/summary&gt;  
+        public string openid
+        {
+            set { _openID = value; }
+            get { return _openID; }
+        }
+        public string SearchText
+        {
+            set { _searchText = value; }
+            get { return _searchText; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户昵称   
+        /// &lt;/summary&gt;  
+        public string nickname
+        {
+            set { _nickname = value; }
+            get { return _nickname; }
+        }
+        public string unionid
+        {
+            set { _unionid = value; }
+            get { return _unionid; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户的性别，值为1时是男性，值为2时是女性，值为0时是未知   
+        /// &lt;/summary&gt;  
+        public string sex
+        {
+            set { _sex = value; }
+            get { return _sex; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户个人资料填写的省份  
+        /// &lt;/summary&gt;  
+        public string province
+        {
+            set { _province = value; }
+            get { return _province; }
+        }
+        /// &lt;summary&gt;  
+        /// 普通用户个人资料填写的城市   
+        /// &lt;/summary&gt;  
+        public string city
+        {
+            set { _city = value; }
+            get { return _city; }
+        }
+        /// &lt;summary&gt;  
+        /// 国家，如中国为CN   
+        /// &lt;/summary&gt;  
+        public string country
+        {
+            set { _country = value; }
+            get { return _country; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户头像，最后一个数值代表正方形头像大小（有0、46、64、96、132数值可选，0代表640*640正方形头像），用户没有头像时该项为空  
+        /// &lt;/summary&gt;  
+        public string headimgurl
+        {
+            set { _headimgUrl = value; }
+            get { return _headimgUrl; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户特权信息，json 数组，如微信沃卡用户为（chinaunicom）其实这个格式称不上JSON，只是个单纯数组  
+        /// &lt;/summary&gt;  
+        //public string privilege
+        //{
+        //    set { _privilege = value; }
+        //    get { return _privilege; }
+        //}
+        #endregion
+    }      
+
+protected void Page_Load(object sender, EventArgs e)  
+    {
+
+        if (!IsPostBack)  
+        {
+            if (!string.IsNullOrEmpty(Request.QueryString["code"]))  
+            {  
+                string Code = Request.QueryString["code"].ToString();
+                string State = Request.QueryString["state"].ToString();
+                //获得Token  
+                OAuth_Token Model = Get_token(Code);
+                OAuthUser OAuthUser_Model = Get_UserInfo(Model.access_token, Model.openid);
+                string content=Model.access_token+ "用户OPENID:" + OAuthUser_Model.openid + "&lt;br&gt;用户昵称:" + OAuthUser_Model.nickname + "&lt;br&gt;性别:" + OAuthUser_Model.sex + "&lt;br&gt;所在省:" + OAuthUser_Model.province + "&lt;br&gt;所在市:" + OAuthUser_Model.city + "&lt;br&gt;所在国家:" + OAuthUser_Model.country + "&lt;br&gt;头像地址:" + OAuthUser_Model.headimgurl + "&lt;br&gt;用户特权信息:";
+
+
+
+
+                    Response.Redirect("https://x.x.com/index.aspx?&amp;oid=" + OAuthUser_Model.openid);
+                  
+            }  
+        }  
+    }
+public class JsonHelper
+{
+    /// &lt;summary&gt;
+    /// 生成Json格式
+    /// &lt;/summary&gt;
+    /// &lt;typeparam name="T"&gt;&lt;/typeparam&gt;
+    /// &lt;param name="obj"&gt;&lt;/param&gt;
+    /// &lt;returns&gt;&lt;/returns&gt;
+    public static string GetJson&lt;T&gt;(T obj)
+    {
+        DataContractJsonSerializer json = new DataContractJsonSerializer(obj.GetType());
+        using (MemoryStream stream = new MemoryStream())
+        {
+            json.WriteObject(stream, obj);
+            string szJson = Encoding.UTF8.GetString(stream.ToArray()); return szJson;
+        }
+    }
+    /// &lt;summary&gt;
+    /// 获取Json的Model
+    /// &lt;/summary&gt;
+    /// &lt;typeparam name="T"&gt;&lt;/typeparam&gt;
+    /// &lt;param name="szJson"&gt;&lt;/param&gt;
+    /// &lt;returns&gt;&lt;/returns&gt;
+    public static T ParseFromJson&lt;T&gt;(string szJson)
+    {
+        T obj = Activator.CreateInstance&lt;T&gt;();
+        using (MemoryStream ms = new MemoryStream(Encoding.UTF8.GetBytes(szJson)))
+        {
+            DataContractJsonSerializer serializer = new DataContractJsonSerializer(obj.GetType());
+            return (T)serializer.ReadObject(ms);
+        }
+    }
+}  
+    //获得Token  
+    protected OAuth_Token Get_token(string Code)  
+    {  
+        string Str = GetJson("https://api.weixin.qq.com/sns/oauth2/access_token?appid=" + Appid + "&amp;secret=" + appsecret + "&amp;code=" + Code + "&amp;grant_type=authorization_code");
+        
+        
+        OAuth_Token Oauth_Token_Model = JsonHelper.ParseFromJson&lt;OAuth_Token&gt;(Str);  
+        return Oauth_Token_Model;  
+    }  
+    //刷新Token  
+    protected OAuth_Token refresh_token(string REFRESH_TOKEN)  
+    {  
+        string Str = GetJson("https://api.weixin.qq.com/sns/oauth2/refresh_token?appid=" + Appid + "&amp;grant_type=refresh_token&amp;refresh_token=" + REFRESH_TOKEN);  
+        OAuth_Token Oauth_Token_Model = JsonHelper.ParseFromJson&lt;OAuth_Token&gt;(Str);  
+        return Oauth_Token_Model;  
+    }  
+    //获得用户信息  
+    protected OAuthUser Get_UserInfo(string REFRESH_TOKEN, string OPENID)  
+    {  
+       // Response.Write("获得用户信息REFRESH_TOKEN:" + REFRESH_TOKEN + "||OPENID:" + OPENID);  
+        string Str = GetJson("https://api.weixin.qq.com/sns/userinfo?access_token=" + REFRESH_TOKEN + "&amp;openid=" + OPENID + "&amp;lang=zh_CN");  
+        OAuthUser OAuthUser_Model = JsonHelper.ParseFromJson&lt;OAuthUser&gt;(Str);
+        return OAuthUser_Model;  
+    }  
+    protected string GetJson(string url)  
+    {  
+        WebClient wc = new WebClient();  
+        wc.Credentials = CredentialCache.DefaultCredentials;  
+        wc.Encoding = Encoding.UTF8;
+        string returnText = "";
+        try
+        {
+            returnText = wc.DownloadString(url);
+        }
+        catch (Exception e)
+        {
+            Response.Write(e.Message);
+            Response.End();
+        }
+        if (returnText.Contains("errcode"))  
+        {  
+            //可能发生错误  
+        }  
+        //Response.Write(returnText);  
+        return returnText;  
+    }  
+  
+}</code></pre> 
+<h3 id="is_snapshotuser%E5%AD%97%E6%AE%B5%C2%A0">is_snapshotuser字段 </h3> 
+<p>通过code换取网页授权access_token<br> 请求方法是获取code后，请求以下链接获取access_token：</p> 
+<p>https://api.weixin.qq.com/sns/oauth2/access_token?appid=APPID&amp;secret=SECRET&amp;code=CODE&amp;grant_type=authorization_code</p> 
+<p>正确时会返回具有如下图所示的JSON数据包：</p> 
+<p><img alt="" height="1079" src="https://images2.imgbox.com/f3/4e/5X5hK9I6_o.png" width="1200"></p> 
+<p>因此可能通过判断 is_snapshotuser 字段是否为1，判断是否快照页模式</p> 
+<h3 id="%E6%94%B9%E9%80%A0%E5%8E%9F%E6%9C%89%E6%96%B9%E6%A1%88">改造原有方案</h3> 
+<p>主要是增加 string is_snapshotuser = "0" 和后续对JSON返回值的判断，并返回回调的url并携带此参数。示例代码如下：</p> 
+<pre><code class="language-cs">using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Web;
+using System.Web.Security;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Xml;
+using System.Collections;
+using System.Net;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using LitJson;
+using System.Data;
+using System.Data.SqlClient;
+using CosysJaneCommonAPI;
+using System.Web.Script.Serialization;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
+
+public partial class oa2 : System.Web.UI.Page
+{
+
+
+    string Appid = "";
+    string appsecret = "";
+
+    string domain = "";
+    string is_snapshotuser = "0";
+
+
+    
+    public class OAuth_Token
+    {
+        public OAuth_Token()
+        {
+        }
+        //access_token  网页授权接口调用凭证,注意：此access_token与基础支持的access_token不同  
+        //expires_in    access_token接口调用凭证超时时间，单位（秒）  
+        //refresh_token 用户刷新access_token  
+        //openid    用户唯一标识，请注意，在未关注公众号时，用户访问公众号的网页，也会产生一个用户和公众号唯一的OpenID  
+        //scope 用户授权的作用域，使用逗号（,）分隔  
+        public string access_token { get; set; }
+        public string expires_in { get; set; }
+        public string refresh_token { get; set; }
+        public string openid { get; set; }
+        public string scope { get; set; }
+
+    }
+
+
+    public class OAuthUser
+    {
+        public OAuthUser()
+        { }
+        #region 数据库字段
+        private string _openID;
+        private string _searchText;
+        private string _unionid;
+        private string _nickname;
+        private string _sex;
+        private string _province;
+        private string _city;
+        private string _country;
+        private string _headimgUrl;
+//        private string _privilege;
+        #endregion
+
+        #region 字段属性
+        /// &lt;summary&gt;  
+        /// 用户的唯一标识  
+        /// &lt;/summary&gt;  
+        public string openid
+        {
+            set { _openID = value; }
+            get { return _openID; }
+        }
+        public string SearchText
+        {
+            set { _searchText = value; }
+            get { return _searchText; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户昵称   
+        /// &lt;/summary&gt;  
+        public string nickname
+        {
+            set { _nickname = value; }
+            get { return _nickname; }
+        }
+        public string unionid
+        {
+            set { _unionid = value; }
+            get { return _unionid; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户的性别，值为1时是男性，值为2时是女性，值为0时是未知   
+        /// &lt;/summary&gt;  
+        public string sex
+        {
+            set { _sex = value; }
+            get { return _sex; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户个人资料填写的省份  
+        /// &lt;/summary&gt;  
+        public string province
+        {
+            set { _province = value; }
+            get { return _province; }
+        }
+        /// &lt;summary&gt;  
+        /// 普通用户个人资料填写的城市   
+        /// &lt;/summary&gt;  
+        public string city
+        {
+            set { _city = value; }
+            get { return _city; }
+        }
+        /// &lt;summary&gt;  
+        /// 国家，如中国为CN   
+        /// &lt;/summary&gt;  
+        public string country
+        {
+            set { _country = value; }
+            get { return _country; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户头像，最后一个数值代表正方形头像大小（有0、46、64、96、132数值可选，0代表640*640正方形头像），用户没有头像时该项为空  
+        /// &lt;/summary&gt;  
+        public string headimgurl
+        {
+            set { _headimgUrl = value; }
+            get { return _headimgUrl; }
+        }
+        /// &lt;summary&gt;  
+        /// 用户特权信息，json 数组，如微信沃卡用户为（chinaunicom）其实这个格式称不上JSON，只是个单纯数组  
+        /// &lt;/summary&gt;  
+        //public string privilege
+        //{
+        //    set { _privilege = value; }
+        //    get { return _privilege; }
+        //}
+        #endregion
+    }      
+
+protected void Page_Load(object sender, EventArgs e)  
+    {
+
+        if (!IsPostBack)  
+        {
+            if (!string.IsNullOrEmpty(Request.QueryString["code"]))  
+            {  
+                string Code = Request.QueryString["code"].ToString();
+                string State = Request.QueryString["state"].ToString();
+                //获得Token  
+                OAuth_Token Model = Get_token(Code);
+                OAuthUser OAuthUser_Model = Get_UserInfo(Model.access_token, Model.openid);
+                string content=Model.access_token+ "用户OPENID:" + OAuthUser_Model.openid + "&lt;br&gt;用户昵称:" + OAuthUser_Model.nickname + "&lt;br&gt;性别:" + OAuthUser_Model.sex + "&lt;br&gt;所在省:" + OAuthUser_Model.province + "&lt;br&gt;所在市:" + OAuthUser_Model.city + "&lt;br&gt;所在国家:" + OAuthUser_Model.country + "&lt;br&gt;头像地址:" + OAuthUser_Model.headimgurl + "&lt;br&gt;用户特权信息:";
+
+
+
+
+                    Response.Redirect("https://x.x.com/index.aspx?&amp;oid=" + OAuthUser_Model.openid+"&amp;is_snapshotuser="+is_snapshotuser);
+                  
+            }  
+        }  
+    }
+public class JsonHelper
+{
+    /// &lt;summary&gt;
+    /// 生成Json格式
+    /// &lt;/summary&gt;
+    /// &lt;typeparam name="T"&gt;&lt;/typeparam&gt;
+    /// &lt;param name="obj"&gt;&lt;/param&gt;
+    /// &lt;returns&gt;&lt;/returns&gt;
+    public static string GetJson&lt;T&gt;(T obj)
+    {
+        DataContractJsonSerializer json = new DataContractJsonSerializer(obj.GetType());
+        using (MemoryStream stream = new MemoryStream())
+        {
+            json.WriteObject(stream, obj);
+            string szJson = Encoding.UTF8.GetString(stream.ToArray()); return szJson;
+        }
+    }
+    /// &lt;summary&gt;
+    /// 获取Json的Model
+    /// &lt;/summary&gt;
+    /// &lt;typeparam name="T"&gt;&lt;/typeparam&gt;
+    /// &lt;param name="szJson"&gt;&lt;/param&gt;
+    /// &lt;returns&gt;&lt;/returns&gt;
+    public static T ParseFromJson&lt;T&gt;(string szJson)
+    {
+        T obj = Activator.CreateInstance&lt;T&gt;();
+        using (MemoryStream ms = new MemoryStream(Encoding.UTF8.GetBytes(szJson)))
+        {
+            DataContractJsonSerializer serializer = new DataContractJsonSerializer(obj.GetType());
+            return (T)serializer.ReadObject(ms);
+        }
+    }
+}  
+    //获得Token  
+    protected OAuth_Token Get_token(string Code)  
+    {  
+        string Str = GetJson("https://api.weixin.qq.com/sns/oauth2/access_token?appid=" + Appid + "&amp;secret=" + appsecret + "&amp;code=" + Code + "&amp;grant_type=authorization_code");
+        if (Str.IndexOf("\"is_snapshotuser\":1") != -1||Str.IndexOf("\"is_snapshotuser\": 1")!=-1)
+        {
+            is_snapshotuser = "1";
+        }
+        OAuth_Token Oauth_Token_Model = JsonHelper.ParseFromJson&lt;OAuth_Token&gt;(Str);  
+        return Oauth_Token_Model;  
+    }  
+    //刷新Token  
+    protected OAuth_Token refresh_token(string REFRESH_TOKEN)  
+    {  
+        string Str = GetJson("https://api.weixin.qq.com/sns/oauth2/refresh_token?appid=" + Appid + "&amp;grant_type=refresh_token&amp;refresh_token=" + REFRESH_TOKEN);  
+        OAuth_Token Oauth_Token_Model = JsonHelper.ParseFromJson&lt;OAuth_Token&gt;(Str);  
+        return Oauth_Token_Model;  
+    }  
+    //获得用户信息  
+    protected OAuthUser Get_UserInfo(string REFRESH_TOKEN, string OPENID)  
+    {  
+       // Response.Write("获得用户信息REFRESH_TOKEN:" + REFRESH_TOKEN + "||OPENID:" + OPENID);  
+        string Str = GetJson("https://api.weixin.qq.com/sns/userinfo?access_token=" + REFRESH_TOKEN + "&amp;openid=" + OPENID + "&amp;lang=zh_CN");  
+        OAuthUser OAuthUser_Model = JsonHelper.ParseFromJson&lt;OAuthUser&gt;(Str);
+        return OAuthUser_Model;  
+    }  
+    protected string GetJson(string url)  
+    {  
+        WebClient wc = new WebClient();  
+        wc.Credentials = CredentialCache.DefaultCredentials;  
+        wc.Encoding = Encoding.UTF8;
+        string returnText = "";
+        try
+        {
+            returnText = wc.DownloadString(url);
+        }
+        catch (Exception e)
+        {
+            Response.Write(e.Message);
+            Response.End();
+        }
+        if (returnText.Contains("errcode"))  
+        {  
+            //可能发生错误  
+        }  
+        //Response.Write(returnText);  
+        return returnText;  
+    }  
+  
+}</code></pre> 
+<p>这样可以在业务页面，如上述代码中的index.aspx进行如下判断：</p> 
+<pre><code class="language-cs">if (Request.QueryString["is_snapshotuser"] == "1")
+{
+    Layer.open("使用前微信要求您的授权，请点击下方使用完整服务后继续...", "'确定'", "info");
+    return;
+}</code></pre> 
+<h3 id="%E5%A6%82%E4%BD%95%E5%A4%8D%E7%8E%B0%E6%B5%8B%E8%AF%95%E5%9C%BA%E6%99%AF">如何复现测试场景</h3> 
+<p>已经授权的用户，如果想测试重新授权的场景，请打开微信，依如下步骤进行设置：</p> 
+<p class="img-center"><img alt="" height="758" src="https://images2.imgbox.com/1d/dd/O5pTFkvf_o.png" width="325"></p> 
+<p class="img-center"><img alt="" height="763" src="https://images2.imgbox.com/4b/9e/vbAxEtJB_o.png" width="327"></p> 
+<p class="img-center"><img alt="" height="784" src="https://images2.imgbox.com/69/32/UCUCjRFd_o.png" width="336"></p> 
+<p> </p> 
+<p> </p> 
+<p class="img-center"><img alt="" height="831" src="https://images2.imgbox.com/02/0b/l4wZzz5w_o.png" width="356"></p> 
+<p class="img-center"><img alt="" height="759" src="https://images2.imgbox.com/b0/50/ynmWRXX9_o.png" width="325"></p> 
+<p> </p> 
+<p> </p> 
+<p class="img-center"><img alt="" height="749" src="https://images2.imgbox.com/d3/f9/LoYrK98D_o.png" width="321"></p> 
+<h3 id="%E5%B0%8F%E7%BB%93">小结</h3> 
+<p>以上示例是一种较小改动的解决方案，个人比较习惯于应用程序稳定性第一的思路。如果已经使用新规则设计方案则可仅供参考。</p> 
+<p>另外在此介绍一下关于网页授权的两种scope的区别：<br> 1、以snsapi_base为scope发起的网页授权，可以直接获取进入页面的用户的openid，且是静默授权并自动跳转到业务页面。<br> 2、以snsapi_userinfo为scope发起的网页授权，是用来获取用户的基本信息的。需要用户手动同意，无须关注，就可在授权后获取该用户的基本信息。</p> 
+<p>以上是个人的一些观点和解决方案，感谢阅读，并提出指正。</p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p></p> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/8ffa053743d8eddebe1d509f3a9dc0f7/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">快速幂与矩阵快速幂（c&#43;&#43;入门必学算法）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/2dbd74e1d157b5647acf26ac1bca66b6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C&#43;&#43;&amp;Python&amp;C# 三语言OpenCV从零开发(8):图像平滑处理</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>消息队列-RabbitMQ：发布确认—发布确认逻辑和发布确认的策略 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="消息队列-RabbitMQ：发布确认—发布确认逻辑和发布确认的策略" />
+<meta property="og:description" content="九、发布确认 1、发布确认逻辑 生产者将信道设置成 confirm 模式，一旦信道进入 confirm 模式，所有在该信道上面发布的消息都将会被指派一个唯一的 ID (从 1 开始)，一旦消息被投递到所有匹配的队列之后，broker 就会发送一个确认给生产者 (包含消息的唯一 ID)，这就使得生产者知道消息已经正确到达目的队列了，（单个）如果消息和队列是可持久化的，那么确认消息会在将消息写入磁盘之后发出，broker 回传给生产者的确认消息中 delivery-tag 域包含了确认消息的序列号，此外 broker 也可以设置 basic.ack 的 multiple 域，表示到这个序列号之前的所有消息都已经得到了处理。(批量)
+（异步）confirm 模式最大的好处在于它是异步的，一旦发布一条消息，生产者应用程序就可以在等信道返回确认的同时继续发送下一条消息，当消息最终得到确认之后，生产者应用便可以通过回调方法来处理该确认消息，如果 RabbitMQ 因为自身内部错误导致消息丢失，就会发送一条 nack 消息， 生产者应用程序同样可以在回调方法中处理该 nack 消息。
+2、发布确认的策略 开启发布确认的方法：发布确认默认是没有开启的，如果要开启，需要调用方法 confirmSelect，每当你要想使用发布确认，都需要在 channel 上调用该方法（反复确认）。
+1）单个确认发布 这是一种简单的确认方式，它是一种同步确认发布的方式，也就是发布一个消息之后只有它被确认发布，后续的消息才能继续发布，waitForConfirmsOrDie(long) 这个方法只有在消息被确认的时候才返回，如果在指定时间范围内这个消息没有被确认那么它将抛出异常。
+这种确认方式有一个最大的缺点就是:发布速度特别的慢，因为如果没有确认发布的消息就会阻塞所有后续消息的发布，这种方式最多提供每秒不超过数百条发布消息的吞吐量。当然对于某些应用程序来说这可能已经足够了。
+/** * 单个发送 */ public static void publishMessageIndividually() throws Exception { Channel channel = RabbitMqUtils.getChannel(); //队列声明 String queueName = UUID.randomUUID().toString(); channel.queueDeclare(queueName, true, false, false, null); //开启发布确认 channel.confirmSelect(); long begin = System." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/14edbb063d725aaf5e867bac77590193/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-20T23:25:13+08:00" />
+<meta property="article:modified_time" content="2024-02-20T23:25:13+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">消息队列-RabbitMQ：发布确认—发布确认逻辑和发布确认的策略</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="_1"></a>九、发布确认</h2> 
+<p><img src="https://images2.imgbox.com/ba/1c/pguuW8Pi_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="1_8"></a>1、发布确认逻辑</h3> 
+<p>生产者将信道设置成 confirm 模式，一旦信道进入 confirm 模式，所有在该信道上面发布的消息都将会被指派一个唯一的 ID (从 1 开始)，一旦消息被投递到所有匹配的队列之后，broker 就会发送一个确认给生产者 (包含消息的唯一 ID)，这就使得生产者知道消息已经正确到达目的队列了，<strong>（单个）如果消息和队列是可持久化的，那么确认消息会在将消息写入磁盘之后发出，broker 回传给生产者的确认消息中 delivery-tag 域包含了确认消息的序列号</strong>，此外 <strong>broker 也可以设置 basic.ack 的 multiple 域，表示到这个序列号之前的所有消息都已经得到了处理。(批量)</strong></p> 
+<p><strong>（异步）confirm 模式最大的好处在于它是异步的</strong>，一旦发布一条消息，生产者应用程序就可以在等信道返回确认的同时继续发送下一条消息，<code>当消息最终得到确认之后，生产者应用便可以通过回调方法来处理该确认消息，如果 RabbitMQ 因为自身内部错误导致消息丢失，就会发送一条 nack 消息， 生产者应用程序同样可以在回调方法中处理该 nack 消息。</code></p> 
+<h3><a id="2_16"></a>2、发布确认的策略</h3> 
+<p><strong>开启发布确认的方法</strong>：<code>发布确认默认是没有开启的</code>，如果<code>要开启，需要调用方法 confirmSelect</code>，<code>每当你要想使用发布确认，都需要在 channel 上调用该方法（反复确认）。</code></p> 
+<h4><a id="1_22"></a>1）单个确认发布</h4> 
+<p>这是一种简单的确认方式，它是一种<strong>同步确认发布</strong>的方式，<strong>也就是发布一个消息之后只有它被确认发布，后续的消息才能继续发布</strong>，<code>waitForConfirmsOrDie(long)</code> 这个方法只有在消息被确认的时候才返回，<strong>如果在指定时间范围内这个消息没有被确认那么它将抛出异常。</strong></p> 
+<p>这种确认方式有一个最大的缺点就是:<strong>发布速度特别的慢</strong>，因为如果没有确认发布的消息就会阻塞所有后续消息的发布，这种方式最多提供每秒不超过数百条发布消息的吞吐量。当然对于某些应用程序来说这可能已经足够了。</p> 
+<p><img src="https://images2.imgbox.com/db/e3/2Oc94Vbo_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/73/4f/1MH6Iw2p_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/01/33/Ef0sqjB1_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/79/ec/yPMSgnAL_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/1a/de/H25tjUhO_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 单个发送
+ */</span>
+<span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">publishMessageIndividually</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMqUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//队列声明</span>
+    <span class="token class-name">String</span> queueName <span class="token operator">=</span> <span class="token constant">UUID</span><span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span>queueName<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//开启发布确认</span>
+    channel<span class="token punctuation">.</span><span class="token function">confirmSelect</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">long</span> begin <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> <span class="token constant">MESSAGE_COUNT</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">String</span> message <span class="token operator">=</span> i <span class="token operator">+</span> <span class="token string">""</span><span class="token punctuation">;</span>
+        channel<span class="token punctuation">.</span><span class="token function">basicPublish</span><span class="token punctuation">(</span><span class="token string">""</span><span class="token punctuation">,</span> queueName<span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">,</span> message<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//服务端返回 false 或超时时间内未返回，生产者可以消息重发</span>
+        <span class="token keyword">boolean</span> flag <span class="token operator">=</span> channel<span class="token punctuation">.</span><span class="token function">waitForConfirms</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>flag<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"消息发送成功"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">long</span> end <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"发布"</span> <span class="token operator">+</span> <span class="token constant">MESSAGE_COUNT</span> <span class="token operator">+</span> <span class="token string">"个单独确认消息,耗时"</span> <span class="token operator">+</span> <span class="token punctuation">(</span>end <span class="token operator">-</span> begin<span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"ms"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>测试效果：</strong></p> 
+<p><img src="https://images2.imgbox.com/a7/37/kRxbSFS7_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/e4/90/gqntjuTD_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="2_89"></a>2）批量确认发布</h4> 
+<p>上面那种方式非常慢，与单个等待确认消息相比，<strong>先发布一批消息然后一起确认可以极大地提高吞吐量</strong>，当然这种方式的<strong>缺点</strong>就是：当发生故障导致发布出现问题时，不知道是哪个消息出问题了，我们必须将整个批处理保存在内存中，以记录重要的信息而后重新发布消息。当然这种方案仍然是同步的，也一样阻塞消息的发布。</p> 
+<p><img src="https://images2.imgbox.com/f6/62/t7YuYyDF_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/73/d4/QqBphqFY_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-java"><span class="token comment">/**
+ * 批量
+ */</span>
+<span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">publishMessageBatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMqUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//队列声明</span>
+    <span class="token class-name">String</span> queueName <span class="token operator">=</span> <span class="token constant">UUID</span><span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span>queueName<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//开启发布确认</span>
+    channel<span class="token punctuation">.</span><span class="token function">confirmSelect</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//批量确认消息大小</span>
+    <span class="token keyword">int</span> batchSize <span class="token operator">=</span> <span class="token number">100</span><span class="token punctuation">;</span>
+    <span class="token comment">//未确认消息个数</span>
+    <span class="token keyword">int</span> outstandingMessageCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">long</span> begin <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> <span class="token constant">MESSAGE_COUNT</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">String</span> message <span class="token operator">=</span> i <span class="token operator">+</span> <span class="token string">""</span><span class="token punctuation">;</span>
+        channel<span class="token punctuation">.</span><span class="token function">basicPublish</span><span class="token punctuation">(</span><span class="token string">""</span><span class="token punctuation">,</span> queueName<span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">,</span> message<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        outstandingMessageCount<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>outstandingMessageCount <span class="token operator">==</span> batchSize<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            channel<span class="token punctuation">.</span><span class="token function">waitForConfirms</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            outstandingMessageCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">//为了确保还有剩余没有确认消息 再次确认</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>outstandingMessageCount <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        channel<span class="token punctuation">.</span><span class="token function">waitForConfirms</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">long</span> end <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"发布"</span> <span class="token operator">+</span> <span class="token constant">MESSAGE_COUNT</span> <span class="token operator">+</span> <span class="token string">"个批量确认消息,耗时"</span> <span class="token operator">+</span> <span class="token punctuation">(</span>end <span class="token operator">-</span> begin<span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"ms"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>测试效果：</strong></p> 
+<p><img src="https://images2.imgbox.com/25/ca/nZ5Opmwo_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/db/61/KLnRytS3_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="3_150"></a>3）异步确认发布</h4> 
+<p><strong>异步确认</strong>虽然编程逻辑比上两个要复杂，<strong>但是性价比最高</strong>，无论是可靠性还是效率都没得说， <strong>它是利用回调函数来达到消息可靠性传递的</strong>，这个中间件也是通过函数回调来保证是否投递成功， 下面就让我们来详细讲解异步确认是怎么实现的。</p> 
+<h5><a id="_158"></a>异步确认发布</h5> 
+<p><strong>1、RabbitMQ使用map来记录消息序号和内容</strong></p> 
+<p><strong>2、代码实现异步确认</strong></p> 
+<p><strong>（1）选择有两个参数的addConfirmListener函数</strong></p> 
+<p><img src="https://images2.imgbox.com/46/eb/j0xQodzW_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>（2）查看源码：知道需要配置的参数</strong><br> <img src="https://images2.imgbox.com/f1/ae/P25LYpT1_o.png" alt="在这里插入图片描述"></p> 
+<p><code>都是需要实例化接口函数的</code></p> 
+<p><img src="https://images2.imgbox.com/d2/b2/SIZjFRus_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>（3）使用匿名函数的方式</strong></p> 
+<p><img src="https://images2.imgbox.com/3c/cb/jylvxhFR_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>（4）打印消息序号</strong></p> 
+<p><img src="https://images2.imgbox.com/49/9a/GGbL9G4w_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/08/0c/ZEJnNG5o_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>（5）测试效果：</strong></p> 
+<p><img src="https://images2.imgbox.com/59/c0/VEGpYAqn_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/06/e6/qH1dkKlK_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/f3/d5/9pC3XCzR_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="_214"></a>如何处理异步未确认消息？</h5> 
+<p>最好的解决方案<strong>就是把未确认的消息放到一个基于内存的能被发布线程访问的队列</strong>， 比如说用 ConcurrentLinkedQueue 这个队列在 confirm callbacks 与发布线程之间进行消息的传递。</p> 
+<p><strong>（1）代码实现：</strong></p> 
+<p><img src="https://images2.imgbox.com/70/86/drgSxTLy_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>①记录下所有要发送的消息，消息的总和</strong></p> 
+<p><img src="https://images2.imgbox.com/6f/5f/2exPw3da_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>②删除到已经确认的消息，剩下的就是未确认的消息</strong></p> 
+<p><img src="https://images2.imgbox.com/e7/46/KhXSSZWv_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>③打印一下未确认的消息都有哪些</strong></p> 
+<p><img src="https://images2.imgbox.com/49/a3/9M9KpZuf_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-java"><span class="token comment">//    异步确认发布</span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">publishMessageAsync</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Channel</span> channel <span class="token operator">=</span> <span class="token class-name">RabbitMqUtils</span><span class="token punctuation">.</span><span class="token function">getChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//队列声明</span>
+        <span class="token class-name">String</span> queueName <span class="token operator">=</span> <span class="token constant">UUID</span><span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        channel<span class="token punctuation">.</span><span class="token function">queueDeclare</span><span class="token punctuation">(</span>queueName<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//开启发布确认</span>
+        channel<span class="token punctuation">.</span><span class="token function">confirmSelect</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+        <span class="token comment">/**线程安全有序的一个哈希表，适用于高并发的情况下
+          1.轻松的将序号与消息进行关联
+          2.轻松批量删除条目，只要给到序号
+          3.支持高并发（多线程）
+         **/</span>
+        <span class="token comment">//消息确认成功，回调函数</span>
+        <span class="token class-name">ConcurrentSkipListMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Long</span><span class="token punctuation">,</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> outstandingConfirms <span class="token operator">=</span>
+                <span class="token keyword">new</span> <span class="token class-name">ConcurrentSkipListMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">ConfirmCallback</span> ackCallback <span class="token operator">=</span> <span class="token punctuation">(</span>deliveryTag <span class="token punctuation">,</span> multiple<span class="token punctuation">)</span><span class="token operator">-&gt;</span><span class="token punctuation">{<!-- --></span> <span class="token comment">//确认了多少条，multiple:批量或单个</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>multiple<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>  <span class="token comment">//批量的</span>
+                <span class="token comment">//2.轻松批量删除条目，只要给到序号</span>
+                <span class="token class-name">ConcurrentNavigableMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Long</span><span class="token punctuation">,</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> confirmed <span class="token operator">=</span>
+                        outstandingConfirms<span class="token punctuation">.</span><span class="token function">headMap</span><span class="token punctuation">(</span>deliveryTag<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//消息的序号</span>
+                confirmed<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span><span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>  <span class="token comment">//单个的</span>
+                outstandingConfirms<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>deliveryTag<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"确认的消息："</span><span class="token operator">+</span>deliveryTag<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//消息确认失败，回调函数</span>
+        <span class="token comment">/**
+         * 1.消息的标记
+         * 2.是否为批量确认
+         */</span>
+        <span class="token class-name">ConfirmCallback</span> nackCallback <span class="token operator">=</span> <span class="token punctuation">(</span>deliveryTag <span class="token punctuation">,</span> multiple<span class="token punctuation">)</span><span class="token operator">-&gt;</span><span class="token punctuation">{<!-- --></span>
+            <span class="token comment">//3、打印一下未确认的消息都有哪些</span>
+            <span class="token class-name">String</span> message <span class="token operator">=</span> outstandingConfirms<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>deliveryTag<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"未确认的消息是:"</span><span class="token operator">+</span>message<span class="token operator">+</span><span class="token string">":::未确认的消息："</span><span class="token operator">+</span>deliveryTag<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+
+        <span class="token comment">//准备消息的监听器 ，监听哪些消息成功了， 哪些失败了</span>
+        channel<span class="token punctuation">.</span><span class="token function">addConfirmListener</span><span class="token punctuation">(</span> ackCallback<span class="token punctuation">,</span> nackCallback<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//开始时间</span>
+        <span class="token keyword">long</span> begin <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">//发送消息</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> <span class="token constant">MESSAGE_COUNT</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">String</span> message <span class="token operator">=</span> i <span class="token operator">+</span> <span class="token string">""</span><span class="token punctuation">;</span>
+            channel<span class="token punctuation">.</span><span class="token function">basicPublish</span><span class="token punctuation">(</span><span class="token string">""</span><span class="token punctuation">,</span> queueName<span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">,</span> message<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment">//1.轻松的将序号与消息进行关联，将每一条消息都存放hash表里面</span>
+            outstandingConfirms<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>channel<span class="token punctuation">.</span><span class="token function">getNextPublishSeqNo</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment">//结束时间</span>
+        <span class="token keyword">long</span> end <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"发布"</span> <span class="token operator">+</span> <span class="token constant">MESSAGE_COUNT</span> <span class="token operator">+</span> <span class="token string">"个单独确认消息,耗时"</span> <span class="token operator">+</span> <span class="token punctuation">(</span>end <span class="token operator">-</span> begin<span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"ms"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>测试效果：</strong></p> 
+<p><img src="https://images2.imgbox.com/8c/83/PKBCkqxJ_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>以上 3 种发布确认速度对比 :</strong></p> 
+<ul><li> <p>单独发布消息：同步等待确认，简单，但吞吐量非常有限。</p> </li><li> <p>批量发布消息：批量同步等待确认，简单，合理的吞吐量，一旦出现问题但很难推断出是哪条消息出现了问题。</p> </li><li> <p>异步处理：最佳性能和资源使用，在出现错误的情况下可以很好地控制，但是实现起来稍微难些。</p> </li></ul> 
+<p><strong>消息队列-RabbitMQ：发布确认—发布确认逻辑和发布确认的策略 到此完结，笔者归纳、创作不易，大佬们给个3连再起飞吧</strong></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/dfe95b36429ca88dcc7747dbdc5c7895/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">将yolov8权重文件转为onnx格式并在c#中使用</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/cba873c4a741d3b4bd46cf9f6795dccd/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">dockerfile文件书写</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

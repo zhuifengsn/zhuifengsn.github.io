@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>2.8 STM32_按键扫描_安富莱 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="2.8 STM32_按键扫描_安富莱" />
+<meta property="og:description" content="1、程序优点 扩展性非常强，功能比较齐全；
+bsp_key按键驱动程序用于扫描独立按键，具有软件滤波机制，采用FIFO机制保存键值。可以检测如下事件：
+按键按下。
+按键弹起。
+长按键。
+长按时自动连发。
+我们将按键驱动分为两个部分来介绍，一部分是FIFO的实现，一部分是按键检测的实现。
+bsp_key.c 文件包含按键检测和按键FIFO的实现代码。
+bsp.c 文件会调用bsp_InitKey()初始化函数。
+bsp.c 文件会调用bsp_KeyScan按键扫描函数。
+bsp_timer.c 中的Systick中断服务程序调用 bsp_RunPer10ms。
+中断程序和主程序通过FIFO接口函数进行信息传递。
+函数调用关系图
+按键FIFO的原理
+FIFO是First Input First Output的缩写，先入先出队列。我们这里以5个字节的FIFO空间进行说明。Write变量表示写位置，Read变量表示读位置。初始状态时，Read = Write = 0。
+我们依次按下按键K1，K2，那么FIFO中的数据变为：
+如果Write！= Read，则我们认为有新的按键事件。
+我们通过函数bsp_GetKey读取一个按键值进行处理后，Read变量变为1。Write变量不变。
+我们继续通过函数bsp_GetKey读取3个按键值进行处理后，Read变量变为4。此时Read = Write = 4。两个变量已经相等，表示已经没有新的按键事件需要处理。
+有一点要特别的注意，如果FIFO空间写满了，Write会被重新赋值为0，也就是重新从第一个字节空间填数据进去，如果这个地址空间的数据还没有被及时读取出来，那么会被后来的数据覆盖掉，这点要引起大家的注意。我们的驱动程序开辟了10个字节的FIFO缓冲区，对于一般的应用足够了。
+设计按键FIFO主要有三个方面的好处：
+可靠地记录每一个按键事件，避免遗漏按键事件。特别是需要实现按键的按下、长按、自动连发、弹起等事件时。
+读取按键的函数可以设计为非阻塞的，不需要等待按键抖动滤波处理完毕。
+按键FIFO程序在嘀嗒定时器中定期的执行检测，不需要在主程序中一直做检测，这样可以有效地降低系统资源消耗。
+详细参考：第19章 STM32H7的GPIO应用之按键FIFO
+2、代码 bsp_key.c /* ********************************************************************************************************* * *	模块名称 : 独立按键驱动模块 *	文件名称 : bsp_key.c *	版 本 : V1.0 *	说 明 : 扫描独立按键，具有软件滤波机制，具有按键FIFO。可以检测如下事件： *	(1) 按键按下 *	(2) 按键弹起 *	(3) 长按键 *	(4) 长按时自动连发 * *	修改记录 : *	版本号 日期 作者 说明 *	V1." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/876421409934d3c493fa8155db19432b/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-10-15T09:49:46+08:00" />
+<meta property="article:modified_time" content="2020-10-15T09:49:46+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">2.8 STM32_按键扫描_安富莱</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="1_0"></a>1、程序优点</h3> 
+<p>扩展性非常强，功能比较齐全；<br> bsp_key按键驱动程序用于扫描独立按键，具有软件滤波机制，采用FIFO机制保存键值。可以检测如下事件：</p> 
+<p>按键按下。<br> 按键弹起。<br> 长按键。<br> 长按时自动连发。</p> 
+<p>我们将按键驱动分为两个部分来介绍，一部分是FIFO的实现，一部分是按键检测的实现。<br> <img src="https://images2.imgbox.com/52/09/jANP61BT_o.png" alt="在这里插入图片描述"><br> bsp_key.c 文件包含按键检测和按键FIFO的实现代码。</p> 
+<p>bsp.c 文件会调用bsp_InitKey()初始化函数。</p> 
+<p>bsp.c 文件会调用bsp_KeyScan按键扫描函数。</p> 
+<p>bsp_timer.c 中的Systick中断服务程序调用 bsp_RunPer10ms。</p> 
+<p>中断程序和主程序通过FIFO接口函数进行信息传递。</p> 
+<p>函数调用关系图<br> <img src="https://images2.imgbox.com/b8/0b/f7iv2M7u_o.png" alt="在这里插入图片描述"><br> 按键FIFO的原理</p> 
+<p>FIFO是First Input First Output的缩写，先入先出队列。我们这里以5个字节的FIFO空间进行说明。Write变量表示写位置，Read变量表示读位置。初始状态时，Read = Write = 0。<br> <img src="https://images2.imgbox.com/34/43/nAG82wTJ_o.png" alt="在这里插入图片描述"><br> 我们依次按下按键K1，K2，那么FIFO中的数据变为：<br> <img src="https://images2.imgbox.com/5a/d2/dvHAoavx_o.png" alt="在这里插入图片描述"><br> 如果Write！= Read，则我们认为有新的按键事件。</p> 
+<p>我们通过函数bsp_GetKey读取一个按键值进行处理后，Read变量变为1。Write变量不变。<br> <img src="https://images2.imgbox.com/27/a6/VbgMdkEA_o.png" alt="在这里插入图片描述"><br> 我们继续通过函数bsp_GetKey读取3个按键值进行处理后，Read变量变为4。此时Read = Write = 4。两个变量已经相等，表示已经没有新的按键事件需要处理。</p> 
+<p>有一点要特别的注意，如果FIFO空间写满了，Write会被重新赋值为0，也就是重新从第一个字节空间填数据进去，如果这个地址空间的数据还没有被及时读取出来，那么会被后来的数据覆盖掉，这点要引起大家的注意。我们的驱动程序开辟了10个字节的FIFO缓冲区，对于一般的应用足够了。</p> 
+<p>设计按键FIFO主要有三个方面的好处：</p> 
+<p>可靠地记录每一个按键事件，避免遗漏按键事件。特别是需要实现按键的按下、长按、自动连发、弹起等事件时。<br> 读取按键的函数可以设计为非阻塞的，不需要等待按键抖动滤波处理完毕。<br> 按键FIFO程序在嘀嗒定时器中定期的执行检测，不需要在主程序中一直做检测，这样可以有效地降低系统资源消耗。</p> 
+<p>详细参考：<a href="https://www.cnblogs.com/armfly/p/10879956.html" rel="nofollow">第19章 STM32H7的GPIO应用之按键FIFO</a></p> 
+<h3><a id="2_bsp_keyc_47"></a>2、代码 bsp_key.c</h3> 
+<pre><code class="prism language-c"><span class="token comment">/*
+*********************************************************************************************************
+*
+*	模块名称 : 独立按键驱动模块
+*	文件名称 : bsp_key.c
+*	版    本 : V1.0
+*	说    明 : 扫描独立按键，具有软件滤波机制，具有按键FIFO。可以检测如下事件：
+*				(1) 按键按下
+*				(2) 按键弹起
+*				(3) 长按键
+*				(4) 长按时自动连发
+*
+*	修改记录 :
+*		版本号  日期        作者     说明
+*		V1.0    2013-02-01 armfly  正式发布
+*		V1.1    2013-06-29 armfly  增加1个读指针，用于bsp_Idle() 函数读取系统控制组合键（截屏）
+*								   增加 K0 K2 组合键 和 K1 K3 组合键，用于系统控制
+*		V1.2    2015-08-08 armfly  K1，K2，K3独立按键进行排他判断，修改  IsKeyDown1()等函数
+*
+*
+*********************************************************************************************************
+*/</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"bsp_key.h"</span></span>
+
+<span class="token comment">/*
+	正点原子STM32-V5 按键口线分配：
+		K0 键      : PH3    (低电平表示按下)
+		K1 键      : PH2    (低电平表示按下)
+		K2 键      : PC13    (低电平表示按下)
+		K3 键      : PA0    (--- 高电平表示按下)
+*/</span>
+
+
+<span class="token keyword">static</span> KEY_T s_tBtn<span class="token punctuation">[</span>KEY_COUNT<span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> KEY_FIFO_T s_tKey<span class="token punctuation">;</span>		<span class="token comment">/* 按键FIFO变量,结构体 */</span>
+
+<span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">bsp_InitKeyVar</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">bsp_InitKeyHard</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">bsp_DetectKey</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> i<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: IsKeyDownX
+*	功能说明: 判断按键是否按下
+*	形    参: 无
+*	返 回 值: 返回值1 表示按下，0表示未按下
+*********************************************************************************************************
+*/</span>
+
+<span class="token comment">/* 为了区分2个事件: K0 K1 K2 K_UP单独按键;K1 K_UP组合，K0 K2组合*/</span>
+<span class="token comment">//K0</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">IsKeyDown1</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY0_GPIO_Port<span class="token punctuation">,</span>KEY0_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY1_GPIO_Port<span class="token punctuation">,</span>KEY1_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>
+		<span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY2_GPIO_Port<span class="token punctuation">,</span>KEY2_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY_UP_GPIO_Port<span class="token punctuation">,</span>KEY_UP_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">else</span> 
+		<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token comment">//K1</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">IsKeyDown2</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY0_GPIO_Port<span class="token punctuation">,</span>KEY0_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY1_GPIO_Port<span class="token punctuation">,</span>KEY1_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span>
+		<span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY2_GPIO_Port<span class="token punctuation">,</span>KEY2_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY_UP_GPIO_Port<span class="token punctuation">,</span>KEY_UP_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">else</span> 
+		<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token comment">//K2</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">IsKeyDown3</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY0_GPIO_Port<span class="token punctuation">,</span>KEY0_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>  <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY1_GPIO_Port<span class="token punctuation">,</span>KEY1_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>
+		<span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY2_GPIO_Port<span class="token punctuation">,</span>KEY2_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY_UP_GPIO_Port<span class="token punctuation">,</span>KEY_UP_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">else</span> 
+		<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token comment">//K3</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">IsKeyDown4</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY0_GPIO_Port<span class="token punctuation">,</span>KEY0_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>  <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY1_GPIO_Port<span class="token punctuation">,</span>KEY1_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>
+		<span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY2_GPIO_Port<span class="token punctuation">,</span>KEY2_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY_UP_GPIO_Port<span class="token punctuation">,</span>KEY_UP_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">else</span> 
+		<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">//K0 K2</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">IsKeyDown5</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>	<span class="token comment">/* K0 K2组合键 */</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY0_GPIO_Port<span class="token punctuation">,</span>KEY0_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span>  <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY1_GPIO_Port<span class="token punctuation">,</span>KEY1_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>
+		<span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY2_GPIO_Port<span class="token punctuation">,</span>KEY2_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY_UP_GPIO_Port<span class="token punctuation">,</span>KEY_UP_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">else</span> 
+		<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">//K1 K3</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">IsKeyDown6</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>	<span class="token comment">/* K1 K3组合键 */</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY0_GPIO_Port<span class="token punctuation">,</span>KEY0_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>  <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY1_GPIO_Port<span class="token punctuation">,</span>KEY1_Pin<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span>
+		<span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY2_GPIO_Port<span class="token punctuation">,</span>KEY2_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span>  <span class="token operator">&amp;&amp;</span> <span class="token function">HAL_GPIO_ReadPin</span><span class="token punctuation">(</span>KEY_UP_GPIO_Port<span class="token punctuation">,</span>KEY_UP_Pin<span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">else</span> 
+		<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_InitKey
+*	功能说明: 初始化按键. 该函数被 bsp_Init() 调用。
+*	形    参:  无
+*	返 回 值: 无
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">void</span> <span class="token function">bsp_InitKey</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">bsp_InitKeyVar</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>			<span class="token comment">/* 初始化按键变量 */</span>
+	<span class="token function">bsp_InitKeyHard</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>		<span class="token comment">/* 初始化按键硬件 */</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_PutKey
+*	功能说明: 将1个键值压入按键FIFO缓冲区。可用于模拟一个按键。
+*	形    参:  _KeyCode : 按键代码
+*	返 回 值: 无
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">void</span> <span class="token function">bsp_PutKey</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> _KeyCode<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	s_tKey<span class="token punctuation">.</span>Buf<span class="token punctuation">[</span>s_tKey<span class="token punctuation">.</span>Write<span class="token punctuation">]</span> <span class="token operator">=</span> _KeyCode<span class="token punctuation">;</span>
+
+	<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">++</span>s_tKey<span class="token punctuation">.</span>Write  <span class="token operator">&gt;=</span> KEY_FIFO_SIZE<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		s_tKey<span class="token punctuation">.</span>Write <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_GetKey
+*	功能说明: 从按键FIFO缓冲区读取一个键值。
+*	形    参:  无
+*	返 回 值: 按键代码
+*********************************************************************************************************
+*/</span>
+<span class="token class-name">uint8_t</span> <span class="token function">bsp_GetKey</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token class-name">uint8_t</span> ret<span class="token punctuation">;</span>
+
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>s_tKey<span class="token punctuation">.</span>Read <span class="token operator">==</span> s_tKey<span class="token punctuation">.</span>Write<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> KEY_NONE<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		ret <span class="token operator">=</span> s_tKey<span class="token punctuation">.</span>Buf<span class="token punctuation">[</span>s_tKey<span class="token punctuation">.</span>Read<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+		<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">++</span>s_tKey<span class="token punctuation">.</span>Read <span class="token operator">&gt;=</span> KEY_FIFO_SIZE<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			s_tKey<span class="token punctuation">.</span>Read <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> ret<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_GetKey2
+*	功能说明: 从按键FIFO缓冲区读取一个键值。独立的读指针。
+*	形    参:  无
+*	返 回 值: 按键代码
+*********************************************************************************************************
+*/</span>
+<span class="token class-name">uint8_t</span> <span class="token function">bsp_GetKey2</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token class-name">uint8_t</span> ret<span class="token punctuation">;</span>
+
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>s_tKey<span class="token punctuation">.</span>Read2 <span class="token operator">==</span> s_tKey<span class="token punctuation">.</span>Write<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> KEY_NONE<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		ret <span class="token operator">=</span> s_tKey<span class="token punctuation">.</span>Buf<span class="token punctuation">[</span>s_tKey<span class="token punctuation">.</span>Read2<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+		<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">++</span>s_tKey<span class="token punctuation">.</span>Read2 <span class="token operator">&gt;=</span> KEY_FIFO_SIZE<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			s_tKey<span class="token punctuation">.</span>Read2 <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> ret<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_GetKeyState
+*	功能说明: 读取按键的状态
+*	形    参:  _ucKeyID : 按键ID，从0开始
+*	返 回 值: 1 表示按下， 0 表示未按下
+*********************************************************************************************************
+*/</span>
+<span class="token class-name">uint8_t</span> <span class="token function">bsp_GetKeyState</span><span class="token punctuation">(</span>KEY_ID_E _ucKeyID<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">return</span> s_tBtn<span class="token punctuation">[</span>_ucKeyID<span class="token punctuation">]</span><span class="token punctuation">.</span>State<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_SetKeyParam
+*	功能说明: 设置按键参数
+*	形    参：_ucKeyID : 按键ID，从0开始
+*			_LongTime : 长按事件时间
+*			 _RepeatSpeed : 连发速度
+*	返 回 值: 无
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">void</span> <span class="token function">bsp_SetKeyParam</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> _ucKeyID<span class="token punctuation">,</span> <span class="token class-name">uint16_t</span> _LongTime<span class="token punctuation">,</span> <span class="token class-name">uint8_t</span>  _RepeatSpeed<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	s_tBtn<span class="token punctuation">[</span>_ucKeyID<span class="token punctuation">]</span><span class="token punctuation">.</span>LongTime <span class="token operator">=</span> _LongTime<span class="token punctuation">;</span>			<span class="token comment">/* 长按时间 0 表示不检测长按键事件 */</span>
+	s_tBtn<span class="token punctuation">[</span>_ucKeyID<span class="token punctuation">]</span><span class="token punctuation">.</span>RepeatSpeed <span class="token operator">=</span> _RepeatSpeed<span class="token punctuation">;</span>			<span class="token comment">/* 按键连发的速度，0表示不支持连发 */</span>
+	s_tBtn<span class="token punctuation">[</span>_ucKeyID<span class="token punctuation">]</span><span class="token punctuation">.</span>RepeatCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>						<span class="token comment">/* 连发计数器 */</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_ClearKey
+*	功能说明: 清空按键FIFO缓冲区
+*	形    参：无
+*	返 回 值: 按键代码
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">void</span> <span class="token function">bsp_ClearKey</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	s_tKey<span class="token punctuation">.</span>Read <span class="token operator">=</span> s_tKey<span class="token punctuation">.</span>Write<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_InitKeyHard
+*	功能说明: 配置按键对应的GPIO
+*	形    参:  无
+*	返 回 值: 无
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">bsp_InitKeyHard</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_InitKeyVar
+*	功能说明: 初始化按键变量
+*	形    参:  无
+*	返 回 值: 无
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">bsp_InitKeyVar</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token class-name">uint8_t</span> i<span class="token punctuation">;</span>
+
+	<span class="token comment">/* 对按键FIFO读写指针清零 */</span>
+	s_tKey<span class="token punctuation">.</span>Read <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	s_tKey<span class="token punctuation">.</span>Write <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	s_tKey<span class="token punctuation">.</span>Read2 <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+	<span class="token comment">/* 给每个按键结构体成员变量赋一组缺省值 */</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span>i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> KEY_COUNT<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		s_tBtn<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>LongTime <span class="token operator">=</span> KEY_LONG_TIME<span class="token punctuation">;</span>			<span class="token comment">/* 长按时间 0 表示不检测长按键事件 */</span>
+		s_tBtn<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>Count <span class="token operator">=</span> KEY_FILTER_TIME <span class="token operator">/</span> <span class="token number">2</span><span class="token punctuation">;</span>		<span class="token comment">/* 计数器设置为滤波时间的一半 */</span>
+		s_tBtn<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>State <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>							<span class="token comment">/* 按键缺省状态，0为未按下 */</span>
+		<span class="token comment">//s_tBtn[i].KeyCodeDown = 3 * i + 1;				/* 按键按下的键值代码 */</span>
+		<span class="token comment">//s_tBtn[i].KeyCodeUp   = 3 * i + 2;				/* 按键弹起的键值代码 */</span>
+		<span class="token comment">//s_tBtn[i].KeyCodeLong = 3 * i + 3;				/* 按键被持续按下的键值代码 */</span>
+		s_tBtn<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>RepeatSpeed <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>						<span class="token comment">/* 按键连发的速度，0表示不支持连发 */</span>
+		s_tBtn<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>RepeatCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>						<span class="token comment">/* 连发计数器 */</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">/* 如果需要单独更改某个按键的参数，可以在此单独重新赋值 */</span>
+	<span class="token comment">/* 比如，我们希望按键1按下超过1秒后，自动重发相同键值 */</span>
+	s_tBtn<span class="token punctuation">[</span>KID_JOY_OK<span class="token punctuation">]</span><span class="token punctuation">.</span>LongTime <span class="token operator">=</span> <span class="token number">100</span><span class="token punctuation">;</span>
+	s_tBtn<span class="token punctuation">[</span>KID_JOY_OK<span class="token punctuation">]</span><span class="token punctuation">.</span>RepeatSpeed <span class="token operator">=</span> <span class="token number">5</span><span class="token punctuation">;</span>	<span class="token comment">/* 每隔50ms自动发送键值 */</span>
+
+<span class="token comment">//	s_tBtn[KID_JOY_D].LongTime = 100;</span>
+<span class="token comment">//	s_tBtn[KID_JOY_D].RepeatSpeed = 5;	/* 每隔50ms自动发送键值 */</span>
+
+<span class="token comment">//	s_tBtn[KID_JOY_L].LongTime = 100;</span>
+<span class="token comment">//	s_tBtn[KID_JOY_L].RepeatSpeed = 5;	/* 每隔50ms自动发送键值 */</span>
+
+<span class="token comment">//	s_tBtn[KID_JOY_R].LongTime = 100;</span>
+<span class="token comment">//	s_tBtn[KID_JOY_R].RepeatSpeed = 5;	/* 每隔50ms自动发送键值 */</span>
+
+	<span class="token comment">/* 判断按键按下的函数 */</span>
+	s_tBtn<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">.</span>IsKeyDownFunc <span class="token operator">=</span> IsKeyDown1<span class="token punctuation">;</span>
+	s_tBtn<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">.</span>IsKeyDownFunc <span class="token operator">=</span> IsKeyDown2<span class="token punctuation">;</span>
+	s_tBtn<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">.</span>IsKeyDownFunc <span class="token operator">=</span> IsKeyDown3<span class="token punctuation">;</span>
+	s_tBtn<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">.</span>IsKeyDownFunc <span class="token operator">=</span> IsKeyDown4<span class="token punctuation">;</span>
+
+
+	<span class="token comment">/* 组合键 */</span>
+	s_tBtn<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span><span class="token punctuation">.</span>IsKeyDownFunc <span class="token operator">=</span> IsKeyDown5<span class="token punctuation">;</span>
+	s_tBtn<span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">.</span>IsKeyDownFunc <span class="token operator">=</span> IsKeyDown6<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_DetectKey
+*	功能说明: 检测一个按键。非阻塞状态，必须被周期性的调用。
+*	形    参:  按键结构变量指针
+*	返 回 值: 无
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">bsp_DetectKey</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> i<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	KEY_T <span class="token operator">*</span>pBtn<span class="token punctuation">;</span>
+
+	<span class="token comment">/*
+		如果没有初始化按键函数，则报错
+		if (s_tBtn[i].IsKeyDownFunc == 0)
+		{
+			printf("Fault : DetectButton(), s_tBtn[i].IsKeyDownFunc undefine");
+		}
+	*/</span>
+<span class="token comment">/*按键按下*/</span>
+	pBtn <span class="token operator">=</span> <span class="token operator">&amp;</span>s_tBtn<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span><span class="token function">IsKeyDownFunc</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token comment">/*短按键，软件处理消抖*/</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>Count <span class="token operator">&lt;</span> KEY_FILTER_TIME<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			pBtn<span class="token operator">-&gt;</span>Count <span class="token operator">=</span> KEY_FILTER_TIME<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>Count <span class="token operator">&lt;</span> <span class="token number">2</span> <span class="token operator">*</span> KEY_FILTER_TIME<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			pBtn<span class="token operator">-&gt;</span>Count<span class="token operator">++</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>	
+		<span class="token keyword">else</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>State <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				pBtn<span class="token operator">-&gt;</span>State <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+
+				<span class="token comment">/* 发送按钮按下的消息 */</span>
+				<span class="token function">bsp_PutKey</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token number">3</span> <span class="token operator">*</span> i <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+
+			<span class="token comment">/*处理长按键*/</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>LongTime <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>LongCount <span class="token operator">&lt;</span> pBtn<span class="token operator">-&gt;</span>LongTime<span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token comment">/* 发送按钮长按下的消息 */</span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">++</span>pBtn<span class="token operator">-&gt;</span>LongCount <span class="token operator">==</span> pBtn<span class="token operator">-&gt;</span>LongTime<span class="token punctuation">)</span>
+					<span class="token punctuation">{<!-- --></span>
+						<span class="token comment">/* 键值放入按键FIFO */</span>
+						<span class="token function">bsp_PutKey</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token number">3</span> <span class="token operator">*</span> i <span class="token operator">+</span> <span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">else</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>RepeatSpeed <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+					<span class="token punctuation">{<!-- --></span>
+						<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">++</span>pBtn<span class="token operator">-&gt;</span>RepeatCount <span class="token operator">&gt;=</span> pBtn<span class="token operator">-&gt;</span>RepeatSpeed<span class="token punctuation">)</span>
+						<span class="token punctuation">{<!-- --></span>
+							pBtn<span class="token operator">-&gt;</span>RepeatCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+							<span class="token comment">/* 长按键后，每隔pBtn-&gt;RepeatSpeed*10ms发送1个按键 */</span>
+							<span class="token function">bsp_PutKey</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token number">3</span> <span class="token operator">*</span> i <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token punctuation">}</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>Count <span class="token operator">&gt;</span> KEY_FILTER_TIME<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			pBtn<span class="token operator">-&gt;</span>Count <span class="token operator">=</span> KEY_FILTER_TIME<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>Count <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			pBtn<span class="token operator">-&gt;</span>Count<span class="token operator">--</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>pBtn<span class="token operator">-&gt;</span>State <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				pBtn<span class="token operator">-&gt;</span>State <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+				<span class="token comment">/* 松开按键KEY_FILTER_TIME后 发送按钮弹起的消息 */</span>
+				<span class="token function">bsp_PutKey</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token number">3</span> <span class="token operator">*</span> i <span class="token operator">+</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+
+		pBtn<span class="token operator">-&gt;</span>LongCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+		pBtn<span class="token operator">-&gt;</span>RepeatCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/*
+*********************************************************************************************************
+*	函 数 名: bsp_KeyScan
+*	功能说明: 扫描所有按键。非阻塞，被systick中断周期性的调用
+*	形    参:  无
+*	返 回 值: 无
+*********************************************************************************************************
+*/</span>
+<span class="token keyword">void</span> <span class="token function">bsp_KeyScan</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token class-name">uint8_t</span> i<span class="token punctuation">;</span>
+
+	<span class="token keyword">for</span> <span class="token punctuation">(</span>i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> KEY_COUNT<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">bsp_DetectKey</span><span class="token punctuation">(</span>i<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/***************************** 安富莱电子 www.armfly.com (END OF FILE) *********************************/</span>
+
+</code></pre> 
+<p>bsp_key.h</p> 
+<pre><code class="prism language-c"><span class="token comment">/*
+*********************************************************************************************************
+*
+*	模块名称 : 按键驱动模块
+*	文件名称 : bsp_key.h
+*	版    本 : V1.0
+*	说    明 : 头文件
+*
+*	Copyright (C), 2013-2014, 安富莱电子 www.armfly.com
+*
+*********************************************************************************************************
+*/</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifndef</span> <span class="token expression">__BSP_KEY_H</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">__BSP_KEY_H</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"stm32f4xx_hal.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"main.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_COUNT</span>    <span class="token expression"><span class="token number">6</span>	   					</span><span class="token comment">/* 按键个数, 4个独立建 + 3个组合键 */</span></span>
+
+<span class="token comment">/* 根据应用程序的功能重命名按键宏 */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_DOWN_K0</span>		<span class="token expression">KEY_0_DOWN</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_UP_K0</span>		  <span class="token expression">KEY_0_UP</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_LONG_K0</span>		<span class="token expression">KEY_0_LONG</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_DOWN_K1</span>		<span class="token expression">KEY_1_DOWN</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_UP_K1</span>			<span class="token expression">KEY_1_UP</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_LONG_K1</span>		<span class="token expression">KEY_1_LONG</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_DOWN_K2</span>		<span class="token expression">KEY_2_DOWN</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_UP_K2</span>		  <span class="token expression">KEY_2_UP</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_LONG_K2</span>		<span class="token expression">KEY_2_LONG</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_DOWN_K3</span>		<span class="token expression">KEY_3_DOWN		</span><span class="token comment">/* 上 */</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_UP_K3</span>			<span class="token expression">KEY_3_UP</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_LONG_K3</span>		<span class="token expression">KEY_3_LONG</span></span>
+
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SYS_DOWN_K0K2</span>	<span class="token expression">KEY_4_DOWN		</span><span class="token comment">/* K0 K2 组合键 */</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SYS_UP_K0K2</span>	  <span class="token expression">KEY_4_UP</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SYS_LONG_K0K2</span>	<span class="token expression">KEY_4_LONG</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SYS_DOWN_K1K3</span>	<span class="token expression">KEY_5_DOWN		</span><span class="token comment">/* K1 K3 组合键 */</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SYS_UP_K1K3</span>  	<span class="token expression">KEY_5_UP</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SYS_LONG_K1K3</span>	<span class="token expression">KEY_5_LONG</span></span>
+
+<span class="token comment">/* 按键ID, 主要用于bsp_KeyState()函数的入口参数 */</span>
+<span class="token keyword">typedef</span> <span class="token keyword">enum</span>
+<span class="token punctuation">{<!-- --></span>
+	KID_K0 <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">,</span>
+	KID_K1<span class="token punctuation">,</span>
+	KID_K2<span class="token punctuation">,</span>
+	KID_JOY_OK<span class="token punctuation">,</span>
+	KID_JOY_U<span class="token punctuation">,</span>
+	KID_JOY_D<span class="token punctuation">,</span>
+	KID_JOY_L<span class="token punctuation">,</span>
+	KID_JOY_R<span class="token punctuation">,</span>
+<span class="token punctuation">}</span>KEY_ID_E<span class="token punctuation">;</span>
+
+<span class="token comment">/*
+	按键滤波时间50ms, 单位10ms。
+	只有连续检测到50ms状态不变才认为有效，包括弹起和按下两种事件
+	即使按键电路不做硬件滤波，该滤波机制也可以保证可靠地检测到按键事件
+*/</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_FILTER_TIME</span>   <span class="token expression"><span class="token number">5</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_LONG_TIME</span>     <span class="token expression"><span class="token number">100</span>			</span><span class="token comment">/* 单位10ms， 持续1秒，认为长按事件 */</span></span>
+
+<span class="token comment">/*
+	每个按键对应1个全局的结构体变量。
+*/</span>
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token comment">/* 下面是一个函数指针，指向判断按键手否按下的函数 */</span>
+	<span class="token class-name">uint8_t</span> <span class="token punctuation">(</span><span class="token operator">*</span>IsKeyDownFunc<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">/* 按键按下的判断函数,1表示按下 */</span>
+
+	<span class="token class-name">uint8_t</span>  Count<span class="token punctuation">;</span>			<span class="token comment">/* 滤波器计数器 */</span>
+	<span class="token class-name">uint16_t</span> LongCount<span class="token punctuation">;</span>		<span class="token comment">/* 长按计数器 */</span>
+	<span class="token class-name">uint16_t</span> LongTime<span class="token punctuation">;</span>		<span class="token comment">/* 按键按下持续时间, 0表示不检测长按 */</span>
+	<span class="token class-name">uint8_t</span>  State<span class="token punctuation">;</span>			<span class="token comment">/* 按键当前状态（按下还是弹起） */</span>
+	<span class="token class-name">uint8_t</span>  RepeatSpeed<span class="token punctuation">;</span>	<span class="token comment">/* 连续按键周期 */</span>
+	<span class="token class-name">uint8_t</span>  RepeatCount<span class="token punctuation">;</span>	<span class="token comment">/* 连续按键计数器 */</span>
+<span class="token punctuation">}</span>KEY_T<span class="token punctuation">;</span>
+
+<span class="token comment">/*
+	定义键值代码, 必须按如下次序定时每个键的按下、弹起和长按事件
+
+	推荐使用enum, 不用#define，原因：
+	(1) 便于新增键值,方便调整顺序，使代码看起来舒服点
+	(2) 编译器可帮我们避免键值重复。
+*/</span>
+<span class="token keyword">typedef</span> <span class="token keyword">enum</span>
+<span class="token punctuation">{<!-- --></span>
+	KEY_NONE <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">,</span>			<span class="token comment">/* 0 表示按键事件 */</span>
+
+	KEY_0_DOWN<span class="token punctuation">,</span>				<span class="token comment">/* 0键按下 */</span>
+	KEY_0_UP<span class="token punctuation">,</span>				  <span class="token comment">/* 0键弹起 */</span>
+	KEY_0_LONG<span class="token punctuation">,</span>				<span class="token comment">/* 0键长按 */</span>
+	
+	KEY_1_DOWN<span class="token punctuation">,</span>				<span class="token comment">/* 1键按下 */</span>
+	KEY_1_UP<span class="token punctuation">,</span>				  <span class="token comment">/* 1键弹起 */</span>
+	KEY_1_LONG<span class="token punctuation">,</span>				<span class="token comment">/* 1键长按 */</span>
+
+	KEY_2_DOWN<span class="token punctuation">,</span>				<span class="token comment">/* 2键按下 */</span>
+	KEY_2_UP<span class="token punctuation">,</span>				  <span class="token comment">/* 2键弹起 */</span>
+	KEY_2_LONG<span class="token punctuation">,</span>				<span class="token comment">/* 2键长按 */</span>
+
+	KEY_3_DOWN<span class="token punctuation">,</span>				<span class="token comment">/* 3键按下 */</span>
+	KEY_3_UP<span class="token punctuation">,</span>				  <span class="token comment">/* 3键弹起 */</span>
+	KEY_3_LONG<span class="token punctuation">,</span>				<span class="token comment">/* 3键长按 */</span>
+
+
+	<span class="token comment">/* 组合键 */</span>
+	KEY_4_DOWN<span class="token punctuation">,</span>				<span class="token comment">/* 4键按下 */</span>
+	KEY_4_UP<span class="token punctuation">,</span>				  <span class="token comment">/* 4键弹起 */</span>
+	KEY_4_LONG<span class="token punctuation">,</span>				<span class="token comment">/* 4键长按 */</span>
+
+	KEY_5_DOWN<span class="token punctuation">,</span>			<span class="token comment">/* 5键按下 */</span>
+	KEY_5_UP<span class="token punctuation">,</span>				<span class="token comment">/* 5键弹起 */</span>
+	KEY_5_LONG<span class="token punctuation">,</span>			<span class="token comment">/* 5键长按 */</span>
+<span class="token punctuation">}</span>KEY_ENUM<span class="token punctuation">;</span>
+
+<span class="token comment">/* 按键FIFO用到变量 */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">KEY_FIFO_SIZE</span>	<span class="token expression"><span class="token number">10</span></span></span>
+
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token class-name">uint8_t</span> Buf<span class="token punctuation">[</span>KEY_FIFO_SIZE<span class="token punctuation">]</span><span class="token punctuation">;</span>		<span class="token comment">/* 键值缓冲区 */</span>
+	<span class="token class-name">uint8_t</span> Read<span class="token punctuation">;</span>					<span class="token comment">/* 缓冲区读指针1 */</span>
+	<span class="token class-name">uint8_t</span> Write<span class="token punctuation">;</span>					<span class="token comment">/* 缓冲区写指针 */</span>
+	<span class="token class-name">uint8_t</span> Read2<span class="token punctuation">;</span>					<span class="token comment">/* 缓冲区读指针2 */</span>
+<span class="token punctuation">}</span>KEY_FIFO_T<span class="token punctuation">;</span>
+
+<span class="token comment">/* 供外部调用的函数声明 */</span>
+<span class="token keyword">void</span> <span class="token function">bsp_InitKey</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">bsp_KeyScan</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">bsp_PutKey</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> _KeyCode<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">uint8_t</span> <span class="token function">bsp_GetKey</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">uint8_t</span> <span class="token function">bsp_GetKey2</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">bsp_SetKeyParam</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> _ucKeyID<span class="token punctuation">,</span> <span class="token class-name">uint16_t</span> _LongTime<span class="token punctuation">,</span> <span class="token class-name">uint8_t</span>  _RepeatSpeed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">bsp_ClearKey</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+<span class="token comment">/***************************** 安富莱电子 www.armfly.com (END OF FILE) *********************************/</span>
+
+</code></pre> 
+<p>扫描</p> 
+<pre><code class="prism language-c"><span class="token keyword">void</span> <span class="token function">app_main</span> <span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token keyword">const</span><span class="token operator">*</span> arg<span class="token punctuation">)</span> 
+<span class="token punctuation">{<!-- --></span>
+<span class="token comment">//	osStatus_t status;</span>
+		<span class="token comment">/* 创建任务 */</span>
+	<span class="token function">AppTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token comment">/* 创建任务通信机制 */</span>
+	<span class="token function">AppObjCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">/* 按键扫描 */</span>
+		<span class="token function">bsp_KeyScan</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">osDelay</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">main_task</span> <span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span> arg<span class="token punctuation">)</span> 
+<span class="token punctuation">{<!-- --></span>
+	<span class="token class-name">uint8_t</span> ucKeyCode<span class="token punctuation">;</span>
+	 <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		ucKeyCode <span class="token operator">=</span> <span class="token function">bsp_GetKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>ucKeyCode <span class="token operator">!=</span> KEY_NONE<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">switch</span> <span class="token punctuation">(</span>ucKeyCode<span class="token punctuation">)</span>	
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token comment">/* K1键按下，打印调试说明 */</span>
+				<span class="token keyword">case</span> KEY_DOWN_K0<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K1键按下\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_UP_K0<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K1键松开\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_LONG_K0<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K1键长按\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				
+				<span class="token keyword">case</span> KEY_DOWN_K1<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K2键按下\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_UP_K1<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K2键松开\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_LONG_K1<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K2键长按\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				
+				<span class="token keyword">case</span> KEY_DOWN_K2<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K3键按下\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_UP_K2<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K3键松开\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_LONG_K2<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K3键长按\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				
+				<span class="token keyword">case</span> KEY_DOWN_K3<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K4键按下\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_UP_K3<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K4键松开\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> KEY_LONG_K3<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K4键长按\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				
+				<span class="token keyword">case</span> SYS_DOWN_K0K2<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K0K2键按下\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> SYS_UP_K0K2<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K0K2键松开\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> SYS_LONG_K0K2<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K0K2键长按\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				
+				<span class="token keyword">case</span> SYS_DOWN_K1K3<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K1K3键按下\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> SYS_UP_K1K3<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K1K3键松开\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">case</span> SYS_LONG_K1K3<span class="token operator">:</span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"K1K3键长按\r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token keyword">default</span><span class="token operator">:</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>	
+		<span class="token punctuation">}</span>
+		
+		<span class="token function">osDelay</span><span class="token punctuation">(</span><span class="token number">100</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">LED1_Toggle</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">osThreadYield</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d861a3f34d3509e48dede5b5a812c52a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">SpringCloud(5) —— Eureka：什么是Eureka</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/dde68741f3bdea2b2c832afc2bc323a6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">SpringCloud(11) —— Ribbon:自定义负载均衡算法</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

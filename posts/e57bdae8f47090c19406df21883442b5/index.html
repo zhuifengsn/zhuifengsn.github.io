@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>client-go的使用及源码分析 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="client-go的使用及源码分析" />
+<meta property="og:description" content="本文个人博客地址：http://www.huweihuang.com/article/source-analysis/client-go-source-analysis/
+1. client-go简介 1.1 client-go说明 ​ client-go是一个调用kubernetes集群资源对象API的客户端，即通过client-go实现对kubernetes集群中资源对象（包括deployment、service、ingress、replicaSet、pod、namespace、node等）的增删改查等操作。大部分对kubernetes进行前置API封装的二次开发都通过client-go这个第三方包来实现。
+​ client-go官方文档：https://github.com/kubernetes/client-go
+1.2 示例代码 git clone https://github.com/huweihuang/client-go.git cd client-go #保证本地HOME目录有配置kubernetes集群的配置文件 go run client-go.go client-go.go
+package main import ( &#34;flag&#34; &#34;fmt&#34; &#34;os&#34; &#34;path/filepath&#34; &#34;time&#34; metav1 &#34;k8s.io/apimachinery/pkg/apis/meta/v1&#34; &#34;k8s.io/client-go/kubernetes&#34; &#34;k8s.io/client-go/tools/clientcmd&#34; ) func main() { var kubeconfig *string if home := homeDir(); home != &#34;&#34; { kubeconfig = flag.String(&#34;kubeconfig&#34;, filepath.Join(home, &#34;.kube&#34;, &#34;config&#34;), &#34;(optional) absolute path to the kubeconfig file&#34;) } else { kubeconfig = flag.String(&#34;kubeconfig&#34;, &#34;&#34;, &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e57bdae8f47090c19406df21883442b5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2017-12-16T20:21:12+08:00" />
+<meta property="article:modified_time" content="2017-12-16T20:21:12+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">client-go的使用及源码分析</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>本文个人博客地址：<a href="http://www.huweihuang.com/article/source-analysis/client-go-source-analysis/" rel="nofollow">http://www.huweihuang.com/article/source-analysis/client-go-source-analysis/</a></p> 
+<h3 id="1-client-go简介">1. client-go简介</h3> 
+<h4 id="11-client-go说明">1.1 client-go说明</h4> 
+<p>​ client-go是一个调用kubernetes集群资源对象API的客户端，即通过client-go实现对kubernetes集群中资源对象（包括deployment、service、ingress、replicaSet、pod、namespace、node等）的增删改查等操作。大部分对kubernetes进行前置API封装的二次开发都通过client-go这个第三方包来实现。</p> 
+<p>​ client-go官方文档：<a href="https://github.com/kubernetes/client-go">https://github.com/kubernetes/client-go</a></p> 
+<h4 id="12-示例代码">1.2 示例代码</h4> 
+<pre class="prettyprint"><code class="language-shell hljs go">git clone https:<span class="hljs-comment">//github.com/huweihuang/client-go.git</span>
+cd client-<span class="hljs-keyword">go</span>
+#保证本地HOME目录有配置kubernetes集群的配置文件
+<span class="hljs-keyword">go</span> run client-<span class="hljs-keyword">go</span>.<span class="hljs-keyword">go</span></code></pre> 
+<p><strong><a href="https://github.com/huweihuang/client-go/blob/master/client-go.go">client-go.go</a></strong></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-keyword">package</span> main
+
+<span class="hljs-keyword">import</span> (
+    <span class="hljs-string">"flag"</span>
+    <span class="hljs-string">"fmt"</span>
+    <span class="hljs-string">"os"</span>
+    <span class="hljs-string">"path/filepath"</span>
+    <span class="hljs-string">"time"</span>
+
+    metav1 <span class="hljs-string">"k8s.io/apimachinery/pkg/apis/meta/v1"</span>
+    <span class="hljs-string">"k8s.io/client-go/kubernetes"</span>
+    <span class="hljs-string">"k8s.io/client-go/tools/clientcmd"</span>
+)
+
+<span class="hljs-keyword">func</span> main() {
+    <span class="hljs-keyword">var</span> kubeconfig *<span class="hljs-typename">string</span>
+    <span class="hljs-keyword">if</span> home := homeDir(); home != <span class="hljs-string">""</span> {
+        kubeconfig = flag.String(<span class="hljs-string">"kubeconfig"</span>, filepath.Join(home, <span class="hljs-string">".kube"</span>, <span class="hljs-string">"config"</span>), <span class="hljs-string">"(optional) absolute path to the kubeconfig file"</span>)
+    } <span class="hljs-keyword">else</span> {
+        kubeconfig = flag.String(<span class="hljs-string">"kubeconfig"</span>, <span class="hljs-string">""</span>, <span class="hljs-string">"absolute path to the kubeconfig file"</span>)
+    }
+    flag.Parse()
+    <span class="hljs-comment">// uses the current context in kubeconfig</span>
+    config, err := clientcmd.BuildConfigFromFlags(<span class="hljs-string">""</span>, *kubeconfig)
+    <span class="hljs-keyword">if</span> err != <span class="hljs-constant">nil</span> {
+        <span class="hljs-built_in">panic</span>(err.Error())
+    }
+    <span class="hljs-comment">// creates the clientset</span>
+    clientset, err := kubernetes.NewForConfig(config)
+    <span class="hljs-keyword">if</span> err != <span class="hljs-constant">nil</span> {
+        <span class="hljs-built_in">panic</span>(err.Error())
+    }
+    <span class="hljs-keyword">for</span> {
+        pods, err := clientset.CoreV1().Pods(<span class="hljs-string">""</span>).List(metav1.ListOptions{})
+        <span class="hljs-keyword">if</span> err != <span class="hljs-constant">nil</span> {
+            <span class="hljs-built_in">panic</span>(err.Error())
+        }
+        fmt.Printf(<span class="hljs-string">"There are %d pods in the cluster\n"</span>, <span class="hljs-built_in">len</span>(pods.Items))
+        time.Sleep<span class="hljs-number">(10</span> * time.Second)
+    }
+}
+
+<span class="hljs-keyword">func</span> homeDir() <span class="hljs-typename">string</span> {
+    <span class="hljs-keyword">if</span> h := os.Getenv(<span class="hljs-string">"HOME"</span>); h != <span class="hljs-string">""</span> {
+        <span class="hljs-keyword">return</span> h
+    }
+    <span class="hljs-keyword">return</span> os.Getenv(<span class="hljs-string">"USERPROFILE"</span>) <span class="hljs-comment">// windows</span>
+}</code></pre> 
+<h4 id="13-运行结果">1.3 运行结果</h4> 
+<pre class="prettyprint"><code class="language-shell hljs applescript">➜ go <span class="hljs-command">run</span> client-go.go
+There are <span class="hljs-number">9</span> pods <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> cluster
+There are <span class="hljs-number">7</span> pods <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> cluster
+There are <span class="hljs-number">7</span> pods <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> cluster
+There are <span class="hljs-number">7</span> pods <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> cluster
+There are <span class="hljs-number">7</span> pods <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> cluster</code></pre> 
+<h3 id="2-client-go源码分析">2. client-go源码分析</h3> 
+<p><strong>client-go源码</strong>：<a href="https://github.com/kubernetes/client-go">https://github.com/kubernetes/client-go</a></p> 
+<p><strong>client-go源码目录结构</strong></p> 
+<ul><li>The <code>kubernetes</code> package contains the clientset to access Kubernetes API.</li><li>The <code>discovery</code> package is used to discover APIs supported by a Kubernetes API server.</li><li>The <code>dynamic</code> package contains a dynamic client that can perform generic operations on arbitrary Kubernetes API objects.</li><li>The <code>transport</code> package is used to set up auth and start a connection.</li><li>The <code>tools/cache</code> package is useful for writing controllers.</li></ul> 
+<h4 id="21-kubeconfig">2.1 kubeconfig</h4> 
+<pre class="prettyprint"><code class="language-Go hljs mathematica">kubeconfig = flag.<span class="hljs-keyword">String</span>(<span class="hljs-string">"kubeconfig"</span>, filepath.<span class="hljs-keyword">Join</span>(home, <span class="hljs-string">".kube"</span>, <span class="hljs-string">"config"</span>), <span class="hljs-string">"(optional) absolute path to the kubeconfig file"</span>)</code></pre> 
+<p>获取kubernetes配置文件kubeconfig的绝对路径。一般路径为<code>$HOME/.kube/config</code>。该文件主要用来配置本地连接的kubernetes集群。</p> 
+<p>config内容如下：</p> 
+<pre class="prettyprint"><code class="language-shell hljs mel">apiVersion: v1
+clusters:
+- <span class="hljs-keyword">cluster</span>:
+    server: http:<span class="hljs-comment">//&lt;kube-master-ip&gt;:8080</span>
+  name: k8s
+contexts:
+- context:
+    <span class="hljs-keyword">cluster</span>: k8s
+    <span class="hljs-keyword">namespace</span>: <span class="hljs-keyword">default</span>
+    user: <span class="hljs-string">""</span>
+  name: <span class="hljs-keyword">default</span>
+current-context: <span class="hljs-keyword">default</span>
+kind: Config
+preferences: {}
+users: []</code></pre> 
+<h4 id="22-restconfig">2.2 rest.config</h4> 
+<p>通过参数（master的url或者kubeconfig路径）和<code>BuildConfigFromFlags</code>方法来获取<code>rest.Config</code>对象，一般是通过参数kubeconfig的路径。</p> 
+<pre class="prettyprint"><code class="language-Go hljs perl">config, err := clientcmd.BuildConfigFromFlags(<span class="hljs-string">""</span>, <span class="hljs-variable">*kubeconfig</span>)</code></pre> 
+<p><strong>BuildConfigFromFlags函数源码</strong></p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/master/tools/clientcmd/client_config.go#L522">k8s.io/client-go/tools/clientcmd/client_config.go</a></p> 
+<pre class="prettyprint"><code class="language-Go hljs coffeescript"><span class="hljs-regexp">//</span> BuildConfigFromFlags <span class="hljs-keyword">is</span> a helper <span class="hljs-reserved">function</span> that builds configs from a master
+<span class="hljs-regexp">//</span> url <span class="hljs-keyword">or</span> a kubeconfig filepath. These are passed <span class="hljs-keyword">in</span> as command line flags <span class="hljs-keyword">for</span> cluster
+<span class="hljs-regexp">//</span> components. Warnings should reflect <span class="hljs-keyword">this</span> usage. If neither masterUrl <span class="hljs-keyword">or</span> kubeconfigPath
+<span class="hljs-regexp">//</span> are passed <span class="hljs-keyword">in</span> we fallback to inClusterConfig. If inClusterConfig fails, we fallback
+<span class="hljs-regexp">//</span> to the <span class="hljs-reserved">default</span> config.
+func BuildConfigFromFlags(masterUrl, kubeconfigPath string) (*restclient.Config, error) {
+    <span class="hljs-keyword">if</span> kubeconfigPath == <span class="hljs-string">""</span> &amp;&amp; masterUrl == <span class="hljs-string">""</span> {
+        glog.Warningf(<span class="hljs-string">"Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work."</span>)
+        kubeconfig, err := restclient.InClusterConfig()
+        <span class="hljs-keyword">if</span> err == nil {
+            <span class="hljs-keyword">return</span> kubeconfig, nil
+        }
+        glog.Warning(<span class="hljs-string">"error creating inClusterConfig, falling back to default config: "</span>, err)
+    }
+    <span class="hljs-keyword">return</span> NewNonInteractiveDeferredLoadingClientConfig(
+        &amp;ClientConfigLoadingRules{<!-- --><span class="hljs-attribute">ExplicitPath</span>: kubeconfigPath},
+        &amp;ConfigOverrides{<!-- --><span class="hljs-attribute">ClusterInfo</span>: clientcmdapi.Cluster{<!-- --><span class="hljs-attribute">Server</span>: masterUrl}}).ClientConfig()
+}</code></pre> 
+<h4 id="23-clientset">2.3 clientset</h4> 
+<p>通过<code>*rest.Config</code>参数和<code>NewForConfig</code>方法来获取<code>clientset</code>对象，<code>clientset</code>是多个<code>client</code>的集合，每个<code>client</code>可能包含不同版本的方法调用。</p> 
+<pre class="prettyprint"><code class="language-Go hljs fix"><span class="hljs-attribute">clientset, err :</span>=<span class="hljs-string"> kubernetes.NewForConfig(config)</span></code></pre> 
+<h5 id="231-newforconfig">2.3.1 NewForConfig</h5> 
+<p><code>NewForConfig</code>函数就是初始化clientset中的每个client。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/clientset.go#L396">k8s.io/client-go/kubernetes/clientset.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// NewForConfig creates a new Clientset for the given config.</span>
+<span class="hljs-keyword">func</span> NewForConfig(c *rest.Config) (*Clientset, error) {
+    configShallowCopy := *c
+    ...
+    <span class="hljs-keyword">var</span> cs Clientset
+    cs.appsV1beta1, err = appsv1beta1.NewForConfig(&amp;configShallowCopy)
+    ...
+    cs.coreV1, err = corev1.NewForConfig(&amp;configShallowCopy)
+    ...
+}</code></pre> 
+<h5 id="232-clientset的结构体">2.3.2 clientset的结构体</h5> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/clientset.go#L118">k8s.io/client-go/kubernetes/clientset.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// Clientset contains the clients for groups. Each group has exactly one</span>
+<span class="hljs-comment">// version included in a Clientset.</span>
+<span class="hljs-keyword">type</span> Clientset <span class="hljs-keyword">struct</span> {
+    *discovery.DiscoveryClient
+    admissionregistrationV1alpha1 *admissionregistrationv1alpha1.AdmissionregistrationV1alpha1Client
+    appsV1beta1                   *appsv1beta1.AppsV1beta1Client
+    appsV1beta2                   *appsv1beta2.AppsV1beta2Client
+    authenticationV1              *authenticationv1.AuthenticationV1Client
+    authenticationV1beta1         *authenticationv1beta1.AuthenticationV1beta1Client
+    authorizationV1               *authorizationv1.AuthorizationV1Client
+    authorizationV1beta1          *authorizationv1beta1.AuthorizationV1beta1Client
+    autoscalingV1                 *autoscalingv1.AutoscalingV1Client
+    autoscalingV2beta1            *autoscalingv2beta1.AutoscalingV2beta1Client
+    batchV1                       *batchv1.BatchV1Client
+    batchV1beta1                  *batchv1beta1.BatchV1beta1Client
+    batchV2alpha1                 *batchv2alpha1.BatchV2alpha1Client
+    certificatesV1beta1           *certificatesv1beta1.CertificatesV1beta1Client
+    coreV1                        *corev1.CoreV1Client
+    extensionsV1beta1             *extensionsv1beta1.ExtensionsV1beta1Client
+    networkingV1                  *networkingv1.NetworkingV1Client
+    policyV1beta1                 *policyv1beta1.PolicyV1beta1Client
+    rbacV1                        *rbacv1.RbacV1Client
+    rbacV1beta1                   *rbacv1beta1.RbacV1beta1Client
+    rbacV1alpha1                  *rbacv1alpha1.RbacV1alpha1Client
+    schedulingV1alpha1            *schedulingv1alpha1.SchedulingV1alpha1Client
+    settingsV1alpha1              *settingsv1alpha1.SettingsV1alpha1Client
+    storageV1beta1                *storagev1beta1.StorageV1beta1Client
+    storageV1                     *storagev1.StorageV1Client
+}</code></pre> 
+<h5 id="233-clientsetinterface">2.3.3 clientset.Interface</h5> 
+<p>clientset实现了以下的Interface，因此可以通过调用以下方法获得具体的client。例如：</p> 
+<pre class="prettyprint"><code class="language-go hljs ">pods, err := clientset.CoreV1().Pods(<span class="hljs-string">""</span>).List(metav1.ListOptions{})</code></pre> 
+<p><strong>clientset的方法集接口</strong></p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/clientset.go#L54">k8s.io/client-go/kubernetes/clientset.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-keyword">type</span> Interface <span class="hljs-keyword">interface</span> {
+    Discovery() discovery.DiscoveryInterface
+    AdmissionregistrationV1alpha1() admissionregistrationv1alpha1.AdmissionregistrationV1alpha1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Admissionregistration() admissionregistrationv1alpha1.AdmissionregistrationV1alpha1Interface
+    AppsV1beta1() appsv1beta1.AppsV1beta1Interface
+    AppsV1beta2() appsv1beta2.AppsV1beta2Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Apps() appsv1beta2.AppsV1beta2Interface
+    AuthenticationV1() authenticationv1.AuthenticationV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Authentication() authenticationv1.AuthenticationV1Interface
+    AuthenticationV1beta1() authenticationv1beta1.AuthenticationV1beta1Interface
+    AuthorizationV1() authorizationv1.AuthorizationV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Authorization() authorizationv1.AuthorizationV1Interface
+    AuthorizationV1beta1() authorizationv1beta1.AuthorizationV1beta1Interface
+    AutoscalingV1() autoscalingv1.AutoscalingV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Autoscaling() autoscalingv1.AutoscalingV1Interface
+    AutoscalingV2beta1() autoscalingv2beta1.AutoscalingV2beta1Interface
+    BatchV1() batchv1.BatchV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Batch() batchv1.BatchV1Interface
+    BatchV1beta1() batchv1beta1.BatchV1beta1Interface
+    BatchV2alpha1() batchv2alpha1.BatchV2alpha1Interface
+    CertificatesV1beta1() certificatesv1beta1.CertificatesV1beta1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Certificates() certificatesv1beta1.CertificatesV1beta1Interface
+    CoreV1() corev1.CoreV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Core() corev1.CoreV1Interface
+    ExtensionsV1beta1() extensionsv1beta1.ExtensionsV1beta1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Extensions() extensionsv1beta1.ExtensionsV1beta1Interface
+    NetworkingV1() networkingv1.NetworkingV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Networking() networkingv1.NetworkingV1Interface
+    PolicyV1beta1() policyv1beta1.PolicyV1beta1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Policy() policyv1beta1.PolicyV1beta1Interface
+    RbacV1() rbacv1.RbacV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Rbac() rbacv1.RbacV1Interface
+    RbacV1beta1() rbacv1beta1.RbacV1beta1Interface
+    RbacV1alpha1() rbacv1alpha1.RbacV1alpha1Interface
+    SchedulingV1alpha1() schedulingv1alpha1.SchedulingV1alpha1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Scheduling() schedulingv1alpha1.SchedulingV1alpha1Interface
+    SettingsV1alpha1() settingsv1alpha1.SettingsV1alpha1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Settings() settingsv1alpha1.SettingsV1alpha1Interface
+    StorageV1beta1() storagev1beta1.StorageV1beta1Interface
+    StorageV1() storagev1.StorageV1Interface
+    <span class="hljs-comment">// Deprecated: please explicitly pick a version if possible.</span>
+    Storage() storagev1.StorageV1Interface
+}</code></pre> 
+<h4 id="24-corev1client">2.4 CoreV1Client</h4> 
+<p>我们以clientset中的<code>CoreV1Client</code>为例做分析。</p> 
+<p>通过传入的配置信息<code>rest.Config</code>初始化<code>CoreV1Client</code>对象。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/clientset.go#L464">k8s.io/client-go/kubernetes/clientset.go</a></p> 
+<pre class="prettyprint"><code class="language-Go hljs avrasm">cs<span class="hljs-preprocessor">.coreV</span>1, err = corev1<span class="hljs-preprocessor">.NewForConfig</span>(&amp;configShallowCopy)</code></pre> 
+<h5 id="241-corev1newforconfig">2.4.1 corev1.NewForConfig</h5> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/core_client.go#L116:6">k8s.io/client-go/kubernetes/typed/core/v1/core_client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// NewForConfig creates a new CoreV1Client for the given config.</span>
+<span class="hljs-keyword">func</span> NewForConfig(c *rest.Config) (*CoreV1Client, error) {
+    config := *c
+    <span class="hljs-keyword">if</span> err := setConfigDefaults(&amp;config); err != <span class="hljs-constant">nil</span> {
+        <span class="hljs-keyword">return</span> <span class="hljs-constant">nil</span>, err
+    }
+    client, err := rest.RESTClientFor(&amp;config)
+    <span class="hljs-keyword">if</span> err != <span class="hljs-constant">nil</span> {
+        <span class="hljs-keyword">return</span> <span class="hljs-constant">nil</span>, err
+    }
+    <span class="hljs-keyword">return</span> &amp;CoreV1Client{client}, <span class="hljs-constant">nil</span>
+}</code></pre> 
+<p><code>corev1.NewForConfig</code>方法本质是调用了<code>rest.RESTClientFor(&amp;config)</code>方法创建<code>RESTClient</code>对象，即<code>CoreV1Client</code>的本质就是一个<code>RESTClient</code>对象。</p> 
+<h5 id="242-corev1client结构体">2.4.2 CoreV1Client结构体</h5> 
+<p>以下是<code>CoreV1Client</code>结构体的定义：</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/core_client.go#L47:6">k8s.io/client-go/kubernetes/typed/core/v1/core_client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// CoreV1Client is used to interact with features provided by the  group.</span>
+<span class="hljs-keyword">type</span> CoreV1Client <span class="hljs-keyword">struct</span> {
+    restClient rest.Interface
+}</code></pre> 
+<p><code>CoreV1Client</code>实现了<code>CoreV1Interface</code>的接口，即以下方法，从而对kubernetes的资源对象进行增删改查的操作。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/core_client.go#L51">k8s.io/client-go/kubernetes/typed/core/v1/core_client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//CoreV1Client的方法</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) ComponentStatuses() ComponentStatusInterface {...}
+<span class="hljs-comment">//ConfigMaps</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) ConfigMaps(namespace <span class="hljs-typename">string</span>) ConfigMapInterface {...}
+<span class="hljs-comment">//Endpoints</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) Endpoints(namespace <span class="hljs-typename">string</span>) EndpointsInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) Events(namespace <span class="hljs-typename">string</span>) EventInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) LimitRanges(namespace <span class="hljs-typename">string</span>) LimitRangeInterface {...}
+<span class="hljs-comment">//Namespaces</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) Namespaces() NamespaceInterface {...}
+<span class="hljs-comment">//Nodes</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) Nodes() NodeInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) PersistentVolumes() PersistentVolumeInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) PersistentVolumeClaims(namespace <span class="hljs-typename">string</span>) PersistentVolumeClaimInterface {...}
+<span class="hljs-comment">//Pods</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) Pods(namespace <span class="hljs-typename">string</span>) PodInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) PodTemplates(namespace <span class="hljs-typename">string</span>) PodTemplateInterface {...}
+<span class="hljs-comment">//ReplicationControllers</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) ReplicationControllers(namespace <span class="hljs-typename">string</span>) ReplicationControllerInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) ResourceQuotas(namespace <span class="hljs-typename">string</span>) ResourceQuotaInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) Secrets(namespace <span class="hljs-typename">string</span>) SecretInterface {...}
+<span class="hljs-comment">//Services</span>
+<span class="hljs-keyword">func</span> (c *CoreV1Client) Services(namespace <span class="hljs-typename">string</span>) ServiceInterface {...}
+<span class="hljs-keyword">func</span> (c *CoreV1Client) ServiceAccounts(namespace <span class="hljs-typename">string</span>) ServiceAccountInterface {...}</code></pre> 
+<h5 id="243-corev1interface">2.4.3 CoreV1Interface</h5> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/core_client.go#L26">k8s.io/client-go/kubernetes/typed/core/v1/core_client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-keyword">type</span> CoreV1Interface <span class="hljs-keyword">interface</span> {
+    RESTClient() rest.Interface
+    ComponentStatusesGetter
+    ConfigMapsGetter
+    EndpointsGetter
+    EventsGetter
+    LimitRangesGetter
+    NamespacesGetter
+    NodesGetter
+    PersistentVolumesGetter
+    PersistentVolumeClaimsGetter
+    PodsGetter
+    PodTemplatesGetter
+    ReplicationControllersGetter
+    ResourceQuotasGetter
+    SecretsGetter
+    ServicesGetter
+    ServiceAccountsGetter
+}</code></pre> 
+<p><code>CoreV1Interface</code>中包含了各种<code>kubernetes</code>对象的调用接口，例如<code>PodsGetter</code>是对kubernetes中<code>pod</code>对象增删改查操作的接口。<code>ServicesGetter</code>是对<code>service</code>对象的操作的接口。</p> 
+<h5 id="244-podsgetter">2.4.4 PodsGetter</h5> 
+<p>以下我们以<code>PodsGetter</code>接口为例分析<code>CoreV1Client</code>对<code>pod</code>对象的增删改查接口调用。</p> 
+<p>示例中的代码如下：</p> 
+<pre class="prettyprint"><code class="language-go hljs ">pods, err := clientset.CoreV1().Pods(<span class="hljs-string">""</span>).List(metav1.ListOptions{})</code></pre> 
+<p><strong>CoreV1().Pods()</strong></p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/core_client.go#L87">k8s.io/client-go/kubernetes/typed/core/v1/core_client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-keyword">func</span> (c *CoreV1Client) Pods(namespace <span class="hljs-typename">string</span>) PodInterface {
+    <span class="hljs-keyword">return</span> newPods(c, namespace)
+}</code></pre> 
+<p><strong>newPods()</strong></p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/pod.go#L54">k8s.io/client-go/kubernetes/typed/core/v1/pod.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// newPods returns a Pods</span>
+<span class="hljs-keyword">func</span> newPods(c *CoreV1Client, namespace <span class="hljs-typename">string</span>) *pods {
+    <span class="hljs-keyword">return</span> &amp;pods{
+        client: c.RESTClient(),
+        ns:     namespace,
+    }
+}</code></pre> 
+<p><code>CoreV1().Pods()</code>的方法实际上是调用了<code>newPods()</code>的方法，创建了一个<code>pods</code>对象，<code>pods</code>对象继承了<code>rest.Interface</code>接口，即最终的实现本质是<code>RESTClient</code>的HTTP调用。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/pod.go#L48">k8s.io/client-go/kubernetes/typed/core/v1/pod.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// pods implements PodInterface</span>
+<span class="hljs-keyword">type</span> pods <span class="hljs-keyword">struct</span> {
+    client rest.Interface
+    ns     <span class="hljs-typename">string</span>
+}</code></pre> 
+<p><code>pods</code>对象实现了<code>PodInterface</code>接口。<code>PodInterface</code>定义了<code>pods</code>对象的增删改查等方法。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/pod.go#L34">k8s.io/client-go/kubernetes/typed/core/v1/pod.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// PodInterface has methods to work with Pod resources.</span>
+<span class="hljs-keyword">type</span> PodInterface <span class="hljs-keyword">interface</span> {
+    Create(*v1.Pod) (*v1.Pod, error)
+    Update(*v1.Pod) (*v1.Pod, error)
+    UpdateStatus(*v1.Pod) (*v1.Pod, error)
+    Delete(name <span class="hljs-typename">string</span>, options *meta_v1.DeleteOptions) error
+    DeleteCollection(options *meta_v1.DeleteOptions, listOptions meta_v1.ListOptions) error
+    Get(name <span class="hljs-typename">string</span>, options meta_v1.GetOptions) (*v1.Pod, error)
+    List(opts meta_v1.ListOptions) (*v1.PodList, error)
+    Watch(opts meta_v1.ListOptions) (watch.Interface, error)
+    Patch(name <span class="hljs-typename">string</span>, pt types.PatchType, data []<span class="hljs-typename">byte</span>, subresources ...<span class="hljs-typename">string</span>) (result *v1.Pod, err error)
+    PodExpansion
+}</code></pre> 
+<p><strong>PodsGetter</strong></p> 
+<p>PodsGetter继承了PodInterface的接口。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/pod.go#L28">k8s.io/client-go/kubernetes/typed/core/v1/pod.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// PodsGetter has a method to return a PodInterface.</span>
+<span class="hljs-comment">// A group's client should implement this interface.</span>
+<span class="hljs-keyword">type</span> PodsGetter <span class="hljs-keyword">interface</span> {
+    Pods(namespace <span class="hljs-typename">string</span>) PodInterface
+}</code></pre> 
+<p><strong>Pods().List()</strong></p> 
+<p>pods.List()方法通过<code>RESTClient</code>的HTTP调用来实现对kubernetes的pod资源的获取。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/pod.go#L75">k8s.io/client-go/kubernetes/typed/core/v1/pod.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// List takes label and field selectors, and returns the list of Pods that match those selectors.</span>
+<span class="hljs-keyword">func</span> (c *pods) List(opts meta_v1.ListOptions) (result *v1.PodList, err error) {
+    result = &amp;v1.PodList{}
+    err = c.client.Get().
+        Namespace(c.ns).
+        Resource(<span class="hljs-string">"pods"</span>).
+        VersionedParams(&amp;opts, scheme.ParameterCodec).
+        Do().
+        Into(result)
+    <span class="hljs-keyword">return</span>
+}</code></pre> 
+<p>以上分析了<code>clientset.CoreV1().Pods("").List(metav1.ListOptions{})</code>对pod资源获取的过程，最终是调用<code>RESTClient</code>的方法实现。</p> 
+<h4 id="25-restclient">2.5 RESTClient</h4> 
+<p>以下分析<code>RESTClient</code>的创建过程及作用。</p> 
+<p><code>RESTClient</code>对象的创建同样是依赖传入的config信息。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/kubernetes/typed/core/v1/core_client.go#L121">k8s.io/client-go/kubernetes/typed/core/v1/core_client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs ">client, err := rest.RESTClientFor(&amp;config)</code></pre> 
+<h5 id="251-restrestclientfor">2.5.1 rest.RESTClientFor</h5> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/rest/config.go#L182">k8s.io/client-go/rest/config.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// RESTClientFor returns a RESTClient that satisfies the requested attributes on a client Config</span>
+<span class="hljs-comment">// object. Note that a RESTClient may require fields that are optional when initializing a Client.</span>
+<span class="hljs-comment">// A RESTClient created by this method is generic - it expects to operate on an API that follows</span>
+<span class="hljs-comment">// the Kubernetes conventions, but may not be the Kubernetes API.</span>
+<span class="hljs-keyword">func</span> RESTClientFor(config *Config) (*RESTClient, error) {
+    ...
+    qps := config.QPS
+    ...
+    burst := config.Burst
+    ...
+    baseURL, versionedAPIPath, err := defaultServerUrlFor(config)
+    ...
+    transport, err := TransportFor(config)
+    ...
+    <span class="hljs-keyword">var</span> httpClient *http.Client
+    <span class="hljs-keyword">if</span> transport != http.DefaultTransport {
+        httpClient = &amp;http.Client{Transport: transport}
+        <span class="hljs-keyword">if</span> config.Timeout &gt;<span class="hljs-number"> 0</span> {
+            httpClient.Timeout = config.Timeout
+        }
+    }
+
+    <span class="hljs-keyword">return</span> NewRESTClient(baseURL, versionedAPIPath, config.ContentConfig, qps, burst, config.RateLimiter, httpClient)
+}</code></pre> 
+<p><code>RESTClientFor</code>函数调用了<code>NewRESTClient</code>的初始化函数。</p> 
+<h5 id="252-newrestclient">2.5.2 NewRESTClient</h5> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/rest/client.go#L91">k8s.io/client-go/rest/client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// NewRESTClient creates a new RESTClient. This client performs generic REST functions</span>
+<span class="hljs-comment">// such as Get, Put, Post, and Delete on specified paths.  Codec controls encoding and</span>
+<span class="hljs-comment">// decoding of responses from the server.</span>
+<span class="hljs-keyword">func</span> NewRESTClient(baseURL *url.URL, versionedAPIPath <span class="hljs-typename">string</span>, config ContentConfig, maxQPS <span class="hljs-typename">float32</span>, maxBurst <span class="hljs-typename">int</span>, rateLimiter flowcontrol.RateLimiter, client *http.Client) (*RESTClient, error) {
+    base := *baseURL
+    ...
+    serializers, err := createSerializers(config)
+    ...
+    <span class="hljs-keyword">return</span> &amp;RESTClient{
+        base:             &amp;base,
+        versionedAPIPath: versionedAPIPath,
+        contentConfig:    config,
+        serializers:      *serializers,
+        createBackoffMgr: readExpBackoffConfig,
+        Throttle:         throttle,
+        Client:           client,
+    }, <span class="hljs-constant">nil</span>
+}</code></pre> 
+<h5 id="253-restclient结构体">2.5.3 RESTClient结构体</h5> 
+<p>以下介绍RESTClient的结构体定义，RESTClient结构体中包含了<code>http.Client</code>，即本质上RESTClient就是一个<code>http.Client</code>的封装实现。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/rest/client.go#L54">k8s.io/client-go/rest/client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// RESTClient imposes common Kubernetes API conventions on a set of resource paths.</span>
+<span class="hljs-comment">// The baseURL is expected to point to an HTTP or HTTPS path that is the parent</span>
+<span class="hljs-comment">// of one or more resources.  The server should return a decodable API resource</span>
+<span class="hljs-comment">// object, or an api.Status object which contains information about the reason for</span>
+<span class="hljs-comment">// any failure.</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">// Most consumers should use client.New() to get a Kubernetes API client.</span>
+<span class="hljs-keyword">type</span> RESTClient <span class="hljs-keyword">struct</span> {
+    <span class="hljs-comment">// base is the root URL for all invocations of the client</span>
+    base *url.URL
+    <span class="hljs-comment">// versionedAPIPath is a path segment connecting the base URL to the resource root</span>
+    versionedAPIPath <span class="hljs-typename">string</span>
+
+    <span class="hljs-comment">// contentConfig is the information used to communicate with the server.</span>
+    contentConfig ContentConfig
+
+    <span class="hljs-comment">// serializers contain all serializers for underlying content type.</span>
+    serializers Serializers
+
+    <span class="hljs-comment">// creates BackoffManager that is passed to requests.</span>
+    createBackoffMgr <span class="hljs-keyword">func</span>() BackoffManager
+
+    <span class="hljs-comment">// TODO extract this into a wrapper interface via the RESTClient interface in kubectl.</span>
+    Throttle flowcontrol.RateLimiter
+
+    <span class="hljs-comment">// Set specific behavior of the client.  If not set http.DefaultClient will be used.</span>
+    Client *http.Client
+}</code></pre> 
+<h5 id="254-restclientinterface">2.5.4 RESTClient.Interface</h5> 
+<p>RESTClient实现了以下的接口方法：</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/rest/client.go#L42">k8s.io/client-go/rest/client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// Interface captures the set of operations for generically interacting with Kubernetes REST apis.</span>
+<span class="hljs-keyword">type</span> Interface <span class="hljs-keyword">interface</span> {
+    GetRateLimiter() flowcontrol.RateLimiter
+    Verb(verb <span class="hljs-typename">string</span>) *Request
+    Post() *Request
+    Put() *Request
+    Patch(pt types.PatchType) *Request
+    Get() *Request
+    Delete() *Request
+    APIVersion() schema.GroupVersion
+}</code></pre> 
+<p>在调用HTTP方法（Post()，Put()，Get()，Delete() ）时，实际上调用了Verb(verb string)函数。</p> 
+<p><a href="https://github.com/kubernetes/client-go/blob/87887458218a51f3944b2f4c553eb38173458e97/rest/client.go#L208">k8s.io/client-go/rest/client.go</a></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">// Verb begins a request with a verb (GET, POST, PUT, DELETE).</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">// Example usage of RESTClient's request building interface:</span>
+<span class="hljs-comment">// c, err := NewRESTClient(...)</span>
+<span class="hljs-comment">// if err != nil { ... }</span>
+<span class="hljs-comment">// resp, err := c.Verb("GET").</span>
+<span class="hljs-comment">//  Path("pods").</span>
+<span class="hljs-comment">//  SelectorParam("labels", "area=staging").</span>
+<span class="hljs-comment">//  Timeout(10*time.Second).</span>
+<span class="hljs-comment">//  Do()</span>
+<span class="hljs-comment">// if err != nil { ... }</span>
+<span class="hljs-comment">// list, ok := resp.(*api.PodList)</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-keyword">func</span> (c *RESTClient) Verb(verb <span class="hljs-typename">string</span>) *Request {
+    backoff := c.createBackoffMgr()
+
+    <span class="hljs-keyword">if</span> c.Client == <span class="hljs-constant">nil</span> {
+        <span class="hljs-keyword">return</span> NewRequest(<span class="hljs-constant">nil</span>, verb, c.base, c.versionedAPIPath, c.contentConfig, c.serializers, backoff, c.Throttle)
+    }
+    <span class="hljs-keyword">return</span> NewRequest(c.Client, verb, c.base, c.versionedAPIPath, c.contentConfig, c.serializers, backoff, c.Throttle)
+}</code></pre> 
+<p><code>Verb</code>函数调用了<code>NewRequest</code>方法，最后调用<code>Do()</code>方法实现一个HTTP请求获取Result。</p> 
+<h4 id="26-总结">2.6 总结</h4> 
+<p><code>client-go</code>对kubernetes资源对象的调用，需要先获取kubernetes的配置信息，即<code>$HOME/.kube/config</code>。</p> 
+<p>整个调用的过程如下：</p> 
+<p>kubeconfig→rest.config→clientset→具体的client(CoreV1Client)→具体的资源对象(pod)→RESTClient→http.Client→HTTP请求的发送及响应</p> 
+<p>通过clientset中不同的client和client中不同资源对象的方法实现对kubernetes中资源对象的增删改查等操作，常用的client有<code>CoreV1Client</code>、<code>AppsV1beta1Client</code>、<code>ExtensionsV1beta1Client</code>等。</p> 
+<h3 id="3-client-go对k8s资源的调用">3. client-go对k8s资源的调用</h3> 
+<p><strong>创建clientset</strong></p> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//获取kubeconfig</span>
+kubeconfig = flag.String(<span class="hljs-string">"kubeconfig"</span>, filepath.Join(home, <span class="hljs-string">".kube"</span>, <span class="hljs-string">"config"</span>), <span class="hljs-string">"(optional) absolute path to the kubeconfig file"</span>)
+<span class="hljs-comment">//创建config  </span>
+config, err := clientcmd.BuildConfigFromFlags(<span class="hljs-string">""</span>, *kubeconfig)
+<span class="hljs-comment">//创建clientset</span>
+clientset, err := kubernetes.NewForConfig(config)
+<span class="hljs-comment">//具体的资源调用见以下例子</span></code></pre> 
+<h4 id="31-deployment">3.1 deployment</h4> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//声明deployment对象</span>
+<span class="hljs-keyword">var</span> deployment *v1beta1.Deployment
+<span class="hljs-comment">//构造deployment对象</span>
+<span class="hljs-comment">//创建deployment</span>
+deployment, err := clientset.AppsV1beta1().Deployments(&lt;namespace&gt;).Create(&lt;deployment&gt;)
+<span class="hljs-comment">//更新deployment</span>
+deployment, err := clientset.AppsV1beta1().Deployments(&lt;namespace&gt;).Update(&lt;deployment&gt;)
+<span class="hljs-comment">//删除deployment</span>
+err := clientset.AppsV1beta1().Deployments(&lt;namespace&gt;).Delete(&lt;deployment.Name&gt;, &amp;meta_v1.DeleteOptions{})
+<span class="hljs-comment">//查询deployment</span>
+deployment, err := clientset.AppsV1beta1().Deployments(&lt;namespace&gt;).Get(&lt;deployment.Name&gt;, meta_v1.GetOptions{})
+<span class="hljs-comment">//列出deployment</span>
+deploymentList, err := clientset.AppsV1beta1().Deployments(&lt;namespace&gt;).List(&amp;meta_v1.ListOptions{})
+<span class="hljs-comment">//watch deployment</span>
+watchInterface, err := clientset.AppsV1beta1().Deployments(&lt;namespace&gt;).Watch(&amp;meta_v1.ListOptions{})</code></pre> 
+<h4 id="32-service">3.2 service</h4> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//声明service对象</span>
+<span class="hljs-keyword">var</span> service *v1.Service
+<span class="hljs-comment">//构造service对象</span>
+<span class="hljs-comment">//创建service</span>
+service, err := clientset.CoreV1().Services(&lt;namespace&gt;).Create(&lt;service&gt;)
+<span class="hljs-comment">//更新service</span>
+service, err := clientset.CoreV1().Services(&lt;namespace&gt;).Update(&lt;service&gt;)
+<span class="hljs-comment">//删除service</span>
+err := clientset.CoreV1().Services(&lt;namespace&gt;).Delete(&lt;service.Name&gt;, &amp;meta_v1.DeleteOptions{})
+<span class="hljs-comment">//查询service</span>
+service, err := clientset.CoreV1().Services(&lt;namespace&gt;).Get(&lt;service.Name&gt;, meta_v1.GetOptions{})
+<span class="hljs-comment">//列出service</span>
+serviceList, err := clientset.CoreV1().Services(&lt;namespace&gt;).List(&amp;meta_v1.ListOptions{})
+<span class="hljs-comment">//watch service</span>
+watchInterface, err := clientset.CoreV1().Services(&lt;namespace&gt;).Watch(&amp;meta_v1.ListOptions{})</code></pre> 
+<h4 id="33-ingress">3.3 ingress</h4> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//声明ingress对象</span>
+<span class="hljs-keyword">var</span> ingress *v1beta1.Ingress
+<span class="hljs-comment">//构造ingress对象</span>
+<span class="hljs-comment">//创建ingress</span>
+ingress, err := clientset.ExtensionsV1beta1().Ingresses(&lt;namespace&gt;).Create(&lt;ingress&gt;)
+<span class="hljs-comment">//更新ingress</span>
+ingress, err := clientset.ExtensionsV1beta1().Ingresses(&lt;namespace&gt;).Update(&lt;ingress&gt;)
+<span class="hljs-comment">//删除ingress</span>
+err := clientset.ExtensionsV1beta1().Ingresses(&lt;namespace&gt;).Delete(&lt;ingress.Name&gt;, &amp;meta_v1.DeleteOptions{})
+<span class="hljs-comment">//查询ingress</span>
+ingress, err := clientset.ExtensionsV1beta1().Ingresses(&lt;namespace&gt;).Get(&lt;ingress.Name&gt;, meta_v1.GetOptions{})
+<span class="hljs-comment">//列出ingress</span>
+ingressList, err := clientset.ExtensionsV1beta1().Ingresses(&lt;namespace&gt;).List(&amp;meta_v1.ListOptions{})
+<span class="hljs-comment">//watch ingress</span>
+watchInterface, err := clientset.ExtensionsV1beta1().Ingresses(&lt;namespace&gt;).Watch(&amp;meta_v1.ListOptions{})</code></pre> 
+<h4 id="34-replicaset">3.4 replicaSet</h4> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//声明replicaSet对象</span>
+<span class="hljs-keyword">var</span> replicaSet *v1beta1.ReplicaSet
+<span class="hljs-comment">//构造replicaSet对象</span>
+<span class="hljs-comment">//创建replicaSet</span>
+replicaSet, err := clientset.ExtensionsV1beta1().ReplicaSets(&lt;namespace&gt;).Create(&lt;replicaSet&gt;)
+<span class="hljs-comment">//更新replicaSet</span>
+replicaSet, err := clientset.ExtensionsV1beta1().ReplicaSets(&lt;namespace&gt;).Update(&lt;replicaSet&gt;)
+<span class="hljs-comment">//删除replicaSet</span>
+err := clientset.ExtensionsV1beta1().ReplicaSets(&lt;namespace&gt;).Delete(&lt;replicaSet.Name&gt;, &amp;meta_v1.DeleteOptions{})
+<span class="hljs-comment">//查询replicaSet</span>
+replicaSet, err := clientset.ExtensionsV1beta1().ReplicaSets(&lt;namespace&gt;).Get(&lt;replicaSet.Name&gt;, meta_v1.GetOptions{})
+<span class="hljs-comment">//列出replicaSet</span>
+replicaSetList, err := clientset.ExtensionsV1beta1().ReplicaSets(&lt;namespace&gt;).List(&amp;meta_v1.ListOptions{})
+<span class="hljs-comment">//watch replicaSet</span>
+watchInterface, err := clientset.ExtensionsV1beta1().ReplicaSets(&lt;namespace&gt;).Watch(&amp;meta_v1.ListOptions{})</code></pre> 
+<p>新版的kubernetes中一般通过deployment来创建replicaSet，再通过replicaSet来控制pod。</p> 
+<h4 id="35-pod">3.5 pod</h4> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//声明pod对象</span>
+<span class="hljs-keyword">var</span> pod *v1.Pod
+<span class="hljs-comment">//创建pod</span>
+pod, err := clientset.CoreV1().Pods(&lt;namespace&gt;).Create(&lt;pod&gt;)
+<span class="hljs-comment">//更新pod</span>
+pod, err := clientset.CoreV1().Pods(&lt;namespace&gt;).Update(&lt;pod&gt;)
+<span class="hljs-comment">//删除pod</span>
+err := clientset.CoreV1().Pods(&lt;namespace&gt;).Delete(&lt;pod.Name&gt;, &amp;meta_v1.DeleteOptions{})
+<span class="hljs-comment">//查询pod</span>
+pod, err := clientset.CoreV1().Pods(&lt;namespace&gt;).Get(&lt;pod.Name&gt;, meta_v1.GetOptions{})
+<span class="hljs-comment">//列出pod</span>
+podList, err := clientset.CoreV1().Pods(&lt;namespace&gt;).List(&amp;meta_v1.ListOptions{})
+<span class="hljs-comment">//watch pod</span>
+watchInterface, err := clientset.CoreV1().Pods(&lt;namespace&gt;).Watch(&amp;meta_v1.ListOptions{})</code></pre> 
+<h3 id="36-statefulset">3.6 statefulset</h3> 
+<pre class="prettyprint"><code class="language-go hljs "><span class="hljs-comment">//声明statefulset对象</span>
+<span class="hljs-keyword">var</span> statefulset *v1.StatefulSet
+<span class="hljs-comment">//创建statefulset</span>
+statefulset, err := clientset.AppsV1().StatefulSets(&lt;namespace&gt;).Create(&lt;statefulset&gt;)
+<span class="hljs-comment">//更新statefulset</span>
+statefulset, err := clientset.AppsV1().StatefulSets(&lt;namespace&gt;).Update(&lt;statefulset&gt;)
+<span class="hljs-comment">//删除statefulset</span>
+err := clientset.AppsV1().StatefulSets(&lt;namespace&gt;).Delete(&lt;statefulset.Name&gt;, &amp;meta_v1.DeleteOptions{})
+<span class="hljs-comment">//查询statefulset</span>
+statefulset, err := clientset.AppsV1().StatefulSets(&lt;namespace&gt;).Get(&lt;statefulset.Name&gt;, meta_v1.GetOptions{})
+<span class="hljs-comment">//列出statefulset</span>
+statefulsetList, err := clientset.AppsV1().StatefulSets(&lt;namespace&gt;).List(&amp;meta_v1.ListOptions{})
+<span class="hljs-comment">//watch statefulset</span>
+watchInterface, err := clientset.AppsV1().StatefulSets(&lt;namespace&gt;).Watch(&amp;meta_v1.ListOptions{})</code></pre> 
+<p>​ 通过以上对kubernetes的资源对象的操作函数可以看出，每个资源对象都有增删改查等方法，基本调用逻辑类似。一般二次开发只需要创建deployment、service、ingress三个资源对象即可，pod对象由deployment包含的replicaSet来控制创建和删除。函数调用的入参一般只有<code>NAMESPACE</code>和<code>kubernetesObject</code>两个参数，部分操作有<code>Options</code>的参数。在创建前，需要对资源对象构造数据，可以理解为编辑一个资源对象的yaml文件，然后通过<code>kubectl create -f xxx.yaml</code>来创建对象。</p> 
+<p>参考文档</p> 
+<p><a href="https://github.com/kubernetes/client-go">https://github.com/kubernetes/client-go</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/f5b7e7882a462fed354f5a692b4a7d84/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">python中ones的含义和用法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/866f3461509c0b866f002d4093033643/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">android通过webView加载第三方h5应用，无法加载图片和播放视频的解决方法</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

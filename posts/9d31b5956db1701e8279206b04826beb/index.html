@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>智能SQL生成：后端技术与LLM的完美结合 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="智能SQL生成：后端技术与LLM的完美结合" />
+<meta property="og:description" content="文章目录 引言一、什么是大模型二、为什么选择LLM三、开发技术说明四、系统架构说明五、编码实战1. Maven2. 讯飞大模型配置类3. LLM相关的封装4. 编写LLM的service5. 编写controller6. 运行测试 六、总结 引言 本篇文章主要是关于实现一个类似Chat2DB的根据自然语言生成SQL的简单Demo，根据此Demo可以入门大模型应用开发，结合大模型开发出属于自己的大模型应用，让自己的应用智能化，可以根据用户不同问题做出不同的回答。
+一、什么是大模型 如果各位有关注一些技术文章，难免会注意到这几年有一个词非常火，没错这就是“大模型”！
+那大模型是什么？有什么用呢？
+“大模型”是可以指任何规模较大、参数众多的机器学习模型，不仅限于自然语言处理（NLP），也可以包括计算机视觉、语音识别等其他领域的模型。大模型的特点是它们通常需要大量的数据来训练，以及相对较大的计算资源。
+大模型的用途十分广泛，在很多领域都有不错的应用价值：
+自然语言的生成和理解：大模型可以根据用户的问题生成连贯的文本回答、或是总结某些文章。ChatGPT就是一个不错的例子。图像的处理：例如OpenAI的DALL·E模型，它可以根据用户问题，生成新的图像。语言的识别和生成：大模型可以将文本信息转化为人类的语言。推荐系统：大模型可以根据用户的行为或某些数据，推测用户的行为爱好，实现个性化推荐。 大模型的应用十分广泛，除了上面举的例子外，还有很多例子，这里就不一一举例了。
+下面我会使用大模型的其中一种**大型语言模型（Large Language Model，简称LLM）**开发出一些简单的应用Demo，读者可以根据这样的思路进一步完善。
+在此之前，先来介绍一下LLM是何物。LLM是指专门用来处理和理解自然语言的大型机器学习模型，LLM通常通过在大量文本数据上进行预训练来学习语言的结构和语义，从而能够执行各种语言处理任务，如文本生成、翻译、摘要、问答和情感分析等。
+二、为什么选择LLM LLM大模型是一款专注于理解和生成自然语言的大模型，那我们系统中无论是Redis还是MySQL的数据，都是文本形式的，将这些文本信息的数据交与大模型处理，能够有针对性地获取到我们想要的数据。
+其次，LLM的使用成本较低，国内的大模型无论是讯飞星火大模型还是其他互联网厂商自研的大模型都为开发者提供了不少的免费Token，使得学习成本大大降低。
+LLM大模型也是我们大部分人群目前接触最多的大模型，学习成本大幅度降低，只需要知道如何和大模型进行聊天即可懂得如何开发，不需要任何额外的学习成本。
+三、开发技术说明 本文使用的大模型为讯飞星火大模型，但是咱们不限于任何厂商的大模型，有能力的ChatGPT也可以，作者只是觉得讯飞星火大模型送的Token比较多，非常适合初学者。
+读者需要自行前往讯飞星火认知大模型-AI大语言模型-星火大模型-科大讯飞 (xfyun.cn)进行领取免费Token，领取教程这里就不多讲了，网上大把教程，不懂的可以下面留言。
+其次，该教程后端方面需要懂得使用SpringBoot进行开发，也就是简单的一个接口开发，没有任何的前端。
+最后，开发出来的Demo只是一个抛砖引玉的作用，开发过程中不会考虑太多的规范和其他一些限制，只是单纯把一个小功能实现，代码量也不多，一千行不到。
+如果这些都准备好了，那么下面开始发车。
+四、系统架构说明 本篇文章会带大家结合后端技术与讯飞星火大模型实现实现根据用户的自然语言问题生成SQL的工具。
+自然语言生成SQL？是不是很熟悉，没错，这里是参考了阿里开源的Chat2DB数据库管理功能，不过这里是作者对这个功能自主实现的Demo，没有翻阅过Chat2DB源码，故这里的实现可能并不是Chat2DB的底层实现原理
+有能力的可以自己去看看源码：Chat2DB: Chat2DB 是一款有开源免费的多数据库客户端工具，支持windows、mac本地安装，也支持服务器端部署，web网页访问。和传统的数据库客户端软件Navicat、DBeaver 相比Chat2DB集成了AIGC的能力，能够将自然语言转换为SQL，也可以将SQL转换为自然语言，可以给出研发人员SQL的优化建议，极大的提升人员的效率，是AI时代数据库研发人员的利器，未来即使不懂SQL的运营业务也可 (gitee.com)
+怎么根据用户的自然语言描述生成用户想要的SQL呢？下面我们来分析分析
+首先，用户发送一个包含数据库host、user、password、table、用户问题的请求给后端后端根据用户提供的数据库信息，连接数据库查询出该表的DDL后端与LLM建立连接，将DDL、用户问题、prompt发送给LLMLLM根据后端提供的数据以及问题，推测分析并生成SQL，将SQL返回给后端后端将SQL返回响应给用户 也就是说，后端需要获取并整理数据，然后与LLM建立连接，将数据发送给LLM，LLM再根据数据做出回答，返回给后端SQL，这样就实现了自然语言生成SQL
+五、编码实战 了解了整体架构是如何之后，我们进入了编码实战阶段，编码整体来说比较简单，重要的理解整体的架构
+1. Maven 构建SpringBoot项目，引入一些我们需要的Maven依赖
+&lt;dependencies&gt; &lt;!-- SpringBoot Web容器 --&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt; &lt;artifactId&gt;jackson-databind&lt;/artifactId&gt; &lt;version&gt;2.12.3&lt;/version&gt; &lt;/dependency&gt; &lt;!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-annotations --&gt; &lt;dependency&gt; &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt; &lt;artifactId&gt;jackson-annotations&lt;/artifactId&gt; &lt;version&gt;2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9d31b5956db1701e8279206b04826beb/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-25T21:59:10+08:00" />
+<meta property="article:modified_time" content="2024-02-25T21:59:10+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">智能SQL生成：后端技术与LLM的完美结合</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-tomorrow-night">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#_1" rel="nofollow">引言</a></li><li><a href="#_9" rel="nofollow">一、什么是大模型</a></li><li><a href="#LLM_34" rel="nofollow">二、为什么选择LLM</a></li><li><a href="#_46" rel="nofollow">三、开发技术说明</a></li><li><a href="#_60" rel="nofollow">四、系统架构说明</a></li><li><a href="#_82" rel="nofollow">五、编码实战</a></li><li><ul><li><a href="#1_Maven_88" rel="nofollow">1. Maven</a></li><li><a href="#2__143" rel="nofollow">2. 讯飞大模型配置类</a></li><li><a href="#3_%09LLM_229" rel="nofollow">3. LLM相关的封装</a></li><li><a href="#4__LLMservice_441" rel="nofollow">4. 编写LLM的service</a></li><li><a href="#5_controller_517" rel="nofollow">5. 编写controller</a></li><li><a href="#6__612" rel="nofollow">6. 运行测试</a></li></ul> 
+  </li><li><a href="#_618" rel="nofollow">六、总结</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_1"></a>引言</h2> 
+<p>本篇文章主要是关于实现一个类似Chat2DB的根据自然语言生成SQL的简单Demo，根据此Demo可以入门大模型应用开发，结合大模型开发出属于自己的大模型应用，让自己的应用智能化，可以根据用户不同问题做出不同的回答。</p> 
+<p><img src="https://images2.imgbox.com/76/90/CVJpmKkF_o.png" alt="image-20240225175115184"></p> 
+<h2><a id="_9"></a>一、什么是大模型</h2> 
+<p>如果各位有关注一些技术文章，难免会注意到这几年有一个词非常火，没错这就是“大模型”！</p> 
+<p><strong>那大模型是什么？有什么用呢？</strong></p> 
+<p>“大模型”是可以指<strong>任何规模较大、参数众多的机器学习模型</strong>，不仅限于自然语言处理（NLP），也可以包括<strong>计算机视觉、语音识别等其他领域的模型</strong>。大模型的特点是它们通常需要大量的数据来训练，以及相对较大的计算资源。</p> 
+<blockquote> 
+ <p><strong>大模型的用途十分广泛，在很多领域都有不错的应用价值：</strong></p> 
+ <ol><li><strong>自然语言的生成和理解</strong>：大模型可以根据用户的问题生成连贯的文本回答、或是总结某些文章。ChatGPT就是一个不错的例子。</li><li><strong>图像的处理</strong>：例如OpenAI的DALL·E模型，它可以根据用户问题，生成新的图像。</li><li><strong>语言的识别和生成</strong>：大模型可以将文本信息转化为人类的语言。</li><li><strong>推荐系统</strong>：大模型可以根据用户的行为或某些数据，推测用户的行为爱好，实现个性化推荐。</li></ol> 
+</blockquote> 
+<p>大模型的应用十分广泛，除了上面举的例子外，还有很多例子，这里就不一一举例了。</p> 
+<p><img src="https://images2.imgbox.com/69/c4/bEPK9djh_o.png" alt="61b63d3c-3.png"></p> 
+<p>下面我会使用大模型的其中一种**大型语言模型（Large Language Model，简称LLM）**开发出一些简单的应用Demo，读者可以根据这样的思路进一步完善。</p> 
+<blockquote> 
+ <p>在此之前，先来介绍一下LLM是何物。<strong>LLM是指专门用来处理和理解自然语言的大型机器学习模型</strong>，LLM通常通过在大量文本数据上进行预训练来学习语言的结构和语义，从而能够执行各种语言处理任务，如文本生成、翻译、摘要、问答和情感分析等。</p> 
+</blockquote> 
+<hr> 
+<h2><a id="LLM_34"></a>二、为什么选择LLM</h2> 
+<p>LLM大模型是一款专注于理解和生成自然语言的大模型，那我们系统中无论是Redis还是MySQL的数据，都是文本形式的，将这些文本信息的数据交与大模型处理，能够有针对性地获取到我们想要的数据。</p> 
+<p>其次，LLM的使用成本较低，国内的大模型无论是讯飞星火大模型还是其他互联网厂商自研的大模型都为开发者提供了不少的免费Token，使得学习成本大大降低。</p> 
+<p>LLM大模型也是我们大部分人群目前接触最多的大模型，学习成本大幅度降低，只需要知道如何和大模型进行聊天即可懂得如何开发，不需要任何额外的学习成本。</p> 
+<p><img src="https://images2.imgbox.com/89/09/ujTbYSKp_o.png" alt="img"></p> 
+<hr> 
+<h2><a id="_46"></a>三、开发技术说明</h2> 
+<p>本文使用的大模型为讯飞星火大模型，但是咱们不限于任何厂商的大模型，有能力的ChatGPT也可以，作者只是觉得讯飞星火大模型送的Token比较多，非常适合初学者。</p> 
+<p>读者需要自行前往<a href="https://xinghuo.xfyun.cn/spark" rel="nofollow">讯飞星火认知大模型-AI大语言模型-星火大模型-科大讯飞 (xfyun.cn)</a>进行领取免费Token，领取教程这里就不多讲了，网上大把教程，不懂的可以下面留言。</p> 
+<p>其次，该教程后端方面需要懂得使用SpringBoot进行开发，也就是简单的一个接口开发，没有任何的前端。</p> 
+<p>最后，开发出来的Demo只是一个抛砖引玉的作用，开发过程中不会考虑太多的规范和其他一些限制，只是单纯把一个小功能实现，代码量也不多，一千行不到。</p> 
+<p>如果这些都准备好了，那么下面开始发车。</p> 
+<hr> 
+<h2><a id="_60"></a>四、系统架构说明</h2> 
+<p>本篇文章会带大家结合后端技术与讯飞星火大模型实现实现根据用户的自然语言问题生成SQL的工具。</p> 
+<blockquote> 
+ <p>自然语言生成SQL？是不是很熟悉，没错，这里是参考了阿里开源的Chat2DB数据库管理功能，不过这里是作者对这个功能自主实现的Demo，没有翻阅过Chat2DB源码，故这里的实现可能并不是Chat2DB的底层实现原理</p> 
+ <p>有能力的可以自己去看看源码：<a href="https://gitee.com/lkfly/Chat2DB" rel="nofollow">Chat2DB: Chat2DB 是一款有开源免费的多数据库客户端工具，支持windows、mac本地安装，也支持服务器端部署，web网页访问。和传统的数据库客户端软件Navicat、DBeaver 相比Chat2DB集成了AIGC的能力，能够将自然语言转换为SQL，也可以将SQL转换为自然语言，可以给出研发人员SQL的优化建议，极大的提升人员的效率，是AI时代数据库研发人员的利器，未来即使不懂SQL的运营业务也可 (gitee.com)</a></p> 
+</blockquote> 
+<p>怎么根据用户的自然语言描述生成用户想要的SQL呢？下面我们来分析分析</p> 
+<p><img src="https://images2.imgbox.com/f5/fd/tVoC3zSw_o.png" alt="image-20240225172301437"></p> 
+<ol><li>首先，用户发送一个包含数据库host、user、password、table、用户问题的请求给后端</li><li>后端根据用户提供的数据库信息，连接数据库查询出该表的DDL</li><li>后端与LLM建立连接，将DDL、用户问题、prompt发送给LLM</li><li>LLM根据后端提供的数据以及问题，推测分析并生成SQL，将SQL返回给后端</li><li>后端将SQL返回响应给用户</li></ol> 
+<blockquote> 
+ <p>也就是说，后端需要获取并整理数据，然后与LLM建立连接，将数据发送给LLM，LLM再根据数据做出回答，返回给后端SQL，这样就实现了自然语言生成SQL</p> 
+</blockquote> 
+<hr> 
+<h2><a id="_82"></a>五、编码实战</h2> 
+<p>了解了整体架构是如何之后，我们进入了编码实战阶段，编码整体来说比较简单，重要的理解整体的架构</p> 
+<hr> 
+<h3><a id="1_Maven_88"></a>1. Maven</h3> 
+<p>构建SpringBoot项目，引入一些我们需要的Maven依赖</p> 
+<pre><code class="prism language-xml">    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+
+        <span class="token comment">&lt;!-- SpringBoot Web容器 --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-boot-starter-web<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.fasterxml.jackson.core<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>jackson-databind<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>2.12.3<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+
+        <span class="token comment">&lt;!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-annotations --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.fasterxml.jackson.core<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>jackson-annotations<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>2.12.3<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.projectlombok<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>lombok<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token comment">&lt;!--okhttp3--&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.squareup.okhttp3<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>okhttp<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.alibaba.fastjson2<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>fastjson2<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>2.0.43<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>mysql<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>mysql-connector-java<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>8.0.27<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span> <span class="token comment">&lt;!-- 根据你需要的版本进行调整 --&gt;</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-boot-starter-test<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>scope</span><span class="token punctuation">&gt;</span></span>test<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>scope</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencies</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<hr> 
+<h3><a id="2__143"></a>2. 讯飞大模型配置类</h3> 
+<p>为了方便维护，需要将讯飞星火大模型配置成一个类，方便日后维护</p> 
+<p>并根据接口文档的内容生成鉴权信息</p> 
+<p><a href="https://www.xfyun.cn/doc/spark/Web.html" rel="nofollow">星火认知大模型Web API文档 | 讯飞开放平台文档中心 (xfyun.cn)</a></p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@ConfigurationProperties</span><span class="token punctuation">(</span><span class="token string">"xun-fei.xing-huo"</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@Component</span>
+<span class="token annotation punctuation">@Data</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">XFLlmConfig</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> appId<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> domain<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> wsUrl<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> role<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> host<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> path<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> apiSecret<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> apiKey<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">Long</span> maxResponseTime<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> prompt<span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getWsUrl</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">String</span> httpUrl <span class="token operator">=</span> wsUrl<span class="token punctuation">.</span><span class="token function">replaceAll</span><span class="token punctuation">(</span><span class="token string">"wss"</span><span class="token punctuation">,</span> <span class="token string">"https"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">Date</span> date <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Date</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">SimpleDateFormat</span> sdf <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SimpleDateFormat</span><span class="token punctuation">(</span><span class="token string">"EEE, dd MMM yyyy HH:mm:ss z"</span><span class="token punctuation">,</span> <span class="token class-name">Locale</span><span class="token punctuation">.</span><span class="token constant">US</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            sdf<span class="token punctuation">.</span><span class="token function">setTimeZone</span><span class="token punctuation">(</span><span class="token class-name">TimeZone</span><span class="token punctuation">.</span><span class="token function">getTimeZone</span><span class="token punctuation">(</span><span class="token string">"GMT"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">String</span> formatData <span class="token operator">=</span> sdf<span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span>date<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">String</span> tmp <span class="token operator">=</span> <span class="token string">"host: "</span> <span class="token operator">+</span> host <span class="token operator">+</span> <span class="token string">"\n"</span><span class="token punctuation">;</span>
+            tmp <span class="token operator">+=</span> <span class="token string">"date: "</span> <span class="token operator">+</span> formatData <span class="token operator">+</span> <span class="token string">"\n"</span><span class="token punctuation">;</span>
+            tmp <span class="token operator">+=</span> <span class="token string">"GET "</span> <span class="token operator">+</span> path <span class="token operator">+</span> <span class="token string">" HTTP/1.1"</span><span class="token punctuation">;</span>
+            <span class="token class-name">Mac</span> mac <span class="token operator">=</span> <span class="token class-name">Mac</span><span class="token punctuation">.</span><span class="token function">getInstance</span><span class="token punctuation">(</span><span class="token string">"hmacsha256"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">SecretKeySpec</span> spec <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SecretKeySpec</span><span class="token punctuation">(</span>apiSecret<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token class-name">StandardCharsets</span><span class="token punctuation">.</span><span class="token constant">UTF_8</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"hmacsha256"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            mac<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span>spec<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> hexDigits <span class="token operator">=</span> mac<span class="token punctuation">.</span><span class="token function">doFinal</span><span class="token punctuation">(</span>tmp<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token class-name">StandardCharsets</span><span class="token punctuation">.</span><span class="token constant">UTF_8</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment">// Base64加密</span>
+            <span class="token class-name">String</span> sha <span class="token operator">=</span> <span class="token class-name">Base64</span><span class="token punctuation">.</span><span class="token function">getEncoder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">encodeToString</span><span class="token punctuation">(</span>hexDigits<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">String</span> authorization <span class="token operator">=</span> <span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span><span class="token string">"api_key=\"%s\", algorithm=\"%s\", headers=\"%s\", signature=\"%s\""</span><span class="token punctuation">,</span> apiKey<span class="token punctuation">,</span> <span class="token string">"hmac-sha256"</span><span class="token punctuation">,</span> <span class="token string">"host date request-line"</span><span class="token punctuation">,</span> sha<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment">// 拼接地址</span>
+            <span class="token class-name">HttpUrl</span> url <span class="token operator">=</span> <span class="token class-name">Objects</span><span class="token punctuation">.</span><span class="token function">requireNonNull</span><span class="token punctuation">(</span><span class="token class-name">HttpUrl</span><span class="token punctuation">.</span><span class="token function">parse</span><span class="token punctuation">(</span>httpUrl<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">newBuilder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>
+                    <span class="token function">addQueryParameter</span><span class="token punctuation">(</span><span class="token string">"authorization"</span><span class="token punctuation">,</span> <span class="token class-name">Base64</span><span class="token punctuation">.</span><span class="token function">getEncoder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">encodeToString</span><span class="token punctuation">(</span>authorization<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token class-name">StandardCharsets</span><span class="token punctuation">.</span><span class="token constant">UTF_8</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>
+                    <span class="token function">addQueryParameter</span><span class="token punctuation">(</span><span class="token string">"date"</span><span class="token punctuation">,</span> formatData<span class="token punctuation">)</span><span class="token punctuation">.</span>
+                    <span class="token function">addQueryParameter</span><span class="token punctuation">(</span><span class="token string">"host"</span><span class="token punctuation">,</span> host<span class="token punctuation">)</span><span class="token punctuation">.</span>
+                    <span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> url<span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">replace</span><span class="token punctuation">(</span><span class="token string">"http://"</span><span class="token punctuation">,</span> <span class="token string">"ws://"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">replace</span><span class="token punctuation">(</span><span class="token string">"https://"</span><span class="token punctuation">,</span> <span class="token string">"wss://"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span><span class="token string">"getWsUrl 发生异常"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><code>application.yml</code></p> 
+<pre><code class="prism language-yml"><span class="token key atrule">xun-fei</span><span class="token punctuation">:</span>
+  <span class="token key atrule">xing-huo</span><span class="token punctuation">:</span>
+    <span class="token key atrule">appId</span><span class="token punctuation">:</span> 你的appId
+    <span class="token key atrule">domain</span><span class="token punctuation">:</span> xxxx
+    <span class="token key atrule">wsUrl</span><span class="token punctuation">:</span> wss<span class="token punctuation">:</span>//$<span class="token punctuation">{<!-- --></span>xun<span class="token punctuation">-</span>fei.xing<span class="token punctuation">-</span>huo.host<span class="token punctuation">}</span>$<span class="token punctuation">{<!-- --></span>xun<span class="token punctuation">-</span>fei.xing<span class="token punctuation">-</span>huo.path<span class="token punctuation">}</span>
+    <span class="token key atrule">role</span><span class="token punctuation">:</span> user
+    <span class="token key atrule">apiSecret</span><span class="token punctuation">:</span> xxxx
+    <span class="token key atrule">apiKey</span><span class="token punctuation">:</span> xxxx
+    <span class="token key atrule">host</span><span class="token punctuation">:</span> spark<span class="token punctuation">-</span>api.xf<span class="token punctuation">-</span>yun.com
+    <span class="token key atrule">path</span><span class="token punctuation">:</span> /v3.5/chat
+    <span class="token comment">#  30s</span>
+    <span class="token key atrule">maxResponseTime</span><span class="token punctuation">:</span> <span class="token number">30000</span>
+    <span class="token key atrule">prompt</span><span class="token punctuation">:</span> <span class="token string">'下面是一些表的DDL语句, 请严格根据这些DDL语句结合用户的问题为用户生成所需的SQL: \n%s \n用户问题是: %s\n注意只需要回复SQL即可!'</span>
+</code></pre> 
+<hr> 
+<h3><a id="3_%09LLM_229"></a>3. LLM相关的封装</h3> 
+<p>下面的request以及response都是参考的接口文档封装的，需要自己看看文档。</p> 
+<p>请求LLM的Request封装</p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Data</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">XFLlmRequest</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"header"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Header</span> header<span class="token punctuation">;</span>
+    <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"parameter"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Parameter</span> parameter<span class="token punctuation">;</span>
+    <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"payload"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Payload</span> payload<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Header</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"app_id"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> appId<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"uid"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> uid<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Parameter</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"chat"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Chat</span> chat<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Chat</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"domain"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> domain<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"temperature"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Double</span> temperature<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"max_tokens"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Long</span> maxTokens<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Payload</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"message"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Message</span> message<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Message</span> <span class="token punctuation">{<!-- --></span>
+
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"text"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Text</span><span class="token punctuation">&gt;</span></span> text<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token annotation punctuation">@Builder</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Text</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"role"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> role<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"content"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> content<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>响应体封装</p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Data</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">XFLlmResponse</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"header"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Header</span> header<span class="token punctuation">;</span>
+    <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"payload"</span><span class="token punctuation">)</span>
+    <span class="token keyword">private</span> <span class="token class-name">Payload</span> payload<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Header</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"code"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Long</span> code<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"message"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> message<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"sid"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> sid<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"status"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Long</span> status<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Payload</span> <span class="token punctuation">{<!-- --></span>
+
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"choices"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Choices</span> choices<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Choices</span> <span class="token punctuation">{<!-- --></span>
+
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"status"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Long</span> status<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"seq"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Long</span> seq<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"text"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">Text</span><span class="token punctuation">&gt;</span></span> text<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Data</span>
+    <span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Text</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"content"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> content<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"role"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">String</span> role<span class="token punctuation">;</span>
+        <span class="token annotation punctuation">@JsonProperty</span><span class="token punctuation">(</span><span class="token string">"index"</span><span class="token punctuation">)</span>
+        <span class="token keyword">private</span> <span class="token class-name">Long</span> index<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><code>WebSocketListener</code>的具体实现，用于收集llm返回的结果</p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Slf4j</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">XFWebSocketListener</span> <span class="token keyword">extends</span> <span class="token class-name">WebSocketListener</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">/**
+     * 断开websocket标志位
+     */</span>
+    <span class="token annotation punctuation">@Getter</span>
+    <span class="token keyword">private</span> <span class="token keyword">volatile</span> <span class="token keyword">boolean</span> wsCloseFlag <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 锁
+     */</span>
+    <span class="token annotation punctuation">@Getter</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token class-name">Object</span> lock <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Object</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 语句组装buffer，将大模型返回结果全部接收，在组装成一句话返回
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">StringBuilder</span> answer <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">StringBuilder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getAnswer</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> answer<span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onOpen</span><span class="token punctuation">(</span><span class="token class-name">WebSocket</span> webSocket<span class="token punctuation">,</span> <span class="token class-name">Response</span> response<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">onOpen</span><span class="token punctuation">(</span>webSocket<span class="token punctuation">,</span> response<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"讯飞星火大模型连接成功！"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span><span class="token class-name">WebSocket</span> webSocket<span class="token punctuation">,</span> <span class="token class-name">String</span> text<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>lock<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">onMessage</span><span class="token punctuation">(</span>webSocket<span class="token punctuation">,</span> text<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">XFLlmResponse</span> response <span class="token operator">=</span> <span class="token constant">JSON</span><span class="token punctuation">.</span><span class="token function">parseObject</span><span class="token punctuation">(</span>text<span class="token punctuation">,</span> <span class="token class-name">XFLlmResponse</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"response:{}"</span><span class="token punctuation">,</span> <span class="token constant">JSON</span><span class="token punctuation">.</span><span class="token function">toJSONString</span><span class="token punctuation">(</span>response<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>response<span class="token punctuation">.</span><span class="token function">getHeader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getCode</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"发生错误，错误信息为:{}"</span><span class="token punctuation">,</span> <span class="token constant">JSON</span><span class="token punctuation">.</span><span class="token function">toJSONString</span><span class="token punctuation">(</span>response<span class="token punctuation">.</span><span class="token function">getHeader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                answer<span class="token punctuation">.</span><span class="token function">append</span><span class="token punctuation">(</span><span class="token string">"大模型响应异常，请联系管理员"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment">// 关闭连接标识</span>
+                wsCloseFlag <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                lock<span class="token punctuation">.</span><span class="token function">notify</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">XFLlmResponse<span class="token punctuation">.</span>Text</span><span class="token punctuation">&gt;</span></span> textList <span class="token operator">=</span> response<span class="token punctuation">.</span><span class="token function">getPayload</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getChoices</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getText</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">XFLlmResponse<span class="token punctuation">.</span>Text</span> temp <span class="token operator">:</span> textList<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"讯飞大模型返回结果信息为：{}"</span><span class="token punctuation">,</span> <span class="token constant">JSON</span><span class="token punctuation">.</span><span class="token function">toJSONString</span><span class="token punctuation">(</span>temp<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                answer<span class="token punctuation">.</span><span class="token function">append</span><span class="token punctuation">(</span>temp<span class="token punctuation">.</span><span class="token function">getContent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"result:{}"</span><span class="token punctuation">,</span> answer<span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>response<span class="token punctuation">.</span><span class="token function">getHeader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getStatus</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">2</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                wsCloseFlag <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"wsCloseFlag为：{}"</span><span class="token punctuation">,</span> wsCloseFlag <span class="token operator">+</span> <span class="token string">" result: "</span> <span class="token operator">+</span> answer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                webSocket<span class="token punctuation">.</span><span class="token function">close</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">,</span> <span class="token string">"Closing WebSocket connection"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                lock<span class="token punctuation">.</span><span class="token function">notify</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onFailure</span><span class="token punctuation">(</span><span class="token class-name">WebSocket</span> webSocket<span class="token punctuation">,</span> <span class="token class-name">Throwable</span> t<span class="token punctuation">,</span> <span class="token class-name">Response</span> response<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">onFailure</span><span class="token punctuation">(</span>webSocket<span class="token punctuation">,</span> t<span class="token punctuation">,</span> response<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">null</span> <span class="token operator">!=</span> response<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">int</span> code <span class="token operator">=</span> response<span class="token punctuation">.</span><span class="token function">code</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">assert</span> response<span class="token punctuation">.</span><span class="token function">body</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+                log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"onFailure body:{}"</span><span class="token punctuation">,</span> response<span class="token punctuation">.</span><span class="token function">body</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">string</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token number">101</span> <span class="token operator">!=</span> code<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                    log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"讯飞星火大模型连接异常"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"IO异常："</span> <span class="token operator">+</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onClosing</span><span class="token punctuation">(</span><span class="token class-name">WebSocket</span> webSocket<span class="token punctuation">,</span> <span class="token keyword">int</span> code<span class="token punctuation">,</span> <span class="token class-name">String</span> reason<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">onClosing</span><span class="token punctuation">(</span>webSocket<span class="token punctuation">,</span> code<span class="token punctuation">,</span> reason<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        wsCloseFlag <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        answer <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">StringBuilder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<hr> 
+<h3><a id="4__LLMservice_441"></a>4. 编写LLM的service</h3> 
+<p>LLMService提供两个方法，一个是<code>sendMsg</code>用于给LLM发送数据，<code>getResult</code>则是获取LLM的响应结果</p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Service</span>
+<span class="token annotation punctuation">@Slf4j</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LlmServiceImpl</span> <span class="token keyword">implements</span> <span class="token class-name">LlmService</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token annotation punctuation">@Resource</span>
+    <span class="token keyword">private</span> <span class="token class-name">XFLlmConfig</span> xfLlmConfig<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token class-name">WebSocket</span> <span class="token function">sendMsg</span><span class="token punctuation">(</span><span class="token class-name">String</span> text<span class="token punctuation">,</span> <span class="token class-name">WebSocketListener</span> webSocketListener<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">String</span> wsUrl <span class="token operator">=</span> xfLlmConfig<span class="token punctuation">.</span><span class="token function">getWsUrl</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">Request</span> request <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Request<span class="token punctuation">.</span>Builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">url</span><span class="token punctuation">(</span>wsUrl<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">OkHttpClient</span> client <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">OkHttpClient<span class="token punctuation">.</span>Builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">String</span> body <span class="token operator">=</span> <span class="token function">buildBody</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"llm request body: {}"</span><span class="token punctuation">,</span> body<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">WebSocket</span> webSocket <span class="token operator">=</span> client<span class="token punctuation">.</span><span class="token function">newWebSocket</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> webSocketListener<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        webSocket<span class="token punctuation">.</span><span class="token function">send</span><span class="token punctuation">(</span>body<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> webSocket<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@SneakyThrows</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getResult</span><span class="token punctuation">(</span><span class="token class-name">XFWebSocketListener</span> webSocketListener<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>webSocketListener<span class="token punctuation">.</span><span class="token function">getLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">Long</span> maxResponseTime <span class="token operator">=</span> xfLlmConfig<span class="token punctuation">.</span><span class="token function">getMaxResponseTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">long</span> start <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>webSocketListener<span class="token punctuation">.</span><span class="token function">isWsCloseFlag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"Thread ID: {}, wsCloseFlag:{}, 线程等待"</span><span class="token punctuation">,</span> <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> webSocketListener<span class="token punctuation">.</span><span class="token function">isWsCloseFlag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                webSocketListener<span class="token punctuation">.</span><span class="token function">getLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">wait</span><span class="token punctuation">(</span>maxResponseTime<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">long</span> end <span class="token operator">=</span> <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"Thread ID: {}, wsCloseFlag:{}, 等待时长:{} 线程被唤醒"</span><span class="token punctuation">,</span> <span class="token class-name">Thread</span><span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> webSocketListener<span class="token punctuation">.</span><span class="token function">isWsCloseFlag</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>end <span class="token operator">-</span> start<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>end <span class="token operator">-</span> start<span class="token punctuation">)</span> <span class="token operator">&gt;</span> maxResponseTime<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span><span class="token string">"响应超时，请联系相关人员"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> webSocketListener<span class="token punctuation">.</span><span class="token function">getAnswer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> <span class="token function">buildBody</span><span class="token punctuation">(</span><span class="token class-name">String</span> content<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">XFLlmRequest</span> request <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">XFLlmRequest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Header</span> header <span class="token operator">=</span> <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Header</span><span class="token punctuation">.</span><span class="token function">builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">appId</span><span class="token punctuation">(</span>xfLlmConfig<span class="token punctuation">.</span><span class="token function">getAppId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        request<span class="token punctuation">.</span><span class="token function">setHeader</span><span class="token punctuation">(</span>header<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Chat</span> chat <span class="token operator">=</span> <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Chat</span><span class="token punctuation">.</span><span class="token function">builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">domain</span><span class="token punctuation">(</span>xfLlmConfig<span class="token punctuation">.</span><span class="token function">getDomain</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Parameter</span> parameter <span class="token operator">=</span> <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Parameter</span><span class="token punctuation">.</span><span class="token function">builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">chat</span><span class="token punctuation">(</span>chat<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        request<span class="token punctuation">.</span><span class="token function">setParameter</span><span class="token punctuation">(</span>parameter<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Text</span> text <span class="token operator">=</span> <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Text</span><span class="token punctuation">.</span><span class="token function">builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">content</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">role</span><span class="token punctuation">(</span>xfLlmConfig<span class="token punctuation">.</span><span class="token function">getRole</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Message</span> message <span class="token operator">=</span> <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Message</span><span class="token punctuation">.</span><span class="token function">builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">text</span><span class="token punctuation">(</span><span class="token class-name">Collections</span><span class="token punctuation">.</span><span class="token function">singletonList</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Payload</span> payload <span class="token operator">=</span> <span class="token class-name">XFLlmRequest<span class="token punctuation">.</span>Payload</span><span class="token punctuation">.</span><span class="token function">builder</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span>message<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        request<span class="token punctuation">.</span><span class="token function">setPayload</span><span class="token punctuation">(</span>payload<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token constant">JSON</span><span class="token punctuation">.</span><span class="token function">toJSONString</span><span class="token punctuation">(</span>request<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<hr> 
+<h3><a id="5_controller_517"></a>5. 编写controller</h3> 
+<p>用户发起请求的request封装</p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Data</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">GenerateSqlRequest</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">/**
+     * 端口号
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> port<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 主机
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> host<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 密码
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> password<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 用户名
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> userName<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 数据库名字
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> databaseName<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 表的名字
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> tableName<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 用户的问题
+     */</span>
+    <span class="token keyword">private</span> <span class="token class-name">String</span> problem<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@RequestMapping</span><span class="token punctuation">(</span><span class="token string">"generate-sql"</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@RestController</span>
+<span class="token annotation punctuation">@RequiredArgsConstructor</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">GenerateSqlController</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token keyword">static</span> <span class="token class-name">String</span> <span class="token constant">URL</span> <span class="token operator">=</span> <span class="token string">"jdbc:mysql://%s:%s/%s"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token class-name">XFLlmConfig</span> xfLlmConfig<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token class-name">LlmService</span> llmService<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@SneakyThrows</span>
+    <span class="token annotation punctuation">@PostMapping</span>
+    <span class="token keyword">public</span> <span class="token class-name">R</span> <span class="token function">generateSql</span><span class="token punctuation">(</span><span class="token annotation punctuation">@RequestBody</span> <span class="token class-name">GenerateSqlRequest</span> request<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">String</span> url <span class="token operator">=</span> <span class="token function">getUrl</span><span class="token punctuation">(</span>request<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">String</span> userName <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getUserName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">String</span> password <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getPassword</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">Class</span><span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span><span class="token string">"com.mysql.cj.jdbc.Driver"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">(</span><span class="token class-name">Connection</span> conn <span class="token operator">=</span> <span class="token class-name">DriverManager</span><span class="token punctuation">.</span><span class="token function">getConnection</span><span class="token punctuation">(</span>url<span class="token punctuation">,</span> userName<span class="token punctuation">,</span> password<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token class-name">String</span> tableName <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getTableName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">String</span> query <span class="token operator">=</span> <span class="token string">"SHOW CREATE TABLE "</span> <span class="token operator">+</span> tableName<span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">(</span><span class="token class-name">Statement</span> stmt <span class="token operator">=</span> conn<span class="token punctuation">.</span><span class="token function">createStatement</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                 <span class="token class-name">ResultSet</span> rs <span class="token operator">=</span> stmt<span class="token punctuation">.</span><span class="token function">executeQuery</span><span class="token punctuation">(</span>query<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>rs<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+                    <span class="token class-name">String</span> ddl <span class="token operator">=</span> rs<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token class-name">String</span> prompt <span class="token operator">=</span> <span class="token function">getPrompt</span><span class="token punctuation">(</span>ddl<span class="token punctuation">,</span> request<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token class-name">XFWebSocketListener</span> webSocketListener <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">XFWebSocketListener</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    llmService<span class="token punctuation">.</span><span class="token function">sendMsg</span><span class="token punctuation">(</span>prompt<span class="token punctuation">,</span> webSocketListener<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token class-name">String</span> result <span class="token operator">=</span> llmService<span class="token punctuation">.</span><span class="token function">getResult</span><span class="token punctuation">(</span>webSocketListener<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">return</span> <span class="token class-name">R</span><span class="token punctuation">.</span><span class="token function">success</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SQLException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            e<span class="token punctuation">.</span><span class="token function">printStackTrace</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> <span class="token class-name">R</span><span class="token punctuation">.</span><span class="token function">fail</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getUrl</span><span class="token punctuation">(</span><span class="token class-name">GenerateSqlRequest</span> request<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span><span class="token constant">URL</span><span class="token punctuation">,</span> request<span class="token punctuation">.</span><span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> request<span class="token punctuation">.</span><span class="token function">getPort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> request<span class="token punctuation">.</span><span class="token function">getDatabaseName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getPrompt</span><span class="token punctuation">(</span><span class="token class-name">String</span> ddl<span class="token punctuation">,</span> <span class="token class-name">GenerateSqlRequest</span> request<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span>xfLlmConfig<span class="token punctuation">.</span><span class="token function">getPrompt</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> ddl<span class="token punctuation">,</span> request<span class="token punctuation">.</span><span class="token function">getProblem</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<hr> 
+<h3><a id="6__612"></a>6. 运行测试</h3> 
+<p><img src="https://images2.imgbox.com/01/b4/z09KyLsa_o.png" alt="image-20240225174110107"></p> 
+<hr> 
+<h2><a id="_618"></a>六、总结</h2> 
+<p>按照这样的一套流程，我们就把LLM接入到系统中，将我们的一个系统实现了智能化，让我们的系统有了自主思考的能力，这是一个不错的Demo。</p> 
+<p>对此，大家可以根据这种思想，将自己的项目改造，不再是简单的CRUD功能，这也是不错的亮点。</p> 
+<hr>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2751a1a7c9555f0a81ea534979031e39/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Java/Python/Go不同开发语言基础数据结构和相关操作总结-GC篇</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/54d958e5d615f83d08b5988e1f0537dc/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Linux之部署前后端分离项目</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>LLM 模型融合实践指南：低成本构建高性能语言模型 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="LLM 模型融合实践指南：低成本构建高性能语言模型" />
+<meta property="og:description" content="编者按：随着大语言模型技术的快速发展，模型融合成为一种低成本但高性能的模型构建新途径。本文作者 Maxime Labonne 利用 mergekit 库探索了四种模型融合方法：SLERP、TIES、DARE和passthrough。通过配置示例和案例分析，作者详细阐释了这些算法的原理及实践操作。
+作者的核心观点是：相比训练全新模型，融合现有模型可以以更低计算成本获取类似或更优异的效果。
+文章通过模型融合生成了性能优异的 Marcoro14-7B-slerp 。在 Open LLM Leaderboard 和 NousResearch 两个基准测试上，它都是同参数量模型中的佼佼者。案例验证了作者主张的模型融合存在的高性价比。当然模型融合也存在一定问题，如训练数据污染和可能在各种评测排行榜的分数偏高。本文提供了模型融合技术与工程实践的详尽指南，对AI实践者具有重要参考价值。
+作者 | Maxime Labonne
+编译 | 岳扬
+Image by author
+模型融合（Model merging）是一种将两个或更多个大语言模型（LLM）合并为一个模型的技术。这是一种相对较新的实验性方法，可以以较低成本（无需 GPU）创建新模型。 令人惊讶的是，这种技术的效果还比较出奇，使用模型融合技术在 Open LLM Leaderboard[1]上产生了许多最先进的模型。
+在本教程中，我们将使用 mergekit [2]库来实现这一技术。更具体地说，我们将回顾四种模型融合方法，并提供相关的配置示例。然后，我们将使用 mergekit 创建一个模型：Marcoro14–7B-slerp[3]，该模型已成为 Open LLM Leaderboard（02/01/24）上表现最佳的模型。
+相关代码已上传至 GitHub[4] 和 Notebook[5]。个人建议使用 LazyMergekit[6] 项目，来轻松运行 mergekit。
+特别感谢 mergekit 库的作者 Charles Goddard[7] 审阅本文。
+Image by author
+01 🤝 融合算法 在本节，我们将重点介绍 mergekit 库目前实现的四种模型融合方法。请注意，还有其他方法，比如 linear [8]和 Task Arithmetic [9]。如果你对模型融合的相关论文感兴趣，我推荐阅读Hugging Face上的这本优秀论文集[10]。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/fce15fb3313d95ce4cb588006248a106/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-21T10:17:03+08:00" />
+<meta property="article:modified_time" content="2024-02-21T10:17:03+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">LLM 模型融合实践指南：低成本构建高性能语言模型</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <blockquote> 
+ <p><strong>编者按</strong>：随着大语言模型技术的快速发展，模型融合成为一种低成本但高性能的模型构建新途径。本文作者 Maxime Labonne 利用 mergekit 库探索了四种模型融合方法：SLERP、TIES、DARE和passthrough。通过配置示例和案例分析，作者详细阐释了这些算法的原理及实践操作。</p> 
+ <p>作者的核心观点是：<strong>相比训练全新模型，融合现有模型可以以更低计算成本获取类似或更优异的效果。</strong></p> 
+ <p>文章通过模型融合生成了性能优异的 Marcoro14-7B-slerp 。在 Open LLM Leaderboard 和 NousResearch 两个基准测试上，它都是同参数量模型中的佼佼者。案例验证了作者主张的模型融合存在的高性价比。当然模型融合也存在一定问题，如训练数据污染和可能在各种评测排行榜的分数偏高。本文提供了模型融合技术与工程实践的详尽指南，对AI实践者具有重要参考价值。</p> 
+</blockquote> 
+<p><strong>作者 | Maxime Labonne</strong></p> 
+<p><strong>编译 | 岳扬</strong></p> 
+<p><img src="https://images2.imgbox.com/a4/8e/rHFGvWa1_o.png" alt=""></p> 
+<p>Image by author</p> 
+<p>模型融合（Model merging）是一种将两个或更多个大语言模型（LLM）合并为一个模型的技术。<strong>这是一种相对较新的实验性方法，可以以较低成本（无需 GPU）创建新模型。</strong> 令人惊讶的是，这种技术的效果还比较出奇，使用模型融合技术在 Open LLM Leaderboard[1]上产生了许多最先进的模型。</p> 
+<p>在本教程中，我们将使用 mergekit [2]库来实现这一技术。更具体地说，我们将回顾四种模型融合方法，并提供相关的配置示例。然后，我们将使用 mergekit 创建一个模型：Marcoro14–7B-slerp[3]，该模型已成为 Open LLM Leaderboard（02/01/24）上表现最佳的模型。</p> 
+<p>相关代码已上传至 GitHub[4] 和 Notebook[5]。个人建议使用 LazyMergekit[6] 项目，来轻松运行 mergekit。</p> 
+<p>特别感谢 mergekit 库的作者 Charles Goddard[7] 审阅本文。</p> 
+<p><img src="https://images2.imgbox.com/84/57/M3ZkDPA2_o.png" alt=""></p> 
+<p>Image by author</p> 
+<h2><a id="01_%C2%A0_30"></a><strong>01 🤝 融合算法</strong></h2> 
+<p>在本节，我们将重点介绍 mergekit 库目前实现的四种模型融合方法。请注意，还有其他方法，比如 linear [8]和 Task Arithmetic [9]。如果你对模型融合的相关论文感兴趣，我推荐阅读Hugging Face上的这本优秀论文集[10]。</p> 
+<h3><a id="11_SLERP_34"></a><strong>1.1 SLERP</strong></h3> 
+<p>Spherical Linear Interpolation（SLERP）是一种用于在两个向量之间进行平稳和连贯地插值的方法。这种方法能够保持恒定的变化速率，并保留向量所在球面空间的几何特性。</p> 
+<p>与使用传统的线性插值方法相比，SLERP 更受青睐的原因有几个。例如，在高维空间中，线性插值（linear interpolation）可能导致插值向量的大小（幅度）减小（即权重的规模减小）。此外，<strong>权重方向的变化往往比大小（幅度）的变化代表的信息更有意义</strong>（如特征学习（Feature Learning）和表征（Representation））。</p> 
+<p>SLERP 是通过以下步骤实现的：</p> 
+<ol><li>对输入的向量进行归一化处理，使它们的长度（magnitude）变为单位长度（长度为1）。这一步骤的目的是确保这些向量表示的是方向，而不是大小。</li><li>使用点积计算这些向量之间的角度。</li><li>如果这些向量几乎平行，则默认使用线性插值以提高效率。如果输入的两个向量夹角较大，SLERP 将根据插值因子 t （<strong>插值因子 t 是一个介于 0 到 1 之间的值，用于指定插值的程度。t=0 表示完全使用第一个向量，t=1 表示完全使用第二个向量，而在 0 到 1 之间的值表示两个向量的混合程度。</strong> ）和向量之间的夹角计算比例因子（Scale factor）。</li><li>这些因子用于给原始向量加权，然后求和来获得插值向量。</li></ol> 
+<p>SLERP 目前是最流行的模型融合方法，但它仅限于一次合并两个模型。不过，仍然可以通过分层融合多个模型，就像在 Mistral-7B-Merge-14-v0.1[11] 中所示。</p> 
+<p><strong>配置示例：</strong></p> 
+<pre><code>slices:
+  - sources:
+      - model: OpenPipe/mistral-ft-optimized-1218
+        layer_range: [0, 32]
+      - model: mlabonne/NeuralHermes-2.5-Mistral-7B
+        layer_range: [0, 32]
+merge_method: slerp
+base_model: OpenPipe/mistral-ft-optimized-1218
+parameters:
+  t:
+    - filter: self_attn
+      value: [0, 0.5, 0.3, 0.7, 1]
+    - filter: mlp
+      value: [1, 0.5, 0.7, 0.3, 0]
+    - value: 0.5
+dtype: bfloat16
+</code></pre> 
+<p>这是一种经典的 SLERP 配置，SLERP 被应用于模型的每一层，以完成整体的模型融合。请注意，我们为插值因子 t 输入了一系列梯度值（gradient of values）。自注意力层和 MLP 层的参数将使用 OpenPipe/mistral-ft-optimized-1218[12] 和 mlabonne/NeuralHermes-2.5-Mistral-7B[13] 的不同组合。</p> 
+<p>可以在 Hugging Face Hub 上找到最终训练完成的模型，位于 mlabonne/NeuralPipe-7B-slerp[14]。</p> 
+<h3><a id="12_TIES_74"></a><strong>1.2 TIES</strong></h3> 
+<p>TIES-Merging 由 Yadav 等人在这篇论文[15]中引入，TIES-Merging 旨在将多个特定任务模型高效地合并为一个多任务模型。它解决了模型融合中的两大难题：</p> 
+<ul><li><strong>模型参数的冗余</strong>：它能够识别并消除特定任务模型中的冗余参数。具体做法是在模型微调（fine-tuning）的过程中，关注模型参数发生的变化，对微调过程中发生的变化进行排序，并选择那些对模型性能影响最显著的前 k% 的变化，并忽略那些在微调中变化较小或对性能影响较小的部分。</li><li><strong>模型参数的符号之间存在分歧</strong>：当不同模型对同一参数提出相反的调整建议时，就会产生冲突。TIES-Merging 通过创建一个统一的符号向量来解决这些冲突，该向量表示所有模型中变化方向的最显著方向。</li></ul> 
+<p>TIES-Merging 分为以下三个步骤：</p> 
+<ul><li><strong>Trim（修剪）</strong> ：只保留一部分最重要的参数（密度参数（density parameter）），并将其余参数重置为零，从而减少特定任务模型中的冗余参数。</li><li><strong>Elect Sign（确定符号）</strong> ：通过确定模型中哪些方向上的变化（正向或负向）是最为显著或最主导的，创建一个统一的符号向量，以解决不同模型之间的符号冲突。</li><li><strong>Disjoint Merge</strong>：在合并过程中，仅考虑那些与先前创建的统一符号向量一致的参数值，并计算这些值的平均值。在计算平均值时，不考虑原始参数值为零的情况。</li></ul> 
+<p>与 SLERP 不同，TIES 可以一次性合并多个模型。</p> 
+<p><strong>配置示例：</strong></p> 
+<pre><code>models:
+  - model: mistralai/Mistral-7B-v0.1
+    # no parameters necessary for base model
+  - model: OpenPipe/mistral-ft-optimized-1218
+    parameters:
+      density: 0.5
+      weight: 0.5
+  - model: mlabonne/NeuralHermes-2.5-Mistral-7B
+    parameters:
+      density: 0.5
+      weight: 0.3
+merge_method: ties
+base_model: mistralai/Mistral-7B-v0.1
+parameters:
+  normalize: true
+dtype: float16
+</code></pre> 
+<p>在此配置下，我们使用 Mistral-7B 作为基础模型来计算 delta 权重。我们融合了两个模型：mistral-ft-optimized-1218（50%）[12]和 NeuralHermes-2.5-Mistral-7B（30%）[13]，并进行了归一化处理。这里的“density”参数意味着我们只保留了每个模型 50%的参数（另一半来自基础模型）。</p> 
+<p><strong>请注意，在配置中权重之和不等于 1，但 normalize: true 参数会自动在内部将其归一化。</strong> 此配置的灵感来自 OpenHermes-2.5-neural-chat-7b-v3-1-7B[16] 这个模型的作者提供的参数。</p> 
+<p>你可以在 Hugging Face Hub 上的 mlabonne/NeuralPipe-7B-ties[17] 找到最终训练完成的模型。</p> 
+<h3><a id="13_DARE_116"></a><strong>1.3 DARE</strong></h3> 
+<p>DARE[18] 由 Yu 等人（2023 年）提出，使用了与 TIES 类似的方法，但有两个主要区别：</p> 
+<ul><li><strong>Pruning</strong>： DARE 随机将微调后的权重重置为原始值（基础模型的权重）。</li><li><strong>Rescaling</strong>： DARE 重新调整权重，以保持模型输出的期望值大致不变。它将两个（或更多）模型的重调整后的权重与基础模型的权重相加，并使用了一个比例因子。</li></ul> 
+<p>Mergekit 对这种方法的实现有两种：有 TIES 的确定符号步骤（dare_ties）或没有 TIES 的确定符号步骤（dare_linear）。</p> 
+<p><strong>配置示例：</strong></p> 
+<pre><code>models:
+ - model: mistralai/Mistral-7B-v0.1
+ # No parameters necessary for base model
+ - model: samir-fama/SamirGPT-v1
+ parameters:
+ density: 0.53
+ weight: 0.4
+ - model: abacusai/Slerp-CM-mist-dpo
+ parameters:
+ density: 0.53
+ weight: 0.3
+ - model: EmbeddedLLM/Mistral-7B-Merge-14-v0.2
+ parameters:
+ density: 0.53
+ weight: 0.3
+merge_method: dare_ties
+base_model: mistralai/Mistral-7B-v0.1
+parameters:
+ int8_mask: true
+dtype: bfloat16
+</code></pre> 
+<p>在这个配置示例中，我们使用 dare_ties 合并了基于 Mistral-7B 的三个不同模型。这次，我选择的权重总和为 1（总和应在 0.9 和 1.1 之间）。density 参数略高于论文中建议的值（&lt;0.5），但看起来它能持续提供更好的结果（参见此讨论[19]）。</p> 
+<p>你可以在 Hugging Face Hub 的 mlabonne/Daredevil-7B[20] 上找到它。它也是本文中最好的合并模型，甚至优于 Marcoro14-7B-slerp。</p> 
+<h3><a id="14_Passthrough_154"></a><strong>1.4 Passthrough</strong></h3> 
+<p>Passthrough 方法与前几种方法有很大不同。<strong>通过连接来自不同 LLMs 的模型层，这种方法可以生成具有奇怪参数数量的模型（例如，使用两个 7B 参数模型可以生成 9B 模型）。</strong> 这些模型通常被称为 "Frankenmerges "或 “Frankenstein 模型”。</p> 
+<p>这种技术极具实验性，但能够成功地创建一些令人印象深刻的模型，比如使用两个 Llama 2 70B 模型融合而成的 goliath-120b。最近发布的 SOLAR-10.7B-v1.0 也使用了同样的思想，在他们的论文中这种技术称为"depth-up scaling"。</p> 
+<p><strong>配置示例：</strong></p> 
+<pre><code>slices:
+  - sources:
+    - model: OpenPipe/mistral-ft-optimized-1218
+      layer_range: [0, 32]
+  - sources:
+    - model: mlabonne/NeuralHermes-2.5-Mistral-7B
+      layer_range: [24, 32]
+merge_method: passthrough
+dtype: bfloat16
+</code></pre> 
+<p>由此产生的 frankenmerge 模型将包含第一个模型的全部 32 层和第二个模型的 8 个附加层。这将创建一个总共有 40 层和 8.99B 参数的 frankenmerge。此配置的灵感来自于 GML-Mistral-merged-v1[21]。</p> 
+<p>您可以在 Hugging Face Hub 上的 mlabonne/NeuralPipe-9B-merged [22]找到最终模型。</p> 
+<h2><a id="02_%C2%A0_178"></a><strong>02 💻 融合我们自己的模型</strong></h2> 
+<p>在本节中，我们将使用 mergekit 库加载一个模型融合配置，运行它并将生成的结果模型上传到 Hugging Face Hub。</p> 
+<p>首先，我们直接通过源代码安装 mergekit，步骤如下：</p> 
+<pre><code>!git clone https://github.com/cg123/mergekit.git
+!cd mergekit &amp;&amp; pip install -q -e .
+</code></pre> 
+<p>在下面的代码块中，我们将以 YAML 格式加载模型融合配置。还在此指定了完成模型融合后模型的名称，以备将来使用。您可以在此复制/粘贴上一节中的任何配置。</p> 
+<p>这次，我们将使用两个不同的模型： Marcoroni-7B-v3[23] 和 Mistral-7B-Merge-14-v0.1[24] 并用 SLERP 方法进行模型融合。然后将配置保存为 yaml 文件，以便用作模型融合命令的输入。</p> 
+<pre><code>import yaml
+
+MODEL_NAME = "Marcoro14-7B-slerp"
+yaml_config = """
+slices:
+  - sources:
+      - model: AIDC-ai-business/Marcoroni-7B-v3
+        layer_range: [0, 32]
+      - model: EmbeddedLLM/Mistral-7B-Merge-14-v0.1
+        layer_range: [0, 32]
+merge_method: slerp
+base_model: AIDC-ai-business/Marcoroni-7B-v3
+parameters:
+  t:
+    - filter: self_attn
+      value: [0, 0.5, 0.3, 0.7, 1]
+    - filter: mlp
+      value: [1, 0.5, 0.7, 0.3, 0]
+    - value: 0.5
+dtype: bfloat16
+
+"""
+
+# Save config as yaml file
+with open('config.yaml', 'w', encoding="utf-8") as f:
+    f.write(yaml_config)
+</code></pre> 
+<p>我们会使用以下参数运行模型融合命令：</p> 
+<ul><li>–copy-tokenizer 用于从基础模型复制分词器</li><li>–allow-crimes 和 --out-shard-size 可用于将模型划分为较小的分片（shards），可在内存较小的 CPU 上进行计算</li><li>–lazy-unpickle 用于启用实验性的lazy unpickler（译者注：“lazy unpickler” 指的是一种实验性的、能够以一种惰性或延迟加载的方式执行反序列化操作的机制。），以降低内存使用率</li></ul> 
+<p>此外，某些模型可能还需要 --trust_remote_code 参数（Mistral-7B 不需要）。</p> 
+<p>该命令将下载模型融合配置中列出的所有模型的权重，并运行所选的模型融合方法（应该需要约 10 分钟）。</p> 
+<pre><code># Merge models
+!mergekit-yaml config.yaml merge --copy-tokenizer --allow-crimes --out-shard-size 1B --lazy-unpickl
+</code></pre> 
+<p>现在，模型已经融合并保存在 merge 目录中。在上传之前，我们可以创建一个包含复现该模型融合操作所需信息的 README 文件。以下代码块定义了一个 Jinja 模板，并自动将模型融合配置中的数据填入其中。</p> 
+<pre><code>!pip install -qU huggingface_hub
+
+from huggingface_hub import ModelCard, ModelCardData
+from jinja2 import Template
+
+username = "mlabonne"
+
+template_text = """
+---
+license: apache-2.0
+tags:
+- merge
+- mergekit
+- lazymergekit
+{%- for model in models %}
+- {<!-- -->{ model }}
+{%- endfor %}
+---
+
+# {<!-- -->{ model_name }}
+
+{<!-- -->{ model_name }} is a merge of the following models using [mergekit](https://github.com/cg123/mergekit):
+
+{%- for model in models %}
+* [{<!-- -->{ model }}](https://huggingface.co/{<!-- -->{ model }})
+{%- endfor %}
+
+## 🧩 Configuration
+
+```yaml
+{<!-- -->{- yaml_config -}}
+```
+"""
+
+# Create a Jinja template object
+jinja_template = Template(template_text.strip())
+
+# Get list of models from config
+data = yaml.safe_load(yaml_config)
+if "models" in data:
+    models = [data["models"][i]["model"] for i in range(len(data["models"])) if "parameters" in data["models"][i]]
+elif "parameters" in data:
+    models = [data["slices"][0]["sources"][i]["model"] for i in range(len(data["slices"][0]["sources"]))]
+elif "slices" in data:
+    models = [data["slices"][i]["sources"][0]["model"] for i in range(len(data["slices"]))]
+else:
+ raise Exception("No models or slices found in yaml config")
+
+# Fill the template
+content = jinja_template.render(
+    model_name=MODEL_NAME,
+    models=models,
+    yaml_config=yaml_config,
+    username=username,
+)
+
+# Save the model card
+card = ModelCard(content)
+card.save('merge/README.md')
+</code></pre> 
+<p>现在我们有了 model card ，就可以将整个文件夹推送到 HuggingFace Hub。</p> 
+<pre><code>from google.colab import userdata
+from huggingface_hub import HfApi
+
+username = "mlabonne"
+
+# Defined in the secrets tab in Google Colab
+api = HfApi(token=userdata.get("HF_TOKEN"))
+
+api.create_repo(
+    repo_id=f"{username}/{MODEL_NAME}",
+    repo_type="model"
+)
+api.upload_folder(
+    repo_id=f"{username}/{MODEL_NAME}",
+    folder_path="merge",
+)
+</code></pre> 
+<p>该模型现在可以在 Hugging Face Hub 上找到，位于 mlabonne/Marcoro14–7B-slerp[25]。在另一个 notebook 中，我们可以使用以下代码尝试在免费的 T4 GPU 上运行该模型：</p> 
+<pre><code>!pip install -qU transformers accelerate
+
+from transformers import AutoTokenizer
+import transformers
+import torch
+
+model = "mlabonne/Marcoro14-7B-slerp"
+messages = [{"role": "user", "content": "What is a large language model?"}]
+
+tokenizer = AutoTokenizer.from_pretrained(model)
+prompt = tokenizer.apply_chat_template(
+    messages,
+    tokenize=False,
+    add_generation_prompt=True
+)
+pipeline = transformers.pipeline(
+    "text-generation",
+    model=model,
+    torch_dtype=torch.float16,
+    device_map="auto",
+)
+
+outputs = pipeline(prompt, max_new_tokens=256, do_sample=True, temperature=0.7, top_k=50, top_p=0.95)
+</code></pre> 
+<p>我们向 LLM 提出了"What is a Large Language Model?"这个问题，并获得了这样的输出结果：</p> 
+<pre><code>A large language model is a type of artificial intelligence (AI) system that has been trained on vast amounts of text data. It’s designed to understand and generate human-like language, making predictions on what words or phrases might come next in a sentence or document. These models use complex algorithms and neural network architectures to learn from the data and improve their performance over time. Some well-known large language models include GPT-3 from OpenAI and BERT from Google.
+</code></pre> 
+<p>融合后的模型看起来不错，但我们需要更全面的评估。对于这种通用型模型，有一些有趣的基准测试：</p> 
+<ol><li>Chatbot Arena[26]，它通过人类的投票编制 LLMs 排行榜。人们对不同语言模型的表现进行投票，然后使用 Elo 算法对这些模型进行排名。</li><li>MT-bench[26]，它使用 GPT-4 作为评判员，对一组多轮问题上的模型回答进行评分。</li><li>NousResearch benchmark suite[27]，它汇总了四个基准测试：AGIEval、GPT4ALL、TruthfulQA 和 Bigbench。GPT4ALL 包括了 HellaSwag、OpenBookQA、Winogrande、ARC-Easy、ARC-Challenge、BoolQ 和 PIQA。</li><li>Open LLM Leaderboard[28]，它汇总了六个基准测试：ARC、HellaSwag、MMLU、Winogrande、GSM8K 和 TruthfulQA。</li></ol> 
+<p>不幸的是，我们无法将该模型提交到 Chatbot Arena。不过，可以选择使用 Open LLM Leaderboard 和 NousResearch 基准测试对其进行评估。</p> 
+<p>我已经将该模型提交到了 Open LLM Leaderboard[28]，它在该排行榜上被评为最佳的 7B 参数模型。以下是具体情况截图：</p> 
+<p><img src="https://images2.imgbox.com/13/62/IV365l0T_o.png" alt=""></p> 
+<p>Image by author</p> 
+<p>Open LLM Leaderboard 的问题在于这些基准测试是公开的。这意味着人们可以在测试数据上训练语言模型，以获得更好的结果。融合这些最佳的模型，也会污染模型。<strong>可以肯定的是，Marcoro14-7B-slerp 受到了污染，而且这次融合中使用的一些模型应该是在这些评估测试集上训练过的。</strong> 如果你想创建最好的模型而非仅仅在排行榜上表现较好的模型，我建议只使用非融合的模型来创建自己的融合模型。</p> 
+<p>这就是为什么我们不能只依赖于 Open LLM Leaderboard。在 NousResearch benchmark suite 中，我使用了 🧐 LLM AutoEval [29]来自动计算评估分数。以下是与表现优秀的 OpenHermes-2.5-Mistral-7B [30]进行比较的结果：</p> 
+<p><img src="https://images2.imgbox.com/cb/a9/LvnGoE8V_o.png" alt=""></p> 
+<p>Image by author</p> 
+<p>与该模型相比，我们在每项基准测试中都取得了显著进步。请注意， NousResearch benchmark suite 与 Open LLM Leaderboard 共享了一些评估任务：ARC-Challenge，TruthfulQA，HellaSwag和Winogrande。据我所知，Bigbench是唯一完全不同的基准测试（如果情况不是这样，请随时去原文链接与作者联系）。<strong>然而，在此次模型融合中使用的模型之一仍可能是在Bigbench的评测数据集上训练过的。</strong></p> 
+<h2><a id="03__381"></a><strong>03 总结</strong></h2> 
+<p>在这篇文章中，我们介绍了使用四种不同的方法去融合 LLMs 。详细说明了 SLERP、TIES、DARE 和 passthrough 的工作原理，并提供了相关的配置示例。最后，我们通过 mergekit 库使用SLERP方法训练出了 Marcoro14–7B-slerp ，并将其上传到 Hugging Face Hub 。我们在两个基准套件上都获得了出色的性能：Open LLM Leaderboard（该模型是该榜单性能最佳的 7B 模型）和NousResearch。</p> 
+<p><strong>Thanks for reading!</strong></p> 
+<p><strong>END</strong></p> 
+<h2><a id="_388"></a><strong>参考资料</strong></h2> 
+<p>[1]https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard</p> 
+<p>[2]https://github.com/cg123/mergekit</p> 
+<p>[3]https://huggingface.co/mlabonne/Marcoro14-7B-slerp</p> 
+<p>[4]https://github.com/mlabonne/llm-course/blob/main/Mergekit.ipynb</p> 
+<p>[5]https://colab.research.google.com/drive/1_JS7JKJAQozD48-LhYdegcuuZ2ddgXfr?usp=sharing</p> 
+<p>[6]https://colab.research.google.com/drive/1obulZ1ROXHjYLn6PPZJwRR6GzgQogxxb?usp=sharing</p> 
+<p>[7]https://www.linkedin.com/in/charles-goddard-7b6797b/</p> 
+<p>[8]https://github.com/cg123/mergekit/tree/1011ef3a84e4c5545473602baf7ef32d535044a9#linear</p> 
+<p>[9]https://arxiv.org/abs/2212.04089</p> 
+<p>[10]https://huggingface.co/collections/osanseviero/model-merging-65097893623330a3a51ead66</p> 
+<p>[11]https://huggingface.co/EmbeddedLLM/Mistral-7B-Merge-14-v0.1</p> 
+<p>[12]https://huggingface.co/OpenPipe/mistral-ft-optimized-1218</p> 
+<p>[13]https://huggingface.co/mlabonne/NeuralHermes-2.5-Mistral-7B</p> 
+<p>[14]https://huggingface.co/mlabonne/NeuralPipe-7B-slerp</p> 
+<p>[15]https://arxiv.org/abs/2306.01708</p> 
+<p>[16]https://huggingface.co/Weyaxi/OpenHermes-2.5-neural-chat-7b-v3-1-7B</p> 
+<p>[17]https://huggingface.co/mlabonne/NeuralPipe-7B-ties</p> 
+<p>[18]https://arxiv.org/abs/2311.03099</p> 
+<p>[19]https://github.com/cg123/mergekit/issues/26</p> 
+<p>[20]https://huggingface.co/mlabonne/Daredevil-7B</p> 
+<p>[21]https://huggingface.co/zyh3826/GML-Mistral-merged-v1</p> 
+<p>[22]https://huggingface.co/mlabonne/NeuralPipe-9B-merged</p> 
+<p>[23]https://huggingface.co/AIDC-ai-business/Marcoroni-7B-v3</p> 
+<p>[24]https://huggingface.co/EmbeddedLLM/Mistral-7B-Merge-14-v0.1</p> 
+<p>[25]https://huggingface.co/mlabonne/Marcoro14-7B-slerp</p> 
+<p>[26]https://chat.lmsys.org/</p> 
+<p>[27]https://github.com/teknium1/LLM-Benchmark-Logs</p> 
+<p>[28]https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard</p> 
+<p>[29]https://github.com/mlabonne/llm-autoeval</p> 
+<p>[30]https://huggingface.co/teknium/OpenHermes-2.5-Mistral-7B</p> 
+<p><strong>原文链接：</strong></p> 
+<p>https://towardsdatascience.com/merge-large-language-models-with-mergekit-2118fb392b54</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3a18189bcbdfb3937e6606403527ed28/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">每天一个数据分析题（一百六十四）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b91e04830843906eaebe377249541337/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">一些内网渗透总结</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

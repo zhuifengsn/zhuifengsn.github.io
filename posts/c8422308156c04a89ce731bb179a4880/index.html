@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>windows版tinyhttpd - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="windows版tinyhttpd" />
+<meta property="og:description" content="单线程，同步阻塞的socket。去掉了cgi的功能，只处理静态文件请求，改了accept_request中的几处bug。
+/* J. David&#39;s webserver */ /* This is a simple webserver. * Created November 1999 by J. David Blackstone. * CSE 4344 (Network concepts), Prof. Zeigler * University of Texas at Arlington */ /* This program compiles for Sparc Solaris 2.6. * To compile for Linux: * 1) Comment out the #include &lt;pthread.h&gt; line. * 2) Comment out the line that defines the variable newthread. * 3) Comment out the two lines that run pthread_create()." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/c8422308156c04a89ce731bb179a4880/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2015-02-07T16:47:23+08:00" />
+<meta property="article:modified_time" content="2015-02-07T16:47:23+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">windows版tinyhttpd</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>单线程，同步阻塞的socket。去掉了cgi的功能，只处理静态文件请求，改了accept_request中的几处bug。</p> 
+<p></p> 
+<pre><code class="language-cpp">/* J. David's webserver */
+/* This is a simple webserver.
+ * Created November 1999 by J. David Blackstone.
+ * CSE 4344 (Network concepts), Prof. Zeigler
+ * University of Texas at Arlington
+ */
+/* This program compiles for Sparc Solaris 2.6.
+ * To compile for Linux:
+ *  1) Comment out the #include &lt;pthread.h&gt; line.
+ *  2) Comment out the line that defines the variable newthread.
+ *  3) Comment out the two lines that run pthread_create().
+ *  4) Uncomment the line that runs accept_request().
+ *  5) Remove -lsocket from the Makefile.
+ */
+#include &lt;WinSock2.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;ctype.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;stdlib.h&gt;
+
+#pragma warning(disable : 4267)
+
+#define ISspace(x) isspace((int)(x))
+
+#define SERVER_STRING "Server: bdsoftmgr httpd/0.1.0\r\n"
+
+void accept_request(SOCKET);
+void bad_request(int);
+void cat(SOCKET, FILE *);
+void cannot_execute(int);
+void error_die(const char *);
+void execute_cgi(int, const char *, const char *, const char *);
+int get_line(SOCKET, char *, int);
+void headers(SOCKET, const char *);
+void not_found(SOCKET);
+void serve_file(SOCKET, const char *);
+SOCKET startup(u_short *);
+void unimplemented(SOCKET);
+void discardheaders(SOCKET);
+
+/**********************************************************************/
+/* A request has caused a call to accept() on the server port to
+ * return.  Process the request appropriately.
+ * Parameters: the socket connected to the client */
+/**********************************************************************/
+void accept_request(SOCKET client)
+{
+ char buf[1024];
+ int numchars;
+ char method[255];
+ char url[255];
+ char path[512];
+ size_t i, j;
+ struct stat st;
+
+ char *query_string = NULL;
+
+ numchars = get_line(client, buf, sizeof(buf));
+ i = 0; j = 0; 
+ while (j &lt; numchars &amp;&amp; !ISspace(buf[j]) &amp;&amp; (i &lt; sizeof(method) - 1))
+ {
+  method[i] = buf[j];
+  i++; j++;
+ }
+ method[i] = '\0';
+
+ if (_stricmp(method, "GET") != 0)		// 只处理GET请求
+ {
+  if (numchars &gt; 0)
+	  discardheaders(client);
+  
+  unimplemented(client);
+  closesocket(client);
+  return;
+ }
+
+ i = 0;
+ while (ISspace(buf[j]) &amp;&amp; (j &lt; sizeof(buf)))
+  j++;
+ while (!ISspace(buf[j]) &amp;&amp; (i &lt; sizeof(url) - 1) &amp;&amp; (j &lt; sizeof(buf)))
+ {
+  url[i] = buf[j];
+  i++; j++;
+ }
+ url[i] = '\0';
+
+ if (_stricmp(method, "GET") == 0)
+ {
+  query_string = url;
+  while ((*query_string != '?') &amp;&amp; (*query_string != '\0'))
+   query_string++;
+  if (*query_string == '?')
+  {
+   *query_string = '\0';
+   query_string++;
+  }
+ }
+
+ sprintf_s(path, 512, "htdocs%s", url);
+ if (path[strlen(path) - 1] == '/')
+  strcat_s(path, 512, "index.html");
+ if (stat(path, &amp;st) == -1) {
+  if (numchars &gt; 0)
+   discardheaders(client);
+  not_found(client);
+ }
+ else
+ {
+  if ((st.st_mode &amp; S_IFMT) == S_IFDIR)
+   strcat_s(path, 512, "/index.html");
+  serve_file(client, path);
+ }
+
+ closesocket(client);
+}
+
+/**********************************************************************/
+/* Inform the client that a request it has made has a problem.
+ * Parameters: client socket */
+/**********************************************************************/
+void bad_request(int client)
+{
+ char buf[1024];
+
+ sprintf_s(buf, 1024, "HTTP/1.0 400 BAD REQUEST\r\n");
+ send(client, buf, sizeof(buf), 0);
+ sprintf_s(buf, 1024, "Content-type: text/html\r\n");
+ send(client, buf, sizeof(buf), 0);
+ sprintf_s(buf, 1024, "\r\n");
+ send(client, buf, sizeof(buf), 0);
+ sprintf_s(buf, 1024, "&lt;P&gt;Your browser sent a bad request, ");
+ send(client, buf, sizeof(buf), 0);
+ sprintf_s(buf, 1024, "such as a POST without a Content-Length.\r\n");
+ send(client, buf, sizeof(buf), 0);
+}
+
+/**********************************************************************/
+/* Put the entire contents of a file out on a socket.  This function
+ * is named after the UNIX "cat" command, because it might have been
+ * easier just to do something like pipe, fork, and exec("cat").
+ * Parameters: the client socket descriptor
+ *             FILE pointer for the file to cat */
+/**********************************************************************/
+void cat(SOCKET client, FILE *resource)
+{
+ char buf[1024];
+
+ fgets(buf, sizeof(buf), resource);
+ while (!feof(resource))
+ {
+  send(client, buf, strlen(buf), 0);
+  fgets(buf, sizeof(buf), resource);
+ }
+}
+
+/**********************************************************************/
+/* Inform the client that a CGI script could not be executed.
+ * Parameter: the client socket descriptor. */
+/**********************************************************************/
+void cannot_execute(int client)
+{
+ char buf[1024];
+
+ sprintf_s(buf, 1024, "HTTP/1.0 500 Internal Server Error\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "Content-type: text/html\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;P&gt;Error prohibited CGI execution.\r\n");
+ send(client, buf, strlen(buf), 0);
+}
+
+/**********************************************************************/
+/* Print out an error message with perror() (for system errors; based
+ * on value of errno, which indicates system call errors) and exit the
+ * program indicating an error. */
+/**********************************************************************/
+void error_die(const char *sc)
+{
+ perror(sc);
+ exit(1);
+}
+
+/**********************************************************************/
+/* Get a line from a socket, whether the line ends in a newline,
+ * carriage return, or a CRLF combination.  Terminates the string read
+ * with a null character.  If no newline indicator is found before the
+ * end of the buffer, the string is terminated with a null.  If any of
+ * the above three line terminators is read, the last character of the
+ * string will be a linefeed and the string will be terminated with a
+ * null character.
+ * Parameters: the socket descriptor
+ *             the buffer to save the data in
+ *             the size of the buffer
+ * Returns: the number of bytes stored (excluding null) */
+/**********************************************************************/
+int get_line(SOCKET sock, char *buf, int size)
+{
+ int i = 0;
+ char c = '\0';
+ int n;
+
+ while ((i &lt; size - 1) &amp;&amp; (c != '\n'))
+ {
+  n = recv(sock, &amp;c, 1, 0);
+  /* DEBUG printf("%02X\n", c); */
+  if (n &gt; 0)
+  {
+   if (c == '\r')
+   {
+    n = recv(sock, &amp;c, 1, MSG_PEEK);
+    /* DEBUG printf("%02X\n", c); */
+    if ((n &gt; 0) &amp;&amp; (c == '\n'))
+     recv(sock, &amp;c, 1, 0);
+    else
+     c = '\n';
+   }
+   buf[i] = c;
+   i++;
+  }
+  else
+   c = '\n';
+ }
+ buf[i] = '\0';
+ 
+ return(i);
+}
+
+/**********************************************************************/
+/* Return the informational HTTP headers about a file. */
+/* Parameters: the socket to print the headers on
+ *             the name of the file */
+/**********************************************************************/
+void headers(SOCKET client, const char *filename)
+{
+ char buf[1024];
+ (void)filename;  /* could use filename to determine file type */
+
+ strcpy_s(buf, 1024, "HTTP/1.0 200 OK\r\n");
+ send(client, buf, strlen(buf), 0);
+ strcpy_s(buf, 1024, SERVER_STRING);
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "Content-Type: text/html\r\n");
+ send(client, buf, strlen(buf), 0);
+ strcpy_s(buf, 1024, "\r\n");
+ send(client, buf, strlen(buf), 0);
+}
+
+/**********************************************************************/
+/* Give a client a 404 not found status message. */
+/**********************************************************************/
+void not_found(SOCKET client)
+{
+ char buf[1024];
+
+ sprintf_s(buf, 1024, "HTTP/1.0 404 NOT FOUND\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, SERVER_STRING);
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "Content-Type: text/html\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;HTML&gt;&lt;TITLE&gt;Not Found&lt;/TITLE&gt;\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;BODY&gt;&lt;P&gt;The server could not fulfill\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "your request because the resource specified\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "is unavailable or nonexistent.\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;/BODY&gt;&lt;/HTML&gt;\r\n");
+ send(client, buf, strlen(buf), 0);
+}
+
+/**********************************************************************/
+/* Send a regular file to the client.  Use headers, and report
+ * errors to client if they occur.
+ * Parameters: a pointer to a file structure produced from the socket
+ *              file descriptor
+ *             the name of the file to serve */
+/**********************************************************************/
+void serve_file(SOCKET client, const char *filename)
+{
+ FILE *resource = NULL;
+ char buf[1024];
+
+ discardheaders(client);
+ fopen_s(&amp;resource, filename, "r");
+ if (resource == NULL)
+  not_found(client);
+ else
+ {
+  headers(client, filename);
+  cat(client, resource);
+ }
+ fclose(resource);
+}
+
+
+/**********************************************************************/
+/* Send a regular file to the client.  Use headers, and report
+ * errors to client if they occur.
+ * Parameters: a pointer to a file structure produced from the socket
+ *              file descriptor
+ *             the name of the file to serve */
+/**********************************************************************/
+void discardheaders(SOCKET client)
+{
+	char buf[1024];
+	int numchars = 1;
+	while ((numchars &gt; 0) &amp;&amp; strcmp("\n", buf))  /* read &amp; discard headers */
+		numchars = get_line(client, buf, sizeof(buf));
+}
+
+/**********************************************************************/
+/* This function starts the process of listening for web connections
+ * on a specified port.  If the port is 0, then dynamically allocate a
+ * port and modify the original port variable to reflect the actual
+ * port.
+ * Parameters: pointer to variable containing the port to connect on
+ * Returns: the socket */
+/**********************************************************************/
+SOCKET startup(u_short *port)
+{
+ SOCKET httpd = 0;
+ struct sockaddr_in name;
+
+ httpd = socket(AF_INET, SOCK_STREAM, 0);
+ if (httpd == INVALID_SOCKET)
+  error_die("socket");
+ memset(&amp;name, 0, sizeof(name));
+ name.sin_family = AF_INET;
+ name.sin_port = htons(*port);
+ name.sin_addr.s_addr = inet_addr("127.0.0.1");
+ if (bind(httpd, (struct sockaddr *)&amp;name, sizeof(name)) &lt; 0)
+  error_die("bind");
+ if (*port == 0)  /* if dynamically allocating a port */
+ {
+  int namelen = sizeof(name);
+  if (getsockname(httpd, (struct sockaddr *)&amp;name, &amp;namelen) == -1)
+   error_die("getsockname");
+  *port = ntohs(name.sin_port);
+ }
+ if (listen(httpd, 5) &lt; 0)
+  error_die("listen");
+ return(httpd);
+}
+
+/**********************************************************************/
+/* Inform the client that the requested web method has not been
+ * implemented.
+ * Parameter: the client socket */
+/**********************************************************************/
+void unimplemented(SOCKET client)
+{
+ char buf[1024];
+
+ sprintf_s(buf, 1024, "HTTP/1.0 501 Method Not Implemented\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, SERVER_STRING);
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "Content-Type: text/html\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Method Not Implemented\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;/TITLE&gt;&lt;/HEAD&gt;\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;BODY&gt;&lt;P&gt;HTTP request method not supported.\r\n");
+ send(client, buf, strlen(buf), 0);
+ sprintf_s(buf, 1024, "&lt;/BODY&gt;&lt;/HTML&gt;\r\n");
+ send(client, buf, strlen(buf), 0);
+}
+
+/**********************************************************************/
+int main(void)
+{
+ SOCKET server_sock = INVALID_SOCKET;
+ u_short port = 0;
+ SOCKET client_sock = -1;
+ struct sockaddr_in client_name;
+ int client_name_len = sizeof(client_name);
+
+ // 初始化socket
+ WSADATA wsaData;
+ WSAStartup(MAKEWORD(2,2), &amp;wsaData);
+
+ server_sock = startup(&amp;port);
+ printf("httpd running on port %d\n", port);
+
+ while (1)
+ {
+  client_sock = accept(server_sock,
+                       (struct sockaddr *)&amp;client_name,
+                       &amp;client_name_len);
+  if (client_sock == INVALID_SOCKET)
+   error_die("accept");
+  accept_request(client_sock);		// 单线程模式
+ }
+
+ closesocket(server_sock);
+
+ WSACleanup();
+ return(0);
+}</code></pre> 
+<br> 
+<br> 
+<p></p> 
+<p><br> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/45989083ea99ddc071f9aed08600a683/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">在Linux环境下安装多处理器（SMP）核心</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/442c6abe2d21bf6c4581d56a80bfb31a/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">_read函数的一个陷阱</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

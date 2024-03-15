@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>单片机——LCD1602 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="单片机——LCD1602" />
+<meta property="og:description" content="1.基础知识介绍
+1.1、为什么叫1602
+因为可以显示两行，一行16个
+1.2、LCD1602管脚认识
+编号符号引脚说明1VSS电源地2VDD电源正极3VEE液晶显示偏压信号4RS数据/命令选择（H/L）5R/W读/写选择（H/L）6E使能端7D0数据8D1数据9D2数据10D3数据11D4数据12D5数据13D6数据14D7数据 1.3、LCD1602关键性指令设置
+1.3.1、清屏指令
+管脚对应二进制RS0R/W0DB70DB60DB50DB40DB30DB20DB10DB01 功能：
+&lt;1&gt; 清除液晶显示器，即将 DDRAM 的内容全部填入&#34;空白&#34;的 ASCII
+码 20H;
+&lt;2&gt; 光标归位，即将光标撤回液晶显示屏的左上方;
+&lt;3&gt; 将地址计数器(AC)的值设为 0。
+1.3.2、模式选择指令
+管脚对应二进制RS0R/W0DB70DB60DB50DB40DB30DB21DB1I/DDB0S 功能：
+设定每次定入 1 位数据后光标的移位方向 ， 并且设定每次写入的一个字符是否移动。参数设定的情况如下所示：
+位名设置I/D0=写入新数据后光标左移I/D1=写入新数据后光标右移S0=写入新数据后显示屏不移动S1=写入新数据后显示屏整体右移 1 个字符 1.3.3、显示开关控制指令
+管脚对应二进制RS0R/W0DB70DB60DB50DB40DB31DB2DDB1CDB0B 功能：
+功能：控制显示器开/关、光标显示/关闭以及光标是否闪烁。参数设定的情况如下：
+位名设置D0=显示功能关D1=显示功能开C0=无光标C1=有光标B0=光标闪烁B1=光标不闪烁 设置完成之后，要判断液晶模块是否处于忙状态。
+1.3.4功能设置指令
+管脚对应二进制RS0R/W0DB70DB60DB51DB4DLDB3NDB2FDB1XDB0X 功能：设定数据总线位数、显示的行数及字型。参数设定的情况如下：
+位名设置DL0=数据总线为 4 位DL1=数据总线为 8 位N0=显示 1 行N1=显示 2 行F0=5×7 点阵/每字符F1=5×10 点阵/每字符 0x38:00111000，就是数据总线8位，显示两行，以5×7 点阵/每字符 进行显示。
+2、程序解释
+2.1、宏定义
+头文件，宏定义，根据连接定义端口
+#include &lt;reg52.h&gt; #include &lt;intrins.h&gt; //定义端口 sbit duan=P2^6; sbit wei=P2^7; sbit RS=P1^0; sbit RW=P1^1; sbit E=P2^5; #define uchar unsigned char #define uint unsigned int #define Data P0 //	数据接在P0 #define	RS_commad	RS=0 //命令 #define	RS_data	RS=1 //数据 #define	RS_write	RW=0	//写 #define	RS_read	RW=1	//读 #define	E_close	E=0	//使能关 #define	E_open	E=1	//使能开	2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/44a27f810d33bad6b3798b9dba9b6891/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-12T14:45:50+08:00" />
+<meta property="article:modified_time" content="2023-03-12T14:45:50+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">单片机——LCD1602</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p><strong>1.基础知识介绍</strong><br> 1.1、为什么叫1602<br> 因为可以显示两行，一行16个<br> 1.2、LCD1602管脚认识<br> <img src="https://images2.imgbox.com/b6/43/obnSXnRM_o.png" alt="在这里插入图片描述"></p> 
+<table><thead><tr><th>编号</th><th>符号</th><th>引脚说明</th></tr></thead><tbody><tr><td>1</td><td>VSS</td><td>电源地</td></tr><tr><td>2</td><td>VDD</td><td>电源正极</td></tr><tr><td>3</td><td>VEE</td><td>液晶显示偏压信号</td></tr><tr><td>4</td><td>RS</td><td>数据/命令选择（H/L）</td></tr><tr><td>5</td><td>R/W</td><td>读/写选择（H/L）</td></tr><tr><td>6</td><td>E</td><td>使能端</td></tr><tr><td>7</td><td>D0</td><td>数据</td></tr><tr><td>8</td><td>D1</td><td>数据</td></tr><tr><td>9</td><td>D2</td><td>数据</td></tr><tr><td>10</td><td>D3</td><td>数据</td></tr><tr><td>11</td><td>D4</td><td>数据</td></tr><tr><td>12</td><td>D5</td><td>数据</td></tr><tr><td>13</td><td>D6</td><td>数据</td></tr><tr><td>14</td><td>D7</td><td>数据</td></tr></tbody></table> 
+<p>1.3、LCD1602关键性指令设置<br> 1.3.1、清屏指令</p> 
+<table><thead><tr><th>管脚</th><th>对应二进制</th></tr></thead><tbody><tr><td>RS</td><td>0</td></tr><tr><td>R/W</td><td>0</td></tr><tr><td>DB7</td><td>0</td></tr><tr><td>DB6</td><td>0</td></tr><tr><td>DB5</td><td>0</td></tr><tr><td>DB4</td><td>0</td></tr><tr><td>DB3</td><td>0</td></tr><tr><td>DB2</td><td>0</td></tr><tr><td>DB1</td><td>0</td></tr><tr><td>DB0</td><td>1</td></tr></tbody></table> 
+<p>功能：</p> 
+<p>&lt;1&gt; 清除液晶显示器，即将 DDRAM 的内容全部填入"空白"的 ASCII<br> 码 20H;<br> &lt;2&gt; 光标归位，即将光标撤回液晶显示屏的左上方;<br> &lt;3&gt; 将地址计数器(AC)的值设为 0。</p> 
+<p>1.3.2、模式选择指令</p> 
+<table><thead><tr><th>管脚</th><th>对应二进制</th></tr></thead><tbody><tr><td>RS</td><td>0</td></tr><tr><td>R/W</td><td>0</td></tr><tr><td>DB7</td><td>0</td></tr><tr><td>DB6</td><td>0</td></tr><tr><td>DB5</td><td>0</td></tr><tr><td>DB4</td><td>0</td></tr><tr><td>DB3</td><td>0</td></tr><tr><td>DB2</td><td>1</td></tr><tr><td>DB1</td><td>I/D</td></tr><tr><td>DB0</td><td>S</td></tr></tbody></table> 
+<p>功能：<br> 设定每次定入 1 位数据后光标的移位方向 ， 并且设定每次写入的一个字符是否移动。参数设定的情况如下所示：</p> 
+<table><thead><tr><th>位名</th><th>设置</th></tr></thead><tbody><tr><td>I/D</td><td>0=写入新数据后光标左移</td></tr><tr><td>I/D</td><td>1=写入新数据后光标右移</td></tr><tr><td>S</td><td>0=写入新数据后显示屏不移动</td></tr><tr><td>S</td><td>1=写入新数据后显示屏整体右移 1 个字符</td></tr></tbody></table> 
+<p>1.3.3、显示开关控制指令</p> 
+<table><thead><tr><th>管脚</th><th>对应二进制</th></tr></thead><tbody><tr><td>RS</td><td>0</td></tr><tr><td>R/W</td><td>0</td></tr><tr><td>DB7</td><td>0</td></tr><tr><td>DB6</td><td>0</td></tr><tr><td>DB5</td><td>0</td></tr><tr><td>DB4</td><td>0</td></tr><tr><td>DB3</td><td>1</td></tr><tr><td>DB2</td><td>D</td></tr><tr><td>DB1</td><td>C</td></tr><tr><td>DB0</td><td>B</td></tr></tbody></table> 
+<p>功能：<br> 功能：控制显示器开/关、光标显示/关闭以及光标是否闪烁。参数设定的情况如下：</p> 
+<table><thead><tr><th>位名</th><th>设置</th></tr></thead><tbody><tr><td>D</td><td>0=显示功能关</td></tr><tr><td>D</td><td>1=显示功能开</td></tr><tr><td>C</td><td>0=无光标</td></tr><tr><td>C</td><td>1=有光标</td></tr><tr><td>B</td><td>0=光标闪烁</td></tr><tr><td>B</td><td>1=光标不闪烁</td></tr></tbody></table> 
+<p>设置完成之后，要判断液晶模块是否处于忙状态。</p> 
+<p>1.3.4功能设置指令</p> 
+<table><thead><tr><th>管脚</th><th>对应二进制</th></tr></thead><tbody><tr><td>RS</td><td>0</td></tr><tr><td>R/W</td><td>0</td></tr><tr><td>DB7</td><td>0</td></tr><tr><td>DB6</td><td>0</td></tr><tr><td>DB5</td><td>1</td></tr><tr><td>DB4</td><td>DL</td></tr><tr><td>DB3</td><td>N</td></tr><tr><td>DB2</td><td>F</td></tr><tr><td>DB1</td><td>X</td></tr><tr><td>DB0</td><td>X</td></tr></tbody></table> 
+<p>功能：设定数据总线位数、显示的行数及字型。参数设定的情况如下：</p> 
+<table><thead><tr><th>位名</th><th>设置</th></tr></thead><tbody><tr><td>DL</td><td>0=数据总线为 4 位</td></tr><tr><td>DL</td><td>1=数据总线为 8 位</td></tr><tr><td>N</td><td>0=显示 1 行</td></tr><tr><td>N</td><td>1=显示 2 行</td></tr><tr><td>F</td><td>0=5×7 点阵/每字符</td></tr><tr><td>F</td><td>1=5×10 点阵/每字符</td></tr></tbody></table> 
+<p>0x38:00111000，就是数据总线8位，显示两行，以5×7 点阵/每字符 进行显示。</p> 
+<p><strong>2、程序解释</strong><br> 2.1、宏定义<br> 头文件，宏定义，根据连接定义端口<br> <img src="https://images2.imgbox.com/31/3e/BuuHDgow_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-javascript">#include <span class="token operator">&lt;</span>reg52<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+#include <span class="token operator">&lt;</span>intrins<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+
+
+<span class="token comment">//定义端口</span>
+sbit duan<span class="token operator">=</span><span class="token constant">P2</span><span class="token operator">^</span><span class="token number">6</span><span class="token punctuation">;</span>
+sbit wei<span class="token operator">=</span><span class="token constant">P2</span><span class="token operator">^</span><span class="token number">7</span><span class="token punctuation">;</span>
+
+sbit <span class="token constant">RS</span><span class="token operator">=</span><span class="token constant">P1</span><span class="token operator">^</span><span class="token number">0</span><span class="token punctuation">;</span>
+sbit <span class="token constant">RW</span><span class="token operator">=</span><span class="token constant">P1</span><span class="token operator">^</span><span class="token number">1</span><span class="token punctuation">;</span>
+sbit <span class="token constant">E</span><span class="token operator">=</span><span class="token constant">P2</span><span class="token operator">^</span><span class="token number">5</span><span class="token punctuation">;</span>
+
+#define uchar unsigned char
+#define uint unsigned int
+#define Data <span class="token constant">P0</span> <span class="token comment">//	  数据接在P0</span>
+
+#define	  RS_commad	 <span class="token constant">RS</span><span class="token operator">=</span><span class="token number">0</span> 	<span class="token comment">//命令</span>
+#define	  RS_data	 <span class="token constant">RS</span><span class="token operator">=</span><span class="token number">1</span> 	<span class="token comment">//数据</span>
+#define	  RS_write	 <span class="token constant">RW</span><span class="token operator">=</span><span class="token number">0</span>	<span class="token comment">//写</span>
+#define	  RS_read	 <span class="token constant">RW</span><span class="token operator">=</span><span class="token number">1</span>	<span class="token comment">//读</span>
+#define	  E_close	 <span class="token constant">E</span><span class="token operator">=</span><span class="token number">0</span>	<span class="token comment">//使能关</span>
+#define	  E_open	 <span class="token constant">E</span><span class="token operator">=</span><span class="token number">1</span>	<span class="token comment">//使能开	</span>
+</code></pre> 
+<p>2.2 、延时部分（具体解释见之前的博客）</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">delay</span><span class="token punctuation">(</span><span class="token parameter">uint k</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ uint i<span class="token punctuation">,</span>j<span class="token punctuation">;</span>
+ <span class="token keyword">for</span><span class="token punctuation">(</span>i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>i<span class="token operator">&lt;</span>k<span class="token punctuation">;</span>i<span class="token operator">++</span><span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+	 <span class="token keyword">for</span><span class="token punctuation">(</span>j<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>j<span class="token operator">&lt;</span><span class="token number">113</span><span class="token punctuation">;</span>j<span class="token operator">++</span><span class="token punctuation">)</span>
+	  <span class="token punctuation">{<!-- --></span>
+	  <span class="token punctuation">;</span>
+	  <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2.3、数码管关闭程序<br> 在1602程序中需要调用数码管的程序，是因为其中的cmg函数用于关闭数码管，在LCD控制时需要先关闭数码管，避免两者的干扰。</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">cmg</span> <span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+duan<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+wei<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+<span class="token constant">P0</span><span class="token operator">=</span><span class="token number">0x00</span><span class="token punctuation">;</span>
+duan<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+wei<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>	  
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2.4、写命令<br> 2.4.1、程序里面用到了延时，原因是在写命令时，需要给液晶一定的响应时间。如果没有延时，液晶可能无法正确地接收到指令，从而无法正常显示。一般情况下，液晶的响应时间为几微秒至几毫秒不等，具体时间取决于液晶型号和工作状态。这里的5毫秒延时是为了确保液晶能够正确地接收到指令。<br> 2.4.2、nop<br> <em>nop</em>(); 是汇编指令，表示“空操作（no operation）”，也就是不执行任何操作，只是占用一个CPU周期。在这个代码中，可能是为了等待指令执行完毕，延长执行时间，确保程序的正确性。</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">writecom</span> <span class="token punctuation">(</span><span class="token parameter">uchar command</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span>
+ RS_command<span class="token punctuation">;</span>	 
+ RW_write<span class="token punctuation">;</span>
+ E_open<span class="token punctuation">;</span>
+ Data<span class="token operator">=</span>data<span class="token punctuation">;</span>
+ <span class="token function">_nop_</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  E_close<span class="token punctuation">;</span> 	 
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2.5、写数据<br> 与上面写命令逻辑是相同的</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">writedata</span> <span class="token punctuation">(</span><span class="token parameter">uchar da</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ RS_data<span class="token punctuation">;</span>	 
+ RW_write<span class="token punctuation">;</span>
+ E_open<span class="token punctuation">;</span>
+ Data<span class="token operator">=</span>da<span class="token punctuation">;</span>
+ <span class="token function">_nop_</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  E_close<span class="token punctuation">;</span>
+ 	 
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2.6、写字符<br> 先进行写命令，让它写在哪一行，之后写入数据。x,y代表横纵坐标</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">writechar</span><span class="token punctuation">(</span><span class="token parameter">uchar x<span class="token punctuation">,</span>uchar y<span class="token punctuation">,</span>uchar c</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token keyword">if</span> <span class="token punctuation">(</span>y<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token punctuation">{<!-- --></span>
+   <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x80</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//10000000,写在第一行</span>
+ <span class="token punctuation">}</span>
+ <span class="token keyword">else</span>
+ <span class="token punctuation">{<!-- --></span>
+  <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0xc0</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token punctuation">}</span>
+
+  <span class="token function">writedata</span><span class="token punctuation">(</span>c<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2.7、写字符串<br> 与写字符的区别在于，字符串是很多构成的所以说要进行循环，不断写，直到写完，跳出循环。</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">writestring</span><span class="token punctuation">(</span><span class="token parameter">uchar x<span class="token punctuation">,</span>uchar y<span class="token punctuation">,</span>uchar <span class="token operator">*</span>s</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token keyword">if</span> <span class="token punctuation">(</span>y<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token punctuation">{<!-- --></span>
+   <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x80</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//10000000,写在第一行</span>
+ <span class="token punctuation">}</span>
+ <span class="token keyword">else</span>
+ <span class="token punctuation">{<!-- --></span>
+  <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0xc0</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token punctuation">}</span>
+  
+  <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token operator">*</span>s<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+   <span class="token function">writedata</span><span class="token punctuation">(</span><span class="token operator">*</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   s<span class="token operator">++</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2.8、初始化<br> 主要参照我上面列出的表格，确定LCD的显示模式，例如设置光标，以及光标移不移动，等等。<br> 设置显示模式需要发送三次指令0x38，每次发送可以确保指令被正确接收。0x38表示设置显示模式为8位数据总线，2行显示，5x7点阵字符，这是一种常用的基本显示模式。</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token function">cmg</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x38</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//设置显示模式</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x38</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x38</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x0e</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//显示开关控制，显示功能开，有光标,	光标不闪烁</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x06</span><span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">// 写入数据光标右移，显示屏不移动</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x01</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//清屏</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>2.9、主函数<br> 进行初始化，调用写字符和字符串进行写入显示</p> 
+<pre><code class="prism language-javascript"><span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+<span class="token function">Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token function">writechar</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token string">'d'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//第一行1位置上写字符d</span>
+ <span class="token function">writechar</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token string">'a'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">// 第一行位2置上写字符a</span>
+
+  <span class="token function">writestring</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token string">"npianji"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">writestring</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token string">"tainanle"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>3、完整代码</strong></p> 
+<pre><code class="prism language-javascript">#include <span class="token operator">&lt;</span>reg52<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+#include <span class="token operator">&lt;</span>intrins<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+
+
+<span class="token comment">//定义端口</span>
+sbit duan<span class="token operator">=</span><span class="token constant">P2</span><span class="token operator">^</span><span class="token number">6</span><span class="token punctuation">;</span>
+sbit wei<span class="token operator">=</span><span class="token constant">P2</span><span class="token operator">^</span><span class="token number">7</span><span class="token punctuation">;</span>
+
+sbit <span class="token constant">RS</span><span class="token operator">=</span><span class="token constant">P1</span><span class="token operator">^</span><span class="token number">0</span><span class="token punctuation">;</span>
+sbit <span class="token constant">RW</span><span class="token operator">=</span><span class="token constant">P1</span><span class="token operator">^</span><span class="token number">1</span><span class="token punctuation">;</span>
+sbit <span class="token constant">E</span><span class="token operator">=</span><span class="token constant">P2</span><span class="token operator">^</span><span class="token number">5</span><span class="token punctuation">;</span>
+
+#define uchar unsigned char
+#define uint unsigned int
+#define Data <span class="token constant">P0</span> <span class="token comment">//	  数据接在P0</span>
+
+#define	  RS_command	 <span class="token constant">RS</span><span class="token operator">=</span><span class="token number">0</span> 	<span class="token comment">//命令</span>
+#define	  RS_data	 <span class="token constant">RS</span><span class="token operator">=</span><span class="token number">1</span> 	<span class="token comment">//数据</span>
+#define	  RW_write	 <span class="token constant">RW</span><span class="token operator">=</span><span class="token number">0</span>	<span class="token comment">//写</span>
+#define	  RW_read	 <span class="token constant">RW</span><span class="token operator">=</span><span class="token number">1</span>	<span class="token comment">//读</span>
+#define	  E_close	 <span class="token constant">E</span><span class="token operator">=</span><span class="token number">0</span>	<span class="token comment">//使能关</span>
+#define	  E_open	 <span class="token constant">E</span><span class="token operator">=</span><span class="token number">1</span>	<span class="token comment">//使能开	</span>
+
+
+<span class="token comment">//延时部分</span>
+<span class="token keyword">void</span> <span class="token function">delay</span><span class="token punctuation">(</span><span class="token parameter">uint k</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ uint i<span class="token punctuation">,</span>j<span class="token punctuation">;</span>
+ <span class="token keyword">for</span><span class="token punctuation">(</span>i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>i<span class="token operator">&lt;</span>k<span class="token punctuation">;</span>i<span class="token operator">++</span><span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+	 <span class="token keyword">for</span><span class="token punctuation">(</span>j<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>j<span class="token operator">&lt;</span><span class="token number">113</span><span class="token punctuation">;</span>j<span class="token operator">++</span><span class="token punctuation">)</span>
+	  <span class="token punctuation">{<!-- --></span>
+	  <span class="token punctuation">;</span>
+	  <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token comment">//数码管部分,注意是关数码管</span>
+<span class="token keyword">void</span> <span class="token function">cmg</span> <span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+duan<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>		  <span class="token comment">//段开启</span>
+wei<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+<span class="token constant">P0</span><span class="token operator">=</span><span class="token number">0x00</span><span class="token punctuation">;</span>
+duan<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+wei<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>	  
+<span class="token punctuation">}</span>
+
+<span class="token comment">//写命令</span>
+<span class="token keyword">void</span> <span class="token function">writecom</span> <span class="token punctuation">(</span><span class="token parameter">uchar command</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ RS_command<span class="token punctuation">;</span>	 
+ RW_write<span class="token punctuation">;</span>
+ E_open<span class="token punctuation">;</span>
+ Data<span class="token operator">=</span>command<span class="token punctuation">;</span>
+ <span class="token function">_nop_</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  E_close<span class="token punctuation">;</span>	 
+<span class="token punctuation">}</span>
+
+<span class="token comment">//写数据</span>
+<span class="token keyword">void</span> <span class="token function">writedata</span> <span class="token punctuation">(</span><span class="token parameter">uchar da</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ RS_data<span class="token punctuation">;</span>	 
+ RW_write<span class="token punctuation">;</span>
+ E_open<span class="token punctuation">;</span>
+ Data<span class="token operator">=</span>da<span class="token punctuation">;</span>
+ <span class="token function">_nop_</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  E_close<span class="token punctuation">;</span>
+ 	 
+<span class="token punctuation">}</span>
+
+<span class="token comment">//写字符  (确定坐标)</span>
+<span class="token keyword">void</span> <span class="token function">writechar</span><span class="token punctuation">(</span><span class="token parameter">uchar x<span class="token punctuation">,</span>uchar y<span class="token punctuation">,</span>uchar c</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token keyword">if</span> <span class="token punctuation">(</span>y<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token punctuation">{<!-- --></span>
+   <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x80</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//10000000,写在第一行</span>
+ <span class="token punctuation">}</span>
+ <span class="token keyword">else</span>
+ <span class="token punctuation">{<!-- --></span>
+  <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0xc0</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token punctuation">}</span>
+
+  <span class="token function">writedata</span><span class="token punctuation">(</span>c<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token comment">//写字符串</span>
+<span class="token keyword">void</span> <span class="token function">writestring</span><span class="token punctuation">(</span><span class="token parameter">uchar x<span class="token punctuation">,</span>uchar y<span class="token punctuation">,</span>uchar <span class="token operator">*</span>s</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token keyword">if</span> <span class="token punctuation">(</span>y<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token punctuation">{<!-- --></span>
+   <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x80</span> <span class="token operator">+</span> x<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//10000000,写在第一行</span>
+ <span class="token punctuation">}</span>
+ <span class="token keyword">else</span>
+ <span class="token punctuation">{<!-- --></span>
+  <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0xc0</span><span class="token operator">+</span>x<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token punctuation">}</span>
+  
+  <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token operator">*</span>s<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+   <span class="token function">writedata</span><span class="token punctuation">(</span><span class="token operator">*</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   s <span class="token operator">++</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token comment">//初始化</span>
+<span class="token keyword">void</span> <span class="token function">Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+ <span class="token function">cmg</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">15</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x38</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//设置显示模式</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x38</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x38</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x0e</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//显示开关控制，显示功能开，有光标,	光标不闪烁</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x06</span><span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">// 写入数据光标右移，显示屏不移动</span>
+ <span class="token function">writecom</span><span class="token punctuation">(</span><span class="token number">0x01</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//清屏</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token comment">//主函数</span>
+<span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+<span class="token function">Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  <span class="token function">writestring</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token string">"danpianji"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">writestring</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token string">"tainanle"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><strong>4、运行结果</strong><br> 猜猜运行结果是什么<br> <img src="https://images2.imgbox.com/64/a8/8UpRfKA4_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/b70b3468a27591bdce7a36b2f4038e59/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">计算机考研机试指南第二版（王道）——第三章 排序和查找</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/a464fb03158f35167081b43971176234/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">opencv学习-Mat详解</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

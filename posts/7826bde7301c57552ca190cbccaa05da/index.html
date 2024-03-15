@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>PROJ.4学习--(1)地图投影 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="PROJ.4学习--(1)地图投影" />
+<meta property="og:description" content="前言
+PROJ是由大量的基础投影库构成。这里主要讨论学习PROJ库的相关参数。
+这里大部分是讲如何将3D坐标系投影到2D平面上。投影时，涉及到基准线，单位，比例英子，偏移量，轴转换等。
+很多实际操作中却涉及到3D坐标系转换为其他3D坐标系（下一篇更新）。
+参数列表
+下面是可以应用于大多数坐标系定义的PROJ参数列表。此表不尝试描述特定于特定投影类型的参数。
+参数描述 &#43;a 椭球体长半轴长度 &#43;axis 轴防线 &#43;b 椭球体短半轴长度 &#43;ellps 椭球体名称，在cmd中输入：proj -le 查看支持哪些椭球体 &#43;k 比例系数（比例因子），旧版本，不赞成使用 &#43;k_0 比例系数（比例因子） &#43;lat_0 维度起点 &#43;lon_0 中央经线 &#43;lon_wrap 中央经线的包装参数（详见下面的说明） &#43;no_defs 不要使用proj库中的缺省定义文件。
+在linux中路径为：/usr/share/proj/proj_def.dat
+windows中为安装路径下的：E:\SvnWorkspace\LY_WEB_GIS\branches\Documents\ms4w-mapserver-for-wimdows\release-1911-x64-gdal-2-3-3-mapserver-7-2-1\bin\proj\SHARE\proj_def.dat
+标红处是我安装MapServer是自带安装Proj的路径
+&#43;over 允许经度输出在-180到180范围之外，禁用wrapping(详见下面的说明) &#43;pm 备用本初子午线(通常是一个城市名称，见下文) &#43;proj 投影名称，在cmd中输入：proj -l 查看数据支持 &#43;units 水平单位，meters（米）、 US survey feet, etc（英尺等 us-ft）. &#43;vunits 垂直单位 &#43;x_0 东（伪）偏移量 &#43;y_0 北（伪）偏移量 units
+可以使用&#43;units关键字指定水平单位，该关键字具有单位的符号名称(如：&#43;units=us-ft)。另外换算单位米可以用&#43;to_meter关键字（如：美国一英尺为0.304800609601219米）。
+在cmd中输入： cs2cs -lu 或者 proj -lu 查看PROJ支持的单位。
+下面来了解一下 &#43;to_meter 关键字的使用
+#在cmd中输入： cs2cs &#43;proj=merc &#43;lat_ts=56.5 &#43;ellps=GRS80 &#43;to &#43;proj=utm &#43;zone=32 &#43;units=km #再输入参数 1699741." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/7826bde7301c57552ca190cbccaa05da/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-05-20T14:06:31+08:00" />
+<meta property="article:modified_time" content="2023-05-20T14:06:31+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">PROJ.4学习--(1)地图投影</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>前言</strong></p> 
+<p><strong>　　</strong>PROJ是由大量的基础投影库构成。这里主要讨论学习PROJ库的相关参数。</p> 
+<p>　　这里大部分是讲如何将3D坐标系投影到2D平面上。投影时，涉及到基准线，单位，比例英子，偏移量，轴转换等。</p> 
+<p>　　很多实际操作中却涉及到3D坐标系转换为其他3D坐标系（下一篇更新）。</p> 
+<p><strong>参数列表</strong></p> 
+<p>　　下面是可以应用于大多数坐标系定义的PROJ参数列表。此表不尝试描述特定于特定投影类型的参数。</p> 
+<table border="1" cellpadding="0" cellspacing="0"><caption></caption><tbody><tr><td><strong>参数</strong></td><td><strong>描述</strong></td></tr><tr><td> +a</td><td> 椭球体长半轴长度</td></tr><tr><td> +axis</td><td> 轴防线</td></tr><tr><td> +b</td><td> 椭球体短半轴长度</td></tr><tr><td> +ellps</td><td> 椭球体名称，在cmd中输入：proj -le 查看支持哪些椭球体</td></tr><tr><td> +k</td><td> 比例系数（比例因子），旧版本，不赞成使用</td></tr><tr><td> +k_0</td><td> 比例系数（比例因子）</td></tr><tr><td> +lat_0</td><td> 维度起点</td></tr><tr><td> +lon_0</td><td> 中央经线</td></tr><tr><td> +lon_wrap</td><td> 中央经线的包装参数（详见下面的说明）</td></tr><tr><td> +no_defs</td><td> <p> 不要使用proj库中的缺省定义文件。</p> <p> 在linux中路径为：/usr/share/proj/proj_def.dat</p> <p> windows中为安装路径下的：E:\SvnWorkspace\LY_WEB_GIS\branches\Documents\ms4w-mapserver-for-wimdows\release-1911-x64-gdal-2-3-3-mapserver-7-2-1\bin\proj\SHARE\proj_def.dat</p> <p>标红处是我安装MapServer是自带安装Proj的路径</p> </td></tr><tr><td> +over</td><td> 允许经度输出在-180到180范围之外，禁用wrapping(详见下面的说明)</td></tr><tr><td> +pm</td><td> 备用本初子午线(通常是一个城市名称，见下文)</td></tr><tr><td> +proj</td><td> 投影名称，在cmd中输入：proj -l 查看数据支持</td></tr><tr><td> +units</td><td> 水平单位，meters（米）、 US survey feet, etc（英尺等 us-ft）.</td></tr><tr><td> +vunits</td><td> 垂直单位</td></tr><tr><td> +x_0</td><td> 东（伪）偏移量</td></tr><tr><td> +y_0</td><td> 北（伪）偏移量</td></tr></tbody></table> 
+<p></p> 
+<p><strong>units</strong></p> 
+<p>　　可以使用+units关键字指定水平单位，该关键字具有单位的符号名称(如：+units=us-ft)。另外换算单位米可以用+to_meter关键字（如：美国一英尺为0.304800609601219米）。</p> 
+<p>　　在cmd中输入：  cs2cs -lu 或者 proj -lu 查看PROJ支持的单位。</p> 
+<p>　　</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/2a/e3/5WTwhsC8_o.png"></p> 
+<p>　　</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/10/1a/EpZ3Upxf_o.png"></p> 
+<p>　　下面来了解一下 +to_meter 关键字的使用</p> 
+<pre>#在cmd中输入：
+cs2cs +proj=merc +lat_ts=56.5 +ellps=GRS80 +to +proj=utm +zone=32 +units=km
+#再输入参数
+1699741.9       376042.8
+#得到
+2594.43 715.50 0.00
+
+#在cmd中输入：
+cs2cs +proj=merc +lat_ts=56.5 +ellps=GRS80 +to_meter=0.5 +to +proj=utm +zone=32 +units=km
+#再输入参数
+3399483.80      752085.60
+#得到
+2594.43 715.50 0.00</pre> 
+<p>　</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/83/17/pj9eWICp_o.png"></p> 
+<p>　　从两个命令比较，第二个增加了 +to_meter=0.5</p> 
+<p>　　第二个参数范围是第一个的两倍</p> 
+<p>　　但是投影出来的位置却是同一个</p> 
+<p>　　因为第二个在投影转换是，将1米转换为了0.5倍，即范围缩小了一半</p> 
+<p>　　所以得到的结果是一样的</p> 
+<p>　　同样，垂直单位可以使用 +vunits 关键字。如果没有指定垂直单位，则垂直单位将默认与水平坐标相同。</p> 
+<p>　　注意：proj根本不处理垂直单元，因此+vto_meter参数将被忽略。</p> 
+<p>　　可以通过应用+k_0参数来缩放输出单元。返回的坐标（经纬度、米、千米等，按照定义的 +units 输出）按使用+k_0参数分配的值进行缩放。</p> 
+<pre>#tmerc 横墨卡托高斯投影
+proj +proj=tmerc +lat_0=0 +lon_0=-55.5 +k=0.9999 +x_0=304800 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs
+#输入
+12.2 -58.5
+#得到
+3664306.25      -8536230.41</pre> 
+<p><strong> 东北（伪）偏移量</strong></p> 
+<p>　　几乎所有的坐标系都允许存在一个假的东偏移 (+x_0)和一个假的北偏移 (+y_0)。请注意，这些值总是以米表示，即使坐标系是其他一些单位。有些坐标系(如UTM)具有隐式的假东向和北向值。</p> 
+<p><strong> 经度覆盖/边界设置（Longitude Wrapping）</strong></p> 
+<p>　　我把Wrap翻译为覆盖或边界，也不知道准确与否。</p> 
+<p>　　默认情况下，PROJ将输出经度覆盖/边界值在-180到180之间。可以使用+over开关禁用在pj_inv()中较低级别执行的默认覆盖/边界。这对于等距圆柱投影特别有用，在等距圆柱投影中，X值经过-20000000(大致)后继续经过-180，而不是覆盖/边界到+180。</p> 
+<p>　　可以使用+lon_wrap选项在pj_transform()中提供一种进行经度边界设置的替代方法。此选项的参数是一个中心经度。所以+lon_wrap=180表示在0到360范围内的经度。注意+over不会禁用+lon_wrap。</p> 
+<p><strong>本初子午线Prime Meridian</strong></p> 
+<p>　　本初子午线的定义是基于格林尼治的本初子午线与当前坐标系统本初子午线之间的偏移量定义的（格林尼治的本初子午线是基准，设置 +pm=经度偏移量 表示当前坐标系统的本初子午线；或者是一个符号名称）。</p> 
+<p>　　如：EPSG:27500，它的本初子午线就是基于格林尼治的本初子午线加上西偏2.337208333333333构成</p> 
+<pre># ATF (Paris) / Nord de Guerre
+&lt;27500&gt; +proj=lcc +lat_1=49.50000000000001 +lat_0=49.50000000000001 +lon_0=5.399999999999999 +k_0=0.99950908 +x_0=500000 +y_0=300000 +a=6376523 +b=6355862.933255573 +pm=2.337208333333333 +units=m +no_defs  &lt;&gt;</pre> 
+<p> 　　再如：EPSG:27395，它的本初子午线就是一个符号定义</p> 
+<pre># NGO 1948 (Oslo) / NGO zone V
+&lt;27395&gt; +proj=tmerc +lat_0=58 +lon_0=6.166666666666667 +k=1 +x_0=0 +y_0=0 +a=6377492.018 +b=6356173.508712696 +towgs84=278.3,93,474.5,7.889,0.05,-6.61,6.21 +pm=oslo +units=m +no_defs  &lt;&gt;</pre> 
+<p>　　当前子午线声明只被pj_transform() API利用,而不被pj_inv()和pj_fwd()利用。因此用户工具cs2cs遵守本初子午线参数，但是proj程序忽略它.</p> 
+<p>　　在cmd中输入：cs2cs -lm 查询支持的本初子午线</p> 
+<p>　　</p> 
+<p class="img-center"><img alt="" src="https://images2.imgbox.com/a5/07/cosnpg4t_o.png"></p> 
+<p>　　比如，使用的例子。在格林尼治基于lat/long坐标的位置long=0, lat=0被转换为以马德里为本初子午线的lat/long坐标。</p> 
+<pre>#在cmd中输入：
+cs2cs +proj=latlong +datum=WGS84 +to +proj=latlong +datum=WGS84 +pm=madrid
+#输入参数
+0 0
+#得到
+3d41'16.58"E    0dN 0.000</pre> 
+<p><strong>轴方向切换</strong></p> 
+<p>　　从PROJ 4.8.0开始，+axis参数可用于控制坐标系的轴向。默认的方向是“向东，向北，向上”，但是方向可以翻转，或者使用+axis开关中的轴的组合来翻转轴。值分别是：</p> 
+<ul><li>"e" - Easting</li><li>"w" - Westing</li><li>"n" - Northing</li><li>"s" - Southing</li><li>"u" - Up</li><li>"d" - Down</li></ul> 
+<p>　　其组合格式如下：</p> 
+<ul><li>+axis=enu easting，northing，up - 默认值。</li><li>+axis=neu northing，easting， up - 适用于“lat/long”地理坐标，或向南横向墨卡托。</li><li>+axis=wnu westing，northing，up - 有些具有“西正”坐标的行星坐标系。</li></ul> 
+<p> 　　注意 +axis不适用与 proj 命令，只适用于 cs2cs 命令（3D投影到2D上面是不行的，只能是3D坐标系转其他3D坐标系）。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/7de17248dcdc61b082e273891638fb80/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">SQL优化15个技巧</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/bf945f01d7db46f7c607a27841c4a27c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">基于R语言的因子分析（附代码）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

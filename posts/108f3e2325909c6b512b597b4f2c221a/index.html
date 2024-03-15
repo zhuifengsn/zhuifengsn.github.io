@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>物理服务器系统升级怎么备份,路由交换操作系统备份与升级 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="物理服务器系统升级怎么备份,路由交换操作系统备份与升级" />
+<meta property="og:description" content="基于安全的考虑，网络管理员要对网络设备的配置信息和IOS进行备份，如果需要将新的特性部署到网络设备上，很多时候就需要对IOS的版本进行升级。
+不小心把IOS误删掉或者在升级IOS失败，重启后进入ROMMON(ROMMON状态是ROM MONITOR的缩写)状态，是比较常见的事情。本文内容将介绍IOS备份与恢复的两种方法。
+问题：网络设备操作系统的偿试困难
+很多想考CISCO认证的朋友经常苦于实战演练没有设备，北京某培训中心根据业务发展的情况，对部分VIP学员免费开放了实验环境。并且在这些设备所组成的拓扑上，配置和实现很多复杂的功能，但学员经常拔插Console线，这会对Console口造成极大的损伤。基于以上考虑，培训中心在原有培训实验室的基础上建立了一套远程试验室，大部分的实验环境都实现了隔离，也就是说，练习学员很少能接触到真实的设备。
+实验室也进行了一些规定，例如一些危险性的命令(erase flash)是不允许操作的。但是还有一些学员并没有很好的遵守这些规定，导致一些设备出现了IOS损坏的情况。一些设备已经无法使用，只能进入ROMMON状态，不能进行正常的路由转发功能和软件配置，在这种模式下，原IOS中的大部分命令都无法使用。
+网络管理员在修复这些设备时，首先检查了 config-register设置的情况(正常config- register应该是0x2102的)，但发现没有问题，已经可以确认是IOS遭到了致命的伤害。另外，一些网络设备的IOS版本特性已经升级了，在获取新的IOS后也需要对这些设备进行更新操作。培训中心的网络维护需求如下：
+* 升级一些交换机的IOS版本，让交换机支持更多的特性。
+* 修复被破坏的路由器IOS。
+提示：
+在实验环境中，升级IOS的情况也是比较常见的，例如，CISCO 2950 交换机频繁发生吊死故障，发生吊死的交换机无任何警告信息，重启后即恢复正常。通过将交换机IOS版本由12.11(EA1)升级到12.12(EA2) 之后的版本，故障现象就可以消失。
+操作系统备份解决思路
+在利用config-register检查寄存器没有问题的情况下，就需要检查IOS大小和文件名是否出现了改动。用dir flash: 命令；注意命令中flash后面跟冒号“：”，执行命令后会显示flash现存的IOS大小和文件名，如下：
+rommon 1 &gt; dir flash:
+File size Checksum File name
+2179331 bytes (0x214103) 0x7b95 c1600-nsy-mz_112-15a_p
+如果File name和File size的两项都和系统之前的快照不一致，那就需要操作系统恢复的步骤了。此时，管理员可以根据IOS的备份恢复系统，可以利用“TFTP”和“XMODEM”两种方式。下面介绍一下升级与备份前的准备工作。
+1．选择传输协议
+升级或恢复IOS的方法可以有3种：TFTP、XMODEM和FTP，但前面两种比较常用。
+在实验室升级网络设备的操作系统还是比较简单的，风险只存在实验网络，但在生产网络中升级IOS的风险是无处不在的。在高端设备的升级中，很有可能会发生一些意想不到的事，比如，用TFTP传输Cisco 6509 交换机IOS就会出现问题，这是因为TFTP(Trivial File Transfer Protocol)普通文件传输协议最大就支持传输32MB的文件，而新的IOS要超过这个限制，所以需要使用FTP进行升级。
+1)TFTP
+TFTP(Trivial File Transfer Protocol，简单文件传输协议)是TCP/IP协议集中的一个用来在客户机与服务器之间进行简单文件传输的协议，提供不复杂、开销不大的文件传输服务。TFTP承载在UDP上，提供不可靠的数据流传输服务，不提供存取授权与认证机制，使用超时重传方式来保证数据的到达。
+可以从它的名称上看出，它适合传送“简单”的文件。与FTP不同的是：它使用的是UDP的69接口，因此它可以穿越许多防火墙。不过它也有缺点，比如传送不可靠、没有密码验证等。虽然如此，它还是非常适合传送小型文件的，就比如网络设备的IOS文件。
+2)XMODEM
+XMODEM协议是最早出现的两台计算机间通过RS232异步串口进行文件传输的通信协议标准，相对于YMODEM、ZMODEM等其他文件传送协议来说，XMODEM协议实现简单，适合于那些存储器有限的场合。
+XMODEM文件发送方将文件分解成128字节的定长数据块，每发送一个数据块，等待对方应答后才发送下一个数据块，数据校验采用垂直累加和校验，也可以采用16位的CRC校验。属于简单ARQ(自动请求重发)协议，所以也适合于2线制的半双工的RS485网络中使用。
+2．升级准备与注意事项
+操作系统作为一个复杂系统，不论在发布之前多么仔细地进行测试，总会有缺陷产生的。出现缺陷后的唯一办法就是尽快给系统打上补丁；如果是网络设备的操作系统，它与其他通用操作系统(Windows和Linux)的区别在于IOS需要将整个系统更换为打过补丁的系统。IOS的恢复也不存在恢复部分文件的情况，因为IOS本身就是一个镜像文件。
+1)获取最新的IOS版本
+新版本的IOS可以从供应商、思科网站及一些第三方工具等渠道获得。例如IOSHunter，IOSHunter是一款可以在网上自动查找对于路由器或交换机合适的IOS Image的工具，操作方法非常简单，图6-5为IOSHunter的操作界面。
+在选择新的IOS软件时要考虑下面两个因素：
+(1)降低成本
+现有网络设备中的FLASH/DRAM一旦不满足大尺寸IOS的要求，不得不采购新的FLASH/ DRAM，这会带来成本开销和一定的采购周期。
+图IOSHunter IOS搜索工具" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/108f3e2325909c6b512b597b4f2c221a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-08-12T02:33:23+08:00" />
+<meta property="article:modified_time" content="2021-08-12T02:33:23+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">物理服务器系统升级怎么备份,路由交换操作系统备份与升级</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div style="font-size:16px;"> 
+ <p>基于安全的考虑，网络管理员要对网络设备的配置信息和IOS进行备份，如果需要将新的特性部署到网络设备上，很多时候就需要对IOS的版本进行升级。</p> 
+ <p>不小心把IOS误删掉或者在升级IOS失败，重启后进入ROMMON(ROMMON状态是ROM MONITOR的缩写)状态，是比较常见的事情。本文内容将介绍IOS备份与恢复的两种方法。</p> 
+ <p>问题：网络设备操作系统的偿试困难</p> 
+ <p>很多想考CISCO认证的朋友经常苦于实战演练没有设备，北京某培训中心根据业务发展的情况，对部分VIP学员免费开放了实验环境。并且在这些设备所组成的拓扑上，配置和实现很多复杂的功能，但学员经常拔插Console线，这会对Console口造成极大的损伤。基于以上考虑，培训中心在原有培训实验室的基础上建立了一套远程试验室，大部分的实验环境都实现了隔离，也就是说，练习学员很少能接触到真实的设备。</p> 
+ <p>实验室也进行了一些规定，例如一些危险性的命令(erase flash)是不允许操作的。但是还有一些学员并没有很好的遵守这些规定，导致一些设备出现了IOS损坏的情况。一些设备已经无法使用，只能进入ROMMON状态，不能进行正常的路由转发功能和软件配置，在这种模式下，原IOS中的大部分命令都无法使用。</p> 
+ <p>网络管理员在修复这些设备时，首先检查了 config-register设置的情况(正常config- register应该是0x2102的)，但发现没有问题，已经可以确认是IOS遭到了致命的伤害。另外，一些网络设备的IOS版本特性已经升级了，在获取新的IOS后也需要对这些设备进行更新操作。培训中心的网络维护需求如下：</p> 
+ <p>* 升级一些交换机的IOS版本，让交换机支持更多的特性。</p> 
+ <p>* 修复被破坏的路由器IOS。</p> 
+ <p>提示：</p> 
+ <p>在实验环境中，升级IOS的情况也是比较常见的，例如，CISCO 2950 交换机频繁发生吊死故障，发生吊死的交换机无任何警告信息，重启后即恢复正常。通过将交换机IOS版本由12.11(EA1)升级到12.12(EA2) 之后的版本，故障现象就可以消失。</p> 
+ <p>操作系统备份解决思路</p> 
+ <p>在利用config-register检查寄存器没有问题的情况下，就需要检查IOS大小和文件名是否出现了改动。用dir flash: 命令；注意命令中flash后面跟冒号“：”，执行命令后会显示flash现存的IOS大小和文件名，如下：</p> 
+ <p>rommon 1 &gt; dir flash:</p> 
+ <p>File size Checksum File name</p> 
+ <p>2179331 bytes (0x214103) 0x7b95 c1600-nsy-mz_112-15a_p</p> 
+ <p>如果File name和File size的两项都和系统之前的快照不一致，那就需要操作系统恢复的步骤了。此时，管理员可以根据IOS的备份恢复系统，可以利用“TFTP”和“XMODEM”两种方式。下面介绍一下升级与备份前的准备工作。</p> 
+ <p>1．选择传输协议</p> 
+ <p>升级或恢复IOS的方法可以有3种：TFTP、XMODEM和FTP，但前面两种比较常用。</p> 
+ <p>在实验室升级网络设备的操作系统还是比较简单的，风险只存在实验网络，但在生产网络中升级IOS的风险是无处不在的。在高端设备的升级中，很有可能会发生一些意想不到的事，比如，用TFTP传输Cisco 6509 交换机IOS就会出现问题，这是因为TFTP(Trivial File Transfer Protocol)普通文件传输协议最大就支持传输32MB的文件，而新的IOS要超过这个限制，所以需要使用FTP进行升级。</p> 
+ <p>1)TFTP</p> 
+ <p>TFTP(Trivial File Transfer Protocol，简单文件传输协议)是TCP/IP协议集中的一个用来在客户机与服务器之间进行简单文件传输的协议，提供不复杂、开销不大的文件传输服务。TFTP承载在UDP上，提供不可靠的数据流传输服务，不提供存取授权与认证机制，使用超时重传方式来保证数据的到达。</p> 
+ <p>可以从它的名称上看出，它适合传送“简单”的文件。与FTP不同的是：它使用的是UDP的69接口，因此它可以穿越许多防火墙。不过它也有缺点，比如传送不可靠、没有密码验证等。虽然如此，它还是非常适合传送小型文件的，就比如网络设备的IOS文件。</p> 
+ <p>2)XMODEM</p> 
+ <p>XMODEM协议是最早出现的两台计算机间通过RS232异步串口进行文件传输的通信协议标准，相对于YMODEM、ZMODEM等其他文件传送协议来说，XMODEM协议实现简单，适合于那些存储器有限的场合。</p> 
+ <p>XMODEM文件发送方将文件分解成128字节的定长数据块，每发送一个数据块，等待对方应答后才发送下一个数据块，数据校验采用垂直累加和校验，也可以采用16位的CRC校验。属于简单ARQ(自动请求重发)协议，所以也适合于2线制的半双工的RS485网络中使用。</p> 
+ <p>2．升级准备与注意事项</p> 
+ <p>操作系统作为一个复杂系统，不论在发布之前多么仔细地进行测试，总会有缺陷产生的。出现缺陷后的唯一办法就是尽快给系统打上补丁；如果是网络设备的操作系统，它与其他通用操作系统(Windows和Linux)的区别在于IOS需要将整个系统更换为打过补丁的系统。IOS的恢复也不存在恢复部分文件的情况，因为IOS本身就是一个镜像文件。</p> 
+ <p>1)获取最新的IOS版本</p> 
+ <p>新版本的IOS可以从供应商、思科网站及一些第三方工具等渠道获得。例如IOSHunter，IOSHunter是一款可以在网上自动查找对于路由器或交换机合适的IOS Image的工具，操作方法非常简单，图6-5为IOSHunter的操作界面。</p> 
+ <p>在选择新的IOS软件时要考虑下面两个因素：</p> 
+ <p>(1)降低成本</p> 
+ <p>现有网络设备中的FLASH/DRAM一旦不满足大尺寸IOS的要求，不得不采购新的FLASH/ DRAM，这会带来成本开销和一定的采购周期。</p> 
+ <p>图IOSHunter IOS搜索工具</p> 
+ <p>(2)运行稳定</p> 
+ <p>新的IOS如果刚刚问世不久，也许会有新的安全漏洞和不稳定因素。对于企业生产网络来说，稳定、连续运行才是我们追求的目标，而不是功能齐全但暂时超出我们所需的软件，更不必说这些太新的软件会带给生产网的潜在风险。所以，最新的软件不一定稳定可靠，我们需要的是被广泛使用了一段时间并且被证明能够稳定运行、消除了大量BUG的软件，而且尽量选择与现有软件主版本号一致的软件。</p> 
+ <p>2)确认升级范围与顺序</p> 
+ <p>在此步骤中，以Cisco的网络设备为例，主要是要确认有安全漏洞的IOS软件版本和受影响的设备范围。首先从Cisco网站上查出有安全漏洞的IOS软件版本及替代版本。其次，根据IT资产数据库，确定受影响的硬件设备范围。</p> 
+ <p>根据企业网络环境、数据流向及业务特点分析，需要确定升级原则，即首先升级次要节点中的次要设备，再升级主要节点中的次要设备，然后升级次要节点中的主要设备，依此类推。</p> 
+ <p>之所以先升级次要节点的次要设备，是因为无法预测在实际升级后的生产网运行期间还会出现什么未知问题。而首先升级最次要的设备，即使真的出现问题，相对其他主要节点的影响而言，它对用户业务的影响也会小些。换句话说，次要节点可以作为整体升级的“试验田”，一旦出现问题，使我们有机会回退并降低风险和项目压力，后续的升级也可以及时中止。</p> 
+ <p>3)评估FLASH/DRAM容量</p> 
+ <p>对于新的替代IOS软件，其文件尺寸往往大于旧的软件，此时需要在升级前检查网络设备的Flash/DRAM的有效容量是否满足新IOS软件的运行要求。Flash/DRAM的有效容量有以下两种情况：</p> 
+ <p>(1)容量大</p> 
+ <p>当Flash/DRAM的有效容量可同时容纳两个IOS软件时，可以在不删除旧IOS软件的情况下将新IOS软件上传到即将升级设备的Flash卡中，这是最理想的情形。其好处是：当升级失败时，可以立即回退启用原来的IOS软件，降低升级过程中的风险。</p> 
+ <p>(2)容量小</p> 
+ <p>有效容量只能容纳一个IOS软件时，上传新的IOS软件前需要删除旧的IOS软件，然后重新启动网络设备，这可能带来一定的风险，一旦重启动失败，需要现场人工干预重新启用旧的IOS软件。</p> 
+ <p>4)物理准备</p> 
+ <p>在升级操作过程中，切记不可断电，所以需要配置UPS(不间断电源)供电。另外，使用的物理线路也需要提前测试，保证其传输性能稳定。</p> 
+ <p>5)操作准备</p> 
+ <p>绝大部分的升级工作都需要管理员直接接触到网络设备，准备操作的平台(台式机、笔记本均可)，用于对交换机进行配置操作及作为TFTP服务器存储IOS文件，以及连接设备的直通线和Console线。</p> 
+ <p>操作系统升级与恢复方案</p> 
+ <p>如果是通过网络升级IOS，运行TFTP Server主机连接交换机的接口没有限制，TFTP Server的地址可以随意定义，但必须与网络设备定义的地址在同一网段上。连接至路由器时，必须使用路由器的第一个以太网口，即Ethernt0(对Cisco 2500系列等)和Ethernet0/0(对Cisco 2600系列等)，其他系列略有差别，可根据使用手册进行确定。下面将详细介绍IOS文件修复的步骤。</p> 
+ <p>1．部署TFTP</p> 
+ <p>首先需要安装TFTP Server软件，这里使用Cisco TFTP Server的TFTP服务器软件，可以从Cisco网站上下载。Cisco TFTP Server的配置十分简单，几乎不用更改它的配置，如需要可以更改其根目录，在图6-6中的位置中选择。</p> 
+ <p>将IOS文件放在TFTP Server所在目录的根目录下，如果TFTP Server软件在机器装的是Cisco TFTP Server目录，那么就把新的IOS文件放在Cisco TFTP Server目录下就可以了。也可以自行指定IOS文件的存放位置。</p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/c6ac703bf31ed293953ccf818830c2a9/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">服务器数据库系列,服务器数据库客户端和服务端</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/0d392c5940f7b673c5a70c1e7fdf8cd0/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">小程序云服务器怎么选择镜像,小程序云服务器镜像选什么好</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

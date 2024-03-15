@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Posts - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Posts" />
+<meta property="og:description" content="追风少年的博客" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+	<link rel="alternate" type="application/rss+xml" href="/posts/index.xml" title="追风少年的博客">
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main list" role="main">
+	<header class="main__header">
+		<h1 class="main__title">Posts</h1>
+	</header><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/85f15dde1f3666b277802644d3d9ec3a/" rel="bookmark">
+			labview入门到出家11(补充)——基于单片机和labview开发的虚拟示波器
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		之前有小伙伴提到需要虚拟示波器的资料，有些库还有文件丢失了，直接给的工程跑不起来，这里我把关键的地方讲解一下，大家可以自行开发。其实开发不难，只是有些点会耗点时间。虚拟示波器，顾名思义就是非实物的示波器，但也还是硬件（便携的采集设备）和软件（在电脑上显示和操作）的结合，和数字示波器相比，本质上区别不大，现在贵一些的数字示波器从功能上看，也很像一台计算机了)。今天要讲的只是低配的，简易版的虚拟示波器（在下当年的毕业设计）。下位机是基于STM32的ADC采集实现的信号抓取，然后通过串口传到上位机中显示。单片机的ADC和串口传输，注定了这虚拟示波器采集的波形频率不会太高，之前能在上位机上还原得比较好的波形频率是25Khz以下，如果大家有其他更快的采集(DSP,FPGA，NI采集卡)和数据上传的方式(USB等)，可以尝试一下，也期待你们的分享。下面大体对硬件(外围电路)，单片机程序(STM32)，和上位机程序(labview)三部分进行讲解。
+1、硬件
+硬件很简单，就是将输入到单片机的波形信号进行处理。因为我用的STM32的单片机，能检测到的电压值是0~3.3V，所以硬件部分就是把输入的交流信号先控制在-1.65V~1.65V之间，最后再通过电路将信号往上偏置1.65V就可以给单片机采集了。至于如何将信号放大放小，控制到可采集的电压范围呢，可以通过上位机发送串口数据给单片机，让单片机控制继电器（或者其他开关方式）切换运放端的电阻，达到更改运放倍数的方式，最后上位机呈现波形的时候加上放大缩小的倍数，就可以在上位机界面上还原波形信号了。我这里先采用了LM358的双电源运放芯片（交流信号，需要双电源运放芯片），后面因为LM358在高频输入的时候，运放输出的信号在零点处会失真，换了一款高频的运放芯片UA741，问题解决。双电源里面的负电压是通过LCL7660输出的。至于偏置电压，是我在multisim上面仿真出来的，实际测试后确实可以偏置，大家可以尝试使用1比1的运放后加偏置电压，也可以参考我的设计电路。附上完整电路图。
+1-1：运放电路
+这是直接用了毕业设计里面的图片，之前的文件不见了。应该能看懂吧 。运放采用的是最简单的负反馈放大电路。放大倍数Vout/Vin=R1/R2。
+1-2：负电压电路
+由于运放芯片想运放负极电压信号，需要采用双电源模式，必须为运放芯片提供负电压。所以本设计采用低功率，额定电压为5V的电源极性转换器ICL7660。ICL7660输入5V正电压，输出-5V电压。为LM358提供双电源。本设计采用ICL7660的基本负电压转换模式。
+1-3：1.65V偏置电路（自己仿真实现的，实测可用）
+2、单片机软件
+这个直接用STM32的单片机ADC采集和串口例程，将数据分高4位和低8位的方式（单片机串口只能上传8位的数据），将12位的ADC数据通过串口分别传输给上位机，ADC采样率调到最高，串口通过DMA的方式，这样可以达到最高的采集速度。最后分别用两个for循环，循环往串口发送1000个低8位和1000个高4位数据。每次发送两组1000个数据的间隔你们可以自己定，我记得我应该间隔是100ms左右刷新一次数据，上位机整合两组数据后，一次显示1000个数据点。ADC和串口传输数据的可以在STM32的例程中找到，具体逻辑这里不再累述。不过还是附上当年写的几条程序吧。
+1、连续读取1000个ADC数据；
+2、拆分低8位和高4位；
+3、向串口上传低8位数据；
+4、向串口上传高4位数据；
+3、上位机
+上位机在整合两次接收的数据，直接调用Labview提供的信号分析函数，如单频测量函数，频谱测量函数以及幅值和电平测量函数。
+3-1：读取串口数据
+3-2：整合高4位，低8位位数据。右侧输出直接给到波形显示控件
+3-3：波形控件
+前面板-&gt;控件-&gt;新式-&gt;图形-&gt;波形图。
+4、最终整合后的虚拟示波器效果
+采集的信号范围为5HZ~25KHZ（STM32F1系列采样率最高为0.5MS/s），0.1V~16.5V的模拟信号；幅值误差低于5%，频率误差低于2%，能满足日常中大多信号/电压的信号采集与分析。希望对大家有所作用，也希望国内开源资源能越来越丰富吧。虽然一般技术不能给我们工程师带来多大的财富，但至少在某个年龄段，在追求一种引以为傲的技能的时候，能让我们感到充实，自豪，也是一种不错的人生体验呢！
+原创不易，一键三连拉！
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/a976ae58c21aad1b606c112681fccdc0/" rel="bookmark">
+			HC-05/06蓝牙模块的原理及使用方法
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		模块简介 HC-05 蓝牙串口通信模块，是基于 Bluetooth Specification V2.0 带 EDR 蓝牙协议的 数传模块。无线工作频段为 2.4GHz ISM，调制方式是 GFSK。模块最大发射功率为 4dBm， 接收灵敏度-85dBm，板载 PCB 天线，可以实现 10 米距离通信。模块自带 LED 灯，可直观判断蓝牙的连接状态。 模块采用 CSR 的 BC417 芯片，支持 AT 指令，用户可根据需要更改角色（主、从模式） 以及串口波特率、设备名称等参数，使用灵活。
+二．模块原理
+蓝牙模块的通信示意图如下：两个设备主控芯片或单片机分别连接各自的蓝牙模块，即将主控芯片与蓝牙模块的串口控制引脚交叉连接。因为蓝牙模块自带透传功能，简单来说就是主控芯片串口什么数据，蓝牙模块就转发什么数据，所以也可以把主控芯片的串口看作一个带有无线传输的串口。由于蓝牙有主从机之分，模块出厂默认为从机模式。如果需要设置为主机，需要通过AT指令对蓝牙进行设置。 蓝牙模块与单片机的连接图
+模块与供电系统为 3.3V 的 MCU 连接时，串口交叉连接即可（模块的 RX 接 MCU 的 TX、模块的 TX 接 MCU 的 RX）；模块与供电系统为 5V 的 MCU 连接时，可在模块的 RX 端串接一个 220R~1K 电阻再接 MCU 的 TX，模块的 TX 直接接 MCU 的 RX，无需串接电阻。（注：请先确认所使用的 MCU 把 3.0V 或以上电压认定为高电平，否则需加上 3.3V/5V 电平转换电路；本人在使用STC89C52单片机是直连，不需要加电平转换电路）。如图：
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/a976ae58c21aad1b606c112681fccdc0/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/30af0578b256f4b5ccacd7eae447df1c/" rel="bookmark">
+			C语言——操作符详解
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		目录
+1、算术操作符
+2、位操作符
+算术右移：
+3.赋值操作符 4.复合赋值符
+5.单目操作符
+6.关系操作符
+7.逻辑操作符
+8.条件操作符
+9.逗号表达式
+10.下标引用、函数调用和结构成员
+1、算术操作符 + - * / %
+% 是取模操作符，意思就是 求余数。
+int ret = 10 % 3; //求10 % 3的余数，得出的余数是1 printf("%d\n", ret); 注意的是：% 操作符不能用于浮点数，只能作用于整数，如果作用于浮点数将会报错。
+对于 /（除法）操作符如果两个操作数都为整数，执行整数除法。而只要有浮点数执行的就是浮点数除法。什么意思呢？请看下面的代码
+int ret = 10 / 3; // / 两边的操作都是整数，执行的就是整数除法，结果为3 printf("%d\n", ret); 如果 / 两边的操作数有一个数为浮点数的话，执行的是浮点数除法
+double ret = 10 /3.0; // 得出的结果是 3.333333 printf("%lf\n", ret); 2、位操作符 &lt;&lt; 左移操作符
+&gt;&gt; 右移操作符
+注：移位操作符的操作数只能是整数，不能是浮点数。
+讲之前先了解一下原码、反码、补码是什么？ 一个正整数的原，反，补码都是一样的，负整数则不同，需要计算。
+为什么要讲这些呢，因为一个整数在内存中存储的是补码！！！
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/30af0578b256f4b5ccacd7eae447df1c/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/001c884a4b6b916f0b309f75d8ecd350/" rel="bookmark">
+			使用正交表高效地设计测试用例
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		（我的公众号“墨石测试攻略”，分享测试经验，欢迎关注！）
+在测试过程中，我们会遇到一些可能的输入数据或输入数据组合量很大的情况，我们不可能对每个组合都创建测试用例。使用一般的测试方法可能会产生大量的冗余测试，而使用正交表可以用最少的测试用例获得最大的测试覆盖率。
+概念说明
+正交试验设计法：是研究多因素水平的一种方法，根据正交性，从大量的试验点中挑选出适量的、有代表性的点进行试验。
+特点：通过对部分试验结果的分析了解全面试验的情况，找出最优的水平组合。
+正交表由行、因素、水平构成。
+行：即试验的次数
+因素（Factor）：在同一试验中，影响试验结果的输入条件称为因素
+水平（Lever）：影响每个试验因素的取值或输入称为水平
+正交表的表示形式：
+设计步骤
+用正交表设计测试用例的步骤：
+1、确定因素：即确定交互测试中有多少个相互独立的变量
+2 、确定水平：即确定每个变量可以取值的的个数的最大数
+3 、选择正交表：选择一个次数（Run）数最少的最适合的正交表。一个最合适的正交表是至少满足第一步说明的因素数且至少满足第二步说明的水平数。如果没有合适的正交表或需要的功能测试数量太多，要对因素和水平进行调整
+如何选择：考虑因素的个数；因素水平的个数；正交表的行数，取行数最少的那个
+4 、套用正交表，把因素和值映射到表中
+5、加上一些你认为可疑但没有在表中出现的组合，或去掉一些实际并不可能出现的组合
+6、将上述所描述的组合转化成测试用例
+举例
+场景：根据姓名、电话、班级查找学生。使用正交实验法分析过程如下：
+第一步：确定因素
+本例中一共有三个因素：姓名、电话、班级
+第二步：确定水平
+每个因素的取值称为水平。姓名、电话、班级各有两个水平：输入（1），不输入（0）
+姓名
+电话
+班级
+输入
+输入
+输入
+不输入
+不输入
+不输入
+第三步：选择正交表
+表中的因素数&gt;=3，表中至少有三个因素的水平数&gt;=2，行数（试验次数）取最少的那个，因此选择这个正交表L4（2^3）--表示需做4次试验，最多观察3个因素，每个因素均有2个水平：
+序号 1 2 3 1 1 1 1
+2 1 2 2
+3 2 1 2
+4 2 2 1
+备注：并不是我们想要什么正交表就有什么正交表，有的正交表是没有被设计出来的，我们选取正交表时只能从现有的正交表中进行选择，而且选择的正交表要满足上述中的因素数和因素水平，在这个前提下选择行数最少的一个。
+（可以通过下列的网址查找正交表http://support.sas.com/techsup/technote/ts723_Designs.txt）
+第四步：套用正交表
+序号 姓名
+电话
+班级
+1 输入
+输入
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/001c884a4b6b916f0b309f75d8ecd350/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/dbaf4e6e3efca9473fd1606b3e5cf164/" rel="bookmark">
+			如何批量将 psd 转换为 png、jpeg、bmp、svg、webp 格式
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		 概要：使用过 Photoshop 的伙伴一定非常熟悉一种图片格式-PSD，这种格式是 Adobe 公司的图形设计软件 Photoshop 的专用格式，所以我们一般在用 Photoshop 进行图片制作后保存的格式就是 psd 格式的。这种格式不能够用直接的预览，也不能直接的嵌入到网页上。所以我们就需要将 psd 格式的图片转换为其他能够方便预览的格式如 png、jpeg、bmp、svg、webp 等等。那我们有没有比较高效的方式能够支持批量将 psd 转换为 png、jpeg、bmp、svg、webp 格式呢？
+相信大家平时在将 psd 格式的图片转换为 png、jpeg 等可以直接预览类型的时候，都是先用 Photoshop 将 psd 文件打开，然后在另存为中选择想要存储的格式。使用过这种方式的小伙伴一定都有一个感受，那就是太慢了，打开一个文件都要半天，并且还特别麻烦！并且当我们的 psd 文件非常多，有几千甚至几万个的时候，如果还用 Photoshop 的方式来进行格式转换，那相信想起来都有点让人奔溃，甚至是无法完成的！
+今天给大家介绍一种批量将 psd 转换为 png、jpeg、bmp、svg、webp 格式的方法，这种方法不需要我们用笨重的 Photoshop 再来一个一个的打开 笨重的 psd 文件，我们只需要一些简单的操作，不管你需要进行转换的 psd 文件是一千个还是一万个，都能够快速的完成！这个方法需要借助一个小软件「我的ABC软件工具箱」，这款软件在批量处理图片格式转换上有非常强悍的功能！
+打开「我的ABC软件工具箱」后在左侧选择「格式转换」，右侧进入「图片转换为其它格式」的功能。
+我们按照上图所示点击「图片转换为其它格式」这个功能菜单，就可以进入格式转换的功能了。今天功能后我们要做的第一件事情就是选择我们的 psd 格式的图片。也就是需要转换为 png、jpeg、bmp、svg、webp 等格式的 psd 文件，我们可以一次性的选择多张，。选择好了之后，我们就可以点击下一步进入到选项设置的界面了。
+相信大家看到这个界面都能够看出来，「我的ABC软件工具箱」能够将 psd 格式的文件转换为非常多的其他格式，这里面也就包含了我们常见的 png、jpeg、bmp、svg、webp 等格式，大家可以根据自己的需要进行选择，选择好了之后就可以点击下一步进行输出目录的选择了！
+到目前为止，我们要做的事情基本上就完成了，只需要点击下一步就可以了，软件就能帮助我们完成批量将 psd 转换为 png、jpeg、bmp、svg、webp 格式的操作了！是不是非常的神奇？是不是非常的方便？这种方法是不是比我们用 Photoshop 打开进行转换的方法要高效很多？ 
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/37d80dc416b633cdd4b0c11dbbfa8f23/" rel="bookmark">
+			Apifox中更新token的两种方式(手动、自动)
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		Apifox 关于token的使用方式 前言，关于token的使用，仅做了简单的demo测试token效果。
+1.手动登录获取token 顾名思义，因为只有登录之后才有token的信息，所以在调用其他接口前需要拥有token才能访问。
+操作步骤 1)添加全局变量、参数 在右上角环境中配置详细信息：全局参数填写参数名以及默认值
+{{token}}，并且在全局变量中也可以填写token值。优先级就很高了。
+接着在全局变量中也填写对应的本地值。
+2)在登录接口运行中添加后置操作 选择提取变量，将token填入，并且根据登录接口返回的数据结构获取对应的token。例如我这里就是data.token。
+添加完毕后，就会把登录接口返回的token数据填充到全局变量和全局参数中。但至此还不能实现：登录过后，其他的接口都可以调用了。要执行第3步。
+特别注意：后置操作不是在接口文档中保存的，所以获取token的后置操作要保存用例，下次运行用例才能将token填充到全局变量中去。
+3)在项目概览中添加Auth 点击项目概览，下方有Auth，目前我使用过API Key 和 Bearer Token。效果都一样，也是将{{token}}填入就好了，这样就是动态的获取全局变量中的token。
+4)测试效果 首先是不登录时，调用其他接口的返回状态：
+因为之前登陆过，但是token过期了，所以会提示token过期的信息。然后再执行一次登录接口，再观察控制台结果：在控制台可以很清晰的看到全局变量重新填充了。
+然后回到其他接口调用：没有发生拦截，成功的执行了接口。
+2.自动获取token 自动获取token的方式相对手动获取来说也就是多了一步前置操作，意思就是在调用任意接口前，先执行一次登录接口将token填充到全局变量中，从而避免了token过期或需要手动调用登录接口再调用其他接口
+操作步骤 1)新建公共脚本 在项目设置中添加公共脚本：
+该脚本的主体就是pm.sendRequest()，意思就是调用一次登录接口，其参数也就是接口中所需要的参数，此处都是模拟数据，真实可按照数据库中的账户密码即可。
+特别注意：其实不推荐这样写死的url和账户密码、文章末尾有一份比较标准的脚本，参考了官方文档。
+2)在项目概览中添加前置操作 只要根据提示就可以把脚本给添加到前置操作中。保存后就可以测试结果了。
+3)测试效果 目前接口任然处于一个token过期的状态，但这次不再手动调用登录接口了，而是直接再次运行此接口：
+可以看到接口也运行成功，并没有拦截。此时，我们可以通过点击控制台的链接，发现此处就是默认执行了一次登录的接口，所以token也就不会存在过期、或不存在的情况了。
+脚本模板 // body 里面的参数需要自己设置对应的 // 定义发送登录接口请求方法 function sendLoginRequest() { // 获取环境里的 前置URL // const baseUrl = pm.environment.get('BASE_URL'); // 登录用户名，这里从环境变量 LOGIN_USERNAME 获取，也可以写死（但是不建议） // const username = pm.environment.get('LOGIN_USERNAME'); // 登录用户名，这里从环境变量 LOGIN_PASSWORD 获取，也可以写死（但是不建议） // const password = pm.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/37d80dc416b633cdd4b0c11dbbfa8f23/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/ffbb0065c6c5af190b7014eeb1834f4b/" rel="bookmark">
+			docker迁移Docker Root Dir数据目录
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		默认目录在/var下，如果系统盘比较的的话，时间长了就会因为容器、镜像等数据占用较多的磁盘空间。
+因此可以把它迁移到挂载的数据里
+具体方案参见，实测有效：
+https://developer.aliyun.com/article/785312
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/de89110fa283a4c4313d9410755f2a49/" rel="bookmark">
+			Windows每个版本自带的.NET版本，与支持的最高.NET版本
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		桌面版本：
+注：支持最高版本的 .NET 版本列中，Latest 代表目前最高版本的均支持
+Windows版本自带.NET Framework 版本支持最高的 .NET Framework 版本Windows NT 4.0 SP6a、2000.NET Framework 1.1 SP1Windows 98, 98SE, Me, 2000 SP3.NET Framework 2.0Windows 2000 SP4.NET Framework 2.0 SP2Windows XP SP1.NET Framework 1.0 SP2.NET Framework 1.0 SP2Windows XP SP2.NET Framework 1.1 SP1.NET Framework 3.5 SP1Windows XP SP3.NET Framework 1.1 SP1.NET Framework 4.0Windows Vista.NET Framework 3.0.NET Framework 3.5 SP1Windows Vista SP1.NET Framework 3.0 SP1.NET Framework 4.0Windows Vista SP2.NET Framework 3.0 SP2.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/de89110fa283a4c4313d9410755f2a49/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/b9aff151ebe3eebc7e6b1f589caca22b/" rel="bookmark">
+			spring为什么要使用三级缓存来解决循环依赖?
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		不用三级缓存，用二级缓存能不能解决循环依赖?
+这里我先说一下前面没提到的细节，那就是通过ObjectFactory获取的Bean可能是两种类型，第一种就是实例化阶段创建出来的对象，还是一种就是实例化阶段创建出来的对象的代理对象。至于是不是代理对象，取决于你的配置，如果添加了事务注解又或是自定义aop切面，那就需要代理。这里你不用担心，如果这里获取的是代理对象，那么最后完全创建好的对象也是代理对象，ObjectFactory获取的对象和最终完全创建好的还是同一个，不是同一个肯定会报错，所以上面的理论依然符合，这里只是更加的细节化。
+有了这个知识点之后，我们就来谈一下为什么要三级缓存。
+第一级缓存，也就是缓存完全创建好的Bean的缓存，这个缓存肯定是需要的，因为单例的Bean只能创建一次，那么肯定需要第一级缓存存储这些对象，如果有需要，直接从第一级缓存返回。那么如果只能有二级缓存的话，就只能舍弃第二级或者第三级缓存。
+假设舍弃第三级缓存
+舍弃第三级缓存，也就是没有ObjectFactory，那么就需要往第二缓存放入早期的Bean，那么是放没有代理的Bean还是被代理的Bean呢？
+1）如果直接往二级缓存添加没有被代理的Bean，那么可能注入给其它对象的Bean跟最后最后完全生成的Bean是不一样的，因为最后生成的是代理对象，这肯定是不允许的；
+2）那么如果直接往二级缓存添加一个代理Bean呢？
+假设没有循环依赖，提前暴露了代理对象，那么如果跟最后创建好的不一样，那么项目启动就会报错，假设没有循环依赖，使用了ObjectFactory，那么就不会提前暴露了代理对象，到最后生成的对象是什么就是什么，就不会报错，如果有循环依赖，不论怎样都会提前暴露代理对象，那么如果跟最后创建好的不一样，那么项目启动就会报错 通过上面分析，如果没有循环依赖，使用ObjectFactory，就减少了提前暴露代理对象的可能性，从而减少报错的可能。
+假设舍弃第二级缓存
+假设舍弃第二级缓存，也就是没有存放早期的Bean的缓存，其实肯定也不行。上面说过，ObjectFactory其实获取的对象可能是代理的对象，那么如果每次都通过ObjectFactory获取代理对象，那么每次都重新创建一个代理对象，这肯定也是不允许的。
+从上面分析，知道为什么不能使用二级缓存了吧，第三级缓存就是为了避免过早地创建代理对象，从而避免没有循环依赖过早暴露代理对象产生的问题，而第二级缓存就是防止多次创建代理对象，导致对象不同。
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/48664c6b7d5af19ee9492dd333d9d74a/" rel="bookmark">
+			使用html5-qrcode 扫描二维码(vue3)
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		使用html5-qrcode npm 地址
+1.安装
+npm i html5-qrcode 2.使用
+&lt;template&gt; &lt;div class="container"&gt; &lt;div id="reader"&gt;&lt;/div&gt; &lt;/div&gt; &lt;/template&gt; &lt;script setup lang="ts"&gt; import { onMounted, ref } from 'vue'; import { useRouter } from 'vue-router'; import { Html5Qrcode } from 'html5-qrcode'; import { Html5QrcodeResult, CameraDevice } from './interface'; let cameraId = ref(''); let devicesInfo = ref&lt;any&gt;(''); let html5QrCode = ref&lt;any&gt;(null); const router = useRouter(); onMounted(() =&gt; { getCameras(); }); onUnmounted(() =&gt; { stop(); }); const getCameras = () =&gt; { Html5Qrcode.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/48664c6b7d5af19ee9492dd333d9d74a/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/ae631f027898b32040dcb5f7a1064ac2/" rel="bookmark">
+			QT RTTI 运行时类型识别技术
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		 QT RTTI 运行时类型识别技术 除了C++为我们提供的两种RTTI运算符（dynamic_cast 和 typeid）外，qt也为我们提供了两种运行时类型识别机制：
+（1）qobject_cast
+（2）Qobject::inherits()
+qobject_cast qobject_cast 与 C++ 标准库中的dynamic_cast 类似，都是一个类型转换运算符，是一个向下转换运算符
+qobject_cast 的参数受限于ObjectType*，其中ObjectType类是QObject的派生类并且完全由moc进行处理（这需要其类定义中由Q——OBJECT宏）
+qobject_cast 允许把一个更为常规的指针和引用转换成某种特定的类型。
+// qobject_cast QWidget * editor = new StartEditor； StartEditor * startEditor = qobject_cast&lt;StartEditor *&gt;(editor); if(startEditor != NULL) { // 在此处写功能代码 } Qobject::inherits() 与qobject_cast不同，Qobject::inherits()按树接收一个char* 类型名，而不是一个表达式，这里还是直接上代码吧：
+// Qobject::inherits() Qwidget *w = &amp;s; if(w-&gt;inherits("QListView")) { // 在此处写功能代码 } 
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/6dbbe775ede80f63b8c602caa3d7d62f/" rel="bookmark">
+			idea报错Shorten the command line via JAR manifest or via a classpath file and rerun.
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		问题描述 启动SpringBoot项目，报错
+Error running DeskApplication. Command line is too long. Shorten the command line via JAR manifest or via a classpath file and rerun.
+原因分析： 百度翻译意思为：运行桌面应用程序时出错。命令行太长。缩短命令
+得出结论，报错的原因是因为springboot项目启动命令过长
+解决方案： 修改一下配置就行，点击弹出的错误信息
+其实上面写的已经很清楚了通过JAR manifest或classpath file缩短命令行，然后重新运行，两个任意选择一个就行，再次启动就不会出现这个问题
+我是本篇小编LXL
+遇到Bug需要帮助，
+欢迎加wx：
+xmzl1988
+备注"csdn博客“
+温馨提示此为有偿服务;
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/2e1c5b1fa8872f94427f1755df96017e/" rel="bookmark">
+			【Nginx&#43;SSL】在华为云和腾讯云上配置Nginx&#43;SSL，实现Http转Https
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		【Nginx+SSL】在华为云和腾讯云上配置Nginx+SSL，实现Http转Https 0、 前言0.1、 腾讯云证书下载0.2 华为云证书下载 1. Nginx的SSL模块安装2. SSL证书上传3. Nginx的配置3.1 华为云3.2 腾讯云 4. 重启nginx 0、 前言 本文分别在华为云和腾讯云服务器上为Nginx配置SSL证书加密。关于Ngnix的下载和安装及入门知识，可以查看这篇博客：【nginx】快速入门
+0.1、 腾讯云证书下载 在腾讯云的SSL证书管理界面，点击如下图所示的SSL按钮，即可申请和下载证书。
+申请成功后，点击下载证书，下载Nginx的版本。
+下载完后解压，得到如下图如所示的4个文件，我们需要用到的是.key和.pem后缀的文件。
+为方便后续配置，将解压后的文件重命名为ssl.key和ssl.pem
+0.2 华为云证书下载 华为云的证书申请和下载和腾讯云基本一致。如下图所示，进行申请和下载Ngnix版本。
+下载解压后，得到如下图所示的文件。
+为方便后续配置，将文件分别重命名ssl.crt和ssl.key
+1. Nginx的SSL模块安装 nginx的安装过程可以参考前言里面的连接。刚安装的nginx一般是没有自带ssl模块的。使用下面的命令可以查看ngnix是否安装了http_ssl_module模块。在这里插入代码片
+/usr/local/nginx/sbin/nginx -V 如果出现 configure arguments: –with-http_ssl_module, 则已安装（下面的步骤可以跳过，进入 nginx.conf 配置）
+配置ssl模块
+进入nginx 的解压后的目录并重新进行安装设置
+$ cd nginx-1.20.2 $ ./configure --prefix=/usr/local/nginx --with-http_ssl_module 使用 make 命令编译（使用make install会重新安装nginx），此时当前目录会出现 objs 文件夹。然后输入下面的命令，用新的 nginx 文件覆盖当前的 nginx 文件。
+cp ./objs/nginx /usr/local/nginx/sbin/ 再次查看安装的模块（configure arguments: –with-http_ssl_module说明ssl模块已安装）。
+/usr/local/nginx/sbin/nginx -V nginx version: nginx/1.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/2e1c5b1fa8872f94427f1755df96017e/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/f16a7768f694192c92e3a5bc2cf9e1b6/" rel="bookmark">
+			谷歌浏览器，如何不用翻墙，下载插件？
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		1、点击链接：极简插件_Chrome扩展插件商店_优质crx应用或CrxDL - 下载谷歌浏览器(Chrome)扩展插件CRX
+2、搜索自己需要的插件并下载
+3、将下载的.crx文件拖入谷歌浏览器插件区域即可
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/c464a7cda9b9fd13948e58d26263dfa1/" rel="bookmark">
+			内网项目中引入NoVnc服务
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		 内网项目中引入NoVnc服务 背景目标方案部署步骤完成后验证效果 背景 目前项目中，管理的实例底层为虚拟机，而在用户或运维人员管理具体的实例时，需另外启动VNC Viewer客户端才能配置实例，增加了操作复杂性，所以准备采用web vnc的方式，更快捷更方便的在网页上操作
+目标 在项目页面中，选择相应的实例，点击远程进入vnc页面
+方案 1、项目所在服务器上（liunx系统）部署novnc服务，前台通过访问url的方式进入vnc页面
+2、因为是内网项目，所以首先需要获取novnc的离线安装包及其依赖包，这里我整理好了，有需要的可以下载（里面附带一键安装的脚本）
+（链接：https://pan.baidu.com/s/1jD3f7mzfd5aZHysHwK8uLQ 提取码：v70u）
+3、部署完成后，在/usr/share/novnc/conf下创建文件：tokens.conf，里面的内容格式为：虚拟机标识: ip:端口号，注意虚拟机标识的冒号后面有空格哈，一条虚拟机一行
+4、前台点击某个实例，只需访问url（地址附带虚拟机标识参数）即可进入vnc页面
+5、如果是在线项目，无需离线部署，请看如下的部署步骤：
+部署步骤 1、在线安装novnc
+wget -O /etc/yum.repos.d/epel.repo http://mirrors.cloud.tencent.com/repo/epel-7.repo yum install novnc 2、设置novnc配置文件
+mkdir -p /usr/share/novnc/conf &amp;&amp; cd /usr/share/novnc/conf vi tokens.conf tokens.conf的内容举例如下：
+host1: 192.168.1.10:8001
+host2: 192.168.1.11:8002
+这里的host1作为虚拟机标识可随意设置
+格式要求为：虚拟机标识: ip:端口号
+注意标识冒号后面有空格
+3、生成证书和密钥以供 Websockify 加载
+openssl req -x509 -nodes -newkey rsa:2048 -keyout /usr/share/novnc/conf/self.pem -out /usr/share/novnc/conf/self.pem -days 365 -batch 4、websockity实现代理到目标机器，这里设置的端口号为23017，可随意修改，可以理解为启动后novnc的服务端口就是此端口
+websockify -D --web=/usr/share/novnc/ --cert=/usr/share/novnc/conf/self.pem 23017 --target-config=/usr/share/novnc/conf/tokens.conf 完成后验证效果 在浏览器输入：https://novnc所在服务器地址:novnc的服务端口/vnc_auto.html?path=/conf?token=虚拟机标识 
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/92f9fae20078c9b7c5ac1ab6ba6763c2/" rel="bookmark">
+			是使用local_setup.bash 还是 setup.bash
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		编译完ros2程序后，我们会发现install目录下有两个脚本local_setup.bash 和 setup.bash。执行程序前，通常需要source一下install目录下的脚本，以便环境变量准备就绪。这样ros2 run和ros2 launch就能找到对应的执行文件和依赖。
+下面的内容是从setup.bash中截取出来的一段。可以发现它会先source 一下/opt/ros/galactic目录再source 一下/home/ubuntu/turtlebot3_ws/install目录，最后再source一下当前目录。这样就会把外部的多个工作空间囊括进来。如果多个工作空间中有相同名字的功能包可能就会互相冲突。
+# source chained prefixes # setting COLCON_CURRENT_PREFIX avoids determining the prefix in the sourced script COLCON_CURRENT_PREFIX="/opt/ros/galactic" _colcon_prefix_chain_bash_source_script "$COLCON_CURRENT_PREFIX/local_setup.bash" # setting COLCON_CURRENT_PREFIX avoids determining the prefix in the sourced script COLCON_CURRENT_PREFIX="/home/ubuntu/turtlebot3_ws/install" _colcon_prefix_chain_bash_source_script "$COLCON_CURRENT_PREFIX/local_setup.bash" # source this prefix # setting COLCON_CURRENT_PREFIX avoids determining the prefix in the sourced script COLCON_CURRENT_PREFIX="$(builtin cd "`dirname "${BASH_SOURCE[0]}"`" &gt; /dev/null &amp;&amp; pwd)" _colcon_prefix_chain_bash_source_script "$COLCON_CURRENT_PREFIX/local_setup.bash" unset COLCON_CURRENT_PREFIX unset _colcon_prefix_chain_bash_source_script 而local_setup.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/92f9fae20078c9b7c5ac1ab6ba6763c2/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/f15adea497b29f35b739fd793c4e4771/" rel="bookmark">
+			uniapp使用阿里百川SDK唤醒淘宝APP 打开淘宝领券页面/渠道备案,uniapp对接淘宝联盟等等超级详细
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		附录:
+本文主要针对使用uniapp开发淘宝客APP而写,文章内容会讲到uniapp如何使用阿里百川sdk登录淘宝?如何使用阿里百川sdk做渠道授权,uniapp如何打开淘宝商品领券页面,自己开发APP，淘宝联盟怎么跟踪订单？等等
+一、使用前的准备工作 首先到 阿里百川网站 -&gt;注册-&gt;新建应用-&gt;填写好相关应用的包名-&gt; 获取应用的 安全图片 用于验证应用使用的合法性
+二、必须要开通《 百川电商SDK 》 ，否则授权会出问题，如果不做返利模式,直接打开领券页面的可以忽略此步骤 三、获取应用安全图片 选择自己要使用的应用,生成对应的安全图片.百川更新到 4.0 以上版本后，统一使用了 V5 版本安全图片。安卓 Android 需要上传apk 安装包来获取安全图片,apk安装包, 使用你的安卓证书, 提交云打包生成apk 安装包后,再到百川上传来获取安全图片.如包名或证书有更改 都需要重新获取安全图片,不然会初始化会失败,这里上传的时候可以直接上传空包,百川只校验签名信息. 刚开通百川电商SDK以后,可以过十几分钟在获取安全图,百川可能有缓存会导致授权失败
+四、插件配置 打开插件地址，点击试用，选择一个要绑定的项目,然后输入APP的包名
+在uniapp项目根目录下创建nativeplugins 插件文件夹, 主要是存放安全图和插件的其他文件,包含 ios 和 android 子目录, 插件名称:xiguazhu_baichuan 文件夹名不能修改, 具体看图片所示.
+按照图中创建文件夹 提示： 如果需要使用支付宝功能，要把插件包中的 UTDID.framework 和 utdid4all-1.5.2.jar 文件删除掉，如果不需要则保留一起打包. UTDID.framework文件和 utdid4all-1.5.2.jar文件以及整个目录可以问百川插件作者要
+第一种情况. 需要使用uniapp 官方的支付宝功能时百川配置说明IOS 苹果在插件目录下保留安全图片即可:yw_1222_baichuan.jpg (名字必须叫这个)Android 安卓在插件目录下保留安全图片即可:yw_1222_baichuan.jpg (名字必须叫这个) 第二种情况. 未使用uniapp 官方的支付宝功能时百川配置说明IOS 苹果在插件目录下保留文件: UTDID.framework +yw_1222_baichuan.jpg (名字必须叫这个)Android 安卓在插件目录下保留文件: utdid4all-1.5.2.jar + yw_1222_baichuan.jpg(名字必须叫这个) IOS 端唤起淘宝客户端需要特别设置下,在配置 manifest.json 文件中,找到 ios 项,加入以下代码 "
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/f15adea497b29f35b739fd793c4e4771/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/97f73941c323488939ff9fa6650a19e0/" rel="bookmark">
+			GTest从入门到入门
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		GTest从入门到入门 1 GTest简介 GTest是Google的开源库，是一个功能强大的跨平台C++测试功能库。对于非测试工程师的开发人员来说，学习GTest有利于进行代码的单元测试。
+GTest的功能不止于单元测试，事实上，GTest可以适用于各种测试。
+GTest的文档中如是说。但小白只是个初级程序员，所以能做好单元测试已经非常满足了。
+2 GTest 1.8.1 VS2013+CMake 编译 GTest作为一个开源项目，在github上有完整源码并还在维护中
+GTest传送门
+截至小白写这篇博客为止，GTest的最新版本是v1.11.0，但是很可惜，这个最新版本不支持VS2013，必须要VS2015以上才能使用。鉴于小白工作团队使用的工具所限，小白只能选择最后一个支持VS2013的GTest版本，即v1.8.1。
+从github上把v1.8.1版本的源码下载下来，然后用CMake进行编译。
+这个编译过程非常简单，比之GLOG的少了不少坑。
+默认的配置就好，不需要更改任何勾选。
+打开工程之后，直接“生成”-&gt;“批生成”-&gt;ALL_BUILD和INSTALL的Release x64生成。
+然后掉进第一个坑：
+这里的两个bug不是什么大事，只需要修改一下gmock和gmock_main两个项目下的属性：
+在C/C++ -&gt; 常规 -&gt; “将警告视为错误”选成“否”。
+再次尝试，有可能遇上以下bug:
+这个问题需要在INSTALL项目的属性下，修改“配置属性”-&gt; “生成事件”-&gt; “后期生成事件”，把“命令行”一行内的代码删除。这行命令需要有管理员权限，小白这里没有。简单粗暴，咋就不进行相关操作了，毕竟我们是通过第三方库的方式调用，并不需要注册到系统。
+如果一切顺利的话，应该会有7个项目编译成功：
+至此编译应该是成功了，我们再建一个工程testGtest目录如下：
+├─3rdparty │ └─gtest │ ├─include │ │ └─gtest │ │ └─internal │ │ └─custom │ └─lib ├─build │ └─x64 │ └─Release ├─source └─windows └─testGtest └─x64 └─Release └─testGtest.tlog 这里只需要特别注意一下3rdparty目录下的结构：
+gtest的include下一定要按照gtest的源路径关系设置，具体可参考源码路径下的
+googletest-release-1.8.1\googletest\include\gtest
+lib中只需要刚刚编译得到的gtest.lib和gtest_mock.lib，这两个文件从刚刚编译的build路径下的
+build\googlemock\gtest\Release去寻找即可。（这里有一点点坑，编译得到库的位置在googlemock目录下，而没有直接的gtest或googletest目录）
+到这里，我们的准备工作就做完了。（不得不感叹，还是比GLOG编译时遇到的坑要少很多）。
+3. GTest基础 GTest的文档翔实，地址在GoogleTest Primer。
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/97f73941c323488939ff9fa6650a19e0/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/bec185898f29a93a8ebde67c50f3bbda/" rel="bookmark">
+			算法-四种单链表反转方法
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		单链表反转详解（4种算法实现） 通过前面章节的学习，读者已经对单链表以及它的用法有了一个完整的了解。在此基础上，本节再带领大家研究一个和单链表有关的问题，即如何实现单链表的反转。
+反转链表，又可以称为翻转或逆置链表，它们表达的是同一个意思。以图 1 所示的链表为例：
+图 1 未反转的链表
+经过反转（翻转、逆置）后，得到的新链表如图 2 所示：
+图 2 反转后的链表
+通过对比图 1 和 图 2 中的链表不难得知，所谓反转链表，就是将链表整体“反过来”，将头变成尾、尾变成头。那么，如何实现链表的反转呢？
+常用的实现方案有 4 种，这里分别将它们称为迭代反转法、递归反转法、就地逆置法和头插法。值得一提的是，递归反转法更适用于反转不带头节点的链表；其它 3 种方法既能反转不带头节点的链表，也能反转带头节点的链表。
+本节将以图 1 所示，即不带头节点的链表为例，给大家详细讲解各算法的实现思想。
+1、迭代反转链表 该算法的实现思想非常直接，就是从当前链表的首元节点开始，一直遍历至链表的最后一个节点，这期间会逐个改变所遍历到的节点的指针域，另其指向前一个节点。
+具体的实现方法也很简单，借助 3 个指针即可。以图 1 中建立的链表为例，首先我们定义 3 个指针并分别命名为 beg、mid、end。它们的初始指向如图 3 所示：
+图 3 迭代反转链表的初始状态
+在上图的基础上，遍历链表的过程就等价为：3 个指针每次各向后移动一个节点，直至 mid 指向链表中最后一个节点（此时 end 为 NULL ）。需要注意的是，这 3 个指针每移动之前，都需要做一步操作，即改变 mid 所指节点的指针域，另其指向和 beg 相同。
+1) 在图 3 的基础上，我们先改变 mid 所指节点的指针域指向，另其和 beg 相同（即改为 NULL），然后再将 3 个指针整体各向后移动一个节点。整个过程如图 4 所示：
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/bec185898f29a93a8ebde67c50f3bbda/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/d60d33f5545d2ca79fa79dab1bf44849/" rel="bookmark">
+			【Python】如何用Python快速实现语音提醒功能
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		【背景】 有一些自动化工具，跑着跑着可能会出现不同的情况，人又不希望总是盯着程序，那就失去了自动化的意义。所以，为了提示情况，加上语音提醒功能是很有比较的。
+【思路】 借助于Python优秀的融合能力，以及Windows自带的语音功能，可以方便地在程序需要的地方添加语音提醒。类似于将文字Info语音化。
+【代码】 首先要引入语音Package：
+import speech 在需要播报语音的地方，这么写即可
+speech.say("任务执行成功") 微软对中文语音发音的支持很好，完全够用。
+这样就实现了，太简单了是不是？
+注意，如果不退出相应代码段，语音会一直持续播放。
+	</div>
+</article>
+</main>
+
+<div class="pagination">
+	<a class="pagination__item pagination__item--prev btn" href="/posts/page/60/">«</a>
+	<span class="pagination__item pagination__item--current">61/128</span>
+	<a class="pagination__item pagination__item--next btn" href="/posts/page/62/">»</a>
+</div>
+
+			</div>
+			
+
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

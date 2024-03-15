@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>ARMv8-AArch64 的异常处理模型详解之异常处理详解（同步异常和异步异常的分析和处理） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="ARMv8-AArch64 的异常处理模型详解之异常处理详解（同步异常和异步异常的分析和处理）" />
+<meta property="og:description" content="这里写目录标题 一，同步异常的分析1.1 同步异常分析-异常链接寄存器ELR1.2 同步异常分析-异常综合寄存器ESR，Exception Syndrome Register1.3 同步异常分析-错误地址寄存器FAR,Fault Address Register 二， 同步异常的处理示例 Synchronous exception handling三， 异步异常的处理示例 Asynchronous exception handling 一，同步异常的分析 在文章ARMv8-AArch64 的异常处理模型详解之异常类型 Exception types中提到过，同步异常是处理器在执行指令时产生的异常，是一种精确的，可以具体定位到是哪条指令导致异常的产生。下面笔者将介绍三个用于定位并分析同步异常产生的寄存器。
+1.1 同步异常分析-异常链接寄存器ELR 在文章ARMv8-AArch64 的异常处理模型详解之异常向量表vector tables中提到过，同步异常发生时，会将产生同步异常的那条指令的地址写入ELR，所以如果想知道是哪条指令导致异常的产生，软件在处理异常时可以读取ELR中的值进行分析。
+1.2 同步异常分析-异常综合寄存器ESR，Exception Syndrome Register ESR寄存器里保存着一些异常的诊断信息，比如异常产生的原因。在进入异常后，我们可以读取对应异常等级的ESR（ESR_EL1,ESR_EL2或者ESR_EL3），通过解析各个字段的数值所表示的含义，来分析出当前异常产生的原因。
+拿ESR的EC, bits [31:26]举例，这个EC字段指示了当前异常产生的原因，比如当EC == 0b100010时，按照ARM文档的描述，我们可知当前异常是因为PC未对齐（地址不以0x0 0x4 0x8 0xc结尾）。
+除了EC字段，还有IL字段，从该字段可知是32-bit长度还是16bit 长度的指令导致的异常：
+1.3 同步异常分析-错误地址寄存器FAR,Fault Address Register FAR寄存器将为一些同步异常保存导致异常发生的地址，包括如下同步异常：
+指令中止异常（Instruction Abort exceptions）, 此时ESR寄存器的EC 值为0x20 或者0x21，
+数据中止异常，Data Abort exceptions, 此时ESR寄存器的EC 值为0x24 或者 0x25：
+PC对齐错误异常，PC alignment fault exceptions，此时ESR寄存器的EC 值为0x22。
+调试异常的观察点异常，Watchpoint exceptions，此时ESR寄存器的EC 值0x34 或者0x35：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/de39c02ea117ad8e0e26cac7c17be807/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-26T00:23:03+08:00" />
+<meta property="article:modified_time" content="2024-02-26T00:23:03+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">ARMv8-AArch64 的异常处理模型详解之异常处理详解（同步异常和异步异常的分析和处理）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>这里写目录标题</h4> 
+ <ul><li><a href="#_2" rel="nofollow">一，同步异常的分析</a></li><li><ul><li><a href="#11_ELR_4" rel="nofollow">1.1 同步异常分析-异常链接寄存器ELR</a></li><li><a href="#12_ESRException_Syndrome_Register_6" rel="nofollow">1.2 同步异常分析-异常综合寄存器ESR，Exception Syndrome Register</a></li><li><a href="#13_FARFault_Address_Register_14" rel="nofollow">1.3 同步异常分析-错误地址寄存器FAR,Fault Address Register</a></li></ul> 
+  </li><li><a href="#__Synchronous_exception_handling_28" rel="nofollow">二， 同步异常的处理示例 Synchronous exception handling</a></li><li><a href="#__Asynchronous_exception_handling_46" rel="nofollow">三， 异步异常的处理示例 Asynchronous exception handling</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_2"></a>一，同步异常的分析</h2> 
+<p>在文章<a href="https://blog.csdn.net/luolaihua2018/article/details/135568107?spm=1001.2014.3001.5501">ARMv8-AArch64 的异常处理模型详解之异常类型 Exception types</a>中提到过，同步异常是处理器在执行指令时产生的异常，是一种精确的，可以具体定位到是哪条指令导致异常的产生。下面笔者将介绍三个用于定位并分析同步异常产生的寄存器。</p> 
+<h3><a id="11_ELR_4"></a>1.1 同步异常分析-异常链接寄存器ELR</h3> 
+<p>在文章<a href="https://blog.csdn.net/luolaihua2018/article/details/136178104?spm=1001.2014.3001.5501">ARMv8-AArch64 的异常处理模型详解之异常向量表vector tables</a>中提到过，同步异常发生时，会将产生同步异常的那条指令的地址写入ELR，所以如果想知道是哪条指令导致异常的产生，软件在处理异常时可以读取ELR中的值进行分析。</p> 
+<h3><a id="12_ESRException_Syndrome_Register_6"></a>1.2 同步异常分析-异常综合寄存器ESR，Exception Syndrome Register</h3> 
+<p>ESR寄存器里保存着一些异常的诊断信息，比如异常产生的原因。在进入异常后，我们可以读取对应异常等级的ESR（ESR_EL1,ESR_EL2或者ESR_EL3），通过解析各个字段的数值所表示的含义，来分析出当前异常产生的原因。<br> <img src="https://images2.imgbox.com/ad/72/Y5WJjwVz_o.png" alt="在这里插入图片描述"><br> 拿ESR的EC, bits [31:26]举例，这个EC字段指示了当前异常产生的原因，比如当EC == 0b100010时，按照ARM文档的描述，我们可知当前异常是因为PC未对齐（地址不以0x0 0x4 0x8 0xc结尾）。<br> <img src="https://images2.imgbox.com/34/79/soIVMe0c_o.png" alt="在这里插入图片描述"><br> 除了EC字段，还有IL字段，从该字段可知是32-bit长度还是16bit 长度的指令导致的异常：<br> <img src="https://images2.imgbox.com/04/ae/P4rdLgUA_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="13_FARFault_Address_Register_14"></a>1.3 同步异常分析-错误地址寄存器FAR,Fault Address Register</h3> 
+<p>FAR寄存器将为一些同步异常保存导致异常发生的地址，包括如下同步异常：</p> 
+<ul><li> <p>指令中止异常（Instruction Abort exceptions）, 此时ESR寄存器的EC 值为0x20 或者0x21，<br> <img src="https://images2.imgbox.com/e3/be/juAKEati_o.png" alt="在这里插入图片描述"></p> </li><li> <p>数据中止异常，Data Abort exceptions, 此时ESR寄存器的EC 值为0x24 或者 0x25：<br> <img src="https://images2.imgbox.com/01/a2/9k7QmbOn_o.png" alt="在这里插入图片描述"></p> </li><li> <p>PC对齐错误异常，PC alignment fault exceptions，此时ESR寄存器的EC 值为0x22。<br> <img src="https://images2.imgbox.com/fa/38/nYql8kfo_o.png" alt="在这里插入图片描述"></p> </li><li> <p>调试异常的观察点异常，Watchpoint exceptions，此时ESR寄存器的EC 值0x34 或者0x35：<br> <img src="https://images2.imgbox.com/27/75/R7wHMiix_o.png" alt="在这里插入图片描述"><br> FAR寄存器中的保存的地址是指令获取或数据访问时，导致指令或数据中止的异常的地址。</p> </li></ul> 
+<h2><a id="__Synchronous_exception_handling_28"></a>二， 同步异常的处理示例 Synchronous exception handling</h2> 
+<p>假设有这么一个场景：执行在EL0的AArch32 应用程序需要向执行在EL1的AArch64 操作系统请求一个堆的内存分配，它需要执行一个SVC指令，产生一个SVC同步异常，这将发生如下事件：</p> 
+<ul><li>当前的处理器状态PSTATE将会保存到SPSR_EL1中。</li><li>产生异常指令（SVC）的下一条指令的地址将会被写入到ELR_EL1中。</li><li>异常诊断信息（导致异常发生的原因）将会被记录到ESR_EL1寄存器中。</li><li>目标执行状态取决于HCR_EL2.RW 位。</li><li>当前的处理器状态PSTATE将会被更新：异常等级将会切到EL1，执行状态更行到AArch64</li><li>PC将会跳转到VBAR_EL1+ 600的异常向量，因为是同步异常，有来自低异常等级的异常等级切换，并且低的异常等级为AArch32，所以根据异常向量的选择要求，将选择VBAR_EL1+ 600处的异常向量作为异常处理器。</li><li>在top exception handler中，在进行异常处理前，当前处理器的寄存器上下文将会被压入到SP_EL1中。</li><li>在top exception handler中，根据ESR中的信息，知道当前异常为SVC异常，所以跳转到指定的SVC异常处理函数中。</li><li>在SVC异常处理函数执行完成后，回到top exception handler。</li><li>在top exception handler中，将之前压入到SP_EL1中的寄存器上下文恢复，并执行ERET指令。</li><li>ERET指令包括两个步骤：将SPSR_EL1的值恢复到PSTATE中（包括异常等级为EL0，执行状态为AArch32），然后将ELR_EL1中的值写入到PC中。</li></ul> 
+<p>以上就是执行SVC指令从EL0进入到EL1进行异常处理，然后返回的一般流程。<br> 上述场景还尚未考虑到安全状态的切换，如果是EL0+AArch32+Non-secure状态下，要进入到EL1+AArch64+secure状态进行某些操作，则处理流程将更加复杂。之前的文章提到过，Secure状态的切换必须经过EL3，所以要想实现此操作，中间还需要执行SMC指令进入到EL3。</p> 
+<h2><a id="__Asynchronous_exception_handling_46"></a>三， 异步异常的处理示例 Asynchronous exception handling</h2> 
+<p>异步异常，比如中断，是来自处理器外部的信号，或者SError，来自内存系统的的错误反馈。ARM没有规定异步异常应该什么时候发生，并且，关于异步异常与同步异常的优先级问题，如果同步异常和异步异常同时发生，那么处理器先处理哪一个，这个是由处理器的具体实现定义的。<br> 假设有这么一个场景：当处理器在EL0 AArch32状态下执行用户程序时，发生了一个IRQ中断，假设HCR_EL2 和 SCR_EL3都以及被配置成将当前IRQ中断路由到EL1 AArch64状态下处理，下图为该中断的处理流程：<br> <img src="https://images2.imgbox.com/28/b9/Feqvx62S_o.png" alt="在这里插入图片描述"></p> 
+<ul><li>当前的处理器状态PSTATE将会保存到SPSR_EL1中。</li><li>中断发生时，第一条未被执行完成的指令的地址将会被写入到ELR_EL1中。</li><li>异常诊断信息（导致异常发生的原因）将会被记录到ESR_EL1寄存器中。</li><li>目标执行状态取决于HCR_EL2.RW 位。</li><li>当前的处理器状态PSTATE将会被更新：异常等级将会切到EL1，执行状态更行到AArch64</li><li>PC将会跳转到VBAR_EL1+ 0x680的异常向量，因为是IRQ中断，有来自低异常等级的异常等级切换，并且低的异常等级为AArch32，所以根据异常向量的选择要求，将选择VBAR_EL1+ 0x680处的异常向量作为异常处理器。</li><li>在top exception handler中，在进行异常处理前，当前处理器的寄存器上下文将会被压入到SP_EL1中。</li><li>在top exception handler中，跳转到指定的IRQ异常处理函数中。</li><li>在IRQ处理函数执行完成后，回到top exception handler。</li><li>在top exception handler中，将之前压入到SP_EL1中的寄存器上下文恢复，并执行ERET指令。</li><li>ERET指令包括两个步骤：将SPSR_EL1的值恢复到PSTATE中（包括异常等级为EL0，执行状态为AArch32），然后将ELR_EL1中的值写入到PC中。</li></ul> 
+<p>以上就是进行IRQ中断异常处理，然后返回的一般流程。需要注意的是，处理器或者说是IRQ handler并没有能力判断中断源，只是收到了IRQ中断信号，并开始IRQ中断处理。至于具体的中断源判断、中断优先级以及中断属性（edge/level, secure/non-sercure）配置的工作，由GIC来完成。通过读取GIC的IAR（Interrupt Acknowledge Registers）寄存器，处理器可以知道当前中断源的中断号。一旦中断被处理完成，处理器可以配置GIC的EOIR（End of Interrupt Register）寄存器，来通知GIC当前中断已经被处理完成，并且该中断的状态也随即会变成inactive。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/224bcf6596b5b38c19194dc66bf206da/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">肖志夫：美副防长宣称要以“光速”与中国争夺AI“制高点”</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/423ba0d53e0599e89295f06b772ee5b4/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Python世界之语句</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

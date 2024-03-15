@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>踩坑系列 - BigDecimal - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="踩坑系列 - BigDecimal" />
+<meta property="og:description" content="BigDecimal引发的血案： 从事金融开发已经有快一年了，最近开发一个关于汇率和利息计算的业务，发现在使用BigDecimal的时候，遇到了几个很抓马的BUG，为了避免再犯，所以写了这个系列的文章记录一下，主要是记录工作期间（金融行业）遇到的一些坑，今天是第一篇，以后遇到的坑都会记录在此系列里面，还望各位大佬指点，也希望能帮助到一些小伙伴。
+场景一、BigDecimal实例化造成的数值错误 问题场景代码
+/** * 计算利息Service */ public class CountInterestServiceImple implements ICountInterestService { public void countInterest() { // 计算利息 BigDecimal rate = new BigDecimal(0.01); System.out.println(&#34;rate = &#34; &#43; rate ); // 业务逻辑 // ... } } 通过输出发现这里的rate期望值应该是0.01，但是实际上却是上图所示的值。
+原因
+是因为BigDecimal在new的时候，会将double类型的参数转化为二进制的等价字节，然后存入BigDecimal中，但是对于想0.01这种没有值可以转化为二进制的等价数值的时候，就会出现一个近似值的情况
+解决方式
+有两种解决方式：
+使用BigDecimal.valueof()方法，构建出一个BigDecimal使用new BigDecimal(“”)，直接绕过二进制转化，直接使用String，底层double.valueof转化。 BigDecimal bigDecimal2 = BigDecimal.valueOf(0.01); BigDecimal bigDecimal3 = new BigDecimal(&#34;12345678456734535675.9543245347543475&#34;); System.out.println(&#34;bigDecimal2 = &#34; &#43; bigDecimal2); System.out.println(&#34;bigDecimal3 = &#34; &#43; bigDecimal3); 源码分析
+BigDecimal.valueOf()底层就是通过Double.toString(val)将其转为字符串存入BigDecimal里面的，所以归根到底，最直接的方式就是使用new BigDecimal(“”)的方式构建BigDecimal
+public static BigDecimal valueOf(double val) { // Reminder: a zero double returns &#39;0." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/6b519fa0de587d5c0478eed55f1c79d5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-01-02T08:19:19+08:00" />
+<meta property="article:modified_time" content="2024-01-02T08:19:19+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">踩坑系列 - BigDecimal</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-github-gist">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="BigDecimal_0"></a>BigDecimal引发的血案：</h2> 
+<p><code>从事金融开发已经有快一年了，最近开发一个关于汇率和利息计算的业务，发现在使用BigDecimal的时候，遇到了几个很抓马的BUG，为了避免再犯，所以写了这个系列的文章记录一下，主要是记录工作期间（金融行业）遇到的一些坑，今天是第一篇，以后遇到的坑都会记录在此系列里面，还望各位大佬指点，也希望能帮助到一些小伙伴。</code></p> 
+<h3><a id="BigDecimal_3"></a>场景一、BigDecimal实例化造成的数值错误</h3> 
+<p><strong>问题场景代码</strong></p> 
+<pre><code class="prism language-java"><span class="token comment">/**
+* 计算利息Service
+*/</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">CountInterestServiceImple</span> <span class="token keyword">implements</span> <span class="token class-name">ICountInterestService</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">countInterest</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 计算利息</span>
+		<span class="token class-name">BigDecimal</span> rate <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token number">0.01</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"rate = "</span> <span class="token operator">+</span> rate <span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token comment">// 业务逻辑</span>
+		<span class="token comment">// ...</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/70/e5/CGUfAs8h_o.png" alt="在这里插入图片描述"><br> 通过输出发现这里的rate期望值应该是0.01，但是实际上却是上图所示的值。</p> 
+<p><strong>原因</strong><br> 是因为BigDecimal在new的时候，会将double类型的参数转化为二进制的等价字节，然后存入BigDecimal中，但是对于想0.01这种没有值可以转化为二进制的等价数值的时候，就会出现一个近似值的情况<br> <strong>解决方式</strong><br> 有两种解决方式：</p> 
+<ol><li>使用BigDecimal.valueof()方法，构建出一个BigDecimal</li><li>使用new BigDecimal(“”)，直接绕过二进制转化，直接使用String，底层double.valueof转化。</li></ol> 
+<pre><code class="prism language-java"><span class="token class-name">BigDecimal</span> bigDecimal2 <span class="token operator">=</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span><span class="token number">0.01</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">BigDecimal</span> bigDecimal3 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"12345678456734535675.9543245347543475"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"bigDecimal2 = "</span> <span class="token operator">+</span> bigDecimal2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"bigDecimal3 = "</span> <span class="token operator">+</span> bigDecimal3<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/b2/b6/yztS1ZoZ_o.png" alt="在这里插入图片描述"><br> <strong>源码分析</strong><br> BigDecimal.valueOf()底层就是通过Double.toString(val)将其转为字符串存入BigDecimal里面的，所以归根到底，最直接的方式就是使用new BigDecimal(“”)的方式构建BigDecimal</p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token class-name">BigDecimal</span> <span class="token function">valueOf</span><span class="token punctuation">(</span><span class="token keyword">double</span> val<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+     <span class="token comment">// Reminder: a zero double returns '0.0', so we cannot fastpath</span>
+     <span class="token comment">// to use the constant ZERO.  This might be important enough to</span>
+     <span class="token comment">// justify a factory approach, a cache, or a few private</span>
+     <span class="token comment">// constants, later.</span>
+     <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token class-name">Double</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span>val<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">public</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token class-name">String</span> val<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">this</span><span class="token punctuation">(</span>val<span class="token punctuation">.</span><span class="token function">toCharArray</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> val<span class="token punctuation">.</span><span class="token function">length</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="BigDecimal_54"></a>场景二、BigDecimal比较大小</h3> 
+<p><strong>问题代码复现</strong></p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">CountInterestServiceImple</span> <span class="token keyword">implements</span> <span class="token class-name">ICountInterestService</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">countInterest</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 比较大小</span>
+		<span class="token class-name">BigDecimal</span> bigDecimal1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"0.01"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token class-name">BigDecimal</span> bigDecimal2 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"0.010"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>bigDecimal1<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>bigDecimal2<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token comment">// 业务逻辑</span>
+		<span class="token comment">// ...</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/55/63/ZefSlHqL_o.png" alt="在这里插入图片描述"><br> 通过输出发现这里打印的是false，与期望的true并不符。</p> 
+<p><strong>原因</strong><br> 是因为在使用equals比较大小的时候，BigDecimal里重写了Object的equals方法，不仅比较了数值大小，还比较了数值精度，也就是小数位数。0.01是两位小数，而0.010是三位小数，所以返回的是false。</p> 
+<p><strong>解决方式</strong><br> 使用CompareTo方法比较大小，有三种返回值</p> 
+<ul><li>-1：表示前面的数小于后面的数</li><li>0：表示两数相等</li><li>1：表示前面的数大于后面的数</li></ul> 
+<pre><code class="prism language-java"><span class="token class-name">BigDecimal</span> bigDecimal1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"0.01"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">BigDecimal</span> bigDecimal2 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"0.010"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>bigDecimal1<span class="token punctuation">.</span><span class="token function">compareTo</span><span class="token punctuation">(</span>bigDecimal2<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/0f/fb/PGpoJ51U_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="BigDecimal_85"></a>场景三、BigDecimal做运算</h3> 
+<blockquote> 
+ <p>bigDecimal在计算的时候，如果计算出来是一个无限小数，则会报错，需要考虑保留的小数位和保留模式</p> 
+</blockquote> 
+<p><strong>问题代码复现</strong></p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">CountInterestServiceImple</span> <span class="token keyword">implements</span> <span class="token class-name">ICountInterestService</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">countInterest</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 计算</span>
+		<span class="token class-name">BigDecimal</span> bigDecimal1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"1"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token class-name">BigDecimal</span> bigDecimal2 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"3"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token class-name">BigDecimal</span> bigDecimal3 <span class="token operator">=</span> bigDecimal1<span class="token punctuation">.</span><span class="token function">divide</span><span class="token punctuation">(</span>bigDecimal2<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 0.3333...</span>
+		<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>bigDecimal3<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token comment">// 业务逻辑</span>
+		<span class="token comment">// ...</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/93/65/QjWcCmLI_o.png" alt="在这里插入图片描述"><br> 可以看到打印抛出一个<code>Non-terminating decimal Execption</code>的错误，意思就是无线不循环小数，无法使用BigDecimal表示。</p> 
+<p><strong>解决方式</strong><br> 使用BigDecimal的带有小数精度和保留模式的构造函数，指定计算后小数的保留规则</p> 
+<pre><code class="prism language-java"><span class="token class-name">BigDecimal</span> bigDecimal1 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"1"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">BigDecimal</span> bigDecimal2 <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BigDecimal</span><span class="token punctuation">(</span><span class="token string">"3"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">BigDecimal</span> bigDecimal3 <span class="token operator">=</span> bigDecimal1<span class="token punctuation">.</span><span class="token function">divide</span><span class="token punctuation">(</span>bigDecimal2<span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token class-name">RoundingMode</span><span class="token punctuation">.</span><span class="token constant">HALF_UP</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// 0.33</span>
+<span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>bigDecimal3<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/9f/db/PGmgyTyZ_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_114"></a>小结</h3> 
+<p>在金融行业里，BigDecimal的使用频率必然少不了，有的时候可以用Double来替换，大对于精度要求很高的场景，就不得不使用它，但是如果没有掌握正确的打开方式，又会造成反攻影响工期。上述三种场景是是我踩过的坑，记录下来，希望可以帮助到正在面临这类问题的小伙伴们。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/9b5f16a1d544a2ffe735b9faaf11e310/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">操作系统典型的调度算法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/322a884a0d44f73baab6254ff02dd82a/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">点云体素化</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

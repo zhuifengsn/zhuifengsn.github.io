@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>采用串口中断方式实现串口通信：停止/持续发送“hello windows!” - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="采用串口中断方式实现串口通信：停止/持续发送“hello windows!”" />
+<meta property="og:description" content="文章目录 一、stm32接收到字符“s”/“t”时停止/持续发送“hello windows!”1.STM32CubeMX工程创建2.程序编写3.程序编译及hex文件创建4.电路连接5.程序烧录6.串口调试7.运行结果 二、stm32接收到字符串“stop stm32!”/“go stm32!”时停止/持续发送“hello windows!”1.STM32CubeMX工程创建2.程序编写3.程序编译及hex文件创建4.电路连接5.程序烧录6.串口调试7.运行结果 三、总结四、参考链接 一、stm32接收到字符“s”/“t”时停止/持续发送“hello windows!” 1.STM32CubeMX工程创建 （1）打开STM32CubeMX主界面，点击“ACCESS TO MCU SELECTOR”,创建新项目
+（2）在“Commerical Part Number”里面选择自己需要的芯片，点击信息栏中的具体芯片信息选中，再点击“Start Project”
+（3）先点击System Core将其展开，再点击RCC，将HSE设置为Crystal/Ceramic Resonator
+（4）点击SYS，将Debug设置为Serial Wire
+（5）先点击Connectivity将其展开，再点击USART1，将Mode设置为Asynchronous
+（6）点击NVIC，勾选USART1 global interrupt
+（7）勾选PLLCLK和HSE，将晶振频率设置为最大值72MHz
+（8）点击Project Manager→Project，配置好自己的项目名和项目存放路径，然后将Application Structure设置为Basic，将IDE设置为MDK-ARM
+（9）点击Code Generate界面，选择生成初始化文件.c/.h，之后再点击GENERATE CODE即可成功创建工程
+2.程序编写 （1）在点击GENERATE CODE之后弹出来的界面点击Open Project即可跳转到Keil5进行程序编写
+（2）打开main.c文件
+在main函数前定义全局变量
+char c;//指令 0:停止 1:开始 char message[]=&#34;hello windows!\n&#34;;//输出信息 char tips[]=&#34;CommandError\n&#34;;//提示1 char tips1[]=&#34;Start.....\n&#34;;//提示2 char tips2[]=&#34;Stop......\n&#34;;//提示3 int flag=0;//标志 0:停止发送 1.开始发送 在main函数中设置接收中断
+函数说明
+◉函数原型
+HAL_UART_Receive_IT(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size) ◉功能
+功能：串口中断接收，以中断方式接收指定长度数据。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/89715876c5ba756f1f39d86f16f01d40/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-10-23T20:56:42+08:00" />
+<meta property="article:modified_time" content="2022-10-23T20:56:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">采用串口中断方式实现串口通信：停止/持续发送“hello windows!”</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#stm32sthello_windows_1" rel="nofollow">一、stm32接收到字符“s”/“t”时停止/持续发送“hello windows!”</a></li><li><ul><li><a href="#1STM32CubeMX_2" rel="nofollow">1.STM32CubeMX工程创建</a></li><li><a href="#2_21" rel="nofollow">2.程序编写</a></li><li><a href="#3hex_204" rel="nofollow">3.程序编译及hex文件创建</a></li><li><a href="#4_207" rel="nofollow">4.电路连接</a></li><li><a href="#5_215" rel="nofollow">5.程序烧录</a></li><li><a href="#6_223" rel="nofollow">6.串口调试</a></li><li><a href="#7_226" rel="nofollow">7.运行结果</a></li></ul> 
+  </li><li><a href="#stm32stop_stm32go_stm32hello_windows_234" rel="nofollow">二、stm32接收到字符串“stop stm32!”/“go stm32!”时停止/持续发送“hello windows!”</a></li><li><ul><li><a href="#1STM32CubeMX_235" rel="nofollow">1.STM32CubeMX工程创建</a></li><li><a href="#2_254" rel="nofollow">2.程序编写</a></li><li><a href="#3hex_437" rel="nofollow">3.程序编译及hex文件创建</a></li><li><a href="#4_440" rel="nofollow">4.电路连接</a></li><li><a href="#5_447" rel="nofollow">5.程序烧录</a></li><li><a href="#6_456" rel="nofollow">6.串口调试</a></li><li><a href="#7_459" rel="nofollow">7.运行结果</a></li></ul> 
+  </li><li><a href="#_465" rel="nofollow">三、总结</a></li><li><a href="#_467" rel="nofollow">四、参考链接</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="stm32sthello_windows_1"></a>一、stm32接收到字符“s”/“t”时停止/持续发送“hello windows!”</h2> 
+<h3><a id="1STM32CubeMX_2"></a>1.STM32CubeMX工程创建</h3> 
+<p>（1）打开STM32CubeMX主界面，点击“ACCESS TO MCU SELECTOR”,创建新项目<br> <img src="https://images2.imgbox.com/68/f9/F1OgmqzA_o.png" alt=""><br> （2）在“Commerical Part Number”里面选择自己需要的芯片，点击信息栏中的具体芯片信息选中，再点击“Start Project”<br> <img src="https://images2.imgbox.com/52/bf/HENFRGqG_o.png" alt=""><br> （3）先点击System Core将其展开，再点击RCC，将HSE设置为Crystal/Ceramic Resonator<br> <img src="https://images2.imgbox.com/3d/cd/rSlODL2I_o.png" alt=""><br> （4）点击SYS，将Debug设置为Serial Wire<br> <img src="https://images2.imgbox.com/1d/7c/lhUxQH4t_o.png" alt=""><br> （5）先点击Connectivity将其展开，再点击USART1，将Mode设置为Asynchronous<br> <img src="https://images2.imgbox.com/66/86/HxfmyfrL_o.png" alt=""><br> （6）点击NVIC，勾选USART1 global interrupt<br> <img src="https://images2.imgbox.com/a8/54/9V3lfOPh_o.png" alt=""><br> （7）勾选PLLCLK和HSE，将晶振频率设置为最大值72MHz<br> <img src="https://images2.imgbox.com/e1/07/cSGlSREH_o.png" alt=""><br> （8）点击Project Manager→Project，配置好自己的项目名和项目存放路径，然后将Application Structure设置为Basic，将IDE设置为MDK-ARM<br> <img src="https://images2.imgbox.com/44/84/UCYDTtKh_o.png" alt=""><br> （9）点击Code Generate界面，选择生成初始化文件.c/.h，之后再点击GENERATE CODE即可成功创建工程<br> <img src="https://images2.imgbox.com/a8/6b/J2ILZcOx_o.png" alt=""></p> 
+<h3><a id="2_21"></a>2.程序编写</h3> 
+<p>（1）在点击GENERATE CODE之后弹出来的界面点击Open Project即可跳转到Keil5进行程序编写<br> <img src="https://images2.imgbox.com/b8/b3/auPzTYYh_o.png" alt=""><br> <img src="https://images2.imgbox.com/62/c8/SErq6JPT_o.png" alt=""><br> （2）打开main.c文件<br> 在main函数前<code>定义全局变量</code></p> 
+<pre><code class="prism language-c"><span class="token keyword">char</span> c<span class="token punctuation">;</span><span class="token comment">//指令 0:停止  1:开始</span>
+<span class="token keyword">char</span> message<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"hello windows!\n"</span><span class="token punctuation">;</span><span class="token comment">//输出信息</span>
+<span class="token keyword">char</span> tips<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"CommandError\n"</span><span class="token punctuation">;</span><span class="token comment">//提示1</span>
+<span class="token keyword">char</span> tips1<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Start.....\n"</span><span class="token punctuation">;</span><span class="token comment">//提示2</span>
+<span class="token keyword">char</span> tips2<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Stop......\n"</span><span class="token punctuation">;</span><span class="token comment">//提示3</span>
+<span class="token keyword">int</span> flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span><span class="token comment">//标志 0:停止发送 1.开始发送</span>
+
+</code></pre> 
+<p>在main函数中<code>设置接收中断</code><br> <strong>函数说明</strong><br> ◉函数原型</p> 
+<pre><code class="prism language-c"> <span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span>UART_HandleTypeDef <span class="token operator">*</span>huart<span class="token punctuation">,</span> <span class="token class-name">uint8_t</span> <span class="token operator">*</span>pData<span class="token punctuation">,</span> <span class="token class-name">uint16_t</span> Size<span class="token punctuation">)</span>
+</code></pre> 
+<p>◉功能</p> 
+<blockquote> 
+ <p>功能：串口中断接收，以中断方式接收指定长度数据。<br> 大致过程是，设置数据存放位置，接收数据长度，然后使能串口接收中断。<br> 接收到数据时，会触发串口中断。<br> 再然后，串口中断函数处理，直到接收到指定长度数据<br> 而后关闭中断，进入中断接收回调函数，不再触发接收中断。(只触发一次中断)</p> 
+</blockquote> 
+<p>◉参数</p> 
+<blockquote> 
+ <p>UART_HandleTypeDef *huart UATR的别名<br> huart1 *pData 接收到的数据存放地址<br> Size 接收的字节数</p> 
+</blockquote> 
+<pre><code class="prism language-c"><span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<p>main函数中的<code>while循环</code>里面添加<code>传输代码</code></p> 
+<pre><code class="prism language-c"><span class="token keyword">if</span><span class="token punctuation">(</span>flag<span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+			<span class="token comment">//发送信息</span>
+			<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>message<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>message<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+			
+			<span class="token comment">//延时</span>
+			<span class="token function">HAL_Delay</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+
+</code></pre> 
+<p>在main函数下面<code>重写中断处理函数</code></p> 
+<pre><code class="prism language-c"><span class="token keyword">void</span> <span class="token function">HAL_UART_RxCpltCallback</span><span class="token punctuation">(</span>UART_HandleTypeDef <span class="token operator">*</span>huart<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	
+	<span class="token comment">//当输入的指令为0时,发送提示并改变flag</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'s'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips2<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips2<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">//当输入的指令为1时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'t'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips1<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips1<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">//当输入不存在指令时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">//重新设置中断</span>
+		<span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p><code>main函数全部代码</code>如下：</p> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"main.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"usart.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"gpio.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;string.h&gt;</span></span>
+<span class="token keyword">void</span> <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">char</span> c<span class="token punctuation">;</span><span class="token comment">//指令 s:停止  t:开始</span>
+<span class="token keyword">char</span> message<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"hello windows!\n"</span><span class="token punctuation">;</span><span class="token comment">//输出信息</span>
+<span class="token keyword">char</span> tips<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"CommandError\n"</span><span class="token punctuation">;</span><span class="token comment">//提示1</span>
+<span class="token keyword">char</span> tips1<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Start.....\n"</span><span class="token punctuation">;</span><span class="token comment">//提示2</span>
+<span class="token keyword">char</span> tips2<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Stop......\n"</span><span class="token punctuation">;</span><span class="token comment">//提示3</span>
+<span class="token keyword">int</span> flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span><span class="token comment">//标志 s:停止发送 t:开始发送</span>
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">HAL_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">MX_GPIO_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">MX_USART1_UART_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">//设置接受中断</span>
+	<span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	
+	<span class="token comment">//当flag为1时,每秒发送一次信息</span>
+	<span class="token comment">//当flag为0时,停止</span>
+  <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span>flag<span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+			<span class="token comment">//发送信息</span>
+			<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>message<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>message<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 			
+			<span class="token comment">//延时</span>
+			<span class="token function">HAL_Delay</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">void</span> <span class="token function">HAL_UART_RxCpltCallback</span><span class="token punctuation">(</span>UART_HandleTypeDef <span class="token operator">*</span>huart<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>	
+	<span class="token comment">//当输入的指令为s时,发送提示并改变flag</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'s'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips2<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips2<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>	
+	<span class="token comment">//当输入的指令为t时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'t'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips1<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips1<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>	
+	<span class="token comment">//当输入不存在指令时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+	<span class="token comment">//重新设置中断</span>
+		<span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  
+<span class="token punctuation">}</span>
+<span class="token comment">/* USER CODE END 4 */</span>
+<span class="token comment">/**
+  * @brief System Clock Configuration
+  * @retval None
+  */</span>
+<span class="token keyword">void</span> <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  RCC_OscInitTypeDef RCC_OscInitStruct <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  RCC_ClkInitTypeDef RCC_ClkInitStruct <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>OscillatorType <span class="token operator">=</span> RCC_OSCILLATORTYPE_HSI<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>HSIState <span class="token operator">=</span> RCC_HSI_ON<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>HSICalibrationValue <span class="token operator">=</span> RCC_HSICALIBRATION_DEFAULT<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>PLL<span class="token punctuation">.</span>PLLState <span class="token operator">=</span> RCC_PLL_NONE<span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_RCC_OscConfig</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>RCC_OscInitStruct<span class="token punctuation">)</span> <span class="token operator">!=</span> HAL_OK<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+    <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/** Initializes the CPU, AHB and APB buses clocks
+  */</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>ClockType <span class="token operator">=</span> RCC_CLOCKTYPE_HCLK<span class="token operator">|</span>RCC_CLOCKTYPE_SYSCLK                              <span class="token operator">|</span>RCC_CLOCKTYPE_PCLK1<span class="token operator">|</span>RCC_CLOCKTYPE_PCLK2<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>SYSCLKSource <span class="token operator">=</span> RCC_SYSCLKSOURCE_HSI<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>AHBCLKDivider <span class="token operator">=</span> RCC_SYSCLK_DIV1<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>APB1CLKDivider <span class="token operator">=</span> RCC_HCLK_DIV1<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>APB2CLKDivider <span class="token operator">=</span> RCC_HCLK_DIV1<span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_RCC_ClockConfig</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>RCC_ClkInitStruct<span class="token punctuation">,</span> FLASH_LATENCY_0<span class="token punctuation">)</span> <span class="token operator">!=</span> HAL_OK<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+    <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token comment">/* USER CODE BEGIN 4 */</span>
+<span class="token comment">/* USER CODE END 4 */</span>
+<span class="token comment">/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */</span>
+<span class="token keyword">void</span> <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  <span class="token comment">/* USER CODE BEGIN Error_Handler_Debug */</span>
+  <span class="token comment">/* User can add his own implementation to report the HAL error return state */</span>
+  <span class="token function">__disable_irq</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/* USER CODE END Error_Handler_Debug */</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="3hex_204"></a>3.程序编译及hex文件创建</h3> 
+<p>点击Rebuild编译程序，若没有错误即可成功创建hex文件<br> <img src="https://images2.imgbox.com/10/45/eeOgViC6_o.png" alt=""></p> 
+<h3><a id="4_207"></a>4.电路连接</h3> 
+<table><thead><tr><th>USB转TTL</th><th>STM32F103C8T6</th></tr></thead><tbody><tr><td>GND</td><td>GND</td></tr><tr><td>3v3</td><td>3v3</td></tr><tr><td>TXD</td><td>A10</td></tr><tr><td>RXD</td><td>A9</td></tr></tbody></table> 
+<h3><a id="5_215"></a>5.程序烧录</h3> 
+<p>置BOOT0为0，BOOT1为1<br> （1）打开mcuisp，选择串口为COM5，并选择生成的hex文件<br> <img src="https://images2.imgbox.com/69/f0/iMyZVWVp_o.png" alt=""><br> （2）点击读器件信息，若显示一切正常则进行下一步<br> <img src="https://images2.imgbox.com/29/4a/mPSEvxQD_o.png" alt=""><br> （3）点击开始编程，若显示一切正常则说明烧录成功<br> <img src="https://images2.imgbox.com/38/7b/iZnZlRFj_o.png" alt=""></p> 
+<h3><a id="6_223"></a>6.串口调试</h3> 
+<p>打开野火串口调试助手，将波特率设置为115200，数据位设置为8，停止位设置为1，校验位设置为None，然后点击打开串口<br> <img src="https://images2.imgbox.com/78/70/ZB4PV0pa_o.png" alt=""></p> 
+<h3><a id="7_226"></a>7.运行结果</h3> 
+<p>（1）在发送区输入t，然后按Ctrl+Enter键发送，接收区会显示提示CommandError和Start…，并持续发送hello windows!<br> <img src="https://images2.imgbox.com/93/99/OjjN61rA_o.png" alt=""></p> 
+<p>（2）点击清空重填，在发送区输入s，然后按Ctrl+Enter键发送，接收区会显示提示Stop…，并停止发送hello windows!<br> <img src="https://images2.imgbox.com/ae/de/KgWxOYpU_o.png" alt=""></p> 
+<h2><a id="stm32stop_stm32go_stm32hello_windows_234"></a>二、stm32接收到字符串“stop stm32!”/“go stm32!”时停止/持续发送“hello windows!”</h2> 
+<h3><a id="1STM32CubeMX_235"></a>1.STM32CubeMX工程创建</h3> 
+<p>（1）打开STM32CubeMX主界面，点击“ACCESS TO MCU SELECTOR”,创建新项目<br> <img src="https://images2.imgbox.com/af/d2/nEWRUMuz_o.png" alt=""><br> （2）在“Commerical Part Number”里面选择自己需要的芯片，点击信息栏中的具体芯片信息选中，再点击“Start Project”<br> <img src="https://images2.imgbox.com/a8/c8/LiFOG6lw_o.png" alt=""><br> （3）先点击System Core将其展开，再点击RCC，将HSE设置为Crystal/Ceramic Resonator<br> <img src="https://images2.imgbox.com/2e/66/rKEqee7D_o.png" alt=""><br> （4）点击SYS，将Debug设置为Serial Wire<br> <img src="https://images2.imgbox.com/5c/09/BEvoA2h7_o.png" alt=""><br> 5）先点击Connectivity将其展开，再点击USART1，将Mode设置为Asynchronous<br> <img src="https://images2.imgbox.com/d8/3b/2vUsK2qD_o.png" alt=""><br> （6）点击NVIC，勾选USART1 global interrupt<br> <img src="https://images2.imgbox.com/a1/31/fvYiiXsf_o.png" alt=""><br> （7）点击Clock Configuration勾选PLLCLK和HSE，将晶振频率设置为最大值72MHz<br> <img src="https://images2.imgbox.com/05/d7/deFBr43F_o.png" alt=""><br> （8）点击Project Manager→Project，配置好自己的项目名和项目存放路径，然后将Application Structure设置为Basic，将IDE设置为MDK-ARM<br> <img src="https://images2.imgbox.com/40/04/DV0pljQw_o.png" alt=""><br> （9）点击Code Generate界面，选择生成初始化文件.c/.h，之后再点击GENERATE CODE即可成功创建工程<br> <img src="https://images2.imgbox.com/9f/67/NNRax9mF_o.png" alt=""></p> 
+<h3><a id="2_254"></a>2.程序编写</h3> 
+<p>（1）在点击GENERATE CODE之后弹出来的界面点击Open Project即可跳转到Keil5进行程序编写<br> <img src="https://images2.imgbox.com/00/68/wCjVgv4H_o.png" alt=""><br> <img src="https://images2.imgbox.com/29/eb/zsifkSBe_o.png" alt=""><br> （2）打开main.c文件<br> 在main函数前<code>定义全局变量</code></p> 
+<pre><code class="prism language-c"><span class="token keyword">char</span> c<span class="token punctuation">;</span><span class="token comment">//指令 0:停止  1:开始</span>
+<span class="token keyword">char</span> message<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"hello windows!\n"</span><span class="token punctuation">;</span><span class="token comment">//输出信息</span>
+<span class="token keyword">char</span> tips<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"CommandError\n"</span><span class="token punctuation">;</span><span class="token comment">//提示1</span>
+<span class="token keyword">char</span> tips1<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Start.....\n"</span><span class="token punctuation">;</span><span class="token comment">//提示2</span>
+<span class="token keyword">char</span> tips2<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Stop......\n"</span><span class="token punctuation">;</span><span class="token comment">//提示3</span>
+<span class="token keyword">int</span> flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span><span class="token comment">//标志 0:停止发送 1.开始发送</span>
+
+</code></pre> 
+<p>在main函数中<code>设置接收中断</code><br> <strong>函数说明</strong><br> ◉函数原型</p> 
+<pre><code class="prism language-c"> <span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span>UART_HandleTypeDef <span class="token operator">*</span>huart<span class="token punctuation">,</span> <span class="token class-name">uint8_t</span> <span class="token operator">*</span>pData<span class="token punctuation">,</span> <span class="token class-name">uint16_t</span> Size<span class="token punctuation">)</span>
+</code></pre> 
+<p>◉功能</p> 
+<blockquote> 
+ <p>功能：串口中断接收，以中断方式接收指定长度数据。<br> 大致过程是，设置数据存放位置，接收数据长度，然后使能串口接收中断。<br> 接收到数据时，会触发串口中断。<br> 再然后，串口中断函数处理，直到接收到指定长度数据<br> 而后关闭中断，进入中断接收回调函数，不再触发接收中断。(只触发一次中断)</p> 
+</blockquote> 
+<p>◉参数</p> 
+<blockquote> 
+ <p>UART_HandleTypeDef *huart UATR的别名<br> huart1 *pData 接收到的数据存放地址<br> Size 接收的字节数</p> 
+</blockquote> 
+<pre><code class="prism language-c"><span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<p>main函数中的<code>while循环</code>里面添加<code>传输代码</code></p> 
+<pre><code class="prism language-c"><span class="token keyword">if</span><span class="token punctuation">(</span>flag<span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+			<span class="token comment">//发送信息</span>
+			<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>message<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>message<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+			
+			<span class="token comment">//延时</span>
+			<span class="token function">HAL_Delay</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+
+</code></pre> 
+<p>在main函数下面<code>重写中断处理函数</code></p> 
+<pre><code class="prism language-c"><span class="token keyword">void</span> <span class="token function">HAL_UART_RxCpltCallback</span><span class="token punctuation">(</span>UART_HandleTypeDef <span class="token operator">*</span>huart<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	
+	<span class="token comment">//当输入的指令为0时,发送提示并改变flag</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'s'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips2<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips2<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">//当输入的指令为1时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'t'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips1<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips1<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">//当输入不存在指令时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">//重新设置中断</span>
+		<span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p><code>main函数全部代码</code>如下：</p> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"main.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"usart.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"gpio.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;string.h&gt;</span></span>
+<span class="token keyword">void</span> <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">char</span> c<span class="token punctuation">;</span><span class="token comment">//指令 s:停止  t:开始</span>
+<span class="token keyword">char</span> message<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"hello windows!\n"</span><span class="token punctuation">;</span><span class="token comment">//输出信息</span>
+<span class="token keyword">char</span> tips<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"CommandError\n"</span><span class="token punctuation">;</span><span class="token comment">//提示1</span>
+<span class="token keyword">char</span> tips1<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Start.....\n"</span><span class="token punctuation">;</span><span class="token comment">//提示2</span>
+<span class="token keyword">char</span> tips2<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">"Stop......\n"</span><span class="token punctuation">;</span><span class="token comment">//提示3</span>
+<span class="token keyword">int</span> flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span><span class="token comment">//标志 s:停止发送 t:开始发送</span>
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">HAL_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">MX_GPIO_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">MX_USART1_UART_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">//设置接受中断</span>
+	<span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	
+	<span class="token comment">//当flag为1时,每秒发送一次信息</span>
+	<span class="token comment">//当flag为0时,停止</span>
+  <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span>flag<span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+			<span class="token comment">//发送信息</span>
+			<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>message<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>message<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 			
+			<span class="token comment">//延时</span>
+			<span class="token function">HAL_Delay</span><span class="token punctuation">(</span><span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">void</span> <span class="token function">HAL_UART_RxCpltCallback</span><span class="token punctuation">(</span>UART_HandleTypeDef <span class="token operator">*</span>huart<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>	
+	<span class="token comment">//当输入的指令为s时,发送提示并改变flag</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'s'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips2<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips2<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>	
+	<span class="token comment">//当输入的指令为t时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>c<span class="token operator">==</span><span class="token char">'t'</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips1<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips1<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>	
+	<span class="token comment">//当输入不存在指令时,发送提示并改变flag</span>
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		flag<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>tips<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>tips<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">0xFFFF</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+	<span class="token punctuation">}</span>
+	<span class="token comment">//重新设置中断</span>
+		<span class="token function">HAL_UART_Receive_IT</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>c<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  
+<span class="token punctuation">}</span>
+<span class="token comment">/* USER CODE END 4 */</span>
+<span class="token comment">/**
+  * @brief System Clock Configuration
+  * @retval None
+  */</span>
+<span class="token keyword">void</span> <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  RCC_OscInitTypeDef RCC_OscInitStruct <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  RCC_ClkInitTypeDef RCC_ClkInitStruct <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>OscillatorType <span class="token operator">=</span> RCC_OSCILLATORTYPE_HSI<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>HSIState <span class="token operator">=</span> RCC_HSI_ON<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>HSICalibrationValue <span class="token operator">=</span> RCC_HSICALIBRATION_DEFAULT<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>PLL<span class="token punctuation">.</span>PLLState <span class="token operator">=</span> RCC_PLL_NONE<span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_RCC_OscConfig</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>RCC_OscInitStruct<span class="token punctuation">)</span> <span class="token operator">!=</span> HAL_OK<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+    <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/** Initializes the CPU, AHB and APB buses clocks
+  */</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>ClockType <span class="token operator">=</span> RCC_CLOCKTYPE_HCLK<span class="token operator">|</span>RCC_CLOCKTYPE_SYSCLK                              <span class="token operator">|</span>RCC_CLOCKTYPE_PCLK1<span class="token operator">|</span>RCC_CLOCKTYPE_PCLK2<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>SYSCLKSource <span class="token operator">=</span> RCC_SYSCLKSOURCE_HSI<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>AHBCLKDivider <span class="token operator">=</span> RCC_SYSCLK_DIV1<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>APB1CLKDivider <span class="token operator">=</span> RCC_HCLK_DIV1<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>APB2CLKDivider <span class="token operator">=</span> RCC_HCLK_DIV1<span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_RCC_ClockConfig</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>RCC_ClkInitStruct<span class="token punctuation">,</span> FLASH_LATENCY_0<span class="token punctuation">)</span> <span class="token operator">!=</span> HAL_OK<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+    <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span class="token comment">/* USER CODE BEGIN 4 */</span>
+<span class="token comment">/* USER CODE END 4 */</span>
+<span class="token comment">/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */</span>
+<span class="token keyword">void</span> <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  <span class="token comment">/* USER CODE BEGIN Error_Handler_Debug */</span>
+  <span class="token comment">/* User can add his own implementation to report the HAL error return state */</span>
+  <span class="token function">__disable_irq</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/* USER CODE END Error_Handler_Debug */</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="3hex_437"></a>3.程序编译及hex文件创建</h3> 
+<p>点击Rebuild编译程序，若没有错误即可成功创建hex文件<br> <img src="https://images2.imgbox.com/35/3f/8vUjHRxe_o.png" alt=""></p> 
+<h3><a id="4_440"></a>4.电路连接</h3> 
+<table><thead><tr><th>USB转TTL</th><th>STM32F103C8T6</th></tr></thead><tbody><tr><td>GND</td><td>GND</td></tr><tr><td>3v3</td><td>3v3</td></tr><tr><td>TXD</td><td>A10</td></tr><tr><td>RXD</td><td>A9</td></tr></tbody></table> 
+<h3><a id="5_447"></a>5.程序烧录</h3> 
+<p>置BOOT0为0，BOOT1为1<br> （1）打开mcuisp，选择串口为COM5，并选择生成的hex文件<br> <img src="https://images2.imgbox.com/e8/33/ui1UC7WE_o.png" alt=""><br> （2）点击读器件信息，若显示一切正常则进行下一步<br> <img src="https://images2.imgbox.com/b9/81/aE8XghzR_o.png" alt=""><br> （3）点击开始编程，若显示一切正常则说明烧录成功<br> <img src="https://images2.imgbox.com/36/ec/cN4ZOX8B_o.png" alt=""></p> 
+<h3><a id="6_456"></a>6.串口调试</h3> 
+<p>打开野火串口调试助手，将波特率设置为115200，数据位设置为8，停止位设置为1，校验位设置为None，然后点击打开串口<br> <img src="https://images2.imgbox.com/89/2d/ZCQFtCPa_o.png" alt=""></p> 
+<h3><a id="7_459"></a>7.运行结果</h3> 
+<p>（1）在发送区输入go stm32!，然后按Ctrl+Enter键发送，接收区会显示提示Start…，并持续发送hello windows!<br> <img src="https://images2.imgbox.com/eb/6d/SdoidZan_o.png" alt=""></p> 
+<p>（2）点击清空重填，在发送区输入stop stm32!，然后按Ctrl+Enter键发送，接收区会显示提示Stop…，并停止发送hello windows!<br> <img src="https://images2.imgbox.com/0c/a5/J9OX6jRF_o.png" alt=""></p> 
+<h2><a id="_465"></a>三、总结</h2> 
+<p>做实验stm32接收到字符“s”/“t”时停止/持续发送“hello windows!”需要采用一个全局标量做信号灯,做实验stm32接收到字符串“stop stm32!”/“go stm32!”时停止/持续发送“hello windows!”要将接收到的连续字符保存到一个字符数组里，进行判别匹配。写一个接收字符串的函数，不然就会出错。通过本次实验，我知道了实现串口通信的多种方式，也对嵌入式有了更深入的了解，不过需要学习的仍然有很多。</p> 
+<h2><a id="_467"></a>四、参考链接</h2> 
+<p><a href="https://blog.csdn.net/qq_47281915/article/details/121053903?spm=1001.2014.3001.5506">https://blog.csdn.net/qq_47281915/article/details/121053903?spm=1001.2014.3001.5506</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/502af27111c731ac919f3d42d92f6d53/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">无法自动装配/未找到“XXX“类型的Bean解决办法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/495551d6ce0e2c2d9da16e0218e6c78a/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">STM32采用串口DMA方式，用115200bps或更高速率向上位机连续发送数据</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

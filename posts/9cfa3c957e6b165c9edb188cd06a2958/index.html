@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【lzy学习笔记-dive into deep learning】4.6 暂退法Dropout 的原理与代码实现 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【lzy学习笔记-dive into deep learning】4.6 暂退法Dropout 的原理与代码实现" />
+<meta property="og:description" content="4.6.1 重新审视过拟合 线性模型 当⾯对更多的特征而样本不⾜时，线性模型往往会过拟合。相反，当给出更多样本而不是特征，通常线性模型不会过拟合。
+不幸的是，线性模型泛化的可靠性是有代价的。简单地说，线性模型没有考虑到特征之间的交互作⽤。对于每个特征，线性模型必须指定正的或负的权重，而忽略其他特征。
+深度神经网络 2017年，⼀组研究⼈员通过在随机标记的
+图像上训练深度⽹络。这展⽰了神经⽹络的极⼤灵活性，因为⼈类很难将输⼊和随机标记的输出联系起来，但通过随机梯度下降优化的神经⽹络可以完美地标记训练集中的每⼀幅图像。想⼀想这意味着什么？假设标签是随机均匀分配的，并且有10个类别，那么分类器在测试数据上很难取得⾼于10%的精度，那么这⾥的泛化差距就⾼达90%，如此严重的过拟合。
+深度⽹络的泛化性质令⼈费解，而这种泛化性质的数学基础仍然是悬而未决的研究问题。
+vs 泛化性和灵活性之间的这种基本权衡被描述为偏差-方差权衡（bias-variance tradeoff）
+线性模型深度神经网络没有考虑到特征之间的交互作⽤。对于每个特征，线性模型必须指定正的或负的权重，而忽略其他特征。学习特征之间的交互。e.g.可能推断“尼⽇利亚”和“西联汇款”⼀起出现在电⼦邮件中表⽰垃圾邮件，但单独出现则不表⽰垃圾邮件。当给出更多样本而不是特征，通常线性模型不会过拟合。即使我们有⽐特征多得多的样本，深度神经⽹络也有可能过拟合。 4.6.2 扰动的稳健性 好的预测模型 期待好的预测模型能在未知的数据上有很好的表现：经典泛化理论认为，为了缩小训练和测试性能之间的差距，应该以简单的模型为目标。
+①简单性以较小维度的形式展现。
+e.g. 权重衰减（L2正则化）参数的范数代表了⼀种有⽤的简单性度量。
+②简单性的另⼀个⻆度是平滑性，即函数不应该对其输⼊的微小变化敏感。
+暂退法dropout的出现 原始论文：
+在训练过程中，建议在计算后续层之前向⽹络的每⼀层注⼊噪声。因为当训练⼀个有多层的深层⽹络时，注⼊噪声只会在输⼊-输出映射上增强平滑性。
+解读：
+暂退法在前向传播过程中，计算每⼀内部层的同时注⼊噪声，这已经成为训练神经⽹络的常⽤技术。这种⽅法之所以被称为暂退法，因为从表⾯上看是在训练过程中丢弃（drop out）⼀些神经元。在整个训练过程的每⼀次迭代中，标准暂退法包括在计算下⼀层之前将当前层中的⼀些节点置零。
+如何注入噪声 4.6.3 实践中的暂退法 4.6.4 从零开始实现 源代码遇到的问题
+Class Net
+import torch from torch import nn import commfuncs def dropout_layer(X, dropout): assert 0 &lt;= dropout &lt;= 1 if dropout == 1: return torch.zeros_like(X) if dropout == 0: return X # 从均匀分布U[0, 1]中抽取样本，样本数与这层神经网络的维度⼀致 # 保留那些对应样本大于p的节点，把剩下的丢弃 mask = (torch." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9cfa3c957e6b165c9edb188cd06a2958/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-02-16T23:07:28+08:00" />
+<meta property="article:modified_time" content="2022-02-16T23:07:28+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【lzy学习笔记-dive into deep learning】4.6 暂退法Dropout 的原理与代码实现</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="461__0"></a>4.6.1 重新审视过拟合</h3> 
+<h4><a id="_1"></a>线性模型</h4> 
+<p>当⾯对更多的特征而样本不⾜时，线性模型往往会过拟合。相反，当给出更多样本而不是特征，通常线性模型不会过拟合。<br> 不幸的是，线性模型泛化的可靠性是有代价的。简单地说，线性模型没有考虑到特征之间的交互作⽤。对于每个特征，线性模型必须指定正的或负的权重，而忽略其他特征。</p> 
+<h4><a id="_4"></a>深度神经网络</h4> 
+<p>2017年，⼀组研究⼈员通过在随机标记的<br> 图像上训练深度⽹络。这展⽰了神经⽹络的极⼤灵活性，因为⼈类很难将输⼊和随机标记的输出联系起来，但通过随机梯度下降优化的神经⽹络可以完美地标记<strong>训练集</strong>中的每⼀幅图像。想⼀想这意味着什么？假设标签是<strong>随机均匀分配的</strong>，并且有10个类别，那么分类器在测试数据上很难取得⾼于10%的精度，那么这⾥的泛化差距就⾼达90%，如此严重的过拟合。<br> 深度⽹络的泛化性质令⼈费解，而这种<strong>泛化性质的数学基础</strong>仍然是悬而未决的研究问题。</p> 
+<h4><a id="vs_8"></a>vs</h4> 
+<p>泛化性和灵活性之间的这种基本权衡被描述为<strong>偏差-方差权衡</strong>（bias-variance tradeoff）</p> 
+<table><thead><tr><th>线性模型</th><th>深度神经网络</th></tr></thead><tbody><tr><td>没有考虑到特征之间的交互作⽤。对于每个特征，线性模型必须指定正的或负的权重，而忽略其他特征。</td><td>学习特征之间的交互。e.g.可能推断“尼⽇利亚”和“西联汇款”⼀起出现在电⼦邮件中表⽰垃圾邮件，但单独出现则不表⽰垃圾邮件。</td></tr><tr><td></td><td></td></tr><tr><td>当给出更多样本而不是特征，通常线性模型不会过拟合。</td><td>即使我们有⽐特征多得多的样本，深度神经⽹络也有可能过拟合。</td></tr></tbody></table> 
+<h3><a id="462__15"></a>4.6.2 扰动的稳健性</h3> 
+<h4><a id="_16"></a>好的预测模型</h4> 
+<p>期待<strong>好的预测模型</strong>能在未知的数据上有很好的表现：经典泛化理论认为，为了缩小训练和测试性能之间的差距，应该以简单的模型为目标。<br> ①简单性以<strong>较小维度</strong>的形式展现。<br> e.g. 权重衰减（L2正则化）参数的范数代表了⼀种有⽤的简单性度量。<br> ②简单性的另⼀个⻆度是<strong>平滑性</strong>，即函数不应该对其输⼊的微小变化敏感。</p> 
+<h4><a id="dropout_21"></a>暂退法dropout的出现</h4> 
+<p>原始论文：<br> 在训练过程中，建议在计算后续层之前向⽹络的每⼀层注⼊噪声。因为当训练⼀个有多层的深层⽹络时，注⼊噪声只会在输⼊-输出映射上增强平滑性。<br> 解读：<br> 暂退法在前向传播过程中，计算每⼀内部层的同时注⼊噪声，这已经成为训练神经⽹络的常⽤技术。这种⽅法之所以被称为暂退法，因为从表⾯上看是在训练过程中丢弃（drop out）⼀些神经元。在整个训练过程的每⼀次迭代中，标准暂退法包括在计算下⼀层之前将当前层中的⼀些节点置零。</p> 
+<h4><a id="_26"></a>如何注入噪声</h4> 
+<p><img src="https://images2.imgbox.com/1a/46/wHPJtbOy_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="463__28"></a>4.6.3 实践中的暂退法</h3> 
+<p><img src="https://images2.imgbox.com/8e/a8/kWIVP911_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="464__30"></a>4.6.4 从零开始实现</h3> 
+<p><a href="https://www.cnblogs.com/blogwangwang/p/12153569.html" rel="nofollow">源代码遇到的问题</a><br> <a href="https://blog.csdn.net/qq_27825451/article/details/90550890">Class Net</a></p> 
+<pre><code class="prism language-python"><span class="token keyword">import</span> torch
+<span class="token keyword">from</span> torch <span class="token keyword">import</span> nn
+<span class="token keyword">import</span> commfuncs
+
+
+<span class="token keyword">def</span> <span class="token function">dropout_layer</span><span class="token punctuation">(</span>X<span class="token punctuation">,</span> dropout<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token keyword">assert</span> <span class="token number">0</span> <span class="token operator">&lt;=</span> dropout <span class="token operator">&lt;=</span> <span class="token number">1</span>
+    <span class="token keyword">if</span> dropout <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">:</span>
+        <span class="token keyword">return</span> torch<span class="token punctuation">.</span>zeros_like<span class="token punctuation">(</span>X<span class="token punctuation">)</span>
+    <span class="token keyword">if</span> dropout <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">:</span>
+        <span class="token keyword">return</span> X
+    <span class="token comment"># 从均匀分布U[0, 1]中抽取样本，样本数与这层神经网络的维度⼀致</span>
+    <span class="token comment"># 保留那些对应样本大于p的节点，把剩下的丢弃</span>
+    mask <span class="token operator">=</span> <span class="token punctuation">(</span>torch<span class="token punctuation">.</span>rand<span class="token punctuation">(</span>X<span class="token punctuation">.</span>shape<span class="token punctuation">)</span> <span class="token operator">&gt;</span> dropout<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token comment"># print(X)</span>
+    <span class="token comment"># tensor([[ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.],</span>
+    <span class="token comment">#         [ 8.,  9., 10., 11., 12., 13., 14., 15.]])</span>
+    <span class="token comment"># print(torch.rand(X.shape))</span>
+    <span class="token comment"># tensor([[0.1022, 0.1470, 0.5858, 0.9003, 0.0412, 0.0870, 0.3523, 0.0864],</span>
+    <span class="token comment">#         [0.9840, 0.3919, 0.8694, 0.2050, 0.4681, 0.3243, 0.5055, 0.5013]])</span>
+    <span class="token comment"># print(torch.rand(X.shape) &gt; dropout)</span>
+    <span class="token comment"># tensor([[ True, False, False,  True, False, False, False, False],</span>
+    <span class="token comment">#         [ True, False, False, False,  True, False, False, False]])</span>
+    <span class="token comment"># print(mask)</span>
+    <span class="token comment"># tensor([[1., 0., 0., 0., 0., 1., 0., 1.],</span>
+    <span class="token comment">#         [0., 1., 0., 0., 1., 0., 0., 1.]])</span>
+    <span class="token keyword">return</span> mask <span class="token operator">*</span> X <span class="token operator">/</span> <span class="token punctuation">(</span><span class="token number">1.0</span> <span class="token operator">-</span> dropout<span class="token punctuation">)</span> <span class="token comment"># 依据公式4.6.1</span>
+
+
+X <span class="token operator">=</span> torch<span class="token punctuation">.</span>arange<span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">,</span> dtype<span class="token operator">=</span>torch<span class="token punctuation">.</span>float32<span class="token punctuation">)</span><span class="token punctuation">.</span>reshape<span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">8</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token comment"># print(X)</span>
+<span class="token comment"># print(dropout_layer(X, 0))</span>
+<span class="token comment"># print(dropout_layer(X, 1))</span>
+<span class="token comment"># print(dropout_layer(X, 0.5))</span>
+
+<span class="token comment"># 引入的Fashion-MNIST数据集</span>
+num_inputs<span class="token punctuation">,</span> num_outputs<span class="token punctuation">,</span> num_hiddens1<span class="token punctuation">,</span> num_hiddens2 <span class="token operator">=</span> <span class="token number">784</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span>
+dropout1<span class="token punctuation">,</span> dropout2 <span class="token operator">=</span> <span class="token number">0.2</span><span class="token punctuation">,</span> <span class="token number">0.5</span>
+
+<span class="token comment"># 以将暂退法应⽤于每个隐藏层的输出（在激活函数之后），并且可以为每⼀层分别设置暂退概率</span>
+<span class="token comment"># 常⻅的技巧是在靠近输入层的地方设置较低的暂退概率</span>
+<span class="token comment"># 暂退法只在训练期间有效</span>
+<span class="token keyword">class</span> <span class="token class-name">Net</span><span class="token punctuation">(</span>nn<span class="token punctuation">.</span>Module<span class="token punctuation">)</span><span class="token punctuation">:</span><span class="token comment"># 自定义模型</span>
+    <span class="token keyword">def</span> <span class="token function">__init__</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> num_inputs<span class="token punctuation">,</span> num_outputs<span class="token punctuation">,</span> num_hiddens1<span class="token punctuation">,</span> num_hiddens2<span class="token punctuation">,</span> is_training<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+        <span class="token builtin">super</span><span class="token punctuation">(</span>Net<span class="token punctuation">,</span> self<span class="token punctuation">)</span><span class="token punctuation">.</span>__init__<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        self<span class="token punctuation">.</span>num_inputs <span class="token operator">=</span> num_inputs
+        self<span class="token punctuation">.</span>training <span class="token operator">=</span> is_training
+        self<span class="token punctuation">.</span>lin1 <span class="token operator">=</span> nn<span class="token punctuation">.</span>Linear<span class="token punctuation">(</span>num_inputs<span class="token punctuation">,</span> num_hiddens1<span class="token punctuation">)</span>
+        self<span class="token punctuation">.</span>lin2 <span class="token operator">=</span> nn<span class="token punctuation">.</span>Linear<span class="token punctuation">(</span>num_hiddens1<span class="token punctuation">,</span> num_hiddens2<span class="token punctuation">)</span>
+        self<span class="token punctuation">.</span>lin3 <span class="token operator">=</span> nn<span class="token punctuation">.</span>Linear<span class="token punctuation">(</span>num_hiddens2<span class="token punctuation">,</span> num_outputs<span class="token punctuation">)</span>
+        self<span class="token punctuation">.</span>relu <span class="token operator">=</span> nn<span class="token punctuation">.</span>ReLU<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+    <span class="token keyword">def</span> <span class="token function">forward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> X<span class="token punctuation">)</span><span class="token punctuation">:</span> <span class="token comment"># 连接关系</span>
+        H1 <span class="token operator">=</span> self<span class="token punctuation">.</span>relu<span class="token punctuation">(</span>self<span class="token punctuation">.</span>lin1<span class="token punctuation">(</span>X<span class="token punctuation">.</span>reshape<span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span> self<span class="token punctuation">.</span>num_inputs<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token keyword">if</span> self<span class="token punctuation">.</span>training <span class="token operator">==</span> <span class="token boolean">True</span><span class="token punctuation">:</span>
+            H1 <span class="token operator">=</span> dropout_layer<span class="token punctuation">(</span>H1<span class="token punctuation">,</span> dropout1<span class="token punctuation">)</span>
+        H2 <span class="token operator">=</span> self<span class="token punctuation">.</span>relu<span class="token punctuation">(</span>self<span class="token punctuation">.</span>lin2<span class="token punctuation">(</span>H1<span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token keyword">if</span> self<span class="token punctuation">.</span>training <span class="token operator">==</span> <span class="token boolean">True</span><span class="token punctuation">:</span>
+            H2 <span class="token operator">=</span> dropout_layer<span class="token punctuation">(</span>H2<span class="token punctuation">,</span> dropout2<span class="token punctuation">)</span>
+        out <span class="token operator">=</span> self<span class="token punctuation">.</span>lin3<span class="token punctuation">(</span>H2<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> out
+
+net <span class="token operator">=</span> Net<span class="token punctuation">(</span>num_inputs<span class="token punctuation">,</span> num_outputs<span class="token punctuation">,</span> num_hiddens1<span class="token punctuation">,</span> num_hiddens2<span class="token punctuation">)</span>
+
+<span class="token comment"># for param in net.parameters():</span>
+    <span class="token comment"># print("param",param)</span>
+    <span class="token comment"># print("param.shape",param.shape)</span>
+
+<span class="token comment"># 训练同多层感知机</span>
+num_epochs<span class="token punctuation">,</span> lr<span class="token punctuation">,</span> batch_size <span class="token operator">=</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">256</span>
+loss <span class="token operator">=</span> nn<span class="token punctuation">.</span>CrossEntropyLoss<span class="token punctuation">(</span>reduction<span class="token operator">=</span><span class="token string">'none'</span><span class="token punctuation">)</span>
+trainer_iter<span class="token punctuation">,</span> test_iter <span class="token operator">=</span> commfuncs<span class="token punctuation">.</span>load_data_fashion_mnist<span class="token punctuation">(</span>batch_size<span class="token punctuation">)</span>
+trainer <span class="token operator">=</span> torch<span class="token punctuation">.</span>optim<span class="token punctuation">.</span>SGD<span class="token punctuation">(</span>net<span class="token punctuation">.</span>parameters<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> lr<span class="token operator">=</span>lr<span class="token punctuation">)</span>
+commfuncs<span class="token punctuation">.</span>train_ch3<span class="token punctuation">(</span>net<span class="token punctuation">,</span> trainer_iter<span class="token punctuation">,</span> test_iter<span class="token punctuation">,</span> loss<span class="token punctuation">,</span> num_epochs<span class="token punctuation">,</span> trainer<span class="token punctuation">)</span>
+
+</code></pre> 
+<h3><a id="465__111"></a>4.6.5 简洁实现</h3> 
+<pre><code class="prism language-python"><span class="token keyword">import</span> torch
+<span class="token keyword">from</span> torch <span class="token keyword">import</span> nn
+<span class="token keyword">import</span> commfuncs
+
+dropout1<span class="token punctuation">,</span> dropout2 <span class="token operator">=</span> <span class="token number">0.2</span><span class="token punctuation">,</span> <span class="token number">0.5</span>
+net <span class="token operator">=</span> nn<span class="token punctuation">.</span>Sequential<span class="token punctuation">(</span>nn<span class="token punctuation">.</span>Flatten<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    nn<span class="token punctuation">.</span>Linear<span class="token punctuation">(</span><span class="token number">784</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    nn<span class="token punctuation">.</span>ReLU<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    nn<span class="token punctuation">.</span>Dropout<span class="token punctuation">(</span>dropout1<span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    nn<span class="token punctuation">.</span>Linear<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">256</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    nn<span class="token punctuation">.</span>ReLU<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    nn<span class="token punctuation">.</span>Dropout<span class="token punctuation">(</span>dropout2<span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    nn<span class="token punctuation">.</span>Linear<span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token comment"># 在训练时，Dropout层将根据指定的暂退概率随机丢弃上⼀层的输出（相当于下⼀层的输⼊）</span>
+<span class="token comment"># 在测试时，Dropout层仅传递数据。</span>
+<span class="token keyword">def</span> <span class="token function">init_weights</span><span class="token punctuation">(</span>m<span class="token punctuation">)</span><span class="token punctuation">:</span>
+    <span class="token keyword">if</span> <span class="token builtin">type</span><span class="token punctuation">(</span>m<span class="token punctuation">)</span> <span class="token operator">==</span> nn<span class="token punctuation">.</span>Linear<span class="token punctuation">:</span>
+        nn<span class="token punctuation">.</span>init<span class="token punctuation">.</span>normal_<span class="token punctuation">(</span>m<span class="token punctuation">.</span>weight<span class="token punctuation">,</span> std<span class="token operator">=</span><span class="token number">0.01</span><span class="token punctuation">)</span>
+
+net<span class="token punctuation">.</span><span class="token builtin">apply</span><span class="token punctuation">(</span>init_weights<span class="token punctuation">)</span>
+
+num_epochs<span class="token punctuation">,</span> lr<span class="token punctuation">,</span> batch_size <span class="token operator">=</span> <span class="token number">20</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">256</span>
+loss <span class="token operator">=</span> nn<span class="token punctuation">.</span>CrossEntropyLoss<span class="token punctuation">(</span>reduction<span class="token operator">=</span><span class="token string">'none'</span><span class="token punctuation">)</span>
+trainer_iter<span class="token punctuation">,</span> test_iter <span class="token operator">=</span> commfuncs<span class="token punctuation">.</span>load_data_fashion_mnist<span class="token punctuation">(</span>batch_size<span class="token punctuation">)</span>
+trainer <span class="token operator">=</span> torch<span class="token punctuation">.</span>optim<span class="token punctuation">.</span>SGD<span class="token punctuation">(</span>net<span class="token punctuation">.</span>parameters<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> lr<span class="token operator">=</span>lr<span class="token punctuation">)</span>
+commfuncs<span class="token punctuation">.</span>train_ch3<span class="token punctuation">(</span>net<span class="token punctuation">,</span> trainer_iter<span class="token punctuation">,</span> test_iter<span class="token punctuation">,</span> loss<span class="token punctuation">,</span> num_epochs<span class="token punctuation">,</span> trainer<span class="token punctuation">)</span>
+
+</code></pre> 
+<h3><a id="466__143"></a>4.6.6 小结</h3> 
+<p>• 暂退法在前向传播过程中，计算每⼀内部层的同时丢弃⼀些神经元。<br> • 暂退法可以避免过拟合，它通常与控制权重向量的维数和⼤小结合使⽤的。<br> • 暂退法将活性值h替换为具有期望值h的随机变量。<br> • 暂退法仅在训练期间使⽤。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/1556366927bc63712d24597eeb5431c1/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">RNA 3. SCI 文章中基于TCGA 差异表达基因之 DESeq2</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/69fe8dd9daee3e4eef9f700022cbeb6b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">华为防火墙ssl xxx配置</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

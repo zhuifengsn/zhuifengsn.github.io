@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Redis7搭建主从&#43;哨兵通俗易懂 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Redis7搭建主从&#43;哨兵通俗易懂" />
+<meta property="og:description" content="背景前提–用到的命令 ps -ef |grep redis redis服务器启动(精确启动配置文件位置) redis-server redis6379.conf redis-server redis6380.conf redis-server redis6381.conf redis客户端登录 redis-cli -a 123456 -p 6379 redis-cli -a 123456 -p 6380 redis-cli -a 123456 -p 6381 redis客户端登录后查看角色 master/slave info replication redis如何关闭服务器 redis登录客户端后 输入 shutdown redis退出客户端但不关闭服务器 quit 哨兵启动 redis-sentinel sentinel26379.conf --sentinel redis-sentinel sentinel26380.conf --sentinel redis-sentinel sentinel26381.conf --sentinel 哨兵关闭 redis-cli -p 26379 shutdown redis-cli -p 26380 shutdown redis-cli -p 26381 shutdown 背景前提1 安装支持 文件导入命令 rz 然后解压 tar -zxvf redis-7.0.10.tar.gz" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/7b5055f1bbea2ee67d275224d1bbe557/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-04-06T21:24:06+08:00" />
+<meta property="article:modified_time" content="2023-04-06T21:24:06+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Redis7搭建主从&#43;哨兵通俗易懂</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="_0"></a>背景前提–用到的命令</h2> 
+<pre><code class="prism language-javascript">ps <span class="token operator">-</span>ef <span class="token operator">|</span>grep redis
+<span class="token function">redis服务器启动</span><span class="token punctuation">(</span>精确启动配置文件位置<span class="token punctuation">)</span>
+redis<span class="token operator">-</span>server redis6379<span class="token punctuation">.</span>conf 
+redis<span class="token operator">-</span>server redis6380<span class="token punctuation">.</span>conf 
+redis<span class="token operator">-</span>server redis6381<span class="token punctuation">.</span>conf 
+redis客户端登录
+redis<span class="token operator">-</span>cli <span class="token operator">-</span>a <span class="token number">123456</span> <span class="token operator">-</span>p <span class="token number">6379</span>
+redis<span class="token operator">-</span>cli <span class="token operator">-</span>a <span class="token number">123456</span> <span class="token operator">-</span>p <span class="token number">6380</span>
+redis<span class="token operator">-</span>cli <span class="token operator">-</span>a <span class="token number">123456</span> <span class="token operator">-</span>p <span class="token number">6381</span>
+redis客户端登录后查看角色  master<span class="token operator">/</span>slave 
+info replication 
+redis如何关闭服务器 
+redis登录客户端后  输入 shutdown
+redis退出客户端但不关闭服务器  quit
+
+哨兵启动
+redis<span class="token operator">-</span>sentinel sentinel26379<span class="token punctuation">.</span>conf <span class="token operator">--</span>sentinel
+redis<span class="token operator">-</span>sentinel sentinel26380<span class="token punctuation">.</span>conf <span class="token operator">--</span>sentinel
+redis<span class="token operator">-</span>sentinel sentinel26381<span class="token punctuation">.</span>conf <span class="token operator">--</span>sentinel
+哨兵关闭
+redis<span class="token operator">-</span>cli <span class="token operator">-</span>p <span class="token number">26379</span> shutdown
+redis<span class="token operator">-</span>cli <span class="token operator">-</span>p <span class="token number">26380</span> shutdown
+redis<span class="token operator">-</span>cli <span class="token operator">-</span>p <span class="token number">26381</span> shutdown
+</code></pre> 
+<h2><a id="1_28"></a>背景前提1</h2> 
+<p>安装支持 文件导入命令 rz 然后解压 tar -zxvf redis-7.0.10.tar.gz<br> 将解压在 /opt 目录下redis-7.0.10文件<br> <img src="https://images2.imgbox.com/fb/2a/UbCz4YQI_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="2redis7010myredis_32"></a>背景前提2拷贝文件至redis-7.0.10的新建目录myredis下，主机从机步骤一致</h2> 
+<p>拷贝命令 cp redis.conf /myredis<br> redis支持哨兵 sentinel、集群cluster<br> <img src="https://images2.imgbox.com/09/65/7r5ckgaS_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="3master_36"></a>背景前提3—主机master</h2> 
+<p><img src="https://images2.imgbox.com/6b/5b/AEdt6xNF_o.jpg" alt="在这里插入图片描述"></p> 
+<h2><a id="42_38"></a>背景前提4—从机2为例</h2> 
+<p><img src="https://images2.imgbox.com/8f/84/cbJ0oeUd_o.jpg" alt="在这里插入图片描述"></p> 
+<h2><a id="5__40"></a>背景前提5-- 关闭虚拟机之间的防火墙</h2> 
+<pre><code class="prism language-javascript">启动： systemctl start firewalld
+关闭： systemctl stop firewalld
+查看状态： systemctl status firewalld 
+开机禁用  ： systemctl disable firewalld
+开机启用  ： systemctl enable firewalld
+    
+添加 ：firewall<span class="token operator">-</span>cmd <span class="token operator">--</span>zone<span class="token operator">=</span><span class="token keyword">public</span> <span class="token operator">--</span>add<span class="token operator">-</span>port<span class="token operator">=</span><span class="token number">80</span><span class="token operator">/</span>tcp <span class="token operator">--</span>permanent    （<span class="token operator">--</span>permanent永久生效，没有此参数重启后失效）
+重新载入： firewall<span class="token operator">-</span>cmd <span class="token operator">--</span>reload
+查看： firewall<span class="token operator">-</span>cmd <span class="token operator">--</span>zone<span class="token operator">=</span> <span class="token keyword">public</span> <span class="token operator">--</span>query<span class="token operator">-</span>port<span class="token operator">=</span><span class="token number">80</span><span class="token operator">/</span>tcp
+删除： firewall<span class="token operator">-</span>cmd <span class="token operator">--</span>zone<span class="token operator">=</span> <span class="token keyword">public</span> <span class="token operator">--</span>remove<span class="token operator">-</span>port<span class="token operator">=</span><span class="token number">80</span><span class="token operator">/</span>tcp <span class="token operator">--</span>permanent
+</code></pre> 
+<h2><a id="56_55"></a>背景前提5—主机和从机以及哨兵理论上需要6台虚拟机</h2> 
+<h2><a id="1redisip__57"></a>1、redis主机和从机ip 和端口</h2> 
+<pre><code class="prism language-javascript">主机master ip和端口			<span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.128</span> <span class="token number">6379</span>
+从机slave1 ip和端口			<span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.129</span> <span class="token number">6380</span>
+从机slave2 ip和端口			<span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.130</span> <span class="token number">6381</span>
+</code></pre> 
+<h2><a id="2master_63"></a>2、主机master修改配置文件</h2> 
+<p><code>工作目录是在根目录下 即创建myredis是 要 mkdir /myredis 否则报错 dir /myredis </code></p> 
+<pre><code class="prism language-javascript">daemonize yes
+#bind <span class="token number">127.0</span><span class="token number">.0</span><span class="token number">.1</span> <span class="token operator">-</span><span class="token operator">:</span><span class="token operator">:</span><span class="token number">1</span>
+<span class="token keyword">protected</span><span class="token operator">-</span>mode no
+port <span class="token number">6379</span>
+#工作目录是在根目录下 即创建myredis是 要 mkdir <span class="token operator">/</span>myredis 否则报错 
+dir <span class="token operator">/</span>myredis          
+pidfile <span class="token operator">/</span><span class="token keyword">var</span><span class="token operator">/</span>run<span class="token operator">/</span>redis_6379<span class="token punctuation">.</span>pid
+# 日志目录
+logfile <span class="token string">"/myredis/6379.log"</span>
+requirepass <span class="token string">"123456"</span>  
+#redis数据库保存文件地址  在工作目录的下边         
+dbfilename dump6379<span class="token punctuation">.</span>rdb
+appendonly yes
+masterauth <span class="token string">"123456"</span>
+</code></pre> 
+<h2><a id="3slave1_83"></a>3、从机slave1配置文件</h2> 
+<p>—slave1从机replicaof配置----这个配置内容会当主机挂掉，会被动态注释掉或者清除</p> 
+<pre><code class="prism language-javascript">daemonize yes
+#bind <span class="token number">127.0</span><span class="token number">.0</span><span class="token number">.1</span> <span class="token operator">-</span><span class="token operator">:</span><span class="token operator">:</span><span class="token number">1</span>
+<span class="token keyword">protected</span><span class="token operator">-</span>mode no
+port <span class="token number">6380</span>
+#工作目录
+dir <span class="token operator">/</span>myredis
+pidfile <span class="token operator">/</span><span class="token keyword">var</span><span class="token operator">/</span>run<span class="token operator">/</span>redis_6380<span class="token punctuation">.</span>pid
+logfile <span class="token string">"/myredis/6380.log"</span>
+requirepass <span class="token string">"123456"</span>
+dbfilename dump6380<span class="token punctuation">.</span>rdb
+# 开启 <span class="token function">aof</span>  <span class="token punctuation">(</span>可选操作<span class="token punctuation">)</span>
+appendonly no
+<span class="token operator">--</span><span class="token operator">-</span>slave1从机配置<span class="token operator">--</span><span class="token operator">--</span>这个配置内容会当主机挂掉，这个replicaof会被动态注释掉或者清除 
+replicaof <span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.128</span> <span class="token number">6379</span>     #拜主机码头
+masterauth <span class="token string">"123456"</span>     <span class="token comment">//登录主机密码校验</span>
+</code></pre> 
+<h2><a id="4slave2_103"></a>4、从机slave2配置文件</h2> 
+<pre><code class="prism language-javascript">daemonize yes
+#bind <span class="token number">127.0</span><span class="token number">.0</span><span class="token number">.1</span> <span class="token operator">-</span><span class="token operator">:</span><span class="token operator">:</span><span class="token number">1</span>
+<span class="token keyword">protected</span><span class="token operator">-</span>mode no
+port <span class="token number">6381</span>
+#工作目录
+dir <span class="token operator">/</span>myredis
+pidfile <span class="token operator">/</span><span class="token keyword">var</span><span class="token operator">/</span>run<span class="token operator">/</span>redis_6381<span class="token punctuation">.</span>pid
+# 日志目录
+logfile <span class="token string">"/myredis/6381.log"</span>
+requirepass <span class="token string">"123456"</span>
+dbfilename dump6381<span class="token punctuation">.</span>rdb
+appendonly no
+<span class="token operator">--</span><span class="token operator">-</span>slave2从机配置<span class="token operator">--</span><span class="token operator">--</span>
+replicaof <span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.128</span> <span class="token number">6379</span>     #拜主机码头
+masterauth <span class="token string">"123456"</span>     <span class="token comment">//登录主机密码校验</span>
+</code></pre> 
+<h2><a id="5_122"></a>5、哨兵部署在虚拟机主机上</h2> 
+<h3><a id="511sentinel26379_123"></a>5、1哨兵1–sentinel26379</h3> 
+<pre><code class="prism language-javascript">bind <span class="token number">0.0</span><span class="token number">.0</span><span class="token number">.0</span>
+daemonize yes
+<span class="token keyword">protected</span><span class="token operator">-</span>mode no
+port <span class="token number">26379</span>
+# 日志目录
+logfile <span class="token string">"/myredis/sentinel26379.log"</span>
+pidfile <span class="token operator">/</span><span class="token keyword">var</span><span class="token operator">/</span>run<span class="token operator">/</span>redis<span class="token operator">-</span>sentinel26379<span class="token punctuation">.</span>pid
+dir <span class="token operator">/</span>myredis
+sentinel monitor mymaster <span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.128</span> <span class="token number">6379</span> <span class="token number">2</span>
+sentinel auth<span class="token operator">-</span>pass mymaster <span class="token number">123456</span>
+</code></pre> 
+<h3><a id="521sentinel26380_136"></a>5、2哨兵1–sentinel26380</h3> 
+<pre><code class="prism language-javascript">bind <span class="token number">0.0</span><span class="token number">.0</span><span class="token number">.0</span>
+daemonize yes
+<span class="token keyword">protected</span><span class="token operator">-</span>mode no
+port <span class="token number">26380</span>
+logfile <span class="token string">"/myredis/sentinel26380.log"</span>
+pidfile <span class="token operator">/</span><span class="token keyword">var</span><span class="token operator">/</span>run<span class="token operator">/</span>redis<span class="token operator">-</span>sentinel26380<span class="token punctuation">.</span>pid
+dir <span class="token string">"/myredis"</span>
+sentinel monitor mymaster <span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.128</span> <span class="token number">6379</span> <span class="token number">2</span>
+sentinel auth<span class="token operator">-</span>pass mymaster <span class="token number">123456</span>
+</code></pre> 
+<h3><a id="531sentinel26381_149"></a>5、3哨兵1–sentinel26381</h3> 
+<pre><code class="prism language-javascript">bind <span class="token number">0.0</span><span class="token number">.0</span><span class="token number">.0</span>
+daemonize yes
+<span class="token keyword">protected</span><span class="token operator">-</span>mode no
+port <span class="token number">26381</span>
+logfile <span class="token string">"/myredis/sentinel26381.log"</span>
+pidfile <span class="token operator">/</span><span class="token keyword">var</span><span class="token operator">/</span>run<span class="token operator">/</span>redis<span class="token operator">-</span>sentinel26381<span class="token punctuation">.</span>pid
+dir <span class="token string">"/myredis"</span>
+sentinel monitor mymaster <span class="token number">192.168</span><span class="token number">.154</span><span class="token number">.128</span> <span class="token number">6379</span> <span class="token number">2</span>    #这个<span class="token number">2</span>是投票数
+sentinel auth<span class="token operator">-</span>pass mymaster <span class="token number">123456</span>
+</code></pre> 
+<h2><a id="6_162"></a>6、启动顺序</h2> 
+<h4><a id="61master_1_2_163"></a>6.1先启动主机master 再启动从机1 和从机2</h4> 
+<h4><a id="62123_164"></a>6.2然后在分别启动哨兵1、2、3</h4> 
+<h2><a id="7redis_165"></a>7、如何查看当前redis角色</h2> 
+<h4><a id="71__166"></a>7.1 客户端登录</h4> 
+<p>redis-cli -a 123456 -p 6379</p> 
+<h4><a id="72__168"></a>7.2 查看角色</h4> 
+<p>info replication<br> <img src="https://images2.imgbox.com/dc/84/nzw4EYrl_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="73_role_slave_171"></a>7.3从机查看角色 role 是slave</h3> 
+<p><code>观察slave与主机master连接状况 master_link_status:up 才可以</code><br> <img src="https://images2.imgbox.com/66/eb/3yuXbK9m_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="74__174"></a>7.4查看哨兵 日志</h3> 
+<p>cat sentinel26379.log<br> <img src="https://images2.imgbox.com/49/d5/SMZQJ8C5_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="8master_shutdown_177"></a>8、当主机master 模拟宕机shutdown</h2> 
+<p>哨兵会从从机slave中选举出主机，<br> 从机变成主机，原来的主机master会被哨兵变成从机，角色</p> 
+<h4><a id="1shutdown_180"></a>1、主机shutdown</h4> 
+<p><img src="https://images2.imgbox.com/dc/a2/gl0rLqdu_o.jpg" alt="在这里插入图片描述"></p> 
+<h4><a id="2slave_182"></a>2、原来的主机重新启动，客户端登录发现角色变为slave</h4> 
+<p><img src="https://images2.imgbox.com/32/b0/Q5K9LtcY_o.jpg" alt="在这里插入图片描述"></p> 
+<h4><a id="3slave1master_184"></a>3、从机slave1变为master</h4> 
+<p><img src="https://images2.imgbox.com/0d/26/c5fjQs69_o.jpg" alt="在这里插入图片描述"></p> 
+<h4><a id="4192168154128slave1_186"></a>4、当原来的主机192.168.154.128重新启动后，会跟着slave1喊大哥了，</h4> 
+<p><img src="https://images2.imgbox.com/f1/d6/XLS64TNY_o.jpg" alt="在这里插入图片描述"></p> 
+<h4><a id="5_188"></a>5、通过哨兵日志观察这些角色的变化过程</h4> 
+<p>在myredis目录下查看已经配置好哨兵日志 输入命令 cat sentinel26379.log<br> <img src="https://images2.imgbox.com/e1/2a/lZPMVOAd_o.jpg" alt="在这里插入图片描述"></p> 
+<h4><a id="6master_192"></a>6、当主机master宕机，哨兵推举主机的过程</h4> 
+<p><img src="https://images2.imgbox.com/11/ec/npBnUhVv_o.jpg" alt="在这里插入图片描述"></p> 
+<h2><a id="9_redisconf_194"></a>9、观察 redis.conf配置文件的尾部内容（哨兵追加的内容）</h2> 
+<h4><a id="1vim_redis6380conf_195"></a>1、vim redis6380.conf</h4> 
+<p><img src="https://images2.imgbox.com/55/9e/D3YVCk3U_o.jpg" alt="："></p> 
+<h4><a id="2masterslave_197"></a>2、观察原来的主机master角色变为slave后被哨兵追加的内容</h4> 
+<p>1、vim redis6379.conf<br> 2、观察 replicationof 192.168.154.129 6380 现在跟随原来的slave1了<br> <img src="https://images2.imgbox.com/2f/7c/SjrCHHil_o.jpg" alt="在这里插入图片描述"></p> 
+<h4><a id="3_201"></a>3、监控和选举并更换主机监控</h4> 
+<p><img src="https://images2.imgbox.com/29/d3/VNHByFuB_o.jpg" alt="在这里插入图片描述"></p> 
+<h3><a id="_203"></a>变化</h3> 
+<p><img src="https://images2.imgbox.com/eb/f7/Rz8dX5kg_o.jpg" alt="在这里插入图片描述"></p> 
+<h2><a id="10_slavemaster_205"></a>10 当slave变为主机后，然后再宕机，然后又选举出新的master</h2> 
+<p><img src="https://images2.imgbox.com/b0/3d/hhtMyrta_o.jpg" alt="在这里插入图片描述"><br> 11 查看哨兵日志 <img src="https://images2.imgbox.com/ca/9a/ArW719Vg_o.jpg" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/8e5e929949e6c1ce674ae2376cc8c69e/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Spring boot 启动类实现 CommandLineRunner</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/73a41219e6994802d46ada44f8837895/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">redis 底层数据结构详解</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

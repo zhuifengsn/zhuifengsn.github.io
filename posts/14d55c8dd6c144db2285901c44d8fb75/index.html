@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>图像形态学转换 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="图像形态学转换" />
+<meta property="og:description" content="常用的形态学操作包括：腐蚀、膨胀、开运算、闭运算。其中，开运算是先腐蚀在膨胀，用来消除背景中的噪点；闭运算是先膨胀再腐蚀，用来消除目标中的噪点。在图像处理中我们经常需要这些操作，比如二值处理后，我们的目标区域往往不仅包含噪点，本身也可能相互之间没有连通，这时候适当的形态学处理可以修复目标或者消除噪点，那么腐蚀还是膨胀，两个都用先后顺序如何？都需要进行对比分析。
+相关函数为:
+{腐蚀，膨胀}：cv2.erode(),cv2.dilate(),传递的参数为:img,kernel,iterations分别代表源图像，卷积核，以及相应处理的次数
+形态学往往是针对二值图处理，往往视白色为目标，黑色为背景。
+腐蚀，会使得白色区域缩小，处理过程：将卷积核依次沿着图像移动，判断卷积核对应的原图，若该范围内所有像素值为1，则中心元素保持原来的像素值，否则变为0。在处理中，往往用在1)去掉背景（黑色）中的噪点（小白点），2)可以使原本连通在一起的白色区域相互隔开，视效果选择最佳的迭代次数。
+腐蚀效果：分别选择不同的kernel，相同迭代次数以及不同迭代次数和相同kernel。
+通常kernel选择为(3*3)或者(5*5)，iterations选择1-2次，膨胀类似处理，其计算过程不同在于将图像卷积核对应区域中只要有一个为1，则中心元素像素值为1，会使得白色区域扩张。
+开、闭运算：cv2.morphologyEx()，开运算参数为img,cv2.MORPH_OPEN,kernel,相应的闭运算在第二个参数为cv2.MORPH_CLOSE;而形态学梯度则是将该参数改为cv2.MORPH_GRADIENT,其处理过程为膨胀图像-腐蚀图像，能够极好的显示目标区域的轮廓。
+附上部分代码：
+import numpy as np import cv2 from matplotlib import pyplot as plt #导入matlab绘图模块 import pylab#导入该模块为了调整matlab绘图大小 pylab.rcParams[&#39;figure.figsize&#39;]=(16,10) img=cv2.imread(&#39;building.jpg&#39;)#读取需要处理的图像 img2gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)#将其转换为灰度图，为进一步二值化 ret,imgOtsu=cv2.threshold(img2gray,0,255,cv2.THRESH_BINARY&#43;cv2.THRESH_OTSU)#采用OTSU自适应阈值，关于OTSU算法网络资源较多 #腐蚀次数 iteration_time=[2,5] #kernel大小 kernels=[] for i in range(1,10,4): kernels.append(np.ones((i,i),np.uint8)) #相同次数，不同的kernel值 for i,kernel in enumerate(kernels): #腐蚀 # erosion=cv2.erode(imgOtsu,kernel,iterations=2)#腐蚀，kernel大则会损失掉更多前景 # print(kernel) #膨胀 dilationpic=cv2.dilate(imgOtsu,kernel,iterations=2) #subplot()中参数依次为（列，行，当前图像的索引值),索引值从1开始 plt.subplot(2,3,i&#43;2),plt.imshow(dilationpic,&#39;gray&#39;),plt.title(&#39;kernel is %d *%d&#39;%(4*i&#43;1,4*i&#43;1)) #相同kernel,不同迭代次数 image_index=5 kernel_3=np.ones((3,3),np.uint8)#选择3*3的卷积核，5*5会损失目标 for times in iteration_time: # erosion=cv2.erode(imgOtsu,kernel_3,iterations=times) dilationpic=cv2.dilate(imgOtsu,kernel_3,iterations=times) plt.subplot(2,3,image_index),plt.imshow(dilationpic,&#39;gray&#39;),plt.title(&#39;iteration time is %d&#39;%(times)) image_index&#43;=1 #进行画图，将我们需要的图像逐个通过matlab模块来绘制，往往画多个图会比较好，画单个cv2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/14d55c8dd6c144db2285901c44d8fb75/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-08-04T10:43:00+08:00" />
+<meta property="article:modified_time" content="2018-08-04T10:43:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">图像形态学转换</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>常用的形态学操作包括：腐蚀、膨胀、开运算、闭运算。其中，开运算是先腐蚀在膨胀，用来消除背景中的噪点；闭运算是先膨胀再腐蚀，用来消除目标中的噪点。在图像处理中我们经常需要这些操作，比如二值处理后，我们的目标区域往往不仅包含噪点，本身也可能相互之间没有连通，这时候适当的形态学处理可以修复目标或者消除噪点，那么腐蚀还是膨胀，两个都用先后顺序如何？都需要进行对比分析。</p> 
+<p>相关函数为:</p> 
+<p>{腐蚀，膨胀}：cv2.erode(),cv2.dilate(),传递的参数为:img,kernel,iterations分别代表源图像，卷积核，以及相应处理的次数</p> 
+<p>形态学往往是针对二值图处理，往往视白色为目标，黑色为背景。</p> 
+<p>腐蚀，会使得白色区域缩小，处理过程：将卷积核依次沿着图像移动，判断卷积核对应的原图，若该范围内所有像素值为1，则中心元素保持原来的像素值，否则变为0。在处理中，往往用在1)去掉背景（黑色）中的噪点（小白点），2)可以使原本连通在一起的白色区域相互隔开，视效果选择最佳的迭代次数。</p> 
+<p>腐蚀效果：分别选择不同的kernel，相同迭代次数以及不同迭代次数和相同kernel。</p> 
+<p style="text-indent:50px;"><img alt="" class="has" height="450" src="https://images2.imgbox.com/83/47/dYcSYQsm_o.png" width="631"></p> 
+<p style="text-indent:50px;">通常kernel选择为(3*3)或者(5*5)，iterations选择1-2次，膨胀类似处理，其计算过程不同在于将图像卷积核对应区域中只要有一个为1，则中心元素像素值为1，会使得白色区域扩张。</p> 
+<p>开、闭运算：cv2.morphologyEx()，开运算参数为img,cv2.MORPH_OPEN,kernel,相应的闭运算在第二个参数为cv2.MORPH_CLOSE;而形态学梯度则是将该参数改为cv2.MORPH_GRADIENT,其处理过程为膨胀图像-腐蚀图像，能够极好的显示目标区域的轮廓。</p> 
+<p>附上部分代码：</p> 
+<pre class="has"><code class="language-python">import numpy as np
+import cv2
+from matplotlib import pyplot as plt #导入matlab绘图模块
+import pylab#导入该模块为了调整matlab绘图大小
+pylab.rcParams['figure.figsize']=(16,10)
+img=cv2.imread('building.jpg')#读取需要处理的图像
+img2gray=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)#将其转换为灰度图，为进一步二值化
+ret,imgOtsu=cv2.threshold(img2gray,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)#采用OTSU自适应阈值，关于OTSU算法网络资源较多
+#腐蚀次数
+iteration_time=[2,5]
+#kernel大小
+kernels=[]
+for i in range(1,10,4):
+    kernels.append(np.ones((i,i),np.uint8))
+#相同次数，不同的kernel值
+for i,kernel in enumerate(kernels):
+    #腐蚀
+#     erosion=cv2.erode(imgOtsu,kernel,iterations=2)#腐蚀，kernel大则会损失掉更多前景
+#     print(kernel)
+    #膨胀
+    dilationpic=cv2.dilate(imgOtsu,kernel,iterations=2)
+    #subplot()中参数依次为（列，行，当前图像的索引值),索引值从1开始
+    plt.subplot(2,3,i+2),plt.imshow(dilationpic,'gray'),plt.title('kernel is %d *%d'%(4*i+1,4*i+1))
+    
+#相同kernel,不同迭代次数
+image_index=5
+kernel_3=np.ones((3,3),np.uint8)#选择3*3的卷积核，5*5会损失目标
+for times in iteration_time:
+#     erosion=cv2.erode(imgOtsu,kernel_3,iterations=times)
+    dilationpic=cv2.dilate(imgOtsu,kernel_3,iterations=times)
+    plt.subplot(2,3,image_index),plt.imshow(dilationpic,'gray'),plt.title('iteration time is %d'%(times))
+    image_index+=1
+#进行画图，将我们需要的图像逐个通过matlab模块来绘制，往往画多个图会比较好，画单个cv2.imshow()比较方便
+plt.subplot(2,3,1),plt.imshow(img2gray,'gray'),plt.title('grayscale of the source')
+plt.savefig('dilate_result.png')#保存图片
+plt.show()#以整体来显示</code></pre> 
+<p>cv2.getStructuringElement()函数为我们提供了构造其他形状的卷积核模板，比如5*5的椭圆核参数为cv2.MORPH_ELLIPSE,(5,5)</p> 
+<p>相关资源：<a href="http://homepages.inf.ed.ac.uk/rbf/HIPR2/morops.htm" rel="nofollow">http://homepages.inf.ed.ac.uk/rbf/HIPR2/morops.htm</a></p> 
+<p>参考文献：openCV for Python中文版</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/7981fa3ba8445418fc835df25e710921/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">harvasst of apples（组合数）（乘法逆元）（莫队算法）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/330a191f6604a03b6e44380da650b2ba/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">为什么springcloud值得我们学习？</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

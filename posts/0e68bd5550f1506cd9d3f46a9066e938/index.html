@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Springboot整合shiro - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Springboot整合shiro" />
+<meta property="og:description" content="教程视频：去哔哩哔哩搜索楠哥教你学Java。里面有一篇SpringBoot整合Shiro的视频
+这里是我自己整理的一个笔记，除了视频里教的，还有一些扩展功能以及一些解释
+目录
+1、什么是Shiro？
+2、什么是RBAC？
+3、Shiro核心组件
+4、Springboot整合Shiro
+5、认证和授权规则
+6、Shiro整合Thymeleaf
+7、Controller示例
+8、权限管理标准5张表
+9、密码加密、加盐
+10、多个Realm
+11、记住我
+1、什么是Shiro？ 官网：Apache Shiro | Simple. Java. Security.
+是一款主流的Java安全框架，不依赖任何容器，可以运行在Java SE和Java EE项目中，它的主要作用是对访问系统的用户进行身份认证、授权、会话管理、加密等操作。
+Shiro 就是用来解决安全管理的系统化框架。Shiro是基于session的身份认证和访问控制框架。
+2、什么是RBAC？ RBAC是Role-Based Access Control（基于角色的访问控制）的缩写。它是一种广泛应用于安全管理中的访问控制模型。RBAC模型通过授予用户不同的角色，并将角色与权限进行关联，来管理对资源的访问。
+RBAC模型中的关键概念包括以下几个部分：
+角色（Role）：角色是一组具有相似职责和权限的用户集合。例如，管理员、编辑、访客等都可以是角色。
+权限（Permission）：权限是指执行特定操作或访问特定资源的能力。例如，读取、写入、删除等操作可以被视为不同的权限。
+用户（User）：用户是系统中的个体，可以被授予一个或多个角色。
+资源（Resource）：资源是系统中受到访问控制的对象。可以是文件、数据库记录、API接口等。
+3、Shiro核心组件 用户、角色、权限
+会给角色赋予权限、给用户赋予角色
+1、UsernamePasswordToken，Shiro用来封装用户登录信息，使用用户的登录信息来创建令牌Token。
+2、SecurityManager，Shiro的核心部分，负责安全认证和授权。
+3、Subject，Shiro的一个抽象概念，包含了用户信息。
+4、Realm，开发者自定义的模块，根据项目的需求，验证和授权的逻辑全部写在Reaim中。
+5、AuthenticationInfo，用户的角色信息集合，认证时使用。
+6、AuthorzationInfo，角色的权限信息集合，授权时使用。
+7、DefaultWebSecurityManager，安全管理器，开发者自定义的Realm需要注入到DefaultWebSecurityManager进行管理才能生效
+8、ShiroFilterFactoryBean，过滤器工厂，Shiro的基本运行机制是开发者定制规则，Shiro去运行，具体的执行操作就是由ShiroFilterFactoryBean
+Shiro的运行机制如下图所示： 4、Springboot整合Shiro SpringBoot集成Shiro官网：Integrating Apache Shiro into Spring-Boot Applications | Apache Shiro
+这里说一下，我从一开始学习就用的Springboot3，而3版本整合shrio出现了Servlet和Shiro不生效等问题。所以还是推荐使用Springboot2的版本去整合Shiro。
+不过，后面发现一位大佬把这个问题完美的解决了！！！(膜拜大佬╰(*°▽°*)╯）Java17和springboot3.0使用shiro报ClassNotFoundException_星海蔚蓝的博客-CSDN博客
+根据大佬，重新将shiro依赖引入，再去使用Springboot3的版本就没有问题了！！！
+即使看懂了上面的概念，你不去看视频教学，下面的代码很难看懂的。所以先去看看教学视频，跟着教学实操。
+1、创建Spring Boot应用，集成Shiro及相关组件(这里是我练习模块中的依赖，我直接粘过来的)
+&lt;dependencies&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-thymeleaf&lt;/artifactId&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/0e68bd5550f1506cd9d3f46a9066e938/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-10-11T16:40:59+08:00" />
+<meta property="article:modified_time" content="2023-10-11T16:40:59+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Springboot整合shiro</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <blockquote> 
+ <p></p> 
+ <p>教程视频：去哔哩哔哩搜索楠哥教你学Java。里面有一篇SpringBoot整合Shiro的视频</p> 
+ <p><strong>这里是我自己整理的一个笔记，除了视频里教的，还有一些扩展功能以及一些解释</strong></p> 
+</blockquote> 
+<p id="main-toc"><strong>目录</strong></p> 
+<p id="1%E3%80%81%E4%BB%80%E4%B9%88%E6%98%AFShiro%EF%BC%9F-toc" style="margin-left:0px;"><a href="#1%E3%80%81%E4%BB%80%E4%B9%88%E6%98%AFShiro%EF%BC%9F" rel="nofollow">1、什么是Shiro？</a></p> 
+<p id="%C2%A02%E3%80%81%E4%BB%80%E4%B9%88%E6%98%AFRBAC%EF%BC%9F-toc" style="margin-left:0px;"><a href="#%C2%A02%E3%80%81%E4%BB%80%E4%B9%88%E6%98%AFRBAC%EF%BC%9F" rel="nofollow"> 2、什么是RBAC？</a></p> 
+<p id="3%E3%80%81Shiro%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6-toc" style="margin-left:0px;"><a href="#3%E3%80%81Shiro%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6" rel="nofollow">3、Shiro核心组件</a></p> 
+<p id="4%E3%80%81Springboot%E6%95%B4%E5%90%88Shiro-toc" style="margin-left:0px;"><a href="#4%E3%80%81Springboot%E6%95%B4%E5%90%88Shiro" rel="nofollow">4、Springboot整合Shiro</a></p> 
+<p id="5%E3%80%81%E8%AE%A4%E8%AF%81%E5%92%8C%E6%8E%88%E6%9D%83%E8%A7%84%E5%88%99-toc" style="margin-left:0px;"><a href="#5%E3%80%81%E8%AE%A4%E8%AF%81%E5%92%8C%E6%8E%88%E6%9D%83%E8%A7%84%E5%88%99" rel="nofollow">5、认证和授权规则</a></p> 
+<p id="6%E3%80%81Shiro%E6%95%B4%E5%90%88Thymeleaf-toc" style="margin-left:0px;"><a href="#6%E3%80%81Shiro%E6%95%B4%E5%90%88Thymeleaf" rel="nofollow">6、Shiro整合Thymeleaf</a></p> 
+<p id="7%E3%80%81Controller%E7%A4%BA%E4%BE%8B-toc" style="margin-left:0px;"><a href="#7%E3%80%81Controller%E7%A4%BA%E4%BE%8B" rel="nofollow">7、Controller示例</a></p> 
+<p id="8%E3%80%81%E6%9D%83%E9%99%90%E7%AE%A1%E7%90%86%E6%A0%87%E5%87%865%E5%BC%A0%E8%A1%A8-toc" style="margin-left:0px;"><a href="#8%E3%80%81%E6%9D%83%E9%99%90%E7%AE%A1%E7%90%86%E6%A0%87%E5%87%865%E5%BC%A0%E8%A1%A8" rel="nofollow">8、权限管理标准5张表</a></p> 
+<p id="9%E3%80%81%E5%AF%86%E7%A0%81%E5%8A%A0%E5%AF%86%E3%80%81%E5%8A%A0%E7%9B%90-toc" style="margin-left:0px;"><a href="#9%E3%80%81%E5%AF%86%E7%A0%81%E5%8A%A0%E5%AF%86%E3%80%81%E5%8A%A0%E7%9B%90" rel="nofollow">9、密码加密、加盐</a></p> 
+<p id="10%E3%80%81%E5%A4%9A%E4%B8%AARealm-toc" style="margin-left:0px;"><a href="#10%E3%80%81%E5%A4%9A%E4%B8%AARealm" rel="nofollow">10、多个Realm</a></p> 
+<p id="11%E3%80%81%E8%AE%B0%E4%BD%8F%E6%88%91-toc" style="margin-left:0px;"><a href="#11%E3%80%81%E8%AE%B0%E4%BD%8F%E6%88%91" rel="nofollow">11、记住我</a></p> 
+<hr id="hr-toc"> 
+<h2>1、什么是Shiro？</h2> 
+<p>官网：<a href="https://shiro.apache.org/" rel="nofollow" title="Apache Shiro | Simple. Java. Security.">Apache Shiro | Simple. Java. Security.</a></p> 
+<p>是一款主流的Java安全框架，不依赖任何容器，可以运行在Java SE和Java EE项目中，它的主要作用是对访问系统的用户进行身份认证、授权、会话管理、加密等操作。</p> 
+<p>Shiro 就是用来解决安全管理的系统化框架。Shiro是基于session的身份认证和访问控制框架。</p> 
+<h2 id="%C2%A02%E3%80%81%E4%BB%80%E4%B9%88%E6%98%AFRBAC%EF%BC%9F"> 2、什么是RBAC？</h2> 
+<p><span style="color:#ff9900;"><strong>RBAC</strong></span>是Role-Based Access Control（基于角色的访问控制）的缩写。它是一种广泛应用于安全管理中的访问控制模型。RBAC模型通过授予用户不同的角色，并将角色与权限进行关联，来管理对资源的访问。</p> 
+<p>RBAC模型中的关键概念包括以下几个部分：</p> 
+<ol><li> <p>角色（Role）：角色是一组具有相似职责和权限的用户集合。例如，管理员、编辑、访客等都可以是角色。</p> </li><li> <p>权限（Permission）：权限是指执行特定操作或访问特定资源的能力。例如，读取、写入、删除等操作可以被视为不同的权限。</p> </li><li> <p>用户（User）：用户是系统中的个体，可以被授予一个或多个角色。</p> </li><li> <p>资源（Resource）：资源是系统中受到访问控制的对象。可以是文件、数据库记录、API接口等。</p> </li></ol> 
+<h2 id="3%E3%80%81Shiro%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6">3、Shiro核心组件</h2> 
+<p>用户、角色、权限</p> 
+<p><strong>会给角色赋予权限、给用户赋予角色</strong></p> 
+<p style="text-align:center;"><strong><img alt="" src="https://images2.imgbox.com/c1/c2/au6N1uwv_o.png"></strong></p> 
+<p>1、UsernamePasswordToken，Shiro用来封装用户登录信息，使用用户的登录信息来创建令牌Token。</p> 
+<p>2、SecurityManager，Shiro的核心部分，负责安全认证和授权。</p> 
+<p>3、Subject，Shiro的一个抽象概念，包含了用户信息。</p> 
+<p>4、Realm，开发者自定义的模块，根据项目的需求，验证和授权的逻辑全部写在Reaim中。</p> 
+<p>5、AuthenticationInfo，用户的角色信息集合，认证时使用。</p> 
+<p>6、AuthorzationInfo，角色的权限信息集合，授权时使用。</p> 
+<p>7、DefaultWebSecurityManager，安全管理器，开发者自定义的Realm需要注入到DefaultWebSecurityManager进行管理才能生效</p> 
+<p>8、ShiroFilterFactoryBean，过滤器工厂，Shiro的基本运行机制是开发者定制规则，Shiro去运行，具体的执行操作就是由ShiroFilterFactoryBean</p> 
+<p><strong>Shiro的运行机制如下图所示： </strong></p> 
+<p style="text-align:center;"><strong><img alt="" src="https://images2.imgbox.com/42/76/1t0iA2Km_o.png"></strong></p> 
+<h2 id="4%E3%80%81Springboot%E6%95%B4%E5%90%88Shiro">4、Springboot整合Shiro</h2> 
+<p>SpringBoot集成Shiro官网：<a href="https://shiro.apache.org/spring-boot.html" rel="nofollow" title="Integrating Apache Shiro into Spring-Boot Applications | Apache Shiro">Integrating Apache Shiro into Spring-Boot Applications | Apache Shiro</a></p> 
+<blockquote> 
+ <p> 这里说一下，我从一开始学习就用的Springboot3，而3版本整合shrio出现了Servlet和Shiro不生效等问题。<span style="color:#ff9900;">所以还是推荐使用Springboot2的版本去整合Shiro。</span></p> 
+</blockquote> 
+<p>不过，后面发现一位大佬把这个问题完美的解决了！！！(膜拜大佬╰(*°▽°*)╯）<a href="https://blog.csdn.net/weixin_43492211/article/details/131217344" title="Java17和springboot3.0使用shiro报ClassNotFoundException_星海蔚蓝的博客-CSDN博客">Java17和springboot3.0使用shiro报ClassNotFoundException_星海蔚蓝的博客-CSDN博客</a></p> 
+<p>根据大佬，重新将shiro依赖引入，再去使用Springboot3的版本就没有问题了！！！</p> 
+<blockquote> 
+ <p><span style="color:#38d8f0;">即使看懂了上面的概念，你不去看视频教学，下面的代码很难看懂的。所以先去看看教学视频，跟着教学实操。</span></p> 
+</blockquote> 
+<p><strong>1、创建Spring Boot应用，集成Shiro及相关组件(这里是我练习模块中的依赖，我直接粘过来的)</strong></p> 
+<pre><code class="language-XML">    &lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-thymeleaf&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
+            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
+            &lt;optional&gt;true&lt;/optional&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
+            &lt;scope&gt;test&lt;/scope&gt;
+        &lt;/dependency&gt;
+
+        &lt;!--shiro--&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+            &lt;artifactId&gt;shiro-spring&lt;/artifactId&gt;
+            &lt;classifier&gt;jakarta&lt;/classifier&gt;
+            &lt;version&gt;1.11.0&lt;/version&gt;
+            &lt;!-- 排除仍使用了javax.servlet的依赖 --&gt;
+            &lt;exclusions&gt;
+                &lt;exclusion&gt;
+                    &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+                    &lt;artifactId&gt;shiro-core&lt;/artifactId&gt;
+                &lt;/exclusion&gt;
+                &lt;exclusion&gt;
+                    &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+                    &lt;artifactId&gt;shiro-web&lt;/artifactId&gt;
+                &lt;/exclusion&gt;
+            &lt;/exclusions&gt;
+        &lt;/dependency&gt;
+        &lt;!-- 引入适配jakarta的依赖包 --&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+            &lt;artifactId&gt;shiro-core&lt;/artifactId&gt;
+            &lt;classifier&gt;jakarta&lt;/classifier&gt;
+            &lt;version&gt;1.11.0&lt;/version&gt;
+        &lt;/dependency&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+            &lt;artifactId&gt;shiro-web&lt;/artifactId&gt;
+            &lt;classifier&gt;jakarta&lt;/classifier&gt;
+            &lt;version&gt;1.11.0&lt;/version&gt;
+            &lt;exclusions&gt;
+                &lt;exclusion&gt;
+                    &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+                    &lt;artifactId&gt;shiro-core&lt;/artifactId&gt;
+                &lt;/exclusion&gt;
+            &lt;/exclusions&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;mysql&lt;/groupId&gt;
+            &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt;
+            &lt;version&gt;8.0.24&lt;/version&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;com.baomidou&lt;/groupId&gt;
+            &lt;artifactId&gt;mybatis-plus-boot-starter&lt;/artifactId&gt;
+            &lt;version&gt;3.5.3.1&lt;/version&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;com.github.theborakompanioni&lt;/groupId&gt;
+            &lt;artifactId&gt;thymeleaf-extras-shiro&lt;/artifactId&gt;
+            &lt;version&gt;2.0.0&lt;/version&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+
+    &lt;build&gt;
+        &lt;plugins&gt;
+            &lt;plugin&gt;
+                &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+                &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;
+                &lt;configuration&gt;
+                    &lt;excludes&gt;
+                        &lt;exclude&gt;
+                            &lt;groupId&gt;org.projectlombok&lt;/groupId&gt;
+                            &lt;artifactId&gt;lombok&lt;/artifactId&gt;
+                        &lt;/exclude&gt;
+                    &lt;/excludes&gt;
+                &lt;/configuration&gt;
+            &lt;/plugin&gt;
+        &lt;/plugins&gt;
+    &lt;/build&gt;</code></pre> 
+<p><strong>2、自定义Shiro过滤器</strong></p> 
+<pre><code class="language-java">public class AccountRealm extends AuthorizingRealm {
+    @Autowired
+    private AccountService accountService;
+
+    /**
+     * 授权
+     * @param principalCollection
+     * @return
+     */
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        //获取当前登录的用户信息
+        Subject subject = SecurityUtils.getSubject();
+        Account account = (Account) subject.getPrincipal();
+
+        //设置角色
+        Set&lt;String&gt; roles = new HashSet&lt;&gt;();
+        roles.add(account.getRole());
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo(roles);
+
+        //设置权限
+        info.addStringPermission(account.getPerms());
+        return info;
+    }
+
+    /**
+     * 认证
+     * @param authenticationToken
+     * @return
+     * @throws AuthenticationException
+     */
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+        UsernamePasswordToken token = (UsernamePasswordToken) authenticationToken;  //这行代码将传入的 authenticationToken 转换为 UsernamePasswordToken 对象，以便获取用户名和密码。
+        Account account = accountService.findByUsername(token.getUsername());
+        if(account != null){
+            /**
+             * 这是返回身份验证信息的代码。SimpleAuthenticationInfo 是 Shiro 框架中的一个实现类，用于封装用户的身份验证信息
+             * @Param1  account 参数表示身份验证的主体对象，可以是任何表示用户身份的实体对象
+             * @Param2   表示用户的密码，用于进行密码验证
+             * @Param3  返回当前 Realm 的名称，用于标识身份验证信息来源,Realm 可以通过其名称进行唯一标识，以便在 Shiro 配置文件中区分和配置不同的 Realm
+             */
+            return new SimpleAuthenticationInfo(account,account.getPassword(),getName());
+        }
+        return null;
+    }
+}</code></pre> 
+<p><strong>3、配置类</strong></p> 
+<pre><code class="language-java">@Configuration
+public class ShiroConfig {
+    @Bean
+    public ShiroFilterFactoryBean shiroFilterFactoryBean(DefaultWebSecurityManager securityManager){
+        ShiroFilterFactoryBean factoryBean = new ShiroFilterFactoryBean();
+        factoryBean.setSecurityManager(securityManager);
+        //权限设置
+        Map&lt;String,String&gt; map = new HashMap&lt;&gt;();
+        map.put("/main","authc");
+        map.put("/manage","perms[manage]");
+        map.put("/administrator","roles[administrator]");
+        //设置登录页面
+        factoryBean.setLoginUrl("/login");
+        //设置未授权页面
+        factoryBean.setUnauthorizedUrl("/unauth");
+        factoryBean.setFilterChainDefinitionMap(map);
+        return factoryBean;
+    }
+
+    @Bean
+    public DefaultWebSecurityManager securityManager(AccountRealm accountRealm){
+        DefaultWebSecurityManager manager = new DefaultWebSecurityManager();
+        manager.setRealm(accountRealm);
+        return manager;
+    }
+
+    @Bean
+    public AccountRealm accountRealm(){
+        return new AccountRealm();
+    }</code></pre> 
+<h2 id="5%E3%80%81%E8%AE%A4%E8%AF%81%E5%92%8C%E6%8E%88%E6%9D%83%E8%A7%84%E5%88%99">5、认证和授权规则</h2> 
+<p><strong>认证过滤器</strong></p> 
+<ol><li> <p>anon：无需认证。</p> </li><li> <p>authc：必须认证。</p> </li><li> <p>authcBasic：需要通过HTTPBasic认证。</p> </li><li> <p>user：不一定通过认证，只要曾经被Shiro记录即可，比如：记住我。</p> </li></ol> 
+<p><strong>授权过滤器</strong></p> 
+<ol><li> <p>perms：必须拥有某个权限才能访问。</p> </li><li> <p>role：必须拥有某个角色才能访问。</p> </li><li> <p>port：请求的端口必须是指定值才可以。</p> </li><li> <p>rest：请求必须基于RESTful，POST，PUT，GET，DELETE。</p> </li><li> <p>ssl：必须是安全的URL请求，协议HTTP。</p> </li></ol> 
+<h2 id="6%E3%80%81Shiro%E6%95%B4%E5%90%88Thymeleaf">6、Shiro整合Thymeleaf</h2> 
+<p><strong>1、pom.xml引入依赖</strong></p> 
+<pre><code class="language-XML">&lt;dependency&gt;
+    &lt;groupId&gt;com.github.theborakompanioni&lt;/groupId&gt;
+    &lt;artifactId&gt;thymeleaf-extras-shiro&lt;/artifactId&gt;
+    &lt;version&gt;2.0.0&lt;/version&gt;
+&lt;/dependency&gt;</code></pre> 
+<p><strong>2、配置类添加ShiroDialect </strong></p> 
+<pre><code class="language-java">@Bean
+public ShiroDialect shiroDialect(){
+    return new ShiroDialect();
+}</code></pre> 
+<p><strong>3、 配置视图解析器</strong></p> 
+<pre><code class="language-java">spring:
+	thymeleaf:
+  		prefix: classpath:/templates/
+  		suffix: .html</code></pre> 
+<p><strong>4、 html</strong></p> 
+<blockquote> 
+ <p> xmlns:th="http://www.thymeleaf.org"        //加上这个才可以使用thymeleaf语法</p> 
+ <p></p> 
+ <p>xmlns:shiro="http://www.thymeleaf.org/thymeleaf-extras-shiro"        //加上这个就可以使用shiro表达式了</p> 
+ <p><br> &lt;link rel="shortcut icon" href="#"/&gt;    //加入这个可以解决控制台报错icon的问题 </p> 
+</blockquote> 
+<h2 id="7%E3%80%81Controller%E7%A4%BA%E4%BE%8B">7、Controller示例</h2> 
+<pre><code class="language-java">@Controller
+public class AccountController {
+
+    @GetMapping("/{url}")
+    public String redirect(@PathVariable("url") String url){
+        return url;
+    }
+
+    @PostMapping("/login")
+    public String login(String username, String password,Model model){
+        Subject subject = SecurityUtils.getSubject();
+        UsernamePasswordToken token = new UsernamePasswordToken(username,password);
+//        token.setRememberMe(rememberMe);
+        try {
+            subject.login(token);
+            Account account = (Account) subject.getPrincipal();
+            subject.getSession().setAttribute("account",account);
+            return "index";
+        } catch (UnknownAccountException e) {
+            e.printStackTrace();
+            model.addAttribute("msg","用户名错误！");
+            return "login";
+        } catch (IncorrectCredentialsException e) {
+            e.printStackTrace();
+            model.addAttribute("msg","密码错误！");
+            return "login";
+        }
+    }
+
+    @GetMapping("/unauth")
+    @ResponseBody
+    public String unauth(){
+        return "未授权，无法访问！";
+    }
+
+    @GetMapping("/logout")
+    public String logout(){
+        Subject subject = SecurityUtils.getSubject();
+        subject.logout();
+        return "login";
+    }
+}</code></pre> 
+<h2 id="8%E3%80%81%E6%9D%83%E9%99%90%E7%AE%A1%E7%90%86%E6%A0%87%E5%87%865%E5%BC%A0%E8%A1%A8">8、权限管理标准5张表</h2> 
+<p>这个去网上随便搜下，就可以看到一些案例表！</p> 
+<h2 id="9%E3%80%81%E5%AF%86%E7%A0%81%E5%8A%A0%E5%AF%86%E3%80%81%E5%8A%A0%E7%9B%90">9、密码加密、加盐</h2> 
+<p><strong>1、什么是加盐？</strong></p> 
+<p>加盐的意思就是加上 <span style="color:#ff9900;"><strong>安全随机数</strong></span></p> 
+<p><strong>2、ShiroConfig</strong></p> 
+<pre><code class="language-java">@Bean
+public AccountRealm accountRealm(){
+    AccountRealm accountRealm = new AccountRealm();
+    //设置加密算法
+    HashedCredentialsMatcher credentialsMatcher = new HashedCredentialsMatcher("md5");
+    //设置加密次数
+    credentialsMatcher.setHashIterations(1);
+    //在身份验证过程中，用户提供的凭证（如密码）需要与存储在系统中的凭证进行匹配，以验证用户的身份。凭证匹配器（Credentials Matcher）是用来执行此匹配过程的组件
+    accountRealm.setCredentialsMatcher(credentialsMatcher); //配置身份验证领域（Realm）的凭证匹配器
+
+    return accountRealm;
+}</code></pre> 
+<p><strong>3、 Realm</strong></p> 
+<p>在认证方法返回对象中加入第三个参数</p> 
+<pre><code class="language-java">return new SimpleAuthenticationInfo(account,account.getPassword(), ByteSource.Util.bytes(account.getSalt()),getName());</code></pre> 
+<p><strong>4、产生盐</strong></p> 
+<pre><code class="language-java">//SecureRandomNumberGenerator 是一个类，它是 Apache Shiro 库中用于生成安全的随机数的类。它使用加密强度较高的算法来生成随机字节。.nextBytes().toHex()是一个用于生成随机字节序列并转换为十六进制字符串的代码片段
+String Salt = new SecureRandomNumberGenerator().nextBytes().toHex();</code></pre> 
+<p><strong>5、 加密</strong></p> 
+<p>加密算法和加密次数必须和配置类中配置的一样！！</p> 
+<pre><code class="language-java">//SimpleHash是Apache Shiro库中的一个类，用于计算散列值
+SimpleHash simpleHash = new SimpleHash("md5",user.getPassword(),Salt,1);</code></pre> 
+<blockquote> 
+ <p><span style="color:#ff9900;">这里解释一下，它是如何利用盐和密码进行的验证：</span></p> 
+ <p>将用户注册的密码和产生的盐一起进行加密作为密码保存在数据库中，将盐也保存在一个字段中。在进行登录验证时，根据用户名查到对应的用户，然后将你输入的密码和对应的盐值进行同样的算法加密和加密次数，然后将加密后的密码和查询到的用户的密码进行比对，如若相同则登录通过，反之。 </p> 
+</blockquote> 
+<h2 id="10%E3%80%81%E5%A4%9A%E4%B8%AARealm">10、多个Realm</h2> 
+<p>如果有多种认证方式，也就是得写多个自定义Realm过滤器时，Shiro会尝试进行身份验证或授权时，它将按照配置的顺序依次调用每个Realm的认证或授权方法。如果某个Realm无法完成验证或授权操作，Shiro将继续尝试下一个Realm，直到找到一个能够验证或授权成功的Realm，或者所有的Realm都被尝试完毕。</p> 
+<p>如果所有配置的Realm都无法完成验证或授权，Shiro将判断认证或授权过程失败，表示提供的登录信息有误。</p> 
+<p>需要注意的是，Shiro的Realm在认证过程中可能会抛出异常，例如身份验证失败、连接数据库失败等。当出现异常时，Shiro将终止当前Realm的验证操作并尝试下一个Realm。</p> 
+<p><strong>配置案例：</strong></p> 
+<pre><code class="language-java">@Configuration
+public class ShiroConfig {
+
+    // 配置自定义的Realm
+    @Bean
+    public Realm realm1() {
+        // 创建并配置realm1的实例
+        return new Realm1();
+    }
+
+    // 配置自定义的Realm
+    @Bean
+    public Realm realm2() {
+        // 创建并配置realm2的实例
+        return new Realm2();
+    }
+
+    // 配置SecurityManager，并指定使用哪些Realm
+    @Bean
+    public SecurityManager securityManager() {
+        DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager();
+        securityManager.setRealms(Arrays.asList(realm1(), realm2()));
+        return securityManager;
+    }
+
+}</code></pre> 
+<h2 id="11%E3%80%81%E8%AE%B0%E4%BD%8F%E6%88%91">11、记住我</h2> 
+<p>当用户勾选了"记住我"功能并且成功登录后，网站会在客户端创建一个持久化的cookie来保存用户的登录凭证。当用户再次访问网站时，浏览器会将该cookie发送给服务器，服务器会解析这个cookie并使用其中的信息重新建立一个会话，从而实现自动登录的功能。</p> 
+<p>具体来说，服务器会使用cookie中的身份标识信息来查找用户的登录凭证，如果凭证有效且未过期，服务器会创建一个新的会话并将用户标记为已登录状态，然后用户就可以继续访问需要登录访问权限的页面，而无需重新输入用户名和密码进行认证。  </p> 
+<p><strong>shiroConfig</strong></p> 
+<pre><code class="language-java">      map.put("/**","user");	    //这个设置 记住我能够访问
+
+
+
+
+    @Bean
+    public DefaultWebSecurityManager securityManager(AccountRealm accountRealm,RememberMeManager rememberMeManager){
+        DefaultWebSecurityManager manager = new DefaultWebSecurityManager();
+        manager.setRealm(accountRealm);
+        manager.setRememberMeManager(rememberMeManager);    //设置RememberMe相关配置
+        return manager;
+    }
+
+    @Bean
+    public RememberMeManager rememberMeManager(){
+        CookieRememberMeManager rememberMeManager = new CookieRememberMeManager();
+        //设置cookie名称，对应login.html页面的&lt;input type="checkbox" name="rememberMe"/&gt;
+        SimpleCookie simpleCookie = new SimpleCookie("rememberMe");
+        //防止某些攻击，不被Javascript代码获取
+        simpleCookie.setHttpOnly(true);
+        //单位为秒，设置cookie过期时间
+        simpleCookie.setMaxAge(7*24*60*60);
+        //设置Cookie
+        rememberMeManager.setCookie(simpleCookie);
+        //设置"Remember Me"功能中使用的密钥的代码
+     	rememberMeManager.setCipherKey(Base64.decode("4AvVhmFLUs0KTA3Kprsdag=="));
+        //密钥 完整步骤为：
+        // 使用Base64编码字符串解码得到字节数组
+		//byte[] cipherKey = Base64.decode("4AvVhmFLUs0KTA3Kprsdag==");	//实际应用中，应该生成一个随机唯一的密钥
+		// 将解码后的字节数组设置为RememberMeManager的密钥
+		//rememberMeManager.setCipherKey(cipherKey);
+        
+        return rememberMeManager;
+    }</code></pre> 
+<p> <strong>controller</strong></p> 
+<pre><code class="language-java">@PostMapping("/login")
+public String login(String username, String password,boolean rememberMe,Model model){
+    Subject subject = SecurityUtils.getSubject();
+    UsernamePasswordToken token = new UsernamePasswordToken(username,password,rememberMe);	
+    System.out.println(rememberMe);//rememberMe为true则shiro会帮我们记住用户的登录状态
+    try {
+        subject.login(token);
+        Account account = (Account) subject.getPrincipal();
+        subject.getSession().setAttribute("account",account);
+        return "index";
+    } catch (UnknownAccountException e) {
+        e.printStackTrace();
+        model.addAttribute("msg","用户名错误！");
+        return "login";
+    } catch (IncorrectCredentialsException e) {
+        e.printStackTrace();
+        model.addAttribute("msg","密码错误！");
+        return "login";
+    }
+}</code></pre> 
+<p>我的博客即将同步至腾讯云开发者社区，邀请大家一同入驻：https://cloud.tencent.com/developer/support-plan?invite_code=2j27rgyk150k8</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/00e4b1507205303fec2bbb726cdd098d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【C语言】字符函数和内存操作函数</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/85112b1eec5bd11d80b59eb70b544269/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Git管理神器SourceTree使用教程详解（连接远程仓库，克隆，拉取，提交，推送，新建/切换/合并分支，冲突解决，提交PR）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

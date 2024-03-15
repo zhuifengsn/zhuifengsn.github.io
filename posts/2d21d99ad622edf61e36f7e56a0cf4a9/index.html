@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux LCD驅動架構學習（三） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux LCD驅動架構學習（三）" />
+<meta property="og:description" content="Linux LCD驅動架構學習（三） 帧缓冲设备的用户空间访问
+通过/dev/fbns，应用程序可进行的针对帧缓冲设备的操作主要有如下几种。 1、读/写 dev/fbn：相当于读/写屏幕缓冲区。例如用 cp /dev/fb0 tmp 命令可将当前屏幕的内容复制到一个文件中，而命令 cp tmp &gt; /dev/fb0 则将图形文件tmp 显示在屏幕上。
+2、映射操作：对于帧缓冲设备，可通过 mmap()映射操作将屏幕缓冲区的物理地址映射到用户空间的一段虚拟地址中，之后用户就可以通过读/写这段虚拟地址访问屏幕缓冲区，在屏幕上绘图了。而且若干个进程可以映射到同一个显示缓冲区。实际上，使用帧缓冲设备的应用程序都是通过映射操作来显示图形的。 3、I/O 控制：对于帧缓冲设备，对设备文件的 ioctl()操作可读取/设置显示设备及屏幕的参数，如分辨率、显示颜色数、屏幕大小等。 如图 所示，在应用程序中，操作/dev/fbn 的一般步骤如下。 （1）打开/dev/fbn 设备文件。 （2）用 ioctl()操作取得当前显示屏幕的参数，如屏幕分辨率、每个像素点的比特数和偏移。根据屏幕参数可计算屏幕缓冲区的大小。 （3）将屏幕缓冲区映射到用户空间。 （4）映射后就可以直接读/写屏幕缓冲区，进行绘图和图片显示了。
+下面代码清单所示为一段用户空间访问帧缓冲设备显示缓冲区的范例，包含打开和关闭帧缓冲设备、得到和设置可变参数、得到固定参数、生成与 BPP 对应的帧缓冲数据及填充显示缓冲区。
+1 /*打开帧缓冲设备*/ 2 int openFB(const char *name) 3 { 4 int fh; 5 char *dev; 6 7 if (name == NULL) 8 { 9 dev = getenv(&#34;FRAMEBUFFER&#34;); 10 if (dev) 11 name = dev; 12 else 13 name = DEFAULT_FRAMEBUFFER; 14 } 15 16 if ((fh = open(name, O_WRONLY)) == - 1) 17 { 18 fprintf(stderr, &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2d21d99ad622edf61e36f7e56a0cf4a9/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2013-08-19T20:15:32+08:00" />
+<meta property="article:modified_time" content="2013-08-19T20:15:32+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux LCD驅動架構學習（三）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2 style="text-align:center">Linux LCD驅動架構學習（三）</h2> 
+<p>帧缓冲设备的用户空间访问</p> 
+<p>通过/dev/fbns，应用程序可进行的针对帧缓冲设备的操作主要有如下几种。 </p> 
+<p>1、读/写 dev/fbn：相当于读/写屏幕缓冲区。例如用 cp /dev/fb0 tmp 命令可将当前屏幕的内容复制到一个文件中，而命令 cp tmp &gt; /dev/fb0 则将图形文件tmp 显示在屏幕上。</p> 
+<p>2、映射操作：对于帧缓冲设备，可通过 mmap()映射操作将屏幕缓冲区的物理地址映射到用户空间的一段虚拟地址中，之后用户就可以通过读/写这段虚拟地址访问屏幕缓冲区，在屏幕上绘图了。而且若干个进程可以映射到同一个显示缓冲区。实际上，使用帧缓冲设备的应用程序都是通过映射操作来显示图形的。 </p> 
+<p>3、I/O 控制：对于帧缓冲设备，对设备文件的 ioctl()操作可读取/设置显示设备及屏幕的参数，如分辨率、显示颜色数、屏幕大小等。 </p> 
+<p>如图 所示，在应用程序中，操作/dev/fbn 的一般步骤如下。 </p> 
+<p>（1）打开/dev/fbn 设备文件。 </p> 
+<p>（2）用 ioctl()操作取得当前显示屏幕的参数，如屏幕分辨率、每个像素点的比特数和偏移。根据屏幕参数可计算屏幕缓冲区的大小。 </p> 
+<p>（3）将屏幕缓冲区映射到用户空间。 </p> 
+<p>（4）映射后就可以直接读/写屏幕缓冲区，进行绘图和图片显示了。</p> 
+<p><img src="https://images2.imgbox.com/ba/12/CIaGVNRW_o.png" alt=""><br> </p> 
+<p>下面代码清单所示为一段用户空间访问帧缓冲设备显示缓冲区的范例，包含打开和关闭帧缓冲设备、得到和设置可变参数、得到固定参数、生成与 BPP 对应的帧缓冲数据及填充显示缓冲区。</p> 
+<p></p> 
+<pre><code class="language-html">1   /*打开帧缓冲设备*/ 
+2   int openFB(const char *name) 
+3   { 
+4       int fh; 
+5       char *dev; 
+6    
+7       if (name == NULL) 
+8       { 
+9           dev = getenv("FRAMEBUFFER"); 
+10         if (dev) 
+11             name = dev; 
+12         else 
+13             name = DEFAULT_FRAMEBUFFER; 
+14      } 
+15   
+16      if ((fh = open(name, O_WRONLY)) ==  - 1) 
+17      { 
+18         fprintf(stderr, "open %s: %s\n", name, strerror(errno)); 
+19         exit(1); 
+20      } 
+21      return fh; 
+22  } 
+23   
+24  /*关闭帧缓冲设备*/ 
+25  void closeFB(int fh) 
+26  { 
+27      close(fh); 
+28  } 
+29   
+30  /*得到屏幕可变参数*/ 
+31  void getVarScreenInfo(int fh, struct fb_var_screeninfo *var) 
+32  { 
+33     if (ioctl(fh, FBIOGET_VSCREENINFO, var)) 
+34     { 
+35                  fprintf(stderr,  "ioctl  FBIOGET_VSCREENINFO:  %s\n", strerror(errno)); 
+36         exit(1); 
+37     } 
+38  } 
+39   
+40  /*设置屏幕可变参数*/ 
+41  void setVarScreenInfo(int fh, struct fb_var_screeninfo *var) 
+42  { 
+43      if (ioctl(fh, FBIOPUT_VSCREENINFO, var)) 
+44      { 
+45                    fprintf(stderr,  "ioctl  FBIOPUT_VSCREENINFO:  %s\n", strerror(errno)); 
+46          exit(1); 
+47     } 
+48  } 
+49   
+50  /*得到屏幕固定参数*/ 
+51  void getFixScreenInfo(int fh, struct fb_fix_screeninfo *fix) 
+52  { 
+53      if (ioctl(fh, FBIOGET_FSCREENINFO, fix)) 
+54      { 
+55                    fprintf(stderr,  "ioctl  FBIOGET_FSCREENINFO:  %s\n", strerror(errno)); 
+56          exit(1); 
+57    } 
+58  } 
+59   
+60  /*构造颜色表*/ 
+61  void make332map(struct fb_cmap *map) 
+62  { 
+63      int rs, gs, bs, i; 
+64      int r = 8, g = 8, b = 4; 
+65   
+66      map-&gt;red = red; 
+67      map-&gt;green = green; 
+68      map-&gt;blue = blue; 
+69   
+70      rs = 256 / (r - 1); 
+71      gs = 256 / (g - 1); 
+72      bs = 256 / (b - 1); 
+73   
+74      for (i = 0; i &lt; 256; i++) 
+75      { 
+76          map-&gt;red[i] = (rs *((i / (g *b)) % r)) *255; 
+77          map-&gt;green[i] = (gs *((i / b) % g)) *255; 
+78          map-&gt;blue[i] = (bs *((i) % b)) *255; 
+79    } 
+80  } 
+81   
+82  /*设置颜色表*/ 
+83  void set8map(int fh, struct fb_cmap *map) 
+84  { 
+85      if (ioctl(fh, FBIOPUTCMAP, map) &lt; 0) 
+86      { 
+87          fprintf(stderr, "Error putting colormap"); 
+88          exit(1); 
+89    } 
+90  } 
+91   
+92  /*构造并设置颜色表*/ 
+93  void set332map(int fh) 
+94  { 
+95      make332map(&amp;map332); 
+96      set8map(fh, &amp;map332); 
+97  } 
+98   
+99  /*获得颜色表*/ 
+100 void get8map(int fh, struct fb_cmap *map) 
+101 { 
+102     if (ioctl(fh, FBIOGETCMAP, map) &lt; 0) 
+103     { 
+104         fprintf(stderr, "Error getting colormap"); 
+105         exit(1); 
+106   } 
+107 } 
+108 /*组成 BPP=16 时的缓冲数据*/ 
+109 inline unsigned short make16color(unsigned char r, unsigned char g, unsigned char b) 
+110 { 
+111         return ((((r &gt;&gt; 3) &amp; 31) &lt;&lt; 11) | 
+112                         (((g &gt;&gt; 2) &amp; 63) &lt;&lt; 5)  | 
+113                         ((b &gt;&gt; 3) &amp; 31) ); 
+114 } 
+115  
+116 /*把 RGB 数据按照屏幕的 BPP 调整*/ 
+117 void *convertRGB2FB(int fh, unsigned char *rgbbuff, unsigned long count, int 
+118     bpp, int *cpp) 
+119 { 
+120     unsigned long i; 
+121     void *fbbuff = NULL; 
+122     unsigned char *c_fbbuff; 
+123     unsigned short *s_fbbuff; 
+124     unsigned int *i_fbbuff; 
+125  
+126     switch (bpp) 
+127     { 
+128         case 8: 
+129            //... 
+130         case 15: 
+131           //  ... 
+132         case 16: 
+133             *cpp = 2; 
+134                            s_fbbuff  =  (unsigned  short*)malloc(count *sizeof(unsigned short)); 
+135              for (i = 0; i &lt; count; i++) 
+136                  s_fbbuff[i] = make16color(rgbbuff[i *3], rgbbuff[i *3+1], rgbbuff 
+137                  [i *3+ 2]); 
+138              fbbuff = (void*)s_fbbuff; 
+139              break; 
+140           case 24: 
+141           case 32: 
+142             //  ... 
+143           default: 
+144              fprintf(stderr, "Unsupported video mode! You've got: %dbpp\n", bpp); 
+145              exit(1); 
+146     } 
+147     return fbbuff; 
+148 } 
+149  
+150 /*写显示缓冲区*/ 
+151 void blit2FB(int fh, void *fbbuff, unsigned int pic_xs, unsigned int pic_ys, 
+152      unsigned int scr_xs, unsigned int scr_ys, unsigned int xp, unsigned int yp, 
+153      unsigned int xoffs, unsigned int yoffs, int cpp) 
+154 { 
+155      int i, xc, yc; 
+156      unsigned char *cp; 
+157      unsigned short *sp; 
+158      unsigned int *ip; 
+159      cp = (unsigned char*)sp = (unsigned short*)ip = (unsigned int*)fbbuff; 
+160  
+161      xc = (pic_xs &gt; scr_xs) ? scr_xs : pic_xs; 
+162      yc = (pic_ys &gt; scr_ys) ? scr_ys : pic_ys; 
+163  
+164      switch (cpp) 
+165      { 
+166         case 1: 
+167            ... 
+168         case 2:  //BPP=16 
+169            for (i = 0; i &lt; yc; i++) 
+170            { 
+171                 lseek(fh, ((i + yoffs) *scr_xs + xoffs) *cpp, SEEK_SET); 
+172                 write(fh, sp + (i + yp) *pic_xs + xp, xc *cpp); 
+173            } 
+174            break; 
+175         case 4: 
+176            ... 
+177   } 
+178 } 
+179  
+180  
+181 /*帧缓冲设备显示*/ 
+182 void fb_display(unsigned char *rgbbuff, int x_size, int y_size, int x_pan, int 
+183     y_pan, int x_offs, int y_offs) 
+184 { 
+185     struct fb_var_screeninfo var; 
+186     unsigned short *fbbuff = NULL; 
+187     int fh =  - 1, bp = 0; 
+188  
+189      /* 打开帧缓冲设备 */ 
+190      fh = openFB(NULL); 
+191  
+192      /* 获得可变参数 */ 
+193      getVarScreenInfo(fh, &amp;var); 
+194  
+195      /*校正 panning */ 
+196      if (x_pan &gt; x_size - var.xres) 
+197          x_pan = 0; 
+198      if (y_pan &gt; y_size - var.yres) 
+199          y_pan = 0; 
+200      /* 校正 offset */ 
+201      if (x_offs + x_size &gt; var.xres) 
+202          x_offs = 0; 
+203      if (y_offs + y_size &gt; var.yres)
+204          y_offs = 0; 
+205  
+206      /* 将 RGB 数据转换为与 var 位域对应的数据并填充到显示缓冲区 */ 
+207            fbbuff  =  convertRGB2FB(fh,  rgbbuff,  x_size  *y_size, var.bits_per_pixel, &amp;bp); 
+208      blit2FB(fh, fbbuff, x_size, y_size, var.xres, var.yres, x_pan, y_pan, x_offs, 
+209          y_offs, bp); 
+210      free(fbbuff); 
+211  
+212      /* 关闭帧缓冲设备 */ 
+213      closeFB(fh); 
+214 }</code></pre> 
+<br> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/209d2c9206d0b41345be4d9b9f68e66a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Linux LCD驅動架構學習（二）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/1507e00215fa44de4715e6da941575e8/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">蓝牙的Baseband说明</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

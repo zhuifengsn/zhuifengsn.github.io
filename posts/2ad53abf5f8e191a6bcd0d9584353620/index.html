@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Java面试高频题汇总：消息中间件篇 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Java面试高频题汇总：消息中间件篇" />
+<meta property="og:description" content="先来看看本篇内容的知识点如下： 在开始正式的面试题之前，我们先来介绍下这篇文章，左边目录是题目，大家可以选择查看，按照顺序学习是最好的。另外，面试官下面的【图片/文字】内容，均为知识点。候选人的文字，则是口语的回答！关于知识点也嵌入在回答中了，希望大家能看明白~
+面试官：RabbitMQ-如何保证消息不丢失 候选人：
+嗯！我们当时MYSQL和Redis的数据双写一致性就是采用RabbitMQ实现同步的，这里面就要求了消息的高可用性，我们要保证消息的不丢失。主要从三个层面考虑；
+第一个是开启生产者确认机制，确保生产者的消息能到达队列，如果报错可以先记录到日志中，再去修复数据；
+第二个是开启持久化功能，确保消息未消费前在队列中不会丢失，其中的交换机、队列、和消息都要做持久化；
+第三个是开启消费者确认机制为auto，由spring确认消息处理成功后完成ack，当然也需要设置一定的重试次数，我们当时设置了3次，如果重试3次还没有收到消息，就将失败后的消息投递到异常交换机，交由人工处理。
+面试官：RabbitMQ消息的重复消费问题如何解决的 候选人：
+嗯，我想想~
+其实这个就是典型的幂等的问题，比如，redis分布式锁、数据库的锁都是可以的
+面试官：RabbitMQ中死信交换机 ? （RabbitMQ延迟队列有了解过嘛） 候选人：
+我们当时的xx项目有一个xx业务，需要用到延迟队列，其中就是使用RabbitMQ来实现的。
+延迟队列就是用到了死信交换机和TTL（消息存活时间）实现的。
+如果消息超时未消费就会变成死信，在RabbitMQ中如果消息成为死信，队列可以绑定一个死信交换机，在死信交换机上可以绑定其他队列，在我们发消息的时候可以按照需求指定TTL的时间，这样就实现了延迟队列的功能了。
+我记得RabbitMQ还有一种方式可以实现延迟队列，在RabbitMQ中安装一个死信插件，这样更方便一些，我们只需要在声明交互机的时候，指定这个就是死信交换机，然后在发送消息的时候直接指定超时时间就行了，相对于死信交换机&#43;TTL要省略了一些步骤。
+面试官：如果有100万消息堆积在MQ，如何解决？ 候选人：
+我在实际的开发中，没遇到过这种情况，不过，如果发生了堆积的问题，解决方案也所有很多的
+第一:提高消费者的消费能力 ,可以使用多线程消费任务
+第二：增加更多消费者，提高消费速度
+使用工作队列模式, 设置多个消费者消费消费同一个队列中的消息
+第三：扩大队列容积，提高堆积上限
+可以使用RabbitMQ惰性队列，惰性队列的好处主要是
+①接收到消息后直接存入磁盘而非内存②消费者要消费消息时才会从磁盘中读取并加载到内存③支持数百万条的消息存储 面试官：RabbitMQ的高可用机制有了解过嘛 在生产环境下，使用集群来保证高可用性普通集群、镜像集群、仲裁队列 候选人：
+嗯，熟悉的~
+我们当时项目在生产环境下，使用的集群，当时搭建是镜像模式集群，使用了3台机器。
+镜像队列结构是一主多从，所有操作都是主节点完成，然后同步给镜像节点，如果主节点宕机后，镜像节点会替代成新的主节点，不过在主从同步完成前，主节点就已经宕机，可能出现数据丢失
+面试官：那出现丢数据怎么解决呢？ 候选人：
+我们可以采用仲裁队列，与镜像队列一样，都是主从模式，支持主从数据同步，主从同步基于Raft协议，强一致。
+并且使用起来也非常简单，不需要额外的配置，在声明队列的时候只要指定这个是仲裁队列即可.
+面试官：Kafka是如何保证消息不丢失？ 候选人：
+嗯，这个保证机制很多，在发送消息到消费者接收消息，在每个阶段都有可能会丢失消息，所以我们解决的话也是从多个方面考虑。
+第一个是生产者发送消息的时候，可以使用异步回调发送，如果消息发送失败，我们可以通过回调获取失败后的消息信息，可以考虑重试或记录日志，后边再做补偿都是可以的。同时在生产者这边还可以设置消息重试，有的时候是由于网络抖动的原因导致发送不成功，就可以使用重试机制来解决。
+第二个在broker中消息有可能会丢失，我们可以通过kafka的复制机制来确保消息不丢失，在生产者发送消息的时候，可以设置一个acks，就是确认机制。我们可以设置参数为all，这样的话，当生产者发送消息到了分区之后，不仅仅只在leader分区保存确认，在follwer分区也会保存确认，只有当所有的副本都保存确认以后才算是成功发送了消息，所以，这样设置就很大程度了保证了消息不会在broker丢失。
+第三个有可能是在消费者端丢失消息，kafka消费消息都是按照offset进行标记消费的，消费者默认是自动按期提交已经消费的偏移量，默认是每隔5s提交一次，如果出现重平衡的情况，可能会重复消费或丢失数据。我们一般都会禁用掉自动提价偏移量，改为手动提交，当消费成功以后再报告给broker消费的位置，这样就可以避免消息丢失和重复消费了。
+面试官：Kafka中消息的重复消费问题如何解决的？ 候选人：
+kafka消费消息都是按照offset进行标记消费的，消费者默认是自动按期提交已经消费的偏移量，默认是每隔5s提交一次，如果出现重平衡的情况，可能会重复消费或丢失数据。我们一般都会禁用掉自动提价偏移量，改为手动提交，当消费成功以后再报告给broker消费的位置，这样就可以避免消息丢失和重复消费了；
+为了消息的幂等，我们也可以设置唯一主键来进行区分，或者是加锁，数据库的锁，或者是redis分布式锁，都能解决幂等的问题。
+面试官：Kafka是如何保证消费的顺序性 应用场景： 即时消息中的单对单聊天和群聊，保证发送方消息发送顺序与接收方的顺序一致 充值转账两个渠道在同一个时间进行余额变更，短信通知必须要有顺序 候选人：
+kafka默认存储和消费消息，是不能保证顺序性的，因为一个topic数据可能存储在不同的分区中，每个分区都有一个按照顺序的存储的偏移量，如果消费者关联了多个分区不能保证顺序性；
+如果有这样的需求的话，我们是可以解决的，把消息都存储同一个分区下就行了，有两种方式都可以进行设置，第一个是发送消息时指定分区号，第二个是发送消息时按照相同的业务设置相同的key，因为默认情况下分区也是通过key的hashcode值来选择分区的，hash值如果一样的话，分区肯定也是一样的。
+面试官：Kafka的高可用机制有了解过嘛 候选人：
+嗯，主要是有两个层面，第一个是集群，第二个是提供了复制机制。
+kafka集群指的是由多个broker实例组成，即使某一台宕机，也不耽误其他broker继续对外提供服务。
+复制机制是可以保证kafka的高可用的，一个topic有多个分区，每个分区有多个副本，有一个leader，其余的是follower，副本存储在不同的broker中；所有的分区副本的内容是都是相同的，如果leader发生故障时，会自动将其中一个follower提升为leader，保证了系统的容错性、高可用性。
+面试官：解释一下复制机制中的ISR 候选人：
+ISR的意思是in-sync replica，就是需要同步复制保存的follower；
+其中分区副本有很多的follower，分为了两类，一个是ISR，与leader副本同步保存数据，另外一个普通的副本，是异步同步数据，当leader挂掉之后，会优先从ISR副本列表中选取一个作为leader，因为ISR是同步保存数据，数据更加的完整一些，所以优先选择ISR副本列表。
+面试官：Kafka数据清理机制了解过吗？ 候选人：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2ad53abf5f8e191a6bcd0d9584353620/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-12-14T17:52:44+08:00" />
+<meta property="article:modified_time" content="2023-12-14T17:52:44+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Java面试高频题汇总：消息中间件篇</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h4 id="h_667981464_0">先来看看本篇内容的知识点如下：</h4> 
+<p></p> 
+<p class="img-center"><img alt="" height="329" src="https://images2.imgbox.com/c8/47/MAO3l8qc_o.png" width="745"></p> 
+<p>在开始正式的面试题之前，我们先来介绍下这篇文章，左边目录是题目，大家可以选择查看，按照顺序学习是最好的。另外，面试官下面的【图片/文字】内容，均为知识点。候选人的文字，则是口语的回答！关于知识点也嵌入在回答中了，希望大家能看明白~</p> 
+<h4 id="h_667981464_1">面试官：RabbitMQ-如何保证消息不丢失</h4> 
+<p></p> 
+<p class="img-center"><img alt="" height="339" src="https://images2.imgbox.com/82/77/lE1WuoZa_o.png" width="784"></p> 
+<p><strong>候选人：</strong></p> 
+<p>嗯！我们当时MYSQL和Redis的数据双写一致性就是采用RabbitMQ实现同步的，这里面就要求了消息的高可用性，我们要保证消息的不丢失。主要从三个层面考虑；</p> 
+<p>第一个是开启生产者确认机制，确保生产者的消息能到达队列，如果报错可以先记录到日志中，再去修复数据；</p> 
+<p>第二个是开启持久化功能，确保消息未消费前在队列中不会丢失，其中的交换机、队列、和消息都要做持久化；</p> 
+<p>第三个是开启消费者确认机制为auto，由spring确认消息处理成功后完成ack，当然也需要设置一定的重试次数，我们当时设置了3次，如果重试3次还没有收到消息，就将失败后的消息投递到异常交换机，交由人工处理。</p> 
+<h4 id="h_667981464_2">面试官：RabbitMQ消息的重复消费问题如何解决的</h4> 
+<p></p> 
+<p class="img-center"><img alt="" height="362" src="https://images2.imgbox.com/88/89/kpY3NxDg_o.png" width="669"></p> 
+<p><strong>候选人：</strong></p> 
+<p>嗯，我想想~</p> 
+<p>其实这个就是典型的幂等的问题，比如，redis分布式锁、数据库的锁都是可以的</p> 
+<h4 id="h_667981464_3"><strong>面试官</strong>：RabbitMQ中死信交换机 ? （RabbitMQ延迟队列有了解过嘛）</h4> 
+<p></p> 
+<p class="img-center"><img alt="" height="305" src="https://images2.imgbox.com/af/66/Vi66V51S_o.png" width="641"></p> 
+<p></p> 
+<p class="img-center"><img alt="" height="486" src="https://images2.imgbox.com/10/5a/W2dx0iB7_o.png" width="720"></p> 
+<p><strong>候选人：</strong></p> 
+<p>我们当时的xx项目有一个xx业务，需要用到延迟队列，其中就是使用RabbitMQ来实现的。</p> 
+<p>延迟队列就是用到了死信交换机和TTL（消息存活时间）实现的。</p> 
+<p></p> 
+<p class="img-center"><img alt="" height="441" src="https://images2.imgbox.com/90/44/7ylQPiaQ_o.png" width="720"></p> 
+<p>如果消息超时未消费就会变成死信，在RabbitMQ中如果消息成为死信，队列可以绑定一个死信交换机，在死信交换机上可以绑定其他队列，在我们发消息的时候可以按照需求指定TTL的时间，这样就实现了延迟队列的功能了。</p> 
+<p>我记得RabbitMQ还有一种方式可以实现延迟队列，在RabbitMQ中安装一个死信插件，这样更方便一些，我们只需要在声明交互机的时候，指定这个就是死信交换机，然后在发送消息的时候直接指定超时时间就行了，相对于死信交换机+TTL要省略了一些步骤。</p> 
+<h4 id="h_667981464_4">面试官：如果有100万消息堆积在MQ，如何解决？</h4> 
+<p></p> 
+<p class="img-center"><img alt="" height="345" src="https://images2.imgbox.com/01/22/P8s8eUfl_o.png" width="720"></p> 
+<p><strong>候选人</strong>：</p> 
+<p>我在实际的开发中，没遇到过这种情况，不过，如果发生了堆积的问题，解决方案也所有很多的</p> 
+<p>第一:提高消费者的消费能力 ,可以使用多线程消费任务</p> 
+<p>第二：增加更多消费者，提高消费速度<br> 使用工作队列模式, 设置多个消费者消费消费同一个队列中的消息</p> 
+<p>第三：扩大队列容积，提高堆积上限<br> 可以使用RabbitMQ惰性队列，惰性队列的好处主要是</p> 
+<ul><li>①接收到消息后直接存入磁盘而非内存</li><li>②消费者要消费消息时才会从磁盘中读取并加载到内存</li><li>③支持数百万条的消息存储</li></ul> 
+<h4 id="h_667981464_5"><strong>面试官</strong>：RabbitMQ的高可用机制有了解过嘛</h4> 
+<ul><li>在生产环境下，使用集群来保证高可用性</li><li>普通集群、镜像集群、仲裁队列</li></ul> 
+<p></p> 
+<p class="img-center"><img alt="" height="372" src="https://images2.imgbox.com/e4/2e/hcNaUwL7_o.png" width="720"></p> 
+<p></p> 
+<p class="img-center"><img alt="" height="374" src="https://images2.imgbox.com/c8/40/K2uGqkgX_o.png" width="720"></p> 
+<p></p> 
+<p class="img-center"><img alt="" height="445" src="https://images2.imgbox.com/89/39/J4yx1qXy_o.png" width="1124"></p> 
+<p><strong>候选人</strong>：</p> 
+<p>嗯，熟悉的~</p> 
+<p>我们当时项目在生产环境下，使用的集群，当时搭建是镜像模式集群，使用了3台机器。</p> 
+<p>镜像队列结构是一主多从，所有操作都是主节点完成，然后同步给镜像节点，如果主节点宕机后，镜像节点会替代成新的主节点，不过在主从同步完成前，主节点就已经宕机，可能出现数据丢失</p> 
+<h4 id="h_667981464_6"><strong>面试官</strong>：那出现丢数据怎么解决呢？</h4> 
+<p><strong>候选人</strong>：</p> 
+<p>我们可以采用仲裁队列，与镜像队列一样，都是主从模式，支持主从数据同步，主从同步基于Raft协议，强一致。</p> 
+<p>并且使用起来也非常简单，不需要额外的配置，在声明队列的时候只要指定这个是仲裁队列即可.</p> 
+<h4 id="h_667981464_7">面试官：Kafka是如何保证消息不丢失？</h4> 
+<p></p> 
+<p class="img-center"><img alt="" height="380" src="https://images2.imgbox.com/54/a5/CbPp4D9N_o.png" width="720"></p> 
+<p><strong>候选人</strong>：</p> 
+<p>嗯，这个保证机制很多，在发送消息到消费者接收消息，在每个阶段都有可能会丢失消息，所以我们解决的话也是从多个方面考虑。</p> 
+<p><strong>第一个是生产者发送消息的时候</strong>，可以使用异步回调发送，如果消息发送失败，我们可以通过回调获取失败后的消息信息，可以考虑重试或记录日志，后边再做补偿都是可以的。同时在生产者这边还可以设置消息重试，有的时候是由于网络抖动的原因导致发送不成功，就可以使用重试机制来解决。</p> 
+<p><strong>第二个在broker中消息有可能会丢失</strong>，我们可以通过kafka的复制机制来确保消息不丢失，在生产者发送消息的时候，可以设置一个acks，就是确认机制。我们可以设置参数为all，这样的话，当生产者发送消息到了分区之后，不仅仅只在leader分区保存确认，在follwer分区也会保存确认，只有当所有的副本都保存确认以后才算是成功发送了消息，所以，这样设置就很大程度了保证了消息不会在broker丢失。</p> 
+<p><strong>第三个有可能是在消费者端丢失消息，</strong>kafka消费消息都是按照offset进行标记消费的，消费者默认是自动按期提交已经消费的偏移量，默认是每隔5s提交一次，如果出现重平衡的情况，可能会重复消费或丢失数据。我们一般都会禁用掉自动提价偏移量，改为手动提交，当消费成功以后再报告给broker消费的位置，这样就可以避免消息丢失和重复消费了。</p> 
+<h4 id="h_667981464_8"><strong>面试官</strong>：Kafka中消息的重复消费问题如何解决的？</h4> 
+<p><strong>候选人</strong>：</p> 
+<p></p> 
+<p class="img-center"><img alt="" height="327" src="https://images2.imgbox.com/98/64/pQ3PDWrB_o.png" width="720"></p> 
+<p>kafka消费消息都是按照offset进行标记消费的，消费者默认是自动按期提交已经消费的偏移量，默认是每隔5s提交一次，如果出现重平衡的情况，可能会重复消费或丢失数据。我们一般都会禁用掉自动提价偏移量，改为手动提交，当消费成功以后再报告给broker消费的位置，这样就可以避免消息丢失和重复消费了；</p> 
+<p>为了消息的幂等，我们也可以设置唯一主键来进行区分，或者是加锁，数据库的锁，或者是redis分布式锁，都能解决幂等的问题。</p> 
+<p></p> 
+<p class="img-center"><img alt="" height="314" src="https://images2.imgbox.com/ed/af/H3XqMKOY_o.png" width="720"></p> 
+<p></p> 
+<p class="img-center"><img alt="" height="263" src="https://images2.imgbox.com/02/23/DuKDsVsA_o.png" width="720"></p> 
+<h4 id="h_667981464_9"><strong>面试官</strong>：Kafka是如何保证消费的顺序性</h4> 
+<blockquote>
+  应用场景： 
+ <br> 即时消息中的单对单聊天和群聊，保证发送方消息发送顺序与接收方的顺序一致 
+ <br> 充值转账两个渠道在同一个时间进行余额变更，短信通知必须要有顺序 
+</blockquote> 
+<p><strong>候选人</strong>：</p> 
+<p>kafka默认存储和消费消息，是不能保证顺序性的，因为一个topic数据可能存储在不同的分区中，每个分区都有一个按照顺序的存储的偏移量，如果消费者关联了多个分区不能保证顺序性；</p> 
+<p>如果有这样的需求的话，我们是可以解决的，把消息都存储同一个分区下就行了，有两种方式都可以进行设置，第一个是发送消息时指定分区号，第二个是发送消息时按照相同的业务设置相同的key，因为默认情况下分区也是通过key的hashcode值来选择分区的，hash值如果一样的话，分区肯定也是一样的。</p> 
+<h4 id="h_667981464_10"><strong>面试官</strong>：Kafka的高可用机制有了解过嘛</h4> 
+<p><strong>候选人</strong>：</p> 
+<p>嗯，主要是有两个层面，第一个是集群，第二个是提供了复制机制。</p> 
+<p></p> 
+<p class="img-center"><img alt="" height="294" src="https://images2.imgbox.com/9e/58/lyymPd1W_o.png" width="720"></p> 
+<p></p> 
+<p class="img-center"><img alt="" height="364" src="https://images2.imgbox.com/3d/cd/NFSozREb_o.png" width="720"></p> 
+<p>kafka集群指的是由多个broker实例组成，即使某一台宕机，也不耽误其他broker继续对外提供服务。</p> 
+<p>复制机制是可以保证kafka的高可用的，一个topic有多个分区，每个分区有多个副本，有一个leader，其余的是follower，副本存储在不同的broker中；所有的分区副本的内容是都是相同的，如果leader发生故障时，会自动将其中一个follower提升为leader，保证了系统的容错性、高可用性。</p> 
+<h4 id="h_667981464_11"><strong>面试官</strong>：解释一下复制机制中的ISR</h4> 
+<p></p> 
+<p class="img-center"><img alt="" height="348" src="https://images2.imgbox.com/98/30/TwzqV0KV_o.png" width="720"></p> 
+<p><strong>候选人</strong>：</p> 
+<p>ISR的意思是in-sync replica，就是需要同步复制保存的follower；</p> 
+<p>其中分区副本有很多的follower，分为了两类，一个是ISR，与leader副本同步保存数据，另外一个普通的副本，是异步同步数据，当leader挂掉之后，会优先从ISR副本列表中选取一个作为leader，因为ISR是同步保存数据，数据更加的完整一些，所以优先选择ISR副本列表。</p> 
+<h4 id="h_667981464_12"><strong>面试官</strong>：Kafka数据清理机制了解过吗？</h4> 
+<p><strong>候选人：</strong></p> 
+<p>嗯，了解过~~</p> 
+<p>Kafka中topic的数据存储在分区上，分区如果文件过大会分段存储segment；</p> 
+<p>每个分段都在磁盘上以索引(xxxx.index)和日志文件(xxxx.log)的形式存储，这样分段的好处是，第一能够减少单个文件内容的大小，查找数据方便，第二方便kafka进行日志清理。</p> 
+<p>在kafka中提供了两个日志的清理策略：</p> 
+<ul><li>第一，根据消息的保留时间，当消息保存的时间超过了指定的时间，就会触发清理，默认是168小时（ 7天）</li><li>第二是根据topic存储的数据大小，当topic所占的日志文件大小大于一定的阈值，则开始删除最久的消息。这个默认是关闭的</li></ul> 
+<p>这两个策略都可以通过kafka的broker中的配置文件进行设置。</p> 
+<h4 id="h_667981464_13"><strong>面试官</strong>：Kafka中实现高性能的设计有了解过嘛</h4> 
+<blockquote> 
+ <strong>知识点Tips</strong> 
+ <br> 消息分区：不受单台服务器的限制，可以不受限的处理更多的数据 
+ <br> 顺序读写：磁盘顺序读写，提升读写效率 
+ <br> 页缓存：把磁盘中的数据缓存到内存中，把对磁盘的访问变为对内存的访问 
+ <br> 零拷贝：减少上下文切换及数据拷贝 
+ <br> 消息压缩：减少磁盘IO和网络IO 
+ <br> 分批发送：将消息打包批量发送，减少网络开销 
+</blockquote> 
+<p><strong>候选人</strong>：</p> 
+<p>Kafka 高性能，是多方面协同的结果，包括宏观架构、分布式存储、ISR 数据同步、以及高效的利用磁盘、操作系统特性等。主要体现有这么几点：</p> 
+<p>消息分区：不受单台服务器的限制，可以不受限的处理更多的数据；</p> 
+<p>顺序读写：磁盘顺序读写，提升读写效率；</p> 
+<p>页缓存：把磁盘中的数据缓存到内存中，把对磁盘的访问变为对内存的访问；</p> 
+<p>零拷贝：减少上下文切换及数据拷贝；</p> 
+<p></p> 
+<p class="img-center"><img alt="" height="530" src="https://images2.imgbox.com/61/14/oPIsBUZ5_o.png" width="1180"></p> 
+<p>消息压缩：减少磁盘IO和网络IO；</p> 
+<p>分批发送：将消息打包批量发送，减少网络开销。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/79340541654323f62c3b69d5cb400405/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">51单片机扫描按键短按、双击、长按功能</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/88b12bf99d788bf3c07886a934c10a78/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C语言中为什么 字符串 可直接赋值给字符指针变量？</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

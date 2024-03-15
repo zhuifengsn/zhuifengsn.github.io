@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>MYSQL--未提交(read uncommitted)、读已提交(read committed)和repeatable read(可重复读) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="MYSQL--未提交(read uncommitted)、读已提交(read committed)和repeatable read(可重复读)" />
+<meta property="og:description" content="一、read uncommitted(读未提交)--脏读(Dirty Read) 读未提交的概念：允许一个事务可以看到其他事务未提交的修改。 第一步，建account(账户)表，属性有id(编号)和balance(金额) 。
+第二步：
+（1）在原窗口调整隔离级别为read uncommitted。
+（2）打开新窗口，调整隔离级别为read uncommitted（未提交读）。
+第三步：
+（1）原窗口开启事务。
+（2）新窗口开启事务。
+第四步：
+（1）原窗口事务1查询account表。
+（2）新窗口事务2更新1号账户的钱，将钱加200，更新到1200。
+（3）在原窗口事务1验证，理论上read uncommitted(未提交读)模式下，虽然事务2未提交，但事务1可以读到事务1的更新值。结果验证如下，符合理论预期：
+第五步：
+（1）在窗口2中回滚：事务2的更新操作。
+（2）在窗口1中重新查询account表，理论上在事务2回滚后，事务1中查询会得到事务2回滚后的表。
+结果验证如下，符合结果预期：
+二、read committed(读已提交) 读已提交的概念：允许一个事务只能看到其他事务已经提交的修改，未提交的修改是不可见的。 第一步：
+在之前的基础上，将事务2改为read committed(读已提交)模式。
+第二步：
+（1）在事务1中，更新账户1，将钱减两百，得800。
+理论上事务2此时，已经只能看到其他事务已经提交的修改，所有事务1的减操作，事务2看不到，所以在事务2中查询，账户1的钱仍然是1000。
+（2）在事务2中验证如下，符合结果预期：事务2只能看到其他事务已提交的内容，事务1尚未提交，因此在事务2中的账户1的钱仍然是1000。
+第三步：
+（1）在事务1中提交之前的账户1更新操作。
+理论上事务1提交操作后，事务2能看的到。所有再在事务2中查询，预期账户1的钱已变为800。
+（2）在事务2中重新查询account表。
+得到账户1的钱已经变为800，符合预期。
+三、repeatable read(可重复读) 可重复读概念：确保如果在一个事务中执行两次相同的select语句，都能得到相同的结果，不管其他事务是否提交这些修改。 第一步：
+（1）在之前的基础上，将事务2改为repeatable(可重复读)模式。
+（2）在事务2中开启事务。
+（3）在事务2中查询一次account表。
+使用select * from account;
+理论上事务2目前处于可重复读模式，无论其他事务怎么修改account表，后面再次执行该查询语句，结果应该和这次的一样。
+（2）第二步：
+（1）在事务1中插入账户3，初始的钱为1000。
+（2）在事务1使用select * from account;
+查询结果中出现了新增的账户记录。
+第三步：
+（1）返回事务2验证：
+在事务2中使用select * from account;
+事务2中的查询结果，没有事务1中新增的记录，成功验证：
+在同一事务和可重复读模式下，无论其他事务怎么修改，原事务中执行相同的查询语句，前后结果相同。
+第四步：
+二道验证，看事务1是否将之前新的记录插成功：
+在事务2中尝试插入账户3，钱为1000。
+运行结果表示：id为3的插入冲突，说明id为3的账户记录已经存在，也就是事务1的插入成功。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3a1cf68b47f8eadebbc17979583fb02f/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-09-05T08:00:00+08:00" />
+<meta property="article:modified_time" content="2022-09-05T08:00:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">MYSQL--未提交(read uncommitted)、读已提交(read committed)和repeatable read(可重复读)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h3>一、read uncommitted(读未提交)--脏读(Dirty Read)</h3> 
+<h4>读未提交的概念：允许一个事务可以看到其他事务未提交的修改。</h4> 
+<p>第一步，建account(账户)表，属性有id(编号)和balance(金额) 。</p> 
+<p><img alt="" height="513" src="https://images2.imgbox.com/46/9a/GC3J66U0_o.png" width="555"></p> 
+<p>第二步：</p> 
+<p>（1）在原窗口调整隔离级别为read uncommitted。</p> 
+<p><img alt="" height="285" src="https://images2.imgbox.com/f2/25/uc1RJSNH_o.png" width="668"></p> 
+<p> （2）打开新窗口，调整隔离级别为read uncommitted（未提交读）。</p> 
+<p><img alt="" height="135" src="https://images2.imgbox.com/9b/77/vTM5cFpG_o.png" width="648"></p> 
+<p>第三步：</p> 
+<p>（1）原窗口开启事务。</p> 
+<p><img alt="" height="98" src="https://images2.imgbox.com/95/c8/c8axIXZb_o.png" width="383"></p> 
+<p>（2）新窗口开启事务。</p> 
+<p><img alt="" height="104" src="https://images2.imgbox.com/af/a4/B4p1ZQRG_o.png" width="404"></p> 
+<p>第四步：</p> 
+<p>（1）原窗口事务1查询account表。</p> 
+<p><img alt="" height="221" src="https://images2.imgbox.com/b2/c5/eSrHlcw6_o.png" width="339"> </p> 
+<p>（2）新窗口事务2更新1号账户的钱，将钱加200，更新到1200。</p> 
+<p><img alt="" height="122" src="https://images2.imgbox.com/7c/6d/fV5othOn_o.png" width="647"></p> 
+<p> （3）在原窗口事务1验证，理论上read uncommitted(未提交读)模式下，虽然事务2未提交，但事务1可以读到事务1的更新值。<span style="color:#fe2c24;">结果验证如下，符合理论预期：</span></p> 
+<p> <img alt="" height="223" src="https://images2.imgbox.com/9a/0f/1uz4MS3W_o.png" width="426"></p> 
+<p> 第五步：</p> 
+<p>（1）在窗口2中回滚：事务2的更新操作。</p> 
+<p><img alt="" height="100" src="https://images2.imgbox.com/4b/fc/nj6ewevm_o.png" width="397"></p> 
+<p>（2）在窗口1中重新查询account表，理论上在事务2回滚后，事务1中查询会得到事务2回滚后的表。</p> 
+<p><span style="color:#fe2c24;">结果验证如下，符合结果预期：</span></p> 
+<p><img alt="" height="214" src="https://images2.imgbox.com/7f/96/1lME30ZH_o.png" width="412"></p> 
+<h3>二、read committed(读已提交)</h3> 
+<h4>读已提交的概念：允许一个事务只能看到其他事务已经提交的修改，未提交的修改是不可见的。</h4> 
+<p>第一步：</p> 
+<p>在之前的基础上，将事务2改为read committed(读已提交)模式。</p> 
+<p><img alt="" height="116" src="https://images2.imgbox.com/86/ee/j8EvEvUU_o.png" width="672"></p> 
+<p> 第二步：</p> 
+<p>（1）在事务1中，更新账户1，将钱减两百，得800。</p> 
+<p><span style="color:#4da8ee;">理论上事务2此时，已经只能看到其他事务已经提交的修改，所有事务1的减操作，事务2看不到，所以在事务2中查询，账户1的钱仍然是1000。</span></p> 
+<p> <img alt="" height="123" src="https://images2.imgbox.com/8a/62/WLTJi12Q_o.png" width="637"></p> 
+<p> （2）<span style="color:#fe2c24;">在事务2中验证如下，符合结果预期：事务2只能看到其他事务已提交的内容，事务1尚未提交，因此在事务2中的账户1的钱仍然是1000。</span></p> 
+<p> <img alt="" height="210" src="https://images2.imgbox.com/26/05/lpr4gTZe_o.png" width="407"></p> 
+<p>第三步：</p> 
+<p>（1）在事务1中提交之前的账户1更新操作。</p> 
+<p><span style="color:#4da8ee;">理论上事务1提交操作后，事务2能看的到。所有再在事务2中查询，预期账户1的钱已变为800。</span></p> 
+<p> <img alt="" height="98" src="https://images2.imgbox.com/7f/59/dnQnIPBi_o.png" width="413"></p> 
+<p>（2）在事务2中重新查询account表。</p> 
+<p><span style="color:#fe2c24;">得到账户1的钱已经变为800，符合预期。</span></p> 
+<p> <img alt="" height="215" src="https://images2.imgbox.com/25/3d/M7O7igVt_o.png" width="378"></p> 
+<h3>三、repeatable read(可重复读)</h3> 
+<h4>可重复读概念：确保如果在一个事务中执行两次相同的select语句，都能得到相同的结果，不管其他事务是否提交这些修改。</h4> 
+<p>第一步：</p> 
+<p>（1）在之前的基础上，将事务2改为repeatable(可重复读)模式。</p> 
+<p><img alt="" height="94" src="https://images2.imgbox.com/57/48/lTR1HrhB_o.png" width="651"></p> 
+<p>（2）在事务2中开启事务。</p> 
+<p> <img alt="" height="95" src="https://images2.imgbox.com/40/60/u3b5lBAX_o.png" width="424"></p> 
+<p>（3）在事务2中查询一次account表。</p> 
+<p><span style="color:#4da8ee;">使用select * from account;</span></p> 
+<p><span style="color:#4da8ee;">理论上事务2目前处于可重复读模式，无论其他事务怎么修改account表，后面再次执行该查询语句，结果应该和这次的一样。</span></p> 
+<p> <img alt="" height="214" src="https://images2.imgbox.com/e7/b2/WDpePvbk_o.png" width="337"></p> 
+<p>（2）第二步：</p> 
+<p>（1）在事务1中插入账户3，初始的钱为1000。</p> 
+<p><img alt="" height="96" src="https://images2.imgbox.com/06/4a/hp3z8n3S_o.png" width="566"></p> 
+<p>（2）在事务1使用select * from account;</p> 
+<p>查询结果中出现了新增的账户记录。</p> 
+<p> <img alt="" height="233" src="https://images2.imgbox.com/a1/94/NO388IQY_o.png" width="332"></p> 
+<p>第三步：</p> 
+<p>（1）返回事务2验证：</p> 
+<p><span style="color:#fe2c24;">在事务2中使用select * from account;</span></p> 
+<p><span style="color:#fe2c24;">事务2中的查询结果，没有事务1中新增的记录，成功验证：</span></p> 
+<p><span style="color:#fe2c24;">在同一事务和可重复读模式下，无论其他事务怎么修改，原事务中执行相同的查询语句，前后结果相同。</span></p> 
+<p><img alt="" height="217" src="https://images2.imgbox.com/4b/c5/oTzPveSq_o.png" width="325"></p> 
+<p>第四步：</p> 
+<p>二道验证，看事务1是否将之前新的记录插成功：</p> 
+<p>在事务2中尝试插入账户3，钱为1000。</p> 
+<p>运行结果表示：id为3的插入冲突，说明id为3的账户记录已经存在，也就是事务1的插入成功。</p> 
+<p>该结果再次证明可重复读模式的功能，结论在上面的第三步。</p> 
+<p> <img alt="" height="114" src="https://images2.imgbox.com/0e/71/TupF2i9J_o.png" width="633"></p> 
+<p> </p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3329ba80d5b6718dc4a07f865b0143aa/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">c语言 指针</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/bf1523d47283911ce3f5a0e4e9986d02/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">基于活动轮廓算法的图像分割</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

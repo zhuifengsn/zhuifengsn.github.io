@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>R语言：感知机模型（一） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="R语言：感知机模型（一）" />
+<meta property="og:description" content="Hello，大家好！最近事情太多，导致这次停更时间有点长了，但是经过了这半年的学习，也学了不少东西，思考后决定，先把李航的《统计学习》这本书上的算法一一代码实现一下，来检测一下是否真的学会了，所以先分享给大家的是第二章：感知机模型！
+因为网上python的实现比较多，以及我最近用R比较多，所以本文的代码实现用R来写，python后续再找时间补上！
+目录 算法：线性可分支持向量机学习算法R语言代码：效果展示 相关文章资源获取 算法：线性可分支持向量机学习算法 李航《统计学习方法》（第2版）P39——算法2.1
+输入：线性可分训练集 T = { ( x 1 , y 1 ) , ( x 2 , y 2 ) , … , ( x N , y N ) } T=\{(x_1,y_1),(x_2,y_2),\dots,(x_N,y_N)\} T={(x1​,y1​),(x2​,y2​),…,(xN​,yN​)}，其中 x i ∈ X = R n x_i\in\mathcal{X}=\mathbf{R}^n xi​∈X=Rn， y i ∈ Y = { − 1 , &#43; 1 } , i = 1 , 2 , … , N y_i\in\mathcal{Y}=\{-1,&#43;1\},i=1,2,\dots,N yi​∈Y={−1,&#43;1},i=1,2,…,N；学习率 η ( 0 &lt; η ⩽ 1 ) \eta(0&lt;\eta\leqslant1) η(0&lt;η⩽1)；" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/84aace4c92083fdc772748e366c38686/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-08-01T11:36:25+08:00" />
+<meta property="article:modified_time" content="2021-08-01T11:36:25+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">R语言：感知机模型（一）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>Hello，大家好！最近事情太多，导致这次停更时间有点长了，但是经过了这半年的学习，也学了不少东西，思考后决定，先把李航的《统计学习》这本书上的算法一一代码实现一下，来检测一下是否真的学会了，所以先分享给大家的是第二章：感知机模型！</p> 
+<blockquote> 
+ <p>因为网上python的实现比较多，以及我最近用R比较多，所以本文的代码实现用R来写，python后续再找时间补上！</p> 
+</blockquote> 
+<p></p> 
+<div class="toc"> 
+ <h4>目录</h4> 
+ <ul><li><ul><li><a href="#_6" rel="nofollow">算法：线性可分支持向量机学习算法</a></li><li><a href="#R_25" rel="nofollow">R语言代码：</a></li><li><ul><li><a href="#_71" rel="nofollow">效果展示</a></li></ul> 
+   </li><li><a href="#_98" rel="nofollow">相关文章</a></li><li><a href="#_102" rel="nofollow">资源获取</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h3><a id="_6"></a>算法：线性可分支持向量机学习算法</h3> 
+<blockquote> 
+ <p>李航《统计学习方法》（第2版）P39——算法2.1</p> 
+</blockquote> 
+<p>输入：线性可分训练集<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         T 
+        
+       
+         = 
+        
+       
+         { 
+        
+       
+         ( 
+        
+        
+        
+          x 
+         
+        
+          1 
+         
+        
+       
+         , 
+        
+        
+        
+          y 
+         
+        
+          1 
+         
+        
+       
+         ) 
+        
+       
+         , 
+        
+       
+         ( 
+        
+        
+        
+          x 
+         
+        
+          2 
+         
+        
+       
+         , 
+        
+        
+        
+          y 
+         
+        
+          2 
+         
+        
+       
+         ) 
+        
+       
+         , 
+        
+       
+         … 
+        
+       
+         , 
+        
+       
+         ( 
+        
+        
+        
+          x 
+         
+        
+          N 
+         
+        
+       
+         , 
+        
+        
+        
+          y 
+         
+        
+          N 
+         
+        
+       
+         ) 
+        
+       
+         } 
+        
+       
+      
+        T=\{(x_1,y_1),(x_2,y_2),\dots,(x_N,y_N)\} 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord mathdefault" style="margin-right: 0.13889em;">T</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">{<!-- --></span><span class="mopen">(</span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.328331em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right: 0.10903em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.328331em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight" style="margin-right: 0.10903em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mclose">)</span><span class="mclose">}</span></span></span></span></span>，其中<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          x 
+         
+        
+          i 
+         
+        
+       
+         ∈ 
+        
+       
+         X 
+        
+       
+         = 
+        
+        
+        
+          R 
+         
+        
+          n 
+         
+        
+       
+      
+        x_i\in\mathcal{X}=\mathbf{R}^n 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.6891em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord"><span class="mord mathcal" style="margin-right: 0.14643em;">X</span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.68611em; vertical-align: 0em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">R</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height: 0.664392em;"><span class="" style="top: -3.063em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">n</span></span></span></span></span></span></span></span></span></span></span></span>，<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          y 
+         
+        
+          i 
+         
+        
+       
+         ∈ 
+        
+       
+         Y 
+        
+       
+         = 
+        
+       
+         { 
+        
+       
+         − 
+        
+       
+         1 
+        
+       
+         , 
+        
+       
+         + 
+        
+       
+         1 
+        
+       
+         } 
+        
+       
+         , 
+        
+       
+         i 
+        
+       
+         = 
+        
+       
+         1 
+        
+       
+         , 
+        
+       
+         2 
+        
+       
+         , 
+        
+       
+         … 
+        
+       
+         , 
+        
+       
+         N 
+        
+       
+      
+        y_i\in\mathcal{Y}=\{-1,+1\},i=1,2,\dots,N 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.73354em; vertical-align: -0.19444em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.78055em; vertical-align: -0.09722em;"></span><span class="mord"><span class="mord mathcal" style="margin-right: 0.08222em;">Y</span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">{<!-- --></span><span class="mord">−</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord">+</span><span class="mord">1</span><span class="mclose">}</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord mathdefault">i</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.87777em; vertical-align: -0.19444em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord mathdefault" style="margin-right: 0.10903em;">N</span></span></span></span></span>；学习率<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         η 
+        
+       
+         ( 
+        
+       
+         0 
+        
+       
+         &lt; 
+        
+       
+         η 
+        
+       
+         ⩽ 
+        
+       
+         1 
+        
+       
+         ) 
+        
+       
+      
+        \eta(0&lt;\eta\leqslant1) 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault" style="margin-right: 0.03588em;">η</span><span class="mopen">(</span><span class="mord">0</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.83111em; vertical-align: -0.19444em;"></span><span class="mord mathdefault" style="margin-right: 0.03588em;">η</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel amsrm">⩽</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span>；</p> 
+<p>输出：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         w 
+        
+       
+         , 
+        
+       
+         b 
+        
+       
+      
+        w,b 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.88888em; vertical-align: -0.19444em;"></span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord mathdefault">b</span></span></span></span></span>；感知机模型<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         f 
+        
+       
+         ( 
+        
+       
+         x 
+        
+       
+         ) 
+        
+       
+         = 
+        
+        
+        
+          s 
+         
+        
+          i 
+         
+        
+          g 
+         
+        
+          n 
+         
+        
+       
+         ( 
+        
+       
+         w 
+        
+       
+         ∙ 
+        
+       
+         x 
+        
+       
+         + 
+        
+       
+         b 
+        
+       
+         ) 
+        
+       
+      
+        f(x)=\mathrm{sign}(w\bullet x+b) 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault" style="margin-right: 0.10764em;">f</span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord"><span class="mord mathrm">s</span><span class="mord mathrm">i</span><span class="mord mathrm" style="margin-right: 0.01389em;">g</span><span class="mord mathrm">n</span></span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">∙</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.66666em; vertical-align: -0.08333em;"></span><span class="mord mathdefault">x</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault">b</span><span class="mclose">)</span></span></span></span></span>。</p> 
+<p>（1）选取初值<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          w 
+         
+        
+          0 
+         
+        
+       
+         , 
+        
+        
+        
+          b 
+         
+        
+          0 
+         
+        
+       
+      
+        w_0,b_0 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.88888em; vertical-align: -0.19444em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: -0.02691em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mord mathdefault">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>；</p> 
+<p>（2）在训练集中选取数据<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         ( 
+        
+        
+        
+          x 
+         
+        
+          i 
+         
+        
+       
+         , 
+        
+        
+        
+          y 
+         
+        
+          i 
+         
+        
+       
+         ) 
+        
+       
+      
+        (x_i,y_i) 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>；</p> 
+<p>（3）如果<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          y 
+         
+        
+          i 
+         
+        
+       
+         ( 
+        
+       
+         w 
+        
+       
+         ∙ 
+        
+        
+        
+          x 
+         
+        
+          i 
+         
+        
+       
+         + 
+        
+       
+         b 
+        
+       
+         ) 
+        
+       
+         ⩽ 
+        
+       
+         0 
+        
+       
+      
+        y_i(w\bullet x_i+b)\leqslant0 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">∙</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.73333em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault">b</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel amsrm">⩽</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">0</span></span></span></span></span>，<br> <span class="katex--display"><span class="katex-display"><span class="katex"><span class="katex-mathml"> 
+      
+       
+        
+        
+          w 
+         
+        
+          ← 
+         
+        
+          w 
+         
+        
+          + 
+         
+        
+          η 
+         
+         
+         
+           y 
+          
+         
+           i 
+          
+         
+         
+         
+           x 
+          
+         
+           i 
+          
+         
+         
+        
+          b 
+         
+        
+          ← 
+         
+        
+          b 
+         
+        
+          + 
+         
+        
+          η 
+         
+         
+         
+           y 
+          
+         
+           i 
+          
+         
+        
+       
+         w \leftarrow w + \eta y_ix_i\\ b \leftarrow b + \eta y_i 
+        
+       
+     </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.43056em; vertical-align: 0em;"></span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.66666em; vertical-align: -0.08333em;"></span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.625em; vertical-align: -0.19444em;"></span><span class="mord mathdefault" style="margin-right: 0.03588em;">η</span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span><span class="mspace newline"></span><span class="base"><span class="strut" style="height: 0.69444em; vertical-align: 0em;"></span><span class="mord mathdefault">b</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.77777em; vertical-align: -0.08333em;"></span><span class="mord mathdefault">b</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.625em; vertical-align: -0.19444em;"></span><span class="mord mathdefault" style="margin-right: 0.03588em;">η</span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.311664em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span></span><br> （4）转至（2），直至训练集中没有误分类点。</p> 
+<h3><a id="R_25"></a>R语言代码：</h3> 
+<blockquote> 
+ <p>实验数据用李航《统计学习方法》（第2版）P152——习题7.2的数据</p> 
+</blockquote> 
+<pre><code class="prism language-r">data <span class="token operator">&lt;-</span> data.frame<span class="token punctuation">(</span>y<span class="token operator">=</span>c<span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span>x1<span class="token operator">=</span>c<span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">3</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">3</span><span class="token punctuation">)</span><span class="token punctuation">,</span>x2<span class="token operator">=</span>c<span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">3</span><span class="token punctuation">,</span><span class="token number">3</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+plot<span class="token punctuation">(</span>data<span class="token punctuation">[</span>which<span class="token punctuation">(</span>data<span class="token operator">$</span>y<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token operator">:</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">,</span> xlim<span class="token operator">=</span>c<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">6</span><span class="token punctuation">)</span><span class="token punctuation">,</span> ylim<span class="token operator">=</span>c<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">6</span><span class="token punctuation">)</span><span class="token punctuation">,</span> pch<span class="token operator">=</span><span class="token number">19</span><span class="token punctuation">,</span> xlab<span class="token operator">=</span>expression<span class="token punctuation">(</span>x<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span> ylab<span class="token operator">=</span>expression<span class="token punctuation">(</span>x<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span> cex.lab<span class="token operator">=</span><span class="token number">1.2</span><span class="token punctuation">,</span> main<span class="token operator">=</span><span class="token string">'感知机模型测试'</span><span class="token punctuation">)</span>
+points<span class="token punctuation">(</span>data<span class="token punctuation">[</span>which<span class="token punctuation">(</span>data<span class="token operator">$</span>y<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token operator">:</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">,</span> pch<span class="token operator">=</span><span class="token number">4</span><span class="token punctuation">)</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/45/f2/X1NdOtV1_o.png" alt="在这里插入图片描述"></p> 
+<p>（1）设置初值<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          w 
+         
+        
+          0 
+         
+        
+       
+         , 
+        
+        
+        
+          b 
+         
+        
+          0 
+         
+        
+       
+      
+        w_0,b_0 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.88888em; vertical-align: -0.19444em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: -0.02691em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mord mathdefault">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>；学习率<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         η 
+        
+       
+      
+        \eta 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.625em; vertical-align: -0.19444em;"></span><span class="mord mathdefault" style="margin-right: 0.03588em;">η</span></span></span></span></span>；最大迭代次数；</p> 
+<pre><code class="prism language-r">eta<span class="token operator">&lt;-</span><span class="token number">0.5</span> <span class="token comment">#学习率</span>
+max_iter<span class="token operator">&lt;-</span><span class="token number">100</span> <span class="token comment">#最大迭代次数</span>
+w<span class="token operator">&lt;-</span>matrix<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span>ncol<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token comment">#初始值w0</span>
+b<span class="token operator">&lt;-</span><span class="token number">0</span> <span class="token comment">#初始值b0</span>
+y<span class="token operator">&lt;-</span>as.matrix<span class="token punctuation">(</span>data<span class="token punctuation">[</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+x<span class="token operator">&lt;-</span>as.matrix<span class="token punctuation">(</span>data<span class="token punctuation">[</span><span class="token punctuation">,</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+</code></pre> 
+<p>（2）运用矩阵计算<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         y 
+        
+       
+         ( 
+        
+       
+         w 
+        
+       
+         ∙ 
+        
+       
+         x 
+        
+       
+         + 
+        
+       
+         b 
+        
+       
+         ) 
+        
+       
+      
+        y(w\bullet x+b) 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">∙</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.66666em; vertical-align: -0.08333em;"></span><span class="mord mathdefault">x</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault">b</span><span class="mclose">)</span></span></span></span></span>，可大大提高运算效率；</p> 
+<pre><code class="prism language-r">y<span class="token operator">*</span><span class="token punctuation">(</span>x<span class="token percent-operator operator">%*%</span>w<span class="token operator">+</span>b<span class="token punctuation">)</span>
+</code></pre> 
+<p>（3）判断<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         y 
+        
+       
+         ( 
+        
+       
+         w 
+        
+       
+         ∙ 
+        
+       
+         x 
+        
+       
+         + 
+        
+       
+         b 
+        
+       
+         ) 
+        
+       
+      
+        y(w\bullet x+b) 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">∙</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.66666em; vertical-align: -0.08333em;"></span><span class="mord mathdefault">x</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord mathdefault">b</span><span class="mclose">)</span></span></span></span></span>的结果中是否有≤0的数；如果有，则随机选择选择一个≤0的样本，更新<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         w 
+        
+       
+         , 
+        
+       
+         b 
+        
+       
+      
+        w,b 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.88888em; vertical-align: -0.19444em;"></span><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord mathdefault">b</span></span></span></span></span>；</p> 
+<pre><code class="prism language-r"><span class="token keyword">for</span> <span class="token punctuation">(</span>i <span class="token keyword">in</span> <span class="token number">1</span><span class="token operator">:</span>max_iter<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+  index<span class="token operator">&lt;-</span>as.integer<span class="token punctuation">(</span>y<span class="token operator">*</span><span class="token punctuation">(</span>x<span class="token percent-operator operator">%*%</span>w<span class="token operator">+</span>b<span class="token punctuation">)</span><span class="token operator">&lt;=</span><span class="token number">0</span><span class="token punctuation">)</span>
+  names<span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token operator">&lt;-</span><span class="token number">1</span><span class="token operator">:</span>nrow<span class="token punctuation">(</span>data<span class="token punctuation">)</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>sum<span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span><span class="token keyword">break</span><span class="token punctuation">}</span>
+  j <span class="token operator">&lt;-</span> sample<span class="token punctuation">(</span>as.integer<span class="token punctuation">(</span>names<span class="token punctuation">(</span>index<span class="token punctuation">[</span>index<span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span>
+  w <span class="token operator">&lt;-</span> w<span class="token operator">+</span>eta<span class="token operator">*</span>data<span class="token punctuation">[</span>j<span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token operator">*</span>as.numeric<span class="token punctuation">(</span>matrix<span class="token punctuation">(</span>data<span class="token punctuation">[</span>j<span class="token punctuation">,</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>ncol<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+  b <span class="token operator">&lt;-</span> b<span class="token operator">+</span>eta<span class="token operator">*</span>data<span class="token punctuation">[</span>j<span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><em>注：</em><br> <em>as.integer(y(xw+b)&lt;=0)：将逻辑值T、F转换为数值1、0；再通过求和来判断是否所有值都符合要求.</em></p> 
+<h4><a id="_71"></a>效果展示</h4> 
+<p>制作了一个动图，来展示每次的迭代效果，最终得到的结果为<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          w 
+         
+        
+          1 
+         
+        
+       
+         = 
+        
+       
+         − 
+        
+       
+         2.5 
+        
+       
+         , 
+        
+        
+        
+          w 
+         
+        
+          2 
+         
+        
+       
+         = 
+        
+       
+         3.5 
+        
+       
+         , 
+        
+       
+         b 
+        
+       
+         = 
+        
+       
+         0 
+        
+       
+      
+        w_1=-2.5,w_2=3.5,b=0 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.58056em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: -0.02691em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.83888em; vertical-align: -0.19444em;"></span><span class="mord">−</span><span class="mord">2</span><span class="mord">.</span><span class="mord">5</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: -0.02691em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.88888em; vertical-align: -0.19444em;"></span><span class="mord">3</span><span class="mord">.</span><span class="mord">5</span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord mathdefault">b</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">0</span></span></span></span></span>，成功分离了所有的样本点。</p> 
+<blockquote> 
+ <p>下列动图是使用animation包+ImageMagick制作而成，完整代码中有写，可在文末获取；以后有时间会专门出一期动图制作。</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/c9/5a/JCpmozAQ_o.gif" alt="在这里插入图片描述"></p> 
+<p>最后封装，便于以后使用，大功告成！</p> 
+<pre><code class="prism language-r">perceptron <span class="token operator">&lt;-</span> <span class="token keyword">function</span><span class="token punctuation">(</span>data<span class="token punctuation">,</span> eta<span class="token punctuation">,</span> max_iter<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+  w<span class="token operator">&lt;-</span>matrix<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span>ncol<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span>
+  b<span class="token operator">&lt;-</span><span class="token number">0</span>
+  y<span class="token operator">&lt;-</span>as.matrix<span class="token punctuation">(</span>data<span class="token punctuation">[</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+  x<span class="token operator">&lt;-</span>as.matrix<span class="token punctuation">(</span>data<span class="token punctuation">[</span><span class="token punctuation">,</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+  <span class="token keyword">for</span> <span class="token punctuation">(</span>i <span class="token keyword">in</span> <span class="token number">1</span><span class="token operator">:</span>max_iter<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    index<span class="token operator">&lt;-</span>as.integer<span class="token punctuation">(</span>y<span class="token operator">*</span><span class="token punctuation">(</span>x<span class="token percent-operator operator">%*%</span>w<span class="token operator">+</span>b<span class="token punctuation">)</span><span class="token operator">&lt;=</span><span class="token number">0</span><span class="token punctuation">)</span>
+    names<span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token operator">&lt;-</span><span class="token number">1</span><span class="token operator">:</span>nrow<span class="token punctuation">(</span>data<span class="token punctuation">)</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>sum<span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span><span class="token keyword">break</span><span class="token punctuation">}</span>
+    j <span class="token operator">&lt;-</span> sample<span class="token punctuation">(</span>as.integer<span class="token punctuation">(</span>names<span class="token punctuation">(</span>index<span class="token punctuation">[</span>index<span class="token operator">==</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span>
+    w <span class="token operator">&lt;-</span> w<span class="token operator">+</span>eta<span class="token operator">*</span>data<span class="token punctuation">[</span>j<span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token operator">*</span>as.numeric<span class="token punctuation">(</span>matrix<span class="token punctuation">(</span>data<span class="token punctuation">[</span>j<span class="token punctuation">,</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>ncol<span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+    b <span class="token operator">&lt;-</span> b<span class="token operator">+</span>eta<span class="token operator">*</span>data<span class="token punctuation">[</span>j<span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+  return<span class="token punctuation">(</span>list<span class="token punctuation">(</span>w<span class="token operator">=</span>w<span class="token punctuation">,</span>b<span class="token operator">=</span>b<span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="_98"></a>相关文章</h3> 
+<ul><li>李航《统计学习导论》第二章 感知机：<a href="https://blog.csdn.net/FightingBob/article/details/119465022">R语言：感知机模型（二）</a></li></ul> 
+<h3><a id="_102"></a>资源获取</h3> 
+<ul><li>关注公众号，回复“<em>《统计学习方法》</em>”，获得电子书；</li><li>关注公众号，回复“<em>感知机</em>”，获得本文完整代码。<br> <img src="https://images2.imgbox.com/5e/45/MX0yGDus_o.jpg" alt="在这里插入图片描述"></li></ul>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d7e5076b6ed2950e5b1202d25649604a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">怎么修改计算机新建文档作者,Word如何修改默认作者信息</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f4c61049d9c5d9a55e2a2854df95ca54/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">SpringBoot整合富文本编辑器</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

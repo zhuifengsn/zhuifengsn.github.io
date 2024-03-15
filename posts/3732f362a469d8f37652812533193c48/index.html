@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>springboot中记录链路日志traceId - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="springboot中记录链路日志traceId" />
+<meta property="og:description" content="一 相关概念 在分布式服务架构下，一个 Web 请求从网关流入，有可能会调用多个服务对请求进行处理，拿到最终结果。在这个过程中每个服务之间的通信又是单独的网络请求，无论请求流经的哪个服务除了故障或者处理过慢都会对前端造成影响。
+在分布式链路追踪中有两个重要的概念：跟踪（trace）和 跨度（span）。trace 是请求在分布式系统中的整个链路视图，span 则代表整个链路中不同服务内部的视图，span 组合在一起就是整个 trace 的视图。
+traceId：用于标识某一次具体的请求ID。当用户的请求进入系统后，会在RPC调用网络的第一层生成一个全局唯一的traceId，并且会随着每一层的RPC调用，不断往后传递，这样的话通过traceId就可以把一次用户请求在系统中调用的路径串联起来。spanId：用于标识某一次RPC调用在分布式请求中的位置。请求到达每个服务后，服务都会为请求生成spanId。parent-spanId：用于标识上游RPC调用在分布式请求中的位置。请求到达每个服务后，随请求一起从上游传过来的上游服务的 spanId 会被记录成 parent-spanId，或者叫 pspanId。当前服务生成的 spanId 随着请求一起，在传到下游服务时，这个 spanId 又会被下游服务当作 parent-spanId 记录。MDC：（Mapped Diagnostic Context）映射诊断环境，是 log4j 和 logback 提供的一种方便在线多线程条件下记录日志的功能，可以看成是一个与当前线程绑定的 ThreadLocal。 public class MDC { // 添加 key-value public static void put(String key, String val) {...} // 根据 key 获取 value public static String get(String key) {...} // 根据 key 删除映射 public static void remove(String key) {...} // 清空 public static void clear() {." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3732f362a469d8f37652812533193c48/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-04-19T17:12:29+08:00" />
+<meta property="article:modified_time" content="2023-04-19T17:12:29+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">springboot中记录链路日志traceId</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-dracula">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="__0"></a>一 相关概念</h3> 
+<p>在分布式服务架构下，一个 Web 请求从网关流入，有可能会调用多个服务对请求进行处理，拿到最终结果。在这个过程中每个服务之间的通信又是单独的网络请求，无论请求流经的哪个服务除了故障或者处理过慢都会对前端造成影响。<br> <img src="https://images2.imgbox.com/5e/92/JBRaQJpr_o.png" alt="在这里插入图片描述"><br> 在分布式链路追踪中有两个重要的概念：跟踪（trace）和 跨度（span）。trace 是请求在分布式系统中的整个链路视图，span 则代表整个链路中不同服务内部的视图，span 组合在一起就是整个 trace 的视图。</p> 
+<ul><li><strong>traceId</strong>：用于标识某一次具体的请求ID。当用户的请求进入系统后，会在RPC调用网络的第一层生成一个全局唯一的traceId，并且会随着每一层的RPC调用，不断往后传递，这样的话通过traceId就可以把一次用户请求在系统中调用的路径串联起来。</li><li><strong>spanId</strong>：用于标识某一次RPC调用在分布式请求中的位置。请求到达每个服务后，服务都会为请求生成spanId。</li><li><strong>parent-spanId</strong>：用于标识上游RPC调用在分布式请求中的位置。请求到达每个服务后，随请求一起从上游传过来的上游服务的 spanId 会被记录成 parent-spanId，或者叫 pspanId。当前服务生成的 spanId 随着请求一起，在传到下游服务时，这个 spanId 又会被下游服务当作 parent-spanId 记录。</li><li><strong>MDC</strong>：（Mapped Diagnostic Context）映射诊断环境，是 log4j 和 logback 提供的一种方便在线多线程条件下记录日志的功能，可以看成是一个与当前线程绑定的 ThreadLocal。</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> MDC <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// 添加 key-value</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">put</span><span class="token punctuation">(</span><span class="token class-name">String</span> key<span class="token punctuation">,</span> <span class="token class-name">String</span> val<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">}</span>
+    <span class="token comment">// 根据 key 获取 value</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token class-name">String</span> <span class="token function">get</span><span class="token punctuation">(</span><span class="token class-name">String</span> key<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">}</span>
+    <span class="token comment">// 根据 key 删除映射</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">remove</span><span class="token punctuation">(</span><span class="token class-name">String</span> key<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">}</span>
+    <span class="token comment">// 清空</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<hr> 
+<h3><a id="__24"></a>二 实现方式</h3> 
+<h3><a id="21_TraceId_25"></a>2.1 设置TraceId</h3> 
+<h4><a id="211_filtertraceId_26"></a>2.1.1 使用filter过滤器设置traceId</h4> 
+<p>新建一个过滤器，实现Filter，重写init，doFilter，destroy方法，设置traceId放在doFilter中，在destroy中调用MDC.clear()方法。</p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@Slf4j</span>
+<span class="token annotation punctuation">@WebFilter</span><span class="token punctuation">(</span>filterName <span class="token operator">=</span> <span class="token string">"traceIdFilter"</span><span class="token punctuation">,</span>urlPatterns <span class="token operator">=</span> <span class="token string">"/*"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> traceIdFilter <span class="token keyword">implements</span> <span class="token class-name">Filter</span> <span class="token punctuation">{<!-- --></span>
+
+	<span class="token comment">/**
+     * 日志跟踪标识
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> TRACE_ID <span class="token operator">=</span> <span class="token string">"TRACE_ID"</span><span class="token punctuation">;</span>
+    
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token class-name">FilterConfig</span> filterConfig<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">ServletException</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">doFilter</span><span class="token punctuation">(</span><span class="token class-name">ServletRequest</span> servletRequest<span class="token punctuation">,</span> <span class="token class-name">ServletResponse</span> servletResponse<span class="token punctuation">,</span> <span class="token class-name">FilterChain</span> filterChain<span class="token punctuation">)</span>
+            <span class="token keyword">throws</span> <span class="token class-name">IOException</span><span class="token punctuation">,</span> <span class="token class-name">ServletException</span> <span class="token punctuation">{<!-- --></span>
+        MDC<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">,</span> UUID<span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        filterChain<span class="token punctuation">.</span><span class="token function">doFilter</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> servletResponse<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">destroy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    	MDC<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h4><a id="212_InterceptortraceId_56"></a>2.1.2 使用Interceptor拦截器设置traceId</h4> 
+<p>定义一个拦截器，重写preHandle方法，在方法中通过MDC设置traceId</p> 
+<pre><code class="prism language-java"><span class="token comment">/**
+ * MDC设置traceId拦截器
+ *
+ * @author china
+ */</span>
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">TraceIdInterceptor</span> <span class="token keyword">extends</span> <span class="token class-name">HandlerInterceptorAdapter</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> UNIQUE_ID <span class="token operator">=</span> <span class="token string">"TRACE_ID"</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">preHandle</span><span class="token punctuation">(</span><span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">,</span> <span class="token class-name">Object</span> handler<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        MDC<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>UNIQUE_ID<span class="token punctuation">,</span> UUID<span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+	<span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">afterCompletion</span><span class="token punctuation">(</span><span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">,</span> <span class="token class-name">Object</span> handler<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> <span class="token class-name">Exception</span> ex<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Exception</span> <span class="token punctuation">{<!-- --></span>
+        MDC<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h4><a id="213_JWT_token_81"></a>2.1.3 使用JWT token过滤器的项目</h4> 
+<p>springboot项目经常使用spring security+jwt来做权限限制，在这种情况下，我们通过新建filter过滤器来设置traceId，那么在验证token这部分的日志就不会带上traceId，因此我们需要把代码放在jwtFilter中。</p> 
+<pre><code class="prism language-java"><span class="token comment">/**
+ * token过滤器 验证token有效性
+ *
+ * @author china
+ */</span>
+<span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">JwtAuthenticationTokenFilter</span> <span class="token keyword">extends</span> <span class="token class-name">OncePerRequestFilter</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">private</span> <span class="token class-name">TokenService</span> tokenService<span class="token punctuation">;</span>
+
+    <span class="token comment">/**
+     * 日志跟踪标识
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> TRACE_ID <span class="token operator">=</span> <span class="token string">"TRACE_ID"</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doFilterInternal</span><span class="token punctuation">(</span><span class="token class-name">HttpServletRequest</span> request<span class="token punctuation">,</span> <span class="token class-name">HttpServletResponse</span> response<span class="token punctuation">,</span> <span class="token class-name">FilterChain</span> chain<span class="token punctuation">)</span>
+            <span class="token keyword">throws</span> <span class="token class-name">ServletException</span><span class="token punctuation">,</span> <span class="token class-name">IOException</span> <span class="token punctuation">{<!-- --></span>
+        MDC<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">,</span> UUID<span class="token punctuation">.</span><span class="token function">randomUUID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">LoginUser</span> loginUser <span class="token operator">=</span> tokenService<span class="token punctuation">.</span><span class="token function">getLoginUser</span><span class="token punctuation">(</span>request<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StringUtils</span><span class="token punctuation">.</span><span class="token function">isNotNull</span><span class="token punctuation">(</span>loginUser<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token class-name">StringUtils</span><span class="token punctuation">.</span><span class="token function">isNull</span><span class="token punctuation">(</span><span class="token class-name">SecurityUtils</span><span class="token punctuation">.</span><span class="token function">getAuthentication</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            tokenService<span class="token punctuation">.</span><span class="token function">verifyToken</span><span class="token punctuation">(</span>loginUser<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">UsernamePasswordAuthenticationToken</span> authenticationToken <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">UsernamePasswordAuthenticationToken</span><span class="token punctuation">(</span>loginUser<span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">,</span> loginUser<span class="token punctuation">.</span><span class="token function">getAuthorities</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            authenticationToken<span class="token punctuation">.</span><span class="token function">setDetails</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">WebAuthenticationDetailsSource</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">buildDetails</span><span class="token punctuation">(</span>request<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token class-name">SecurityContextHolder</span><span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setAuthentication</span><span class="token punctuation">(</span>authenticationToken<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        chain<span class="token punctuation">.</span><span class="token function">doFilter</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> response<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">destroy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        MDC<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="22_logbackxmltraceId_121"></a>2.2 logback.xml配置traceId</h3> 
+<p>与之前的相比只是添加了[%X{TRACE_ID}]， [%X{***}]是一个模板，中间属性名是我们使用MDC put进去的。</p> 
+<pre><code class="prism language-java">#之前
+<span class="token operator">&lt;</span>property name<span class="token operator">=</span><span class="token string">"log.pattern"</span> value<span class="token operator">=</span><span class="token string">"%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n"</span> <span class="token operator">/</span><span class="token operator">&gt;</span>
+#增加traceId后
+<span class="token operator">&lt;</span>property name<span class="token operator">=</span><span class="token string">"log.pattern"</span> value<span class="token operator">=</span><span class="token string">"%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - [%X{TRACE_ID}] - %msg%n"</span> <span class="token operator">/</span><span class="token operator">&gt;</span>
+
+
+</code></pre> 
+<h3><a id="23__133"></a>2.3 扩展</h3> 
+<h4><a id="231_traceId_134"></a>2.3.1 补充异步方法带入上下文的traceId</h4> 
+<p>异步方法会开启一个新线程，我们想要是异步方法和主线程共用同一个traceId，首先先新建一个任务适配器MdcTaskDecorator：</p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">MdcTaskDecorator</span> <span class="token keyword">implements</span> <span class="token class-name">TaskDecorator</span> 
+    <span class="token comment">/**
+     * 使异步线程池获得主线程的上下文
+     * @param runnable
+     * @return
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token class-name">Runnable</span> <span class="token function">decorate</span><span class="token punctuation">(</span><span class="token class-name">Runnable</span> runnable<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> map <span class="token operator">=</span> MDC<span class="token punctuation">.</span><span class="token function">getCopyOfContextMap</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">try</span><span class="token punctuation">{<!-- --></span>
+                MDC<span class="token punctuation">.</span><span class="token function">setContextMap</span><span class="token punctuation">(</span>map<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                runnable<span class="token punctuation">.</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{<!-- --></span>
+                MDC<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>然后，在线程池配置中增加executor.setTaskDecorator(new MdcTaskDecorator())的设置</p> 
+<pre><code class="prism language-java"> <span class="token comment">/**
+ * 线程池配置
+ *
+ * @author china
+ **/</span>
+<span class="token annotation punctuation">@EnableAsync</span>
+<span class="token annotation punctuation">@Configuration</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ThreadPoolConfig</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> corePoolSize <span class="token operator">=</span> <span class="token number">50</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> maxPoolSize <span class="token operator">=</span> <span class="token number">200</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> queueCapacity <span class="token operator">=</span> <span class="token number">1000</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> keepAliveSeconds <span class="token operator">=</span> <span class="token number">300</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Bean</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"threadPoolTaskExecutor"</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> <span class="token class-name">ThreadPoolTaskExecutor</span> <span class="token function">threadPoolTaskExecutor</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">ThreadPoolTaskExecutor</span> executor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ThreadPoolTaskExecutor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        executor<span class="token punctuation">.</span><span class="token function">setMaxPoolSize</span><span class="token punctuation">(</span>maxPoolSize<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        executor<span class="token punctuation">.</span><span class="token function">setCorePoolSize</span><span class="token punctuation">(</span>corePoolSize<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        executor<span class="token punctuation">.</span><span class="token function">setQueueCapacity</span><span class="token punctuation">(</span>queueCapacity<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        executor<span class="token punctuation">.</span><span class="token function">setKeepAliveSeconds</span><span class="token punctuation">(</span>keepAliveSeconds<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        executor<span class="token punctuation">.</span><span class="token function">setTaskDecorator</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">MdcTaskDecorator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 线程池对拒绝任务(无线程可用)的处理策略</span>
+        executor<span class="token punctuation">.</span><span class="token function">setRejectedExecutionHandler</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">ThreadPoolExecutor<span class="token punctuation">.</span>CallerRunsPolicy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> executor<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>最后，在业务代码上使用@Async开启异步方法即可</p> 
+<pre><code class="prism language-java">    <span class="token annotation punctuation">@Async</span><span class="token punctuation">(</span><span class="token string">"threadPoolTaskExecutor"</span><span class="token punctuation">)</span>
+    <span class="token keyword">void</span> <span class="token function">testSyncMethod</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<h4><a id="231_traceId_194"></a>2.3.1 在接口放回中，增加traceId返回</h4> 
+<p>在笔者项目中，接口返回都使用了一个叫AjaxResult自定义类来包装，所以只需要把这个类的构造器中增加traceId返回即可，相对简单。</p> 
+<pre><code class="prism language-java">   <span class="token comment">/**
+     * 日志跟踪标识
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token class-name">String</span> TRACE_ID <span class="token operator">=</span> <span class="token string">"TRACE_ID"</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">/**
+     * 初始化一个新创建的 AjaxResult 对象，使其表示一个空消息。
+     */</span>
+    <span class="token keyword">public</span> <span class="token class-name">AjaxResult</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">,</span> MDC<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">/**
+     * 初始化一个新创建的 AjaxResult 对象
+     *
+     * @param code 状态码
+     * @param msg  返回内容
+     */</span>
+    <span class="token keyword">public</span> <span class="token class-name">AjaxResult</span><span class="token punctuation">(</span><span class="token keyword">int</span> code<span class="token punctuation">,</span> <span class="token class-name">String</span> msg<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>CODE_TAG<span class="token punctuation">,</span> code<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>MSG_TAG<span class="token punctuation">,</span> msg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">,</span> MDC<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">/**
+     * 初始化一个新创建的 AjaxResult 对象
+     *
+     * @param code 状态码
+     * @param msg  返回内容
+     * @param data 数据对象
+     */</span>
+    <span class="token keyword">public</span> <span class="token class-name">AjaxResult</span><span class="token punctuation">(</span><span class="token keyword">int</span> code<span class="token punctuation">,</span> <span class="token class-name">String</span> msg<span class="token punctuation">,</span> <span class="token class-name">Object</span> data<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>CODE_TAG<span class="token punctuation">,</span> code<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>MSG_TAG<span class="token punctuation">,</span> msg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">,</span> MDC<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>TRACE_ID<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StringUtils</span><span class="token punctuation">.</span><span class="token function">isNotNull</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>DATA_TAG<span class="token punctuation">,</span> data<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="_MDC_240"></a>三 MDC的实现方式</h3> 
+<h3><a id="31_InheritableThreadLocal_241"></a>3.1 InheritableThreadLocal</h3> 
+<p>在代码开发中，经常使用 ThreadLocal来保证在同一个线程中共享变量。在 ThreadLocal 中，每个线程都拥有了自己独立的一个变量，线程间不存在共享竞争发生，并且它们也能最大限度的由CPU调度，并发执行。显然这是一种以空间来换取线程安全性的策略。</p> 
+<p>但是，ThreadLocal有一个问题，就是它只保证在同一个线程间共享变量，也就是说如果这个线程起了一个新线程，那么新线程是不会得到父线程的变量信息的。因此，为了保证子线程可以拥有父线程的某些变量视图，JDK提供了一个数据结构，InheritableThreadLocal。</p> 
+<p>javadoc 文档对 InheritableThreadLocal 说明：</p> 
+<blockquote> 
+ <p>该类扩展了 ThreadLocal，为子线程提供从父线程那里继承的值：在创建子线程时，子线程会接收所有可继承的线程局部变量的初始值，以获得父线程所具有的值。通常，子线程的值与父线程的值是一致的；但是，通过重写这个类中的 childValue 方法，子线程的值可以作为父线程值的一个任意函数。</p> 
+</blockquote> 
+<p>当必须将变量（如用户 ID 和 事务 ID）中维护的每线程属性（per-thread-attribute）自动传送给创建的所有子线程时，应尽可能地采用可继承的线程局部变量，而不是采用普通的线程局部变量。</p> 
+<p>代码对比可以看出两者区别：</p> 
+<ul><li>ThreadLocal：</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ThreadLocal</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">/**
+     * Method childValue is visibly defined in subclass
+     * InheritableThreadLocal, but is internally defined here for the
+     * sake of providing createInheritedMap factory method without
+     * needing to subclass the map class in InheritableThreadLocal.
+     * This technique is preferable to the alternative of embedding
+     * instanceof tests in methods.
+     */</span>
+    <span class="token class-name">T</span> <span class="token function">childValue</span><span class="token punctuation">(</span><span class="token class-name">T</span> parentValue<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">UnsupportedOperationException</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<ul><li>InheritableThreadLocal</li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">InheritableThreadLocal</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token keyword">extends</span> <span class="token class-name">ThreadLocal</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token punctuation">{<!-- --></span>
+    <span class="token comment">/**
+     * Computes the child's initial value for this inheritable thread-local
+     * variable as a function of the parent's value at the time the child
+     * thread is created.  This method is called from within the parent
+     * thread before the child is started.
+     * &lt;p&gt;
+     * This method merely returns its input argument, and should be overridden
+     * if a different behavior is desired.
+     *
+     * @param parentValue the parent thread's value
+     * @return the child thread's initial value
+     */</span>
+    <span class="token keyword">protected</span> <span class="token class-name">T</span> <span class="token function">childValue</span><span class="token punctuation">(</span><span class="token class-name">T</span> parentValue<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> parentValue<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">/**
+     * Get the map associated with a ThreadLocal.
+     *
+     * @param t the current thread
+     */</span>
+    <span class="token class-name">ThreadLocalMap</span> <span class="token function">getMap</span><span class="token punctuation">(</span><span class="token class-name">Thread</span> t<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+       <span class="token keyword">return</span> t<span class="token punctuation">.</span>inheritableThreadLocals<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">/**
+     * Create the map associated with a ThreadLocal.
+     *
+     * @param t the current thread
+     * @param firstValue value for the initial entry of the table.
+     * @param map the map to store.
+     */</span>
+    <span class="token keyword">void</span> <span class="token function">createMap</span><span class="token punctuation">(</span><span class="token class-name">Thread</span> t<span class="token punctuation">,</span> <span class="token class-name">T</span> firstValue<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        t<span class="token punctuation">.</span>inheritableThreadLocals <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ThreadLocalMap</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">,</span> firstValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p>这个是开发时一般使用的类，直接copy父线程的变量</p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">CopyOnInheritThreadLocal</span> <span class="token keyword">extends</span>
+    <span class="token class-name">InheritableThreadLocal</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">HashMap</span><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span><span class="token punctuation">&gt;</span></span> <span class="token punctuation">{<!-- --></span>
+
+  <span class="token comment">/**
+   * Child threads should get a copy of the parent's hashmap.
+   */</span>
+  <span class="token annotation punctuation">@Override</span>
+  <span class="token keyword">protected</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> <span class="token function">childValue</span><span class="token punctuation">(</span>
+      <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> parentValue<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>parentValue <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+      <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+      <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span>parentValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p>为了支持InheritableThreadLocal的父子线程传递变量，JDK在Thread中，定义了ThreadLocal.ThreadLocalMap inheritableThreadLocals 属性。该属性变量在线程初始化的时候，如果父线程的该变量不为null，则会把其值复制到ThreadLocal。</p> 
+<p>从上面的代码实现，还可以看到，如果我们使用原生的 InheritableThreadLocal类则在子线程中修改变量，可能会影响到父线程的变量值，及其他子线程的值。因此，一般我们推荐没有特殊情况，最好使用CopyOnInheritThreadLocal类，该实现是新建一个map来保持值，而不是直接使用父线程的引用。</p> 
+<hr> 
+<p>参考文档：<br> https://blog.csdn.net/qq_33204709/article/details/125358252<br> https://blog.csdn.net/t194978/article/details/123012783<br> https://blog.csdn.net/m0_37556444/article/details/100142429</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/6c97202d1faf3dccbc7475e23bc0d92d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【Vue】Vue-route路由</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ee779583630931499ee7b3557f395cc6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">如何修改rpm安装包内容，修改完成后如何重新打包</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

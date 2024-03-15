@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Mysql数据库比较工具类(2.0版本) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Mysql数据库比较工具类(2.0版本)" />
+<meta property="og:description" content="package sql; import com.alibaba.fastjson.JSONArray; import com.alibaba.fastjson.JSONObject; import lombok.Data; import java.sql.*; import java.util.*; /** * 数据库比较工具类 * 温馨提示： * （1）如果想知道现数据库和原数据库有哪些区别，则原数据库配置 old，现数据库配置 now; * （2）比较结果以现数据库的视角说明，如：提示新增 xxx 表，则表示现数据库有，原数据库没有，反之； * （3）整个比较过程中，并不会对两个数据库造成任何影响，可放心使用； * （4）配置好两个数据库后，直接运行本类中的 main() 方法即可，最终比较结果将以 json 的格式直接输出在控制台。 * * @author Yuanqiang.Zhang * @since 2023/7/3 */ @Data public class CompareDataBaseUtils { public static Map&lt;String, String&gt; old; public static Map&lt;String, String&gt; now; static { // 原数据库 old = new HashMap&lt;&gt;(); old.put(Constant.ip, &#34;127.0.0.1&#34;); old.put(Constant.port, &#34;3306&#34;); old.put(Constant.dataBaseName, &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/eed8e9228ed5de2e12278c47b7c23633/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-07-07T15:19:10+08:00" />
+<meta property="article:modified_time" content="2023-07-07T15:19:10+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Mysql数据库比较工具类(2.0版本)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <pre><code class="language-java">package sql;
+
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
+import lombok.Data;
+
+import java.sql.*;
+import java.util.*;
+
+/**
+ * 数据库比较工具类
+ * 温馨提示：
+ * （1）如果想知道现数据库和原数据库有哪些区别，则原数据库配置 old，现数据库配置 now;
+ * （2）比较结果以现数据库的视角说明，如：提示新增 xxx 表，则表示现数据库有，原数据库没有，反之；
+ * （3）整个比较过程中，并不会对两个数据库造成任何影响，可放心使用；
+ * （4）配置好两个数据库后，直接运行本类中的 main() 方法即可，最终比较结果将以 json 的格式直接输出在控制台。
+ *
+ * @author Yuanqiang.Zhang
+ * @since 2023/7/3
+ */
+@Data
+public class CompareDataBaseUtils {
+
+    public static Map&lt;String, String&gt; old;
+    public static Map&lt;String, String&gt; now;
+
+    static {
+        // 原数据库
+        old = new HashMap&lt;&gt;();
+        old.put(Constant.ip, "127.0.0.1");
+        old.put(Constant.port, "3306");
+        old.put(Constant.dataBaseName, "zyq_test");
+        old.put(Constant.userName, "root");
+        old.put(Constant.password, "root123");
+        old.put(Constant.description, "原数据库");
+        // 现数据库
+        now = new HashMap&lt;&gt;();
+        now.put(Constant.ip, "127.0.0.1");
+        now.put(Constant.port, "3306");
+        now.put(Constant.dataBaseName, "zyq_test2");
+        now.put(Constant.userName, "root");
+        now.put(Constant.password, "root123");
+        now.put(Constant.description, "现数据库");
+    }
+
+    /**
+     * 【主方法】配置好数据源后直接执行即可
+     */
+    public static void main(String[] args) {
+        long startTime = System.currentTimeMillis();
+        print("比较中，请等待...");
+        JSONObject compareResult = compareDataBase();
+        if (Objects.nonNull(compareResult)) {
+            print(String.format("比较完成，累计耗时%s毫秒", (System.currentTimeMillis() - startTime)));
+            print("最终比较结果如下：");
+            print(compareResult.toString());
+        }
+    }
+
+    public static JSONObject compareDataBase() {
+        Connection oldConn = getConnection(old);
+        Connection nowConn = getConnection(now);
+        if (Objects.isNull(oldConn) || Objects.isNull(nowConn)) {
+            return null;
+        }
+        JSONObject oldTables = getCompareTable(old, oldConn);
+        JSONObject nowTables = getCompareTable(now, nowConn);
+        Set&lt;String&gt; allTableNames = new HashSet&lt;&gt;();
+        allTableNames.addAll(oldTables.keySet());
+        allTableNames.addAll(nowTables.keySet());
+        List&lt;String&gt; nowMoreTableNames = new ArrayList&lt;&gt;();
+        List&lt;String&gt; nowLessTableNames = new ArrayList&lt;&gt;();
+        List&lt;String&gt; commonTableNames = new ArrayList&lt;&gt;();
+        for (String tableName : allTableNames) {
+            boolean existOld = oldTables.containsKey(tableName);
+            boolean existNow = nowTables.containsKey(tableName);
+            if (existNow &amp;&amp; existOld) {
+                commonTableNames.add(tableName);
+            } else {
+                if (existNow) {
+                    nowMoreTableNames.add(tableName);
+                } else {
+                    nowLessTableNames.add(tableName);
+                }
+            }
+        }
+        // 表相关修改
+        JSONObject compare = new JSONObject(new LinkedHashMap&lt;&gt;());
+        compare.put(Constant.more_tables, nowMoreTableNames);
+        compare.put(Constant.less_tables, nowLessTableNames);
+        // 获取相同两张表的比较结果
+        JSONObject changeTables = new JSONObject(new LinkedHashMap&lt;&gt;());
+        for (String commonTableName : commonTableNames) {
+            JSONObject oldInfo = oldTables.getJSONObject(commonTableName);
+            JSONObject nowInfo = nowTables.getJSONObject(commonTableName);
+            JSONObject compareInfo = getCompareInfo(oldInfo, nowInfo);
+            Boolean changed = compareInfo.getBoolean(Constant.changed);
+            if (changed) {
+                compareInfo.remove(Constant.changed);
+                changeTables.put(commonTableName, compareInfo);
+            }
+        }
+        compare.put(Constant.update_tables, changeTables);
+        return compare;
+    }
+
+
+    /**
+     * 获取老表和新表之间的比较结果
+     */
+    public static JSONObject getCompareInfo(JSONObject old, JSONObject now) {
+        // 表信息比较
+        JSONObject oldBasic = old.getJSONObject(Constant.basics);
+        JSONObject nowBasic = now.getJSONObject(Constant.basics);
+        JSONArray basicCompareResult = compareSameFieldsObject(oldBasic, nowBasic);
+        // 表字段比较
+        JSONObject oldFields = old.getJSONObject(Constant.fields);
+        JSONObject nowFields = now.getJSONObject(Constant.fields);
+        Set&lt;String&gt; allFields = new HashSet&lt;&gt;();
+        allFields.addAll(oldFields.keySet());
+        allFields.addAll(nowFields.keySet());
+        JSONArray nowMoreFields = new JSONArray();
+        JSONArray nowLessFields = new JSONArray();
+        JSONArray commonFields = new JSONArray();
+        for (String field : allFields) {
+            boolean existOld = oldFields.containsKey(field);
+            boolean existNow = nowFields.containsKey(field);
+            if (existOld &amp;&amp; existNow) {
+                commonFields.add(field);
+            } else {
+                if (existNow) {
+                    nowMoreFields.add(field);
+                } else {
+                    nowLessFields.add(field);
+                }
+            }
+        }
+        // 相同字段更新比较
+        JSONObject fieldsCompareResult = new JSONObject(new LinkedHashMap&lt;&gt;());
+        for (Object field : commonFields) {
+            String fileName = field.toString();
+            JSONObject oldField = oldFields.getJSONObject(fileName);
+            JSONObject nowField = nowFields.getJSONObject(fileName);
+            JSONArray commonResultArray = compareSameFieldsObject(oldField, nowField);
+            if (!commonResultArray.isEmpty()) {
+                fieldsCompareResult.put(fileName, commonResultArray);
+            }
+        }
+        // 字段变更信息
+        boolean fieldChanged = !nowMoreFields.isEmpty() || !nowLessFields.isEmpty() || !fieldsCompareResult.isEmpty();
+        JSONObject fieldsResult = new JSONObject(new LinkedHashMap&lt;&gt;());
+        if (!nowMoreFields.isEmpty()) {
+            fieldsResult.put(Constant.more_fields, nowMoreFields);
+        }
+        if (!nowLessFields.isEmpty()) {
+            fieldsResult.put(Constant.less_fields, nowLessFields);
+        }
+        if (!fieldsCompareResult.isEmpty()) {
+            fieldsResult.put(Constant.update_fields, fieldsCompareResult);
+        }
+        // 基础变更信息
+        boolean basicChanged = !basicCompareResult.isEmpty();
+        // 总变更信息
+        boolean changed = fieldChanged || basicChanged;
+        // 字段比较结果
+        JSONObject compareResult = new JSONObject(new LinkedHashMap&lt;&gt;());
+        if (basicChanged) {
+            compareResult.put(Constant.table_change_info, basicCompareResult);
+        }
+        if (fieldChanged) {
+            compareResult.put(Constant.field_change_info, fieldsResult);
+        }
+        compareResult.put(Constant.changed, changed);
+        return compareResult;
+    }
+
+    /**
+     * 比较新老两个相同属性的对象
+     *
+     * @param oldObj 老对象
+     * @param nowObj 新对象
+     * @return 比较结果
+     */
+    private static JSONArray compareSameFieldsObject(JSONObject oldObj, JSONObject nowObj) {
+        Set&lt;String&gt; keys = oldObj.keySet();
+        JSONArray array = new JSONArray();
+        String oldDesc = old.get(Constant.description);
+        String nowDesc = now.get(Constant.description);
+        for (String key : keys) {
+            String oldValue = oldObj.getString(key);
+            String nowValue = nowObj.getString(key);
+            boolean same;
+            if (Objects.isNull(oldValue)) {
+                same = Objects.isNull(nowValue);
+            } else {
+                same = oldValue.equals(nowValue);
+            }
+            if (!same) {
+                JSONObject diff = new JSONObject(new LinkedHashMap&lt;&gt;());
+                diff.put(Constant.change_dimension, key);
+                diff.put(oldDesc, oldValue);
+                diff.put(nowDesc, nowValue);
+                array.add(diff);
+            }
+        }
+        return array;
+    }
+
+    /**
+     * 获取所有表字段属性
+     *
+     * @param dataSource 数据源
+     * @return 表信息
+     */
+    public static JSONObject getCompareTable(Map&lt;String, String&gt; dataSource, Connection conn) {
+        // 获取数据库所有表基础信息
+        JSONObject basics = getAllTableList(conn);
+        String dbName = dataSource.get(Constant.dataBaseName);
+        String desc = dataSource.get(Constant.description);
+        int tableCount = 0;
+        int tableTotal = basics.size();
+        // 获取每张表的每个字段详情
+        JSONObject tables = new JSONObject(new LinkedHashMap&lt;&gt;());
+        for (String tableName : basics.keySet()) {
+            tableCount++;
+            JSONObject table = new JSONObject(new LinkedHashMap&lt;&gt;());
+            table.put(Constant.basics, basics.getJSONObject(tableName));
+            JSONObject fields = getTableFields(conn, dbName, tableName);
+            table.put(Constant.fields, fields);
+            String info = String.format("[%s][%s/%s][%s]解析完成，共%s个字段。",
+                    desc, tableCount, tableTotal, tableName, fields.size());
+            print(info);
+            tables.put(tableName, table);
+        }
+        return tables;
+    }
+
+    /**
+     * 获取数据源属性
+     *
+     * @param conn         数据库连接
+     * @param dataBaseName 数据库名称
+     * @param tableName    表名称
+     * @return 该表的所有字段信息
+     */
+    private static JSONObject getTableFields(Connection conn, String dataBaseName, String tableName) {
+        String sql = "SELECT * FROM information_schema.columns WHERE table_schema = '" + dataBaseName + "' AND table_name = '" + tableName + "'";
+        JSONObject columns = new JSONObject(new LinkedHashMap&lt;&gt;());
+        try {
+            Statement stat = conn.createStatement();
+            ResultSet rs = stat.executeQuery(sql);
+            while (rs.next()) {
+                JSONObject column = new JSONObject(new LinkedHashMap&lt;&gt;());
+                String name = rs.getString("COLUMN_NAME");
+                column.put(Constant.column_name, name);
+                column.put(Constant.column_comment, rs.getString("COLUMN_COMMENT"));
+                column.put(Constant.column_is_nullable, rs.getString("IS_NULLABLE"));
+                column.put(Constant.column_type, rs.getString("COLUMN_TYPE"));
+                column.put(Constant.column_collation, rs.getString("COLLATION_NAME"));
+                column.put(Constant.column_key, rs.getString("COLUMN_KEY"));
+                column.put(Constant.column_extra, rs.getString("EXTRA"));
+                columns.put(name, column);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return columns;
+    }
+
+    /**
+     * 获取数据库链接
+     *
+     * @param map 数据源
+     * @return Connection
+     */
+    private static Connection getConnection(Map&lt;String, String&gt; map) {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            String url = String.format("jdbc:mysql://%s:%s/%s",
+                    map.get(Constant.ip), map.get(Constant.port), map.get(Constant.dataBaseName));
+            return DriverManager.getConnection(url, map.get(Constant.userName), map.get(Constant.password));
+        } catch (Exception e) {
+            System.err.printf("[%s]连接失败，请检查配置是否正确！%n", map.get(Constant.description));
+            return null;
+        }
+    }
+
+    /**
+     * 获取所有数据表名
+     *
+     * @param conn 数据库链接信息
+     * @return Map&lt;表名, 备注&gt;
+     */
+    private static JSONObject getAllTableList(Connection conn) {
+        String sql = "SHOW TABLE status";
+        JSONObject basics = new JSONObject(new LinkedHashMap&lt;&gt;());
+        try {
+            Statement stat = conn.createStatement();
+            ResultSet rs = stat.executeQuery(sql);
+            while (rs.next()) {
+                JSONObject basic = new JSONObject(new LinkedHashMap&lt;&gt;());
+                String name = rs.getString("Name");
+                basic.put(Constant.table_name, name);
+                basic.put(Constant.table_engine, rs.getString("Engine"));
+                basic.put(Constant.table_comment, rs.getString("Comment"));
+                basic.put(Constant.table_collation, rs.getString("Collation"));
+                basics.put(name, basic);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return basics;
+    }
+
+    private static JSONObject getTableIndexes(Connection conn, String tableName) {
+        String sql = "SHOW INDEX FROM " + tableName;
+        JSONObject columns = new JSONObject(new LinkedHashMap&lt;&gt;());
+        try {
+            Statement stat = conn.createStatement();
+            ResultSet rs = stat.executeQuery(sql);
+            while (rs.next()) {
+                JSONObject column = new JSONObject(new LinkedHashMap&lt;&gt;());
+                String name = rs.getString("COLUMN_NAME");
+                column.put(Constant.column_name, name);
+                column.put(Constant.column_comment, rs.getString("COLUMN_COMMENT"));
+                column.put(Constant.column_is_nullable, rs.getString("IS_NULLABLE"));
+                column.put(Constant.column_type, rs.getString("COLUMN_TYPE"));
+                column.put(Constant.column_collation, rs.getString("COLLATION_NAME"));
+                column.put(Constant.column_key, rs.getString("COLUMN_KEY"));
+                column.put(Constant.column_extra, rs.getString("EXTRA"));
+                columns.put(name, column);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return columns;
+    }
+
+    /**
+     * 输出打印
+     *
+     * @param msg 打印信息
+     */
+    private static void print(String msg) {
+        System.out.println(msg);
+    }
+
+    /**
+     * 工具类中含的常量（为方便阅读，本工具类中与输入无相关的常量字段均采用下划线小写）
+     */
+    private static class Constant {
+        // 数据源配置常量键
+        public static final String ip = "ip";
+        public static final String port = "port";
+        public static final String dataBaseName = "dataBaseName";
+        public static final String userName = "userName";
+        public static final String password = "password";
+        public static final String description = "description";
+        // 代码逻辑常量
+        public static final String basics = "basics";
+        public static final String fields = "fields";
+        public static final String changed = "changed";
+        // 比较结果键名（其他）
+        public static final String table_change_info = "表信息变更";
+        public static final String field_change_info = "表字段变更";
+        public static final String more_tables = "新增的表";
+        public static final String less_tables = "减少的表";
+        public static final String update_tables = "变更的表";
+        public static final String more_fields = "新增的字段";
+        public static final String less_fields = "减少的字段";
+        public static final String update_fields = "变更的字段";
+        public static final String change_dimension = "变更维度";
+        // 比较结果键名（表信息）
+        public static final String table_name = "名称";
+        public static final String table_engine = "引擎";
+        public static final String table_comment = "备注";
+        public static final String table_collation = "字符集";
+        // 比较结果键名（字段信息）
+        public static final String column_name = "名称";
+        public static final String column_comment = "备注";
+        public static final String column_is_nullable = "是否可空";
+        public static final String column_type = "数据类型";
+        public static final String column_collation = "字符集";
+        public static final String column_key = "键类型";
+        public static final String column_extra = "额外信息";
+    }
+
+}
+</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3036837eaaa0521a8c31d227135de14b/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">SpringCloud运用与理解</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/0c63c09575833d2da6b1c85d4fb749fb/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Linux使用脚本启动jar/war包（springboot&#43;maven工程jar包）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux系统编程篇--进程控制篇 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux系统编程篇--进程控制篇" />
+<meta property="og:description" content="进程控制篇 了解fork()函数什么是子进程fork()基本用途fork()失败原因 了解写时拷贝概念两种方式 进程退出进程退出情况查看进程退出码进程常见的退出方法回调函数exit()函数和_exit()函数区别 刷新缓冲区进程等待进程等待的必要性进程等待，wait()函数waitpid()根据进程退出码判断进程退出情况？ 进程替换替换函数execlexeclpexelceexecveexecvexecvp 六个替换函数的关系替换原理进程替换的常见使用场景 了解fork()函数 在linux中fork函数时非常重要的函数，它从已存在进程中创建一个新进程。新进程为子进程，而原进程为父进程。
+头文件：
+#include&lt;unistd.h&gt;
+pid_t pd=fork();
+返回值类型：
+子进程中返回0，父进程返回子进程的pid，失败返回-1；
+什么是子进程 子进程是以父进程为“模板”生成的一个新进程
+系统调用fork，内核中做了什么？
+1.分配新的内存块和内核数据结构给子进程
+2.将父进程部分数据结构内容拷贝至子进程
+3.添加子进程到系统进程列表当中
+4.fork返回，开始调度器调度
+fork()基本用途 1.一个父进程希望复制自己，使父子进程同时执行不同的代码段。例如，父进程等待客户端请求，生成子进程来处理请求。
+2.一个进程要执行一个不同的程序。例如子进程从fork返回后，调用exec函数。
+fork()失败原因 1.系统中有太多的进程
+2.实际用户的进程数超过了限制
+了解写时拷贝 通俗点来说，就是什么时候修改，什么时候再进行拷贝。
+概念 操作系统通过fork创建子进程之后，子进程复制了父进程，一开始父子进程指向同一块物理内存空间，因此数据看起来是一模一样的。但是进程间具有独立性，因此当物理空间的数据发生改变时，子进程就会重新开辟物理空间，将数据拷贝过来。这就是写时拷贝技术。因为代码是只读的，因此父子进程数据独有，代码共享。 (当物理空间数据发生改变时)
+两种方式 对数据不做修改的情况下
+对数据做出修改
+进程退出 进程退出情况 1.代码运行完毕，结果正确
+2.代码运行完毕，结果不正确
+3.代码异常终止
+查看进程退出码 echo $?
+进程常见的退出方法 1.main()函数return退出。
+1 #include&lt;iostream&gt; 2 using namespace std; 3 int main() 4 { 5 cout&lt;&lt;&#34;hello Linux&#34;&lt;&lt;endl; 6 return 21; 7 } 可以看到我们的退出码 (main函数的return值为退出码)为21。
+说一下为什么我们main()函数的退出码为什么是0？
+一般在编程中，我们一般认为0是程序正确执行的返回值，通过返回值的不同确定错误的类型。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ef9a4524d96cb3ae69abccb1ff8d554b/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-06-21T00:17:24+08:00" />
+<meta property="article:modified_time" content="2021-06-21T00:17:24+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux系统编程篇--进程控制篇</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>进程控制篇</h4> 
+ <ul><li><a href="#fork_1" rel="nofollow">了解fork()函数</a></li><li><ul><li><a href="#_8" rel="nofollow">什么是子进程</a></li><li><a href="#fork_16" rel="nofollow">fork()基本用途</a></li><li><a href="#fork_19" rel="nofollow">fork()失败原因</a></li></ul> 
+  </li><li><a href="#_22" rel="nofollow">了解写时拷贝</a></li><li><ul><li><a href="#_24" rel="nofollow">概念</a></li><li><a href="#_26" rel="nofollow">两种方式</a></li></ul> 
+  </li><li><a href="#_33" rel="nofollow">进程退出</a></li><li><ul><li><a href="#_34" rel="nofollow">进程退出情况</a></li><li><a href="#_38" rel="nofollow">查看进程退出码</a></li><li><a href="#_40" rel="nofollow">进程常见的退出方法</a></li><li><a href="#_76" rel="nofollow">回调函数</a></li><li><a href="#exit_exit_79" rel="nofollow">exit()函数和_exit()函数区别</a></li></ul> 
+  </li><li><a href="#_87" rel="nofollow">刷新缓冲区</a></li><li><a href="#_109" rel="nofollow">进程等待</a></li><li><ul><li><a href="#_110" rel="nofollow">进程等待的必要性</a></li><li><a href="#wait_151" rel="nofollow">进程等待，wait()函数</a></li><li><a href="#waitpid_204" rel="nofollow">waitpid()</a></li><li><a href="#_268" rel="nofollow">根据进程退出码判断进程退出情况？</a></li></ul> 
+  </li><li><a href="#_273" rel="nofollow">进程替换</a></li><li><ul><li><a href="#_276" rel="nofollow">替换函数</a></li><li><ul><li><a href="#execl_290" rel="nofollow">execl</a></li><li><a href="#execlp_311" rel="nofollow">execlp</a></li><li><a href="#exelce_331" rel="nofollow">exelce</a></li><li><a href="#execve_335" rel="nofollow">execve</a></li><li><a href="#execv_337" rel="nofollow">execv</a></li><li><a href="#execvp_363" rel="nofollow">execvp</a></li></ul> 
+   </li><li><a href="#_391" rel="nofollow">六个替换函数的关系</a></li><li><a href="#_396" rel="nofollow">替换原理</a></li><li><a href="#_400" rel="nofollow">进程替换的常见使用场景</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="fork_1"></a>了解fork()函数</h2> 
+<p>在linux中fork函数时非常重要的函数，它从已存在进程中<strong>创建一个新进程</strong>。<strong>新进程为子进程，而原进程为父进程。</strong><br> 头文件：<br> #include&lt;unistd.h&gt;<br> pid_t pd=fork();<br> 返回值类型：<br> 子进程中返回0，父进程返回子进程的pid，失败返回-1；</p> 
+<h3><a id="_8"></a>什么是子进程</h3> 
+<p>子进程是以父进程为“模板”生成的一个<strong>新进程</strong><br> <strong>系统调用fork，内核中做了什么？</strong><br> 1.分配新的内存块和内核数据结构给子进程<br> 2.将父进程部分数据结构内容拷贝至子进程<br> 3.添加子进程到系统进程列表当中<br> 4.fork返回，开始调度器调度<br> <img src="https://images2.imgbox.com/7a/48/KWrQaHTb_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="fork_16"></a>fork()基本用途</h3> 
+<p>1.一个父进程希望复制自己，使父子进程同时执行不同的代码段。例如，父进程等待客户端请求，生成子进程来处理请求。<br> 2.一个进程要执行一个不同的程序。例如子进程从fork返回后，调用exec函数。</p> 
+<h3><a id="fork_19"></a>fork()失败原因</h3> 
+<p>1.系统中有太多的进程<br> 2.实际用户的进程数超过了限制</p> 
+<h2><a id="_22"></a>了解写时拷贝</h2> 
+<p>通俗点来说，就是什么时候修改，什么时候再进行拷贝。</p> 
+<h3><a id="_24"></a>概念</h3> 
+<p>操作系统通过fork创建子进程之后，子进程复制了父进程，一开始父子进程指向同一块物理内存空间，因此数据看起来是一模一样的。但是进程间具有独立性，因此当物理空间的数据发生改变时，子进程就会重新开辟物理空间，将数据拷贝过来。这就是写时拷贝技术。<strong>因为代码是只读的，因此父子进程数据独有，代码共享。</strong> (当物理空间数据发生改变时)</p> 
+<h3><a id="_26"></a>两种方式</h3> 
+<p>对数据不做修改的情况下<br> <img src="https://images2.imgbox.com/a5/23/OttlIgFY_o.png" alt="在这里插入图片描述"></p> 
+<p>对数据做出修改<br> <img src="https://images2.imgbox.com/4e/6b/xGmza7M1_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_33"></a>进程退出</h2> 
+<h3><a id="_34"></a>进程退出情况</h3> 
+<p>1.代码运行完毕，结果正确<br> 2.代码运行完毕，结果不正确<br> 3.代码异常终止</p> 
+<h3><a id="_38"></a>查看进程退出码</h3> 
+<p><strong>echo $?</strong></p> 
+<h3><a id="_40"></a>进程常见的退出方法</h3> 
+<p>1.main()函数return退出。</p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">3</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">4</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">5</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"hello Linux"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+  <span class="token number">6</span>     <span class="token keyword">return</span> <span class="token number">21</span><span class="token punctuation">;</span>                                                                                                                                                                        
+  <span class="token number">7</span> <span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/da/52/aO7OfSTZ_o.png" alt="在这里插入图片描述"><br> 可以看到我们的<strong>退出码</strong> (main函数的return值为退出码)为21。<br> 说一下为什么我们main()函数的退出码为什么是0？<br> 一般在编程中，我们一般认为0是程序正确执行的返回值，通过返回值的不同确定错误的类型。<br> <img src="https://images2.imgbox.com/f5/10/7XmPxKpn_o.png" alt="在这里插入图片描述"></p> 
+<p>2.调用exit()</p> 
+<pre><code class="prism language-cpp"> <span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;stdlib.h&gt;</span></span>
+ <span class="token keyword">void</span> <span class="token function">exit</span><span class="token punctuation">(</span><span class="token keyword">int</span> status<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<p>//status为退出码，这个函数是来终止程序的，只要执行到该语句，程序直接退出，哪怕后面还有未执行的语句，<br> <img src="https://images2.imgbox.com/d6/e8/bwBc48h5_o.png" alt="在这里插入图片描述"><br> 3._exit()函数</p> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;unistd.h&gt;</span></span>
+<span class="token keyword">void</span> <span class="token function">_exit</span><span class="token punctuation">(</span><span class="token keyword">int</span> status<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<p>status仍为退出码</p> 
+<h3><a id="_76"></a>回调函数</h3> 
+<p><img src="https://images2.imgbox.com/11/76/QVKL6cfJ_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/c3/4d/rwk9oQ7V_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="exit_exit_79"></a>exit()函数和_exit()函数区别</h3> 
+<p>1.exit()函数为库函数，_exit()为系统调用函数<br> 2.exit()函数会比_exit多做两件事情，刷新缓冲区，执行用户自定义清理函数。</p> 
+<p><img src="https://images2.imgbox.com/2b/b1/ncdp9oBj_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/a2/09/VCGAY7pu_o.png" alt="在这里插入图片描述"><br> 3.exit()函数内部封装了_exit();</p> 
+<h2><a id="_87"></a>刷新缓冲区</h2> 
+<p>1.\n刷新</p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">4</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">5</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">6</span>    
+  <span class="token number">7</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"hello Linux"</span><span class="token punctuation">;</span>                                                                                                                                                              
+  <span class="token number">8</span>     <span class="token keyword">return</span> <span class="token number">21</span><span class="token punctuation">;</span>
+  <span class="token number">9</span> <span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/55/8d/RgHrtOzq_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/51/f0/V6TYXdGe_o.png" alt="在这里插入图片描述"></p> 
+<p>2.fflush<br> 头文件#include&lt;stdio.h&gt;<br> fflush(file* fp);<br> 3.exit()函数刷新<br> 4.main()函数return回来后</p> 
+<h2><a id="_109"></a>进程等待</h2> 
+<h3><a id="_110"></a>进程等待的必要性</h3> 
+<p>1.之前讲过，子进程退出，父进程如果不管不顾，<strong>就可能造成‘僵尸进程’的问题，进而造成内存泄漏。</strong><br> 2.另外，进程一旦变成僵尸状态，那就刀枪不入，“杀人不眨眼”的kill -9 也无能为力，因为谁也没有办法杀死一个已经死去的进程。<br> 3.最后，父进程派给子进程的任务完成的如何，我们需要知道。如，子进程运行完成，结果对还是不对，或者是否正常退出。<br> 4.父进程通过进程等待的方式，回收子进程资源，获取子进程退出信息</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> <span class="token keyword">void</span> <span class="token function">mycallback</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">6</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">7</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"this is my callback"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+  <span class="token number">8</span> <span class="token punctuation">}</span>
+  <span class="token number">9</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">10</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">11</span> 
+ <span class="token number">12</span>      pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">13</span>      <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">14</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">15</span>          cerr<span class="token operator">&lt;&lt;</span><span class="token string">"fork failed"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">16</span>      <span class="token punctuation">}</span>
+ <span class="token number">17</span>      <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">18</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">19</span>        cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am son"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">20</span>      <span class="token punctuation">}</span>
+ <span class="token number">21</span>      <span class="token keyword">else</span>
+ <span class="token number">22</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">23</span>          <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">24</span>          <span class="token punctuation">{<!-- --></span>
+ <span class="token number">25</span>              cout<span class="token operator">&lt;&lt;</span><span class="token string">" i am father"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>              <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                                                
+ <span class="token number">27</span>          <span class="token punctuation">}</span>
+ <span class="token number">28</span>      <span class="token punctuation">}</span>
+      <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/61/b6/EUIfwkOk_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="wait_151"></a>进程等待，wait()函数</h3> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/wait.h&gt;</span></span>
+ pid_t <span class="token function">wait</span><span class="token punctuation">(</span><span class="token keyword">int</span> <span class="token operator">*</span>stat_loc<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>sys<span class="token operator">/</span>wait<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> <span class="token keyword">void</span> <span class="token function">mycallback</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"this is my callback"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+  <span class="token number">9</span> <span class="token punctuation">}</span>
+ <span class="token number">10</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">11</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">12</span> 
+ <span class="token number">13</span>      pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">14</span>      <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">15</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">16</span>          cerr<span class="token operator">&lt;&lt;</span><span class="token string">"fork failed"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">17</span>      <span class="token punctuation">}</span>
+ <span class="token number">18</span>      <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">19</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">20</span>        cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am son"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">21</span>      <span class="token punctuation">}</span>
+ <span class="token number">22</span>      <span class="token keyword">else</span>
+ <span class="token number">23</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">24</span>          <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">25</span>          <span class="token punctuation">{<!-- --></span>
+ <span class="token number">26</span>              <span class="token function">wait</span><span class="token punctuation">(</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">27</span>              cout<span class="token operator">&lt;&lt;</span><span class="token string">" i am father"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">28</span>              <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">29</span>          <span class="token punctuation">}</span>
+ <span class="token number">30</span>      <span class="token punctuation">}</span>
+ <span class="token number">31</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>                                                                                                                                                                         
+ <span class="token number">32</span> <span class="token punctuation">}</span> 
+</code></pre> 
+<p><img src="https://images2.imgbox.com/35/e3/S6ajRH4d_o.png" alt="在这里插入图片描述"><br> wait函数的参数：<br> 为一个输出型参数，区分一下输入型参数与输出型参数<br> <img src="https://images2.imgbox.com/a6/24/Fh55sv5y_o.png" alt="在这里插入图片描述"><br> <strong>返回值</strong>：<br> 成功返回被等待进程pid，失败返回-1。<br> 原理 ：<br> 父进程调用wait阻塞，wait是阻塞式的，<strong>父进程调用wait会被阻塞住，父进程调用wait就会一直在这里等SIGCHILD信号</strong>，收到这个信号就说明父进程要去回收僵尸进程了<br> 阻塞的概念：<br> <strong>需要一直在这等着，不能去做其他的事情。</strong></p> 
+<h3><a id="waitpid_204"></a>waitpid()</h3> 
+<pre><code class="prism language-c">pid_ t <span class="token function">waitpid</span><span class="token punctuation">(</span><span class="token class-name">pid_t</span> pid<span class="token punctuation">,</span> <span class="token keyword">int</span> <span class="token operator">*</span>status<span class="token punctuation">,</span> <span class="token keyword">int</span> options<span class="token punctuation">)</span><span class="token punctuation">;</span>
+返回值：
+当正常返回的时候waitpid返回收集到的子进程的进程ID；
+如果设置了选项WNOHANG<span class="token punctuation">,</span>而调用中waitpid发现没有已退出的子进程可收集<span class="token punctuation">,</span>则返回<span class="token number">0</span>；
+如果调用中出错<span class="token punctuation">,</span>则返回<span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span>这时errno会被设置成相应的值以指示错误所在；
+参数：
+pid：
+Pid<span class="token operator">=</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span>等待任一个子进程。与wait等效。
+Pid<span class="token operator">&gt;</span><span class="token number">0.</span>等待其进程ID与pid相等的子进程。
+status<span class="token operator">:</span>
+<span class="token function">WIFEXITED</span><span class="token punctuation">(</span>status<span class="token punctuation">)</span><span class="token operator">:</span> 若为正常终止子进程返回的状态，则为真。（查看进程是否是正常退出）
+<span class="token function">WEXITSTATUS</span><span class="token punctuation">(</span>status<span class="token punctuation">)</span><span class="token operator">:</span> 若WIFEXITED非零，提取子进程退出码。（查看进程的退出码）
+options<span class="token operator">:</span>
+WNOHANG<span class="token operator">:</span> 若pid指定的子进程没有结束，则<span class="token function">waitpid</span><span class="token punctuation">(</span><span class="token punctuation">)</span>函数返回<span class="token number">0</span>，不予以等待。若正常结束，则返回该子进程的ID。
+</code></pre> 
+<p><img src="https://images2.imgbox.com/a7/e8/sxtYsAex_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>sys<span class="token operator">/</span>wait<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> <span class="token keyword">void</span> <span class="token function">mycallback</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"this is my callback"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+  <span class="token number">9</span> <span class="token punctuation">}</span>
+ <span class="token number">10</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">11</span> 
+ <span class="token number">12</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">13</span>     pid_t pid<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">14</span> 
+ <span class="token number">15</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pid<span class="token operator">&lt;</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">16</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">17</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token string">"create failed"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">18</span>     <span class="token punctuation">}</span>
+ <span class="token number">19</span>     <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>pid<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">20</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">21</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am son"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>                                                                                                                                                       
+ <span class="token number">22</span>         <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">23</span>     <span class="token punctuation">}</span>
+ <span class="token number">24</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"before receive"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">25</span>     <span class="token keyword">int</span> result<span class="token operator">=</span><span class="token function">waitpid</span><span class="token punctuation">(</span>pid<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">26</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>result<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">27</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">28</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"wait failed"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">29</span>     <span class="token punctuation">}</span>
+ <span class="token number">30</span>     <span class="token keyword">else</span>
+ <span class="token number">31</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">32</span>            cout<span class="token operator">&lt;&lt;</span><span class="token string">"wait success"</span><span class="token operator">&lt;&lt;</span><span class="token string">"pid is"</span><span class="token operator">&lt;&lt;</span>pid <span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">33</span>     <span class="token punctuation">}</span>
+ <span class="token number">34</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">35</span> <span class="token punctuation">}</span>
+<span class="token operator">~</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/ac/62/Y3uHugy5_o.png" alt="在这里插入图片描述"><br> 为什么会打印waitfailed，这是因为子进程也在调用这个方法。对它来说，它没有要等的，所以在子进程中result是小于0的。<br> <img src="https://images2.imgbox.com/01/66/4w51SwOO_o.png" alt="在这里插入图片描述"><br> 可以看到在options为0的情况下，其父进程就一直在等子进程，等到了就退出，并返回子进程的pid，0为阻塞模式。</p> 
+<h3><a id="_268"></a>根据进程退出码判断进程退出情况？</h3> 
+<p><img src="https://images2.imgbox.com/83/67/z1QOHfAn_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/5b/04/HuvL5OFK_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/c0/0f/4IfXp7gx_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/b6/9c/jrwP90qc_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_273"></a>进程替换</h2> 
+<p><img src="https://images2.imgbox.com/e2/90/8EmClqaj_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/7d/93/nFmTjMwu_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_276"></a>替换函数</h3> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;unistd.h&gt;</span><span class="token expression">`</span></span>
+<span class="token keyword">int</span> <span class="token function">execl</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>path<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>arg<span class="token punctuation">,</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">execlp</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>file<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>arg<span class="token punctuation">,</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">execle</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>path<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>arg<span class="token punctuation">,</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token keyword">char</span> <span class="token operator">*</span><span class="token keyword">const</span> envp<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">execv</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>path<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token keyword">const</span> argv<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">execvp</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">char</span> <span class="token operator">*</span>file<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token keyword">const</span> argv<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>规律：带l的其参数列表以可变参数列表给出<br> 带p的可以不用显式的给出其绝对路径<br> 带v的起参数列表必须是一个指针数组<br> 带e的表示程序员需要自己组织环境变量，不带e的可以不需要</p> 
+<h4><a id="execl_290"></a>execl</h4> 
+<p>函数原型：<br> int execl(const char<em>path,const char</em>arg,…);<br> <img src="https://images2.imgbox.com/a3/53/jmYlRXyi_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">4</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">5</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">6</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"process begin"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+  <span class="token number">7</span>     <span class="token function">execl</span><span class="token punctuation">(</span><span class="token string">"/usr/bin/ls"</span><span class="token punctuation">,</span><span class="token string">"ls"</span><span class="token punctuation">,</span><span class="token string">"-a"</span><span class="token punctuation">,</span><span class="token string">"-l"</span><span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                         
+  <span class="token number">8</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"process end"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+  <span class="token number">9</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">10</span> <span class="token punctuation">}</span>
+
+</code></pre> 
+<p>代码运行结果：<br> <img src="https://images2.imgbox.com/ff/73/GU8wjXVs_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="execlp_311"></a>execlp</h4> 
+<p><img src="https://images2.imgbox.com/de/d0/9oCB8MlA_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">4</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">5</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">6</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"process begin"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+  <span class="token number">7</span>     <span class="token comment">//execl("/usr/bin/ls","ls","-a","-l",NULL);</span>
+  <span class="token number">8</span>     <span class="token function">execlp</span><span class="token punctuation">(</span><span class="token string">"ls"</span><span class="token punctuation">,</span><span class="token string">"ls"</span><span class="token punctuation">,</span><span class="token string">"-a"</span><span class="token punctuation">,</span><span class="token string">"-l"</span><span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                                 
+  <span class="token number">9</span>     cout<span class="token operator">&lt;&lt;</span><span class="token string">"process end"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">10</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">11</span> <span class="token punctuation">}</span>
+<span class="token operator">~</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/5a/dc/1ahSrOop_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="exelce_331"></a>exelce</h4> 
+<p><img src="https://images2.imgbox.com/ed/e7/Eub7sPar_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/e5/f0/jE6XYBus_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/79/77/OOuSHAu4_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="execve_335"></a>execve</h4> 
+<p><img src="https://images2.imgbox.com/a1/5a/arE6Femq_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="execv_337"></a>execv</h4> 
+<p><img src="https://images2.imgbox.com/15/d4/5Wni1h0J_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-c">    <span class="token number">1</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">3</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token number">4</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token number">5</span>     <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"process begin\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token number">6</span>     <span class="token comment">//execl("/usr/bin/ls","ls","-a","-l",NULL);</span>
+    <span class="token number">7</span>     <span class="token comment">//execlp("ls","ls","-a","-l",NULL);</span>
+    <span class="token number">8</span>     <span class="token keyword">char</span> <span class="token operator">*</span>env<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token number">9</span>     <span class="token string">"ls"</span><span class="token punctuation">,</span>                                                                                                                                                                           
+   <span class="token number">10</span>     <span class="token string">"-a"</span><span class="token punctuation">,</span>
+   <span class="token number">11</span>     <span class="token string">"-l"</span><span class="token punctuation">,</span>
+   <span class="token number">12</span>     <span class="token constant">NULL</span><span class="token punctuation">,</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+   <span class="token number">13</span> 
+   <span class="token number">14</span>    <span class="token comment">// execle("./mycom","./mycom",NULL,env);</span>
+   <span class="token number">15</span>    <span class="token function">execv</span><span class="token punctuation">(</span><span class="token string">"/usr/bin/ls"</span><span class="token punctuation">,</span>env<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">16</span>     <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"process end\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">17</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">18</span> <span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/2a/69/B6HjOJ6j_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="execvp_363"></a>execvp</h4> 
+<p><img src="https://images2.imgbox.com/85/bd/w4ZY254A_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">2</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">3</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token number">4</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token number">5</span>     <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"process begin\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token number">6</span>     <span class="token comment">//execl("/usr/bin/ls","ls","-a","-l",NULL);</span>
+    <span class="token number">7</span>     <span class="token comment">//execlp("ls","ls","-a","-l",NULL);</span>
+    <span class="token number">8</span>     <span class="token keyword">char</span> <span class="token operator">*</span>env<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span>
+    <span class="token number">9</span>     <span class="token string">"ls"</span><span class="token punctuation">,</span>
+   <span class="token number">10</span>     <span class="token string">"-a"</span><span class="token punctuation">,</span>
+   <span class="token number">11</span>     <span class="token string">"-l"</span><span class="token punctuation">,</span>
+   <span class="token number">12</span>     <span class="token constant">NULL</span><span class="token punctuation">,</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+   <span class="token number">13</span> 
+   <span class="token number">14</span>    <span class="token comment">// execle("./mycom","./mycom",NULL,env);</span>
+   <span class="token number">15</span>   <span class="token comment">// execv("/usr/bin/ls",env);</span>
+   <span class="token number">16</span>   <span class="token function">execvp</span><span class="token punctuation">(</span><span class="token string">"ls"</span><span class="token punctuation">,</span>env<span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                                                 
+   <span class="token number">17</span>     <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"process end\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">18</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">19</span> <span class="token punctuation">}</span>
+  <span class="token operator">~</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/0f/6d/kkPNc11K_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_391"></a>六个替换函数的关系</h3> 
+<p><img src="https://images2.imgbox.com/f3/61/vc0UXSny_o.png" alt="在这里插入图片描述"><br> ，execlp，execl，execle，execvp，execv它们五个为库函数，这五个库函数是封装了execve()系统调用函数的。</p> 
+<h3><a id="_396"></a>替换原理</h3> 
+<p>用fork创建子进程后执行的是和父进程相同的程序(但有可能执行不同的代码分支),子进程往往要调用一种exec函数以执行另一个程序。当进程调用一种exec函数时,该进程的用户空间代码和数据完全被新程序替换,从新程序的启动<br> 例程开始执行。<strong>调用exec并不创建新进程,所以调用exec前后该进程的id并未改变</strong></p> 
+<h3><a id="_400"></a>进程替换的常见使用场景</h3> 
+<p>1.bash命令行解释器。众所周知，bash通过创建子进程来执行程序，其本质原因是利用了进程独立性的特点，保护bash。<br> <img src="https://images2.imgbox.com/b0/f3/6FTVOtNB_o.png" alt="在这里插入图片描述"><br> 2。守护进程<br> <img src="https://images2.imgbox.com/42/30/AdRIBp1g_o.png" alt="在这里插入图片描述"><br> 好了，下课！！！</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/01d993a924c4cb37342889ae31b03fff/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">pywinauto-PC端应用程序自动化</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/98bc0f4f0db0aad7d7aa341b5981ae1b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">为什么你的“点击”不生效？！</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

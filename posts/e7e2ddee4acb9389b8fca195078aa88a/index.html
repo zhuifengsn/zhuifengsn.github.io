@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>自然语言处理：RNN - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="自然语言处理：RNN" />
+<meta property="og:description" content="关键词：RNN；吴恩达课堂笔记；自然语言处理；联合概率-后验概率；马尔可夫性；
+- - - - - - - - - -
+笔记：桃子🍑
+日期：2021.8
+- - - - - - - - - -
+目录
+概念
+联合概率
+马尔可夫性
+语言模型（language model）
+为什么不能用CBOW、word2vec？
+传统神经网络模型为什么不适应？
+RNN结构
+RNN结构及其应用
+公式
+矩阵形状
+Forward
+RNN语言模型（例子：创建莎士比亚文风）
+RNNLM
+RNNLM的评价
+概念 RNN（Recurrent Neural Network，循环神经网络）
+提出人：托马斯·米科洛夫（ 2010 年）
+RNN应用：语音识别；音乐创作；DNA序列分析；翻译；
+优点：处理时序数据；结构非常简单，易于实现
+缺点：许多情况下无法很好地学习到时序数据的长期依赖关系（因为 BPTT 会发生梯度消失和梯度爆炸的问题。）
+联合概率 使用乘法定理，把m 个单词的联合概率 P(w1, ··· , wm) 用后验概率来表示（单词序列每次减少一个，分解为后验概率）。
+马尔可夫性 是指未来的状态仅依存于当前状态。此外，当某个事件的概率仅取决于其前面的 N 个事件时，称为“N 阶马尔可夫链”。
+语言模型（language model） 语言模型给出了单词序列发生的概率。具体来说，就是使用概率来评估一个单词序列发生的可能性
+为什么不能用CBOW、word2vec？ 在 CBOW 模型的中间层求单词向量的和，因此上下文的单词顺序会被忽视。比如，(you, say) 和 (say, you) 会被作为相同的内容进行处理。（忽略顺序）" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e7e2ddee4acb9389b8fca195078aa88a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-08-04T22:15:19+08:00" />
+<meta property="article:modified_time" content="2021-08-04T22:15:19+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">自然语言处理：RNN</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>关键词：RNN；吴恩达课堂笔记；自然语言处理；联合概率-后验概率；马尔可夫性；</p> 
+<p></p> 
+<p>- - - - - - - - - -</p> 
+<p>笔记：桃子🍑</p> 
+<p>日期：2021.8</p> 
+<p>- - - - - - - - - -</p> 
+<p><img alt="" height="1200" src="https://images2.imgbox.com/8c/bd/tw59rHqh_o.jpg" width="1200"></p> 
+<p></p> 
+<p id="main-toc"><strong>目录</strong></p> 
+<p id="%E6%A6%82%E5%BF%B5-toc" style="margin-left:0px;"><a href="#%E6%A6%82%E5%BF%B5" rel="nofollow">概念</a></p> 
+<p id="%E8%81%94%E5%90%88%E6%A6%82%E7%8E%87-toc" style="margin-left:0px;"><a href="#%E8%81%94%E5%90%88%E6%A6%82%E7%8E%87" rel="nofollow">联合概率</a></p> 
+<p id="%E9%A9%AC%E5%B0%94%E5%8F%AF%E5%A4%AB%E6%80%A7-toc" style="margin-left:0px;"><a href="#%E9%A9%AC%E5%B0%94%E5%8F%AF%E5%A4%AB%E6%80%A7" rel="nofollow">马尔可夫性</a></p> 
+<p id="%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B%EF%BC%88language%20model%EF%BC%89-toc" style="margin-left:0px;"><a href="#%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B%EF%BC%88language%20model%EF%BC%89" rel="nofollow">语言模型（language model）</a></p> 
+<p id="%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%94%A8CBOW%E3%80%81word2vec%EF%BC%9F-toc" style="margin-left:0px;"><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%94%A8CBOW%E3%80%81word2vec%EF%BC%9F" rel="nofollow">为什么不能用CBOW、word2vec？</a></p> 
+<p id="%E4%BC%A0%E7%BB%9F%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E9%80%82%E5%BA%94%EF%BC%9F-toc" style="margin-left:0px;"><a href="#%E4%BC%A0%E7%BB%9F%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E9%80%82%E5%BA%94%EF%BC%9F" rel="nofollow">传统神经网络模型为什么不适应？</a></p> 
+<p id="RNN%E7%BB%93%E6%9E%84-toc" style="margin-left:0px;"><a href="#RNN%E7%BB%93%E6%9E%84" rel="nofollow">RNN结构</a></p> 
+<p id="%C2%A0RNN%E7%BB%93%E6%9E%84%E5%8F%8A%E5%85%B6%E5%BA%94%E7%94%A8-toc" style="margin-left:0px;"><a href="#%C2%A0RNN%E7%BB%93%E6%9E%84%E5%8F%8A%E5%85%B6%E5%BA%94%E7%94%A8" rel="nofollow">RNN结构及其应用</a></p> 
+<p id="%E5%85%AC%E5%BC%8F-toc" style="margin-left:0px;"><a href="#%E5%85%AC%E5%BC%8F" rel="nofollow">公式</a></p> 
+<p id="%E7%9F%A9%E9%98%B5%E5%BD%A2%E7%8A%B6-toc" style="margin-left:0px;"><a href="#%E7%9F%A9%E9%98%B5%E5%BD%A2%E7%8A%B6" rel="nofollow">矩阵形状</a></p> 
+<p id="Forward-toc" style="margin-left:0px;"><a href="#Forward" rel="nofollow">Forward</a></p> 
+<p id="-toc" style="margin-left:0px;"></p> 
+<p id="RNN%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B%EF%BC%88%E4%BE%8B%E5%AD%90%EF%BC%9A%E5%88%9B%E5%BB%BA%E8%8E%8E%E5%A3%AB%E6%AF%94%E4%BA%9A%E6%96%87%E9%A3%8E%EF%BC%89-toc" style="margin-left:0px;"><a href="#RNN%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B%EF%BC%88%E4%BE%8B%E5%AD%90%EF%BC%9A%E5%88%9B%E5%BB%BA%E8%8E%8E%E5%A3%AB%E6%AF%94%E4%BA%9A%E6%96%87%E9%A3%8E%EF%BC%89" rel="nofollow">RNN语言模型（例子：创建莎士比亚文风）</a></p> 
+<p id="RNNLM-toc" style="margin-left:0px;"><a href="#RNNLM" rel="nofollow">RNNLM</a></p> 
+<p id="RNNLM%E7%9A%84%E8%AF%84%E4%BB%B7-toc" style="margin-left:0px;"><a href="#RNNLM%E7%9A%84%E8%AF%84%E4%BB%B7" rel="nofollow">RNNLM的评价</a></p> 
+<hr id="hr-toc"> 
+<p></p> 
+<h2 id="%E6%A6%82%E5%BF%B5">概念</h2> 
+<p>RNN（Recurrent Neural Network，循环神经网络）</p> 
+<p>提出人：托马斯·米科洛夫（ 2010 年）</p> 
+<p>RNN应用：语音识别；音乐创作；DNA序列分析；翻译；</p> 
+<p>优点：处理时序数据；结构非常简单，易于实现</p> 
+<p>缺点：许多情况下无法很好地学习到时序数据的长期依赖关系（因为 BPTT 会发生梯度消失和梯度爆炸的问题。）</p> 
+<p></p> 
+<h2 id="%E8%81%94%E5%90%88%E6%A6%82%E7%8E%87">联合概率</h2> 
+<p>使用乘法定理，把m 个单词的联合概率 P(w1, ··· , wm) 用后验概率来表示（单词序列每次减少一个，分解为后验概率）。</p> 
+<p><img alt="" height="121" src="https://images2.imgbox.com/e7/03/iiuTpdEY_o.png" width="459"></p> 
+<p> </p> 
+<p></p> 
+<h2 id="%E9%A9%AC%E5%B0%94%E5%8F%AF%E5%A4%AB%E6%80%A7">马尔可夫性</h2> 
+<p>是指未来的状态仅依存于当前状态。此外，当某个事件的概率仅取决于其前面的 N 个事件时，称为“N 阶马尔可夫链”。</p> 
+<p></p> 
+<p></p> 
+<h2 id="%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B%EF%BC%88language%20model%EF%BC%89">语言模型（language model）</h2> 
+<p>语言模型给出了单词序列发生的概率。具体来说，就是使用概率来评估一个单词序列发生的可能性</p> 
+<p></p> 
+<h2 id="%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%94%A8CBOW%E3%80%81word2vec%EF%BC%9F">为什么不能用CBOW、word2vec？</h2> 
+<p>在 CBOW 模型的中间层求单词向量的和，因此上下文的单词顺序会被忽视。比如，(you, say) 和 (say, you) 会被作为相同的内容进行处理。（忽略顺序）</p> 
+<p>word2vec 是以获取单词的分布式表示为目的的方法，因此一般不会用于语言模型。（单词分布模型）</p> 
+<p></p> 
+<p></p> 
+<h2 id="%E4%BC%A0%E7%BB%9F%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E9%80%82%E5%BA%94%EF%BC%9F">传统神经网络模型为什么不适应？</h2> 
+<p>1.句子的长度不同，输入层/输出层长度也不同 （input/output长度）</p> 
+<p>2.不同位置无法共享特征，无法复用已经学习到的知识，减少参数（类似于卷积神经网络中将一部分图片学到的内容快速推广到其他部分） (无法迁移学习)</p> 
+<p></p> 
+<h2 id="RNN%E7%BB%93%E6%9E%84">RNN结构</h2> 
+<p><img alt="" height="297" src="https://images2.imgbox.com/3c/04/7ZA16q3G_o.jpg" width="529"></p> 
+<p> </p> 
+<p><img alt="" height="114" src="https://images2.imgbox.com/dd/70/27n85PgE_o.png" width="442"></p> 
+<p> </p> 
+<h2 id="%C2%A0RNN%E7%BB%93%E6%9E%84%E5%8F%8A%E5%85%B6%E5%BA%94%E7%94%A8">RNN结构及其应用</h2> 
+<p>one-to-one 标准神经网络</p> 
+<p>one-to-many 音乐创作</p> 
+<p>many-to-one 情感分类</p> 
+<p>many-to-many （相等） 命名体识别</p> 
+<p>many-to-many   (不等)   机器翻译</p> 
+<p><img alt="" height="289" src="https://images2.imgbox.com/79/95/8AMw0pmV_o.png" width="514"></p> 
+<p> </p> 
+<p></p> 
+<h2 id="%E5%85%AC%E5%BC%8F">公式</h2> 
+<p><img alt="" height="87" src="https://images2.imgbox.com/f1/3a/xCHuJ2kX_o.png" width="441"></p> 
+<p></p> 
+<p>RNN 有两个权重，分别是将前一个 RNN 层的输出转化为当前输出的权重 Wh和将输入x转化为当前输出h的权重 Wx 。此外，还有偏置 b。</p> 
+<p><img alt="" height="273" src="https://images2.imgbox.com/f9/b2/0d2XRIPo_o.png" width="421"></p> 
+<p> </p> 
+<p>各个时刻的 RNN 层接收传给该层的输入和前一个RNN 层的输出，然后据此计算当前时刻的输出ht</p> 
+<h2 id="%E7%9F%A9%E9%98%B5%E5%BD%A2%E7%8A%B6">矩阵形状</h2> 
+<p><img alt="" height="144" src="https://images2.imgbox.com/4a/bf/UrBSGFMr_o.png" width="458"></p> 
+<p> </p> 
+<p></p> 
+<h2 id="Forward">Forward</h2> 
+<p><img alt="" height="1200" src="https://images2.imgbox.com/4e/9b/prr5Boqf_o.jpg" width="1200"></p> 
+<p></p> 
+<p></p> 
+<h2></h2> 
+<p></p> 
+<p></p> 
+<h2 id="RNN%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B%EF%BC%88%E4%BE%8B%E5%AD%90%EF%BC%9A%E5%88%9B%E5%BB%BA%E8%8E%8E%E5%A3%AB%E6%AF%94%E4%BA%9A%E6%96%87%E9%A3%8E%EF%BC%89">RNN语言模型（例子：创建莎士比亚文风）</h2> 
+<p><img alt="" height="216" src="https://images2.imgbox.com/3c/46/wiRfQCqU_o.png" width="384"></p> 
+<p> </p> 
+<p><img alt="" height="223" src="https://images2.imgbox.com/f9/06/7YzBJrSr_o.png" width="396"></p> 
+<p> 输入：一个句子（构建词典：one-hot；index）</p> 
+<p>标记：EOS句子结尾；unk未知词</p> 
+<p>输出：y 单词概率</p> 
+<p></p> 
+<p></p> 
+<h2 id="RNNLM">RNNLM</h2> 
+<p>我们将基于 RNN 的语言模型称为 RNNLM（RNN Language Model，RNN 语言模型）。</p> 
+<p>RNNLM 可以“记忆”目前为止输入的单词，并以此为基础预测接下来会出现的单词。</p> 
+<p>RNN 层通过从过去到现在继承并传递数据，使得编码和存储过去的信息成为可能。</p> 
+<p></p> 
+<p>处理样本语料库“you say goodbye and i say hello.”的RNNLM的例子</p> 
+<p>第 1 层是 Embedding 层，该层将单词 ID 转化为单词的分布式表示，这个单词向量被输入到 RNN 层。RNN 层向下一层（上方）输出隐藏状态，同时也向下一时刻的 RNN 层（右侧）输出隐藏状态。RNN 层向上方输出的隐藏状态经过 Affine 层，传给 Softmax 层。（RNN 将“you say”这一过去的信息保存为了简短的隐藏状态向量。RNN 层的工作是将这 个信息传送到上方的 Affine 层和下一时刻的 RNN 层。）</p> 
+<p><img alt="" height="412" src="https://images2.imgbox.com/28/44/VO0WpEVR_o.png" width="534"></p> 
+<p> </p> 
+<p></p> 
+<p></p> 
+<p></p> 
+<h2 id="RNNLM%E7%9A%84%E8%AF%84%E4%BB%B7">RNNLM的评价</h2> 
+<p>基于困惑度可以评价模型的预测性能。好的模型可以高概率地预测出正确单词，所以困惑度较小（困惑度的最小值是 1.0）；而差的模型只能低概率地预测出正确单词，困惑度较大</p> 
+<p><img alt="" height="106" src="https://images2.imgbox.com/2f/d8/aLJVZrVV_o.png" width="224"></p> 
+<p>数据量为 N 个。tn  是 one-hot 向量形式的正确解标签，tnk 表示第 n 个数据的第 k 个值，ynk 表示概率分布（神经网络中的 Softmax 的输出）。</p> 
+<p></p> 
+<p></p> 
+<p>参考资料</p> 
+<p>吴恩达：RNN</p> 
+<p>book：《深度学习进阶（自然语言处理）》</p> 
+<p></p> 
+<p>RNN应用案例</p> 
+<p><a href="https://cloud.tencent.com/developer/article/1424502" rel="nofollow">推荐系统遇上深度学习(四十)-使用RNN做基于会话的推荐 - 云+社区 - 腾讯云 (tencent.com)</a></p> 
+<p><a href="https://cloud.tencent.com/developer/article/1428758?from=article.detail.1424502" rel="nofollow">推荐系统遇上深度学习(四十三)-考虑用户微观行为的电商推荐 - 云+社区 - 腾讯云 (tencent.com)</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/85510a6ece4506c1a5fa25992a3fdf1d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Arduino与人体感应模块</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b0e3625a88ba1aee1498a2df9e31c6cc/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">ajax请求后没有刷新,AJAX请求完成后，变量不刷新</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

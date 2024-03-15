@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【源码详解~蓝桥杯单片机必备技能】1.利用状态机思维实现矩阵键盘扫描 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【源码详解~蓝桥杯单片机必备技能】1.利用状态机思维实现矩阵键盘扫描" />
+<meta property="og:description" content="按键长按、双击看下一篇文章
+0.引言： 大一啥都不会，傻傻参加蓝桥杯单片机比赛，代码也几乎仿照网上的风格，现在学过STM32后，再来写51的代码，发现许多可以改进的地方，就从按键扫描开始。网上利用状态机思维实现的矩阵键盘扫描要么过于臃肿、不适合蓝桥杯比赛的限时性，要么封装严重、过于抽象化，本文将利用状态机，结合51单片机特点实现小白也能看的懂的矩阵键盘扫描程序 。
+文章目录 0.引言：1.状态机概念：2.利用状态机思维实现矩阵键盘扫描的优势：3.按键过程抽象：3.1.按键状态分类3.2.按键状态转换图 4.代码逐句分析： 1.状态机概念： 状态机（英语：finite-state machine，缩写：FSM）是一个抽象的概念，表示把一个过程抽象为有限个状态之间的转移，且这些状态之间存在一定的联系。
+状态机主要包括四个要素：
+现态：是指当前所处的状态。条件：当一个条件满足后，将会触发一个动作，或者执行一次状态的迁移。动作：条件满足后执行的具体操作。动作执行完毕后，可以迁移到新的状态，也可以仍旧保持原状态。动作不是必需的，当条件满足后，也可以不执行任何动作，直接迁移到新状态。次态：条件满足后要迁往的新状态。“次态”是相对于“现态”而言的，“次态”一旦被激活，就转变为新的“现态”了。 2.利用状态机思维实现矩阵键盘扫描的优势： void Scan_Keys() { //S4按键检测 if(S4 == 0) { DelaySMG(500); //去抖动 if(S4 == 0) //按下S4按键 { /*......*/ } else { /*......*/ } while(S4 == 0); //松手检测 } } 传统按键检测运用delay函数延时消抖，不仅占用MCU的执行时间，而且在延时的时候MCU无法执行其他程序，降低MCU的利用率，并且经常和数码管显示、点灯冲突。
+而利用状态机思维实现的按键检测算法，bug少，算法成熟，可以大大增加程序的稳定性。
+3.按键过程抽象： 3.1.按键状态分类 根据状态机的原理，我们可以将按键过程抽象为三个状态：
+按键抬起状态（KEY_UP）：按键没有按下。
+按键消抖状态（KEY_DEBOUNCE）：消除按键抖动。
+按键按下状态（KEY_DOWN）：确认按键已经按下。
+3.2.按键状态转换图 基于蓝桥杯单片机开发板按键所处IO口，0是按下，1是没按。按键状态转换图如下：
+4.代码逐句分析： 本历程通过2×2矩阵演示（S13、S12、S16、S17）（蓝桥杯比赛历届赛题考矩阵键盘都是2×2，除了很早以前一届是3×4）
+#include &#34;STC15F2K60S2.h&#34; //矩阵键盘的行列定义 sbit Heng1 = P3^3; sbit Heng2 = P3^2; sbit Lie1 = P3^5; sbit Lie2 = P3^4; #define Key_Num 4 #define uint8_t unsigned char #define uint16_t unsigned int typedef enum { KEY_UP = 0, KEY_DEBOUNCE, KEY_DOWN }KEY_STATE; //按键的现态，通过枚举类型实现，也可以简单的用数组，但代码可读性差 //数组的特性，部分初始化对于没给初值的其他数组元素自动补0 KEY_STATE KeyState[Key_Num] = {KEY_UP}; uint8_t KeyFlag[Key_Num] = {0}; //按键按下标志，1按下，0没按 void Key_State(uint8_t i,bit Lie) { switch(KeyState[i]) { case KEY_UP: //按键没按下状态 { if(Lie == 0) //读到低电平，按键进入抖动状态 { KeyState[i] = KEY_DEBOUNCE; } } break; case KEY_DEBOUNCE: //按键抖动状态 { if(Lie == 0) //读到低电平，按键进入按下状态，并将按键按下标志置1 { KeyState[i] = KEY_DOWN; KeyFlag[i] = 1; } else //读到高电平，按键进入没按下状态 { KeyState[i] = KEY_UP; } } break; case KEY_DOWN: //按键按下状态 { if(Lie == 1) //读到高电平，按键进入没按下状态 { KeyState[i] = KEY_UP; KeyFlag[i] = 0; //防止一个按键在被按下同时，按另一个按键依然有效，保 证同一时间只有一个按键按下有效 } break; } } } void Scan_Key() { //列扫描先将列上面的所有IO口拉高，再把行上面的IO口拉低，当其中有一列内任何一个按键按下，那么整列被拉低，通过行和列，确定是哪个按键按下 Lie1 = 1; Lie2 = 1; Heng1 = 0; Heng2 = 1; Key_State(0,Lie1); //扫描S12按键 Key_State(1,Lie2); //扫描S16按键 Heng1 = 1; Heng2 = 0; Key_State(2,Lie1); //扫描S13按键 Key_State(3,Lie2); //扫描S17按键 } void Init_Timer0() //定时器设置为10ms，即每10ms扫描一次矩阵键盘，有效防止按键抖动 { TH0 = (65536 - 10000) / 256; TL0 = (65536 - 10000) % 256; TMOD = 0x01; //定时器设置为16位不自动重装模式 ET0 = 1; TR0 = 1; EA = 1; } void Service_Timer0() interrupt 1 { TH0 = (65536 - 10000) / 256; TL0 = (65536 - 10000) % 256; Scan_Key(); //调用按键扫描函数 } void Key() { if((KeyFlag[0] == 1)&amp;&amp;(KeyFlag[1] == 0)&amp;&amp;(KeyFlag[2] == 0)&amp;&amp;(KeyFlag[3] == 0)) { /*S12按键执行内容." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e36b00f6397b734e033e39b0b5460d69/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-01-31T12:37:46+08:00" />
+<meta property="article:modified_time" content="2023-01-31T12:37:46+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【源码详解~蓝桥杯单片机必备技能】1.利用状态机思维实现矩阵键盘扫描</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p><a href="https://blog.csdn.net/m0_65675467/article/details/128813033?spm=1001.2014.3001.5502">按键长按、双击看下一篇文章</a></p> 
+<h2><a id="0_1"></a>0.引言：</h2> 
+<p>大一啥都不会，傻傻参加蓝桥杯单片机比赛，代码也几乎仿照网上的风格，现在学过STM32后，再来写51的代码，发现许多可以改进的地方，就从按键扫描开始。网上利用状态机思维实现的矩阵键盘扫描要么过于臃肿、不适合蓝桥杯比赛的限时性，要么封装严重、过于抽象化，本文将利用状态机，结合51单片机特点实现<strong>小白也能看的懂的矩阵键盘扫描程序</strong> 。</p> 
+<hr> 
+<p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#0_1" rel="nofollow">0.引言：</a></li><li><a href="#1_9" rel="nofollow">1.状态机概念：</a></li><li><a href="#2_22" rel="nofollow">2.利用状态机思维实现矩阵键盘扫描的优势：</a></li><li><a href="#3_48" rel="nofollow">3.按键过程抽象：</a></li><li><ul><li><a href="#31_49" rel="nofollow">3.1.按键状态分类</a></li><li><a href="#32_58" rel="nofollow">3.2.按键状态转换图</a></li></ul> 
+  </li><li><a href="#4_66" rel="nofollow">4.代码逐句分析：</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="1_9"></a>1.状态机概念：</h2> 
+<p><strong>状态机</strong>（英语：finite-state machine，缩写：FSM）是一个抽象的概念，表示把一个过程抽象为有限个状态之间的转移，且这些状态之间存在一定的联系。</p> 
+<p>状态机主要包括四个要素：</p> 
+<ul><li><strong>现态</strong>：是指当前所处的状态。</li><li><strong>条件</strong>：当一个条件满足后，将会触发一个动作，或者执行一次状态的迁移。</li><li><strong>动作</strong>：条件满足后执行的具体操作。动作执行完毕后，可以迁移到新的状态，也可以仍旧保持原状态。动作不是必需的，当条件满足后，也可以不执行任何动作，直接迁移到新状态。</li><li><strong>次态</strong>：条件满足后要迁往的新状态。“次态”是相对于“现态”而言的，“次态”一旦被激活，就转变为新的“现态”了。</li></ul> 
+<hr> 
+<h2><a id="2_22"></a>2.利用状态机思维实现矩阵键盘扫描的优势：</h2> 
+<pre><code class="prism language-c"><span class="token keyword">void</span> <span class="token function">Scan_Keys</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  <span class="token comment">//S4按键检测</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>S4 <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">DelaySMG</span><span class="token punctuation">(</span><span class="token number">500</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                  <span class="token comment">//去抖动</span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span>S4 <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>                     <span class="token comment">//按下S4按键</span>
+		<span class="token punctuation">{<!-- --></span>
+		<span class="token comment">/*......*/</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span>
+		<span class="token punctuation">{<!-- --></span>
+		<span class="token comment">/*......*/</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">while</span><span class="token punctuation">(</span>S4 <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>               <span class="token comment">//松手检测</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>传统按键检测运用delay函数延时消抖，不仅占用MCU的执行时间，而且在延时的时候MCU无法执行其他程序，降低MCU的利用率，并且经常和数码管显示、点灯冲突。</p> 
+<p>而利用状态机思维实现的按键检测算法，bug少，算法成熟，可以大大增加程序的稳定性。</p> 
+<h2><a id="3_48"></a>3.按键过程抽象：</h2> 
+<h3><a id="31_49"></a>3.1.按键状态分类</h3> 
+<p>根据状态机的原理，我们可以将按键过程抽象为三个状态：</p> 
+<p>按键抬起状态（KEY_UP）：按键没有按下。</p> 
+<p>按键消抖状态（KEY_DEBOUNCE）：消除按键抖动。</p> 
+<p>按键按下状态（KEY_DOWN）：确认按键已经按下。</p> 
+<h3><a id="32_58"></a>3.2.按键状态转换图</h3> 
+<p>基于蓝桥杯单片机开发板按键所处IO口，0是按下，1是没按。按键状态转换图如下：</p> 
+<p><img src="https://images2.imgbox.com/c7/c2/wMujYn6K_o.jpg" alt="在这里插入图片描述" width="450" height="350"></p> 
+<hr> 
+<h2><a id="4_66"></a>4.代码逐句分析：</h2> 
+<p><code>本历程通过2×2矩阵演示（S13、S12、S16、S17）（蓝桥杯比赛历届赛题考矩阵键盘都是2×2，除了很早以前一届是3×4）</code></p> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"STC15F2K60S2.h"</span></span>
+ 
+<span class="token comment">//矩阵键盘的行列定义</span>
+sbit Heng1 <span class="token operator">=</span> P3<span class="token operator">^</span><span class="token number">3</span><span class="token punctuation">;</span>  
+sbit Heng2 <span class="token operator">=</span> P3<span class="token operator">^</span><span class="token number">2</span><span class="token punctuation">;</span>
+sbit Lie1 <span class="token operator">=</span> P3<span class="token operator">^</span><span class="token number">5</span><span class="token punctuation">;</span>
+sbit Lie2 <span class="token operator">=</span> P3<span class="token operator">^</span><span class="token number">4</span><span class="token punctuation">;</span>
+ 
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">Key_Num</span>  <span class="token expression"><span class="token number">4</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">uint8_t</span>  <span class="token expression"><span class="token keyword">unsigned</span> <span class="token keyword">char</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">uint16_t</span> <span class="token expression"><span class="token keyword">unsigned</span> <span class="token keyword">int</span></span></span>
+ 
+<span class="token keyword">typedef</span> <span class="token keyword">enum</span>
+<span class="token punctuation">{<!-- --></span>
+      KEY_UP <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">,</span>
+      KEY_DEBOUNCE<span class="token punctuation">,</span>
+      KEY_DOWN
+<span class="token punctuation">}</span>KEY_STATE<span class="token punctuation">;</span>  <span class="token comment">//按键的现态，通过枚举类型实现，也可以简单的用数组，但代码可读性差</span>
+ 
+<span class="token comment">//数组的特性，部分初始化对于没给初值的其他数组元素自动补0</span>
+KEY_STATE KeyState<span class="token punctuation">[</span>Key_Num<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span>KEY_UP<span class="token punctuation">}</span><span class="token punctuation">;</span>  
+<span class="token class-name">uint8_t</span> KeyFlag<span class="token punctuation">[</span>Key_Num<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>      <span class="token comment">//按键按下标志，1按下，0没按    </span>
+ 
+<span class="token keyword">void</span> <span class="token function">Key_State</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> i<span class="token punctuation">,</span>bit Lie<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+      <span class="token keyword">switch</span><span class="token punctuation">(</span>KeyState<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">case</span> KEY_UP<span class="token operator">:</span>       <span class="token comment">//按键没按下状态</span>
+            <span class="token punctuation">{<!-- --></span>
+                  <span class="token keyword">if</span><span class="token punctuation">(</span>Lie <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>   <span class="token comment">//读到低电平，按键进入抖动状态</span>
+                  <span class="token punctuation">{<!-- --></span>
+                       KeyState<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> KEY_DEBOUNCE<span class="token punctuation">;</span>  
+                  <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token keyword">case</span> KEY_DEBOUNCE<span class="token operator">:</span>    <span class="token comment">//按键抖动状态</span>
+            <span class="token punctuation">{<!-- --></span>
+                  <span class="token keyword">if</span><span class="token punctuation">(</span>Lie <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>    <span class="token comment">//读到低电平，按键进入按下状态，并将按键按下标志置1</span>
+                  <span class="token punctuation">{<!-- --></span>
+                        KeyState<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> KEY_DOWN<span class="token punctuation">;</span>  
+                        KeyFlag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+                  <span class="token punctuation">}</span>
+                  <span class="token keyword">else</span>     <span class="token comment">//读到高电平，按键进入没按下状态</span>
+                  <span class="token punctuation">{<!-- --></span>
+                        KeyState<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> KEY_UP<span class="token punctuation">;</span>
+                  <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token keyword">case</span> KEY_DOWN<span class="token operator">:</span>   <span class="token comment">//按键按下状态</span>
+            <span class="token punctuation">{<!-- --></span>
+                  <span class="token keyword">if</span><span class="token punctuation">(</span>Lie <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>   <span class="token comment">//读到高电平，按键进入没按下状态</span>
+                  <span class="token punctuation">{<!-- --></span>
+                        KeyState<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> KEY_UP<span class="token punctuation">;</span>  
+                        KeyFlag<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>       <span class="token comment">//防止一个按键在被按下同时，按另一个按键依然有效，保                                                 证同一时间只有一个按键按下有效</span>
+                  <span class="token punctuation">}</span>
+            <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+ 
+<span class="token keyword">void</span> <span class="token function">Scan_Key</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+<span class="token comment">//列扫描先将列上面的所有IO口拉高，再把行上面的IO口拉低，当其中有一列内任何一个按键按下，那么整列被拉低，通过行和列，确定是哪个按键按下</span>
+      Lie1 <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span> Lie2 <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+      Heng1 <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>   Heng2 <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+      <span class="token function">Key_State</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span>Lie1<span class="token punctuation">)</span><span class="token punctuation">;</span>    <span class="token comment">//扫描S12按键</span>
+      <span class="token function">Key_State</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span>Lie2<span class="token punctuation">)</span><span class="token punctuation">;</span>    <span class="token comment">//扫描S16按键</span>
+ 
+      Heng1 <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>   Heng2 <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+      <span class="token function">Key_State</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span>Lie1<span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">//扫描S13按键</span>
+      <span class="token function">Key_State</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span>Lie2<span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">//扫描S17按键                   </span>
+<span class="token punctuation">}</span>
+ 
+<span class="token keyword">void</span> <span class="token function">Init_Timer0</span><span class="token punctuation">(</span><span class="token punctuation">)</span>     <span class="token comment">//定时器设置为10ms，即每10ms扫描一次矩阵键盘，有效防止按键抖动</span>
+<span class="token punctuation">{<!-- --></span>
+     TH0 <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">65536</span> <span class="token operator">-</span> <span class="token number">10000</span><span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token number">256</span><span class="token punctuation">;</span>
+     TL0 <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">65536</span> <span class="token operator">-</span> <span class="token number">10000</span><span class="token punctuation">)</span> <span class="token operator">%</span> <span class="token number">256</span><span class="token punctuation">;</span>    
+     TMOD <span class="token operator">=</span> <span class="token number">0x01</span><span class="token punctuation">;</span>    <span class="token comment">//定时器设置为16位不自动重装模式</span>
+     ET0 <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+     TR0 <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+     EA <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>      
+<span class="token punctuation">}</span>
+ 
+<span class="token keyword">void</span> <span class="token function">Service_Timer0</span><span class="token punctuation">(</span><span class="token punctuation">)</span> interrupt <span class="token number">1</span>
+<span class="token punctuation">{<!-- --></span>    
+     TH0 <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">65536</span> <span class="token operator">-</span> <span class="token number">10000</span><span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token number">256</span><span class="token punctuation">;</span>
+     TL0 <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">65536</span> <span class="token operator">-</span> <span class="token number">10000</span><span class="token punctuation">)</span> <span class="token operator">%</span> <span class="token number">256</span><span class="token punctuation">;</span>
+     <span class="token function">Scan_Key</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>    <span class="token comment">//调用按键扫描函数</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key</span><span class="token punctuation">(</span><span class="token punctuation">)</span>   
+<span class="token punctuation">{<!-- --></span>
+      <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{<!-- --></span>
+           <span class="token comment">/*S12按键执行内容......*/</span>
+      <span class="token punctuation">}</span>
+      <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{<!-- --></span>
+           <span class="token comment">/*S16按键执行内容......*/</span>
+      <span class="token punctuation">}</span>
+      <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">/*S13按键执行内容......*/</span>
+      <span class="token punctuation">}</span>
+      <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token operator">&amp;&amp;</span><span class="token punctuation">(</span>KeyFlag<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">/*S17按键执行内容......*/</span>
+      <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/005f7cd61ae3105b255f3af626af57da/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">rabbitmq 消息类型</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/8e4845e8b004d571911f4ca3286e13a6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">linux mint无法启动，开机出现Firmware Bug:TSC_DEADLINE disabled due to Errata</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

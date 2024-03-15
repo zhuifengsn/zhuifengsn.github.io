@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>小型web服务器 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="小型web服务器" />
+<meta property="og:description" content="小型web服务器 一、项目平台： centos 6.5
+二、实现功能 ：网站的后台程序
+三、基本要求：
+1.基于HTTP/1.0版本的web服务器，客户端可以通过GET、POST方法进行资源请求
+2.服务器将客户请求的资源以html页面的形式呈现，并且能够进行差错处理。
+3.服务器能运行简单的cgi
+四、项目的背景知识
+1.了解HTTP协议
+是超文本传输，是应用层的协议，他是基于TCP协议的。他的工作过程：客户端通过浏览器向服务器发送请求，浏览器将请求的资源在传给浏览器，在关闭连接。
+2.了解url
+是统一资源定位符，也是我们俗称的网址。
+http://www.example.jp:80/dir/index.html？uid=1
+如上一个url包括协议方案名，服务器的地址和端口号，请求资源的路径,查询字符串。
+在这里的查询字符串是根据请求的方法来确定有还是没有。若为GET方法就会有查询字符串。若为POST方法就没有，他是通过http请求报文中的body发送的。
+3.http请求及响应的格式
+五、项目的基本思路
+1.通过socket来建立通信
+a) 创建socket
+b) 绑定地址端口
+c) 监听
+d) 进入事件循环
+2.服务器接收浏览器的请求并且进行解析
+a)解析请求的首行，获取方法和url（在这里只考虑GET、POST的请求方法）
+b)再去解析出url获取path和query_string
+c) 读取并解析header（这里只获取到content-length）其余信息丢弃
+d)body暂时不进行解析，根据后面的情况再去判断是否需要解析
+3.根据解析好的HTTP请求来进行计算
+a ) 静态页面：服务器上的某个固定位置的html文件，文件内容若没有人去修改，就会一直不变，浏览器的页面就一样。
+也就是进入到一个非cgi模式
+（1）拼接目录
+/index.html----&gt;不是一个绝对路径，只是和服务器上某个路径匹配的
+是一个相对于HTTP的根目录---&gt;允许对外访问的文件集中到某个目录下面就是HTTP的根目录
+若url_path是一个文件，直接进行拼接
+若url_path是一个目录，就会默认构造一个文件路径，尝试取目录下的index.html文件
+（2）打开文件
+读取文件中的内容，根据内容构造http响应，文件中的内容就是响应中body的部分
+b）动态页面：服务器会根据用户输入参数来决定生成什么样的页面。
+进入到一个cgi模式
+（1）HTTP服务器需要创建子进程
+（2）子进程进行程序替换，替换成磁盘上某个可执行程序
+父进程执行父进程的相关逻辑：
+1.将body写入管道
+2.父进程尝试读取子进程构造的结果
+3.父进程构造HTTP响应，写回客户端
+子进程传递给父进程的信息
+1.设置环境变量（方法、query_string、content_length）
+2.重定向
+3.根据url_path构造路径
+4.进行替换
+六、测试
+用一个简单版的计算器来测试CGI
+1.基于CGI协议获取到需要的参数
+2.根据业务逻辑（计算器相关的逻辑），进行计算
+3.把结果构造成HTML写回到标准输出中
+代码实现：
+1.创建socket连接，采用多线程来进行处理清楚
+#define SIZE (1024*10) 17 typedef struct HttpRequest 18 { 19 char first_line[SIZE]; 20 char *method; 21 char *url; 22 char *url_path; 23 char *query_string; 24 int content_length; 25 }HttpRequest; //线程的入口函数 void* ThreadEntry(void* arg) { int32_t new_sock=(int32_t)arg; HandlerRequest(new_sock); return NULL; } typedef struct sockaddr_in sockaddr_in; typedef struct sockaddr sockaddr; //服务器的入口函数 void HttpServerStart(const char* ip,short port) { //0." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/00d7b918df6450ab6132490a7cf1e50b/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-09-14T09:35:45+08:00" />
+<meta property="article:modified_time" content="2018-09-14T09:35:45+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">小型web服务器</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2><strong>                                   小型web服务器</strong></h2> 
+<p><strong><span style="color:#f33b45;">一、项目平台：</span> centos 6.5</strong></p> 
+<p><strong><span style="color:#f33b45;">二、实现功能 ：</span>网站的后台程序</strong></p> 
+<p><strong><span style="color:#f33b45;">三、基本要求：</span></strong></p> 
+<p><strong>1.基于HTTP/1.0版本的web服务器，客户端可以通过GET、POST方法进行资源请求</strong></p> 
+<p><strong>2.服务器将客户请求的资源以html页面的形式呈现，并且能够进行差错处理。</strong></p> 
+<p><strong>3.服务器能运行简单的cgi</strong></p> 
+<p><strong><span style="color:#f33b45;">四、项目的背景知识</span></strong></p> 
+<p><strong><span style="color:#f33b45;">1.了解HTTP协议</span></strong></p> 
+<p><strong><span style="color:#f33b45;">  </span>  是超文本传输，是应用层的协议，他是基于TCP协议的。他的工作过程：客户端通过浏览器向服务器发送请求，浏览器将请求的资源在传给浏览器，在关闭连接。</strong></p> 
+<p><span style="color:#f33b45;"><strong>2.了解url</strong></span></p> 
+<p><strong>  是统一资源定位符，也是我们俗称的网址。</strong></p> 
+<p><strong>http://www.example.jp:80/dir/index.html？uid=1</strong></p> 
+<p><strong>如上一个url包括协议方案名，服务器的地址和端口号，请求资源的路径,查询字符串。</strong></p> 
+<p><strong>在这里的查询字符串是根据请求的方法来确定有还是没有。若为GET方法就会有查询字符串。若为POST方法就没有，他是通过http请求报文中的body发送的。</strong></p> 
+<p><span style="color:#f33b45;"><strong>3.http请求及响应的格式</strong></span></p> 
+<p><strong><img alt="" class="has" height="182" src="https://images2.imgbox.com/81/8a/MHCp0zkq_o.png" width="538"></strong></p> 
+<p><strong> <span style="color:#f33b45;">五、项目的基本思路</span></strong></p> 
+<p><span style="color:#f33b45;"><strong>  1.通过socket来建立通信</strong></span></p> 
+<p><strong>     a) 创建socket</strong></p> 
+<p><strong>     b)  绑定地址端口</strong></p> 
+<p><strong>     c) 监听</strong></p> 
+<p><strong>     d) 进入事件循环</strong></p> 
+<p><strong> <span style="color:#f33b45;"> 2.服务器接收浏览器的请求并且进行解析</span></strong></p> 
+<p><strong>        a)解析请求的首行，获取方法和url（在这里只考虑GET、POST的请求方法）</strong></p> 
+<p><strong>        b)再去解析出url获取path和query_string</strong></p> 
+<p><strong>       c)  读取并解析header（这里只获取到content-length）其余信息丢弃</strong></p> 
+<p><strong>       d)body暂时不进行解析，根据后面的情况再去判断是否需要解析</strong></p> 
+<p><strong>  <span style="color:#f33b45;">3.根据解析好的HTTP请求来进行计算</span></strong></p> 
+<p><strong>     a ) 静态页面：服务器上的某个固定位置的html文件，文件内容若没有人去修改，就会一直不变，浏览器的页面就一样。</strong></p> 
+<p><strong>            也就是进入到一个非cgi模式</strong></p> 
+<p><strong>           （1）拼接目录</strong></p> 
+<p><strong>           /index.html----&gt;不是一个绝对路径，只是和服务器上某个路径匹配的</strong></p> 
+<p><strong>           是一个相对于HTTP的根目录---&gt;允许对外访问的文件集中到某个目录下面就是HTTP的根目录</strong></p> 
+<p><strong>            若url_path是一个文件，直接进行拼接</strong></p> 
+<p><strong>           若url_path是一个目录，就会默认构造一个文件路径，尝试取目录下的index.html文件</strong></p> 
+<p><strong>           （2）打开文件</strong></p> 
+<p><strong>               读取文件中的内容，根据内容构造http响应，文件中的内容就是响应中body的部分</strong></p> 
+<p><strong>     b）动态页面：服务器会根据用户输入参数来决定生成什么样的页面。</strong></p> 
+<p><strong>            进入到一个cgi模式</strong></p> 
+<p><strong>      （1）HTTP服务器需要创建子进程</strong></p> 
+<p><strong>      （2）子进程进行程序替换，替换成磁盘上某个可执行程序</strong></p> 
+<p><strong>父进程执行父进程的相关逻辑：</strong></p> 
+<p><strong>    1.将body写入管道</strong></p> 
+<p><strong>    2.父进程尝试读取子进程构造的结果</strong></p> 
+<p><strong>    3.父进程构造HTTP响应，写回客户端</strong></p> 
+<p><strong> 子进程传递给父进程的信息</strong></p> 
+<p><strong>     1.设置环境变量（方法、query_string、content_length）</strong></p> 
+<p><strong>     2.重定向</strong></p> 
+<p><strong>     3.根据url_path构造路径</strong></p> 
+<p><strong>     4.进行替换</strong></p> 
+<p><span style="color:#f33b45;"><strong>六、测试</strong></span></p> 
+<p><strong>  用一个简单版的计算器来测试CGI</strong></p> 
+<p><strong>        1.基于CGI协议获取到需要的参数</strong></p> 
+<p><strong>        2.根据业务逻辑（计算器相关的逻辑），进行计算</strong></p> 
+<p><strong>        3.把结果构造成HTML写回到标准输出中</strong></p> 
+<p><span style="color:#f33b45;"><strong>代码实现：</strong></span></p> 
+<p><span style="color:#f33b45;"><strong>1.创建socket连接，采用多线程来进行处理清楚</strong></span></p> 
+<pre class="has"><code>#define SIZE (1024*10)
+ 17 typedef struct HttpRequest
+ 18 {
+ 19     char first_line[SIZE];
+ 20     char *method;
+ 21     char *url;
+ 22     char *url_path;
+ 23     char *query_string;
+ 24     int content_length;
+ 25 }HttpRequest;
+ 
+//线程的入口函数
+ void* ThreadEntry(void* arg)
+ {
+     int32_t new_sock=(int32_t)arg;
+     HandlerRequest(new_sock);
+     return NULL;
+ }
+ typedef struct sockaddr_in sockaddr_in;
+ typedef struct sockaddr sockaddr;
+ //服务器的入口函数
+ void HttpServerStart(const char* ip,short port)
+ {
+     //0.忽略信号
+     signal(SIGCHLD,SIG_IGN);
+     //1.创建socket
+    int listen_sock=socket(AF_INET,SOCK_STREAM,0);
+     //失败原因：文件描述符达到上限
+    if(listen_sock&lt;0)
+    {
+         perror("socket");
+        return;
+     }
+     //2.绑定地址端口
+     sockaddr_in addr;
+     addr.sin_family=AF_INET;
+     addr.sin_port=htons(port);
+     addr.sin_addr.s_addr=inet_addr(ip);
+     int ret=bind(listen_sock,(sockaddr*)&amp;addr,sizeof(addr));
+     if(ret&lt;0)
+         //失败的原因：该端口可能被别的进程绑定
+     {
+         perror("bind");
+         return;
+     }
+     //3.监听
+    ret=listen(listen_sock,5);
+     if(ret&lt;0)
+     {
+         perror("listen");
+         return;
+     }
+ printf("HttpServerStart ok!\n");
+     //4.进入事件循环
+     while(1)
+     {
+         //printf("进入事件循环\n");
+         sockaddr_in peer;
+         socklen_t len = sizeof(peer);
+        int32_t new_sock= accept(listen_sock,(sockaddr*)&amp;peer,&amp;len);
+         if(new_sock&lt;0)
+        {
+            perror("accept");
+             continue;
+         }
+         printf("accept\n");
+         //6.创建线程，由新线程完成具体的HTTP服务器后续的操作
+         //线程创建块，且占用资源少，切换块
+        //1.不可以传递指针，是因为此时可能new_sock生命周期结束，才去调用ThreadEntry,变成野指针
+        //2.那么试着加上static，也是不可以的，因为用static修饰的只有一份。
+  //3.那么每产生一个new_fd都申请一块空间，在函数调用完成之后再去释放，这样可以是可以，但是不好。
+         int32_t new_sock= accept(listen_sock,(sockaddr*)&amp;peer,&amp;len);
+        if(new_sock&lt;0)
+         {
+            perror("accept");
+             continue;
+         }
+         printf("accept\n");
+         //6.创建线程，由新线程完成具体的HTTP服务器后续的操作
+         //线程创建块，且占用资源少，切换块
+       //1.不可以传递指针，是因为此时可能new_sock生命周期结束，才去调用ThreadEntry,变成野指针
+        //2.那么试着加上static，也是不可以的，因为用static修饰的只有一份。
+         //3.那么每产生一个new_fd都申请一块空间，在函数调用完成之后再去释放，这样可以是可以，但是不好。
+         //4.因此采用传值的方式，进入函数，就会进行拷贝，在栈上保存一份属于自己的。函数一旦退出，会自动释放
+         pthread_t tid;
+         pthread_create(&amp;tid,NULL,ThreadEntry,(void*)new_sock);
+        //采用detach，不关注结果，这样才能保证accpet快速被调用
+         pthread_detach(tid);
+     }
+ }
+//通过命令行参数，把需要绑定的ip和port传进来
+ int main(int argc,char* argv[])
+ {
+    if(argc!=3)
+    {
+         printf("Usage: ./http_server ip port\n");
+         return -1;
+     }
+     printf("输入正确\n");
+     //http服务器启动入口函数
+     HttpServerStart(argv[1],atoi(argv[2]));
+     return 0;
+ }</code></pre> 
+<p><span style="color:#f33b45;"><strong>2. 基本的处理流程</strong></span></p> 
+<pre class="has"><code>//请求的处理
+ void HandlerRequest(int new_sock)
+ {
+     printf("Rev Request\n");
+     int err_code=200;
+     HttpRequest req;
+     memset(&amp;req,0,sizeof(req));
+     //1.解析请求（按照http协议的格式进行解析）
+     // a）按行读socket，读出HTTP请求的首行
+    printf("解析首行之前\n");
+     if(ReadLine(new_sock,req.first_line)&lt;0)
+    {
+         printf("ReadLine first_line failed\n");
+         err_code=404;
+         //构造404响应的代码
+         goto END;
+     }
+     printf("first_line=%s\n",req.first_line);
+     //b)解析首行，获取到方法和url
+     if(ParseFirstLine(req.first_line,&amp;req.method,&amp;req.url)&lt;0)
+     {
+         printf("ParseFirstLine failed\n");
+         err_code=404;
+         //此时对错误作统一处理使用404这个错误码
+        //构造404响应的代码
+         goto END;
+     }
+     printf("method=%s url=%s\n",req.method,req.url);
+    // c）解析url，获取url_path和query_string
+    if(ParseUrl(req.url,&amp;req.url_path,&amp;req.query_string)&lt;0)
+     {
+         printf("ParseUrl failed\n");
+         err_code=404;
+         //构造404响应的代码
+         goto END;
+     }
+     printf("method=%s,url_path=%s,query_string=%s\n",req.method,req.url_path,req.query_string);
+     // d)读取并解析header部分，这里只保留Content_Lenght,
+     // 其他的header内容直接丢弃
+     if(ParseHeadler(new_sock,&amp;req.content_length)&lt;0)
+    {
+         printf("ParseHeadler failed\n");
+         err_code=404;
+        //构造404响应的代码
+         goto END;
+     }
+     //body暂时不解析，交给后面的逻辑根据方法来决定是否需要解析body
+     //2.根据收到的请求进行计算，生成响应，把响应写回客户端
+     if(strcmp(req.method,"GET")==0 &amp;&amp; req.query_string==NULL)
+     {
+        // a)静态页面：如果是GET方法且没有query_string
+         err_code=HandlerStaticFile(&amp;req,new_sock);
+     }
+     // b）动态页面：若方法为GET，有query_string
+     else if (strcmp(req.method,"GET")==0 &amp;&amp; req.query_string!=NULL)
+     {
+         // b）动态页面：若方法为GET，有query_string
+         err_code=HandlerCGI(&amp;req,new_sock);
+     }
+     else if(strcmp(req.method,"POST")==0 )
+     {
+        //  c）动态页面： 方法为POST
+        }
+     else
+    {
+         printf("method not suport! method=%s\n",req.method);
+        err_code=404;
+         goto END;
+    }
+ END:
+     if(err_code!=200)
+     {
+         Handler404(new_sock);
+     }
+     //在这里响应写完之后，服务器主动断开连接，进入到一个TIME_WAIT的状态。
+     //由于服务器可能在短时间内接受的大量的连接，服务器出现了大量的TIME_WAIT
+     //可能会导致下一次连接不上。因此需要设置setsocketopt REUSEADDR重用TIME_WAIT状态的连接
+ 
+     close(new_sock);
+ }
+</code></pre> 
+<p><span style="color:#f33b45;"><strong>3.按行读取</strong></span></p> 
+<pre class="has"><code>//从socket中读取一行
+  int ReadLine(int new_sock,char line[])
+  {
+     //按行读取数据，浏览器发送数据中的行分割符可能不一样
+     //\r  \n    \r\n
+     //将不同的行分割符都转化为\n
+     //1.从socket中读取字符，一次读一个
+    char c='\0';
+     int output_index=0;//描述当前读到字符应该放到缓冲区的哪个下标上
+      while(1)
+     {
+          ssize_t read_size=recv(new_sock,&amp;c,1,0);//从sock中读数据
+         if(read_size&lt;=0)
+         {
+             return -1;
+         }
+         //2.判断当前读到的字符是不是 \r
+          if(c=='\r')
+          {
+             //3.如果c是\r,尝试读取下一个
+            //MSG_PEEK只是看一下里面的内容，并不从缓冲区中删除
+             recv(new_sock,&amp;c,1,MSG_PEEK);
+              if(c=='\n'){
+                  //4.如果下一个字符是\n,说明行分隔符就是\r\n 
+                  //就把行分隔符改为\n
+                  //此处在进行一次recv，是为了把缓冲区中的\n拿出来
+                  recv(new_sock,&amp;c,1,0);
+             }else
+              {
+                 // 5.若下一个字符是其他的字符，说明行分隔符就是\r
+                  // 就把\r修改为\n
+                  c='\n';
+              }
+          }
+          //经过上面的if，不论行分隔符是\r还是\r\n，c都已经变成了\n
+          //6.如果是其他的字符，就直接放到缓冲区中
+          line[output_index++]=c;
+          //7.再来判断当前字符是不是\n,如果当前字符是\n
+          //说明这一行读完了,就退出循环，
+         if(c=='\n')  //将这个if写到这里，读出的行后面就包含\n
+          {
+              break;
+          }
+      }
+      //这次读了多少个字节返回去了
+      return output_index;
+  }
+</code></pre> 
+<p><span style="color:#f33b45;"><strong>4.解析首行</strong></span></p> 
+<pre class="has"><code>  //字符串分割
+  int Split(char first_line[],const char* split_char,char* output[])
+  {
+      char* tmp=NULL;
+      int output_index=0;
+      //不可以用strtok这个函数，因为这个函数存在线程不安全的问题。其内部是用static
+      //进行了修饰，也就是在静态全局区中，变量只存了一份，存在竞争
+      //因此用strtok_r这个函数进行替换。其内部没有用static进行修饰，因此需要手动传参
+      //来记录上次切分的位置
+      char* p=strtok_r(first_line,split_char,&amp;tmp);
+      while(p!=NULL)
+      {
+          output[output_index++]=p;
+          p=strtok_r(NULL,split_char,&amp;tmp);
+      }
+      return output_index;
+  } 
+  //解析首行 解析出需要的url和方法
+  //当前只考虑不带域名的简单情况
+  //GET /index.html?a=10 HTTP/1.1
+ //按空格进行字符串切分,切分出三部分
+  int ParseFirstLine(char first_line[],char** p_method,char** p_url)
+  {
+      char* tok[100]={NULL};
+     //tok_size 描述字符串切分出的部分有几个
+     int tok_size=Split(first_line," ",tok);
+     if(tok_size!=3)
+     {
+         printf("first_line Split failed ! n=%d",tok_size);
+         return -1;
+     }
+     //将切割的结果返回
+     *p_method=tok[0];
+    *p_url=tok[1];
+     return 0;
+ }</code></pre> 
+<p><span style="color:#f33b45;"><strong>   5.解析url</strong></span></p> 
+<pre class="has"><code>//解析url
+ //url形如
+ // /index.html?a=10&amp;b=20
+ // /index.thml
+ // 先不考虑带有域名的
+ int ParseUrl(char url[],char** p_url_path,char**p_query_string)
+ {
+     *p_url_path=url;
+     char*p=url;
+     for(;*p!='\0';++p)
+   {
+        if(*p=='?')
+        {
+            //若找到？说明url中带有query_string
+             //将？设为\0
+             *p='\0';
+             //p+1就是query_string的位置
+             *p_query_string=p+1;
+             return 0;
+         }
+     }
+     //如果循环退出没有找？,那么此时url中不存在query_string
+     //就让query_string指向null
+     *p_query_string=NULL;
+     return 0;
+ }</code></pre> 
+<p><span style="color:#f33b45;"><strong>6.解析头部</strong></span></p> 
+<pre class="has"><code> //解析头部
+ int ParseHeadler(int new_sock,int* content_length_str)
+ {
+     //由于header部分是按行组织的数据
+     //循环尝试读取header，每次读一行
+     while(1)
+    {
+        char line[SIZE]={0};
+         int read_size=ReadLine(new_sock,line);
+        if(read_size&lt;0)
+         {
+             printf("ReadLine failed!\n");
+             return -1;
+         }
+        //此处需要考虑比较 Readline的实现细节
+         //若Readline返回结果中不包含 \n
+        //此代码就需要和空串对比
+         if(strcmp(line,"\n")==0)
+         {
+             //读到了空行，说明header结束
+             return 0;
+         }
+         //针对当前读到的行进行判断，看这一行是不是Conten_Length：
+         //例如读到了一行形如：
+         ///content_length:10\n
+         const char* Content_length_str="Content_Length: ";
+         if(strncmp(line,Content_length_str,strlen(Content_length_str)==0))
+         {
+             *content_length_str=atoi(line+strlen(Content_length_str));
+            //此处不可以直接返回，因为要将缓冲区的所有数据都拿出来。防止黏包
+        }
+     }
+ }
+</code></pre> 
+<p><span style="color:#f33b45;"><strong>7.错误处理</strong></span></p> 
+<pre class="has"><code> void Handler404(int new_sock)
+ {
+     printf("Handler404~~~\n");
+     //构造404错误页面 严格按照HTTP响应格式
+     const char* first_line="HTTP/1.1 404 Not Fonud\n";
+     const char* blank_line="\n";
+     //body部分的内容就是HTML
+     const char* body="&lt;head&gt; &lt;meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\"&gt;"
+         "&lt;/head&gt;&lt;body&gt;&lt;h1&gt;您的页面去偷偷去玩了！！&lt;/h1&gt;&lt;/body&gt;";
+     char header[SIZE]={0};
+     sprintf(header,"Content-Length:%lu\n",strlen(body));
+ 
+     send(new_sock,first_line,strlen(first_line),0);
+     send(new_sock,header,strlen(header),0);
+     send(new_sock,blank_line,strlen(blank_line),0);
+     send(new_sock,body,strlen(body),0);
+     return ;
+ }</code></pre> 
+<p><span style="color:#f33b45;"><strong>8.静态页面的处理</strong></span></p> 
+<pre class="has"><code> int IsDir(const char* file_path)
+ {
+    struct stat st;
+     int ret=stat(file_path,&amp;st);//查看文件属性
+    if(ret&lt;0)
+     {
+         perror("stat");
+         return -1;
+    }
+     if(S_ISDIR(st.st_mode))//此宏可以查看文件类型是否为目录文件
+     {
+         return 1;
+     }
+     return 0;
+ }
+//获取路径
+ void GetFilePath( const char* url_path,char file_path[])
+ {
+     //根据HTTP服务器的根目录进行拼接
+     sprintf(file_path,"./wwwroot%s",url_path);
+     //如果用户传的url_path如下：/image
+     //假设这个url_path是一个目录，那就要构造一个默认的文件路径，尝试取目录下的/index.html
+     //如果用户传的url_path是：/image，实际就为：/image/index.html
+     //因此需要判断file_path是普通文件还是目录文件  
+     if(IsDir(file_path))
+     {
+       //file_path可能存在的情况：
+        //1./image/
+        //2./image
+         if(file_path[strlen(file_path)-1]=='/'){
+             strcat(file_path,"index.html");
+         }else{
+             strcat(file_path,"/index.html");
+         }
+     }
+ }
+ 
+ int GetFileSize(const char* file_path)
+ {
+     struct stat st;
+     int ret=stat(file_path,&amp;st);
+     if(ret&lt;0)
+     {
+         return 0;
+     }
+     return st.st_size;
+ }
+ int WriteStaticFile(const char* file_path,int new_sock)
+ {
+     //1.打开文件
+     //2.读取文件内容
+     //3.根据文件内容构造http响应
+     //4.将响应内容写到sock中
+     int fd=open(file_path,O_RDONLY);
+     if(fd&lt;0)
+     {
+         printf("file open failed! file_path=%s\n",file_path);
+        return 404;
+     }
+     const char* first_line="HTTP/1.1 200 OK\n";
+     int size=GetFileSize(file_path);
+     char header[SIZE]={0};
+     sprintf(header,"Content-Length: %d\n",size);
+     const char* blank_line="\n";
+     send(new_sock,first_line,strlen(first_line),0);
+     send(new_sock,header,strlen(header),0);
+     send(new_sock,blank_line,strlen(blank_line),0);
+     sendfile(new_sock,fd,NULL,size);
+     //关闭文件
+     close(fd);
+     return 200;
+ }
+ int HandlerStaticFile(const HttpRequest* req,int new_sock)
+ {
+     //1.拼接目录（根据url_path构造出当前文件系统上的真实目录）
+     //2.打开文件，读取文件内容，根据文件内容构造HTTP响应
+     //其中文件的内容就作为HTTP响应中body的内容
+     char file_path[SIZE]={0};
+     GetFilePath(req-&gt;url_path,file_path);
+     int err_code=WriteStaticFile(file_path,new_sock);
+     return err_code;
+} </code></pre> 
+<p><span style="color:#f33b45;"><strong>9.动态页面的处理</strong></span></p> 
+<pre class="has"><code> //3.父进程执行父进程的相关逻辑
+ int  HandlerCGIFather(const HttpRequest* req,int new_sock,int father_read,int father_write)
+ {
+     printf("父进程逻辑\n");
+     //a） 父进程把HTTP请求的body部分写到管道
+         if(strcmp(req-&gt;method,"POST")==0){
+         int content_length=req-&gt;content_length;
+         int i=0;
+         for(;i&lt;content_length;++i)
+         {
+             char c='\0';
+             recv(new_sock,&amp;c,1,0);
+             //printf("ccc\n");
+            write(father_write,&amp;c,1);
+ 
+         }
+     }
+     //b)  父进程尝试取读取子进程构造的结果
+     //c） 父进程构造HTTP响应，写回客户端
+     const char* first_line="HTTP/1.1 200 OK\n";
+     const char* header="Content-Type: text/html\n";
+     const char* blank_line="\n";
+     send(new_sock,first_line,strlen(first_line),0);
+     send(new_sock,header,strlen(header),0);
+     send(new_sock,blank_line,strlen(blank_line),0);
+     char c='\0';
+     while(read(father_read,&amp;c,1)&gt;0){
+         //从管道中读数据，如果所有的写段关闭，read将读到EOF,从而返回0
+         send(new_sock,&amp;c,1,0);
+     }
+     //d） 父进程回收子进程
+     //进程等待可以，但更简单的是忽略SIGCHLD信号
+     return 0; 
+ } 
+ //子进程执行子进程的相关逻辑
+int  HandlerCGIChild(const HttpRequest* req,int child_read,int child_write){
+     // a）设置环境变量 
+     char request_method_env[SIZE]={0};
+     sprintf(request_method_env,"REQUEST_METHOD=%s",req-&gt;method);
+     putenv(request_method_env);
+     if(strcmp(req-&gt;method,"GET")==0)
+     {
+         char query_string_env[SIZE]={0};
+         sprintf(query_string_env,"QUERY_STRING=%s",req-&gt;query_string);
+         putenv(query_string_env);
+     }else {
+         char content_length_env[SIZE]={0};
+         sprintf(content_length_env,"CONTENT_LENGTH=%d",req-&gt;content_length);
+         putenv(content_length_env);
+     }
+     // b)  重定向，把标准输入输出重定向到管道
+     dup2(child_read,0);
+     dup2(child_write,1);
+     // c)  根据url_path构造出CGI路径
+     char file_path[SIZE]={0};
+     GetFilePath(req-&gt;url_path,file_path);
+     // d)  进行程序替换（也就进入到了CGI程序内部）
+     //l:通过边长参数列表来传输参数  lp：从path中获取  le：手动构造环境变量 
+     //v通过数组 vp ve
+     execl(file_path,file_path,NULL);
+     exit(0);
+     return 0;
+ }
+ int HandlerCGI(const HttpRequest* req,int new_sock)
+ {
+    //1创建一对匿名管道
+      int fd1[2];
+      int fd2[2];
+      pipe(fd1);
+      pipe(fd2);
+      int father_read=fd1[0];
+      int child_write=fd1[1];
+      int child_read =fd2[0];
+      int father_write=fd2[1];
+      printf("进入动态\n");
+      //2创建子进程
+      int ret=fork();
+      if(ret&gt;0){
+          close(child_write);
+          close(child_read);
+          //3.父进程执行父进程的相关逻辑
+          printf("父进程\n");
+        HandlerCGIFather(req,new_sock,father_read,father_write);
+            close(father_read);
+            close(father_write);
+      }
+      else if(ret==0)
+      {
+          close(father_read);
+          close(father_write);
+          printf("子程序\n");
+          //4.子进程执行子进程的相关逻辑
+           HandlerCGIChild(req,child_read,child_write);
+      }
+      else{
+      perror("fork");
+      }
+      return 200;
+ }</code></pre> 
+<p><strong><span style="color:#f33b45;">当写完大体框架时我们先进行验证，此时将动态静态页面全部返回404</span></strong></p> 
+<p><img alt="" class="has" height="133" src="https://images2.imgbox.com/9d/81/353YPSBo_o.png" width="388"></p> 
+<h2><span style="color:#f33b45;">静态页面：</span></h2> 
+<pre class="has"><code> &lt;html&gt;
+   &lt;head&gt;
+   &lt;meta http-equiv="content-type" content="text/html;charset=utf-8"&gt;
+   &lt;/head&gt;
+   &lt;body&gt;
+       &lt;h1&gt;小喵的世界欢迎你~&lt;/h1&gt;
+       &lt;img src="/image/1.jpg"&gt;
+   &lt;/body&gt;
+   &lt;/html&gt;
+</code></pre> 
+<p><img alt="" class="has" height="589" src="https://images2.imgbox.com/99/9f/nhgL6W4u_o.png" width="778"></p> 
+<p> </p> 
+<h2><span style="color:#f33b45;">动态页面如下：</span></h2> 
+<pre class="has"><code>  &lt;html&gt;
+   &lt;form action="/calc/calc"&gt;
+   a:&lt;br&gt;
+   &lt;input type="text" name="a"&gt;
+   &lt;br&gt;
+   b:&lt;br&gt;
+   &lt;input type="text" name="b"&gt;
+   &lt;br&gt;&lt;br&gt;
+   &lt;input type="submit" value="Submit"&gt;
+  &lt;/form&gt;
+  &lt;body background="/calc/image/1.jpg"&gt;
+  &lt;/body&gt;
+  &lt;/html&gt;</code></pre> 
+<pre class="has"><code>void GetQueryString(char output[])
+   {
+       //按照CGI的协议实现此处协议
+      //1.先获取方法
+      char* method=getenv("REQUEST_METHOD");
+      if(method==NULL)
+      {
+          //没有获取到 环境变量
+          fprintf(stderr,"REQUEST_METHOD failed\n");
+          return;
+      }
+      if(strcmp(method,"GET")==0)
+      {
+         char* query_string=getenv("QUERY_STRING");
+          if(query_string==0)
+          {
+              fprintf(stderr,"QUERY_STRING failde\n");
+              return;
+          }
+          strcpy(output,query_string);
+      }
+      else{
+          //POST
+     //获取CONTENT_LENGTH
+      char* content_length_env=getenv("CONTENT_LENGTH");
+     if(content_length_env==NULL)
+         {
+         fprintf(stderr,"CONTENT_LENGTH filed\n");
+         return;
+     }
+    //根据CONTENT_LENGTH读取body内容
+     int content_length=atoi(content_length_env);
+      int i=0;
+     for(;i&lt;content_length;++i)
+     {
+          char c='\0';
+          read(0,&amp;c,1);
+        output[i]=c;
+      }
+     return;
+  }
+  }
+  int main()
+  {
+    //1.基于CGI协议获取到需要的参数
+    char query_string[SIZE]={0};
+    GetQueryString(query_string);
+    //2.根据业务逻辑（计算器相关的逻辑），进行计算
+    //此时获取到的QUERY_STRING形如：
+    //   a=10&amp;b=20
+    int a=0;
+    int b=0;
+    sscanf(query_string,"a=%d&amp;b=%d\n",&amp;a,&amp;b);
+    int sum=a+b;
+    //3.把结果构造成HTML写回到标准输出中
+    printf("&lt;html&gt;&lt;h1&gt;sum=%d&lt;/h1&gt;&lt;/html&gt;",sum);
+    return 0;
+  }
+</code></pre> 
+<p> </p> 
+<p><img alt="" class="has" height="536" src="https://images2.imgbox.com/71/85/HynbB2mH_o.png" width="760"></p> 
+<p><img alt="" class="has" height="58" src="https://images2.imgbox.com/52/38/IA3fRAAL_o.png" width="207"></p> 
+<p> </p> 
+<p> </p> 
+<p><span style="color:#f33b45;"><strong>遇到的问题：</strong></span></p> 
+<p><strong>1.乱码问题   是因为编码格式不对</strong></p> 
+<p><strong>2. 在进行字符串切割的时候，不能使用strtok,线程不安全</strong></p> 
+<p><strong>3.在拼接目录要考虑到客户端请求的是目录还是文件</strong></p> 
+<p><strong>4.CGI要在程序替换之前进行重定向</strong></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d18d19244d9103a14aa491d2ce3b28b9/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">关于virtualenv虚拟环境中python版本的坑</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/7ea05142672a6c2a5ad4552e1e27f527/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">give gandies(数学题)</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

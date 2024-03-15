@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>MySQL InnoDB Replication部署方案与实践 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="MySQL InnoDB Replication部署方案与实践" />
+<meta property="og:description" content="1. 概述 MySQL Innodb ReplicaSet 是 MySQL 团队在 2020 年推出的一款产品，用来帮助用户快速部署和管理主从复制，在数据库层仍然使用的是主从复制技术。
+ReplicaSet 主要包含三个组件：MySQL Router、MySQL Server 以及 MySQL Shell 高级客户端。
+MySQL Shell 负责管理 ReplicaSet 包括部署、切换、节点加入等，都可以通过内置 AdminAPI 自动化完成。
+MySQL Router 是一款轻量级中间件，可在应用程序和 ReplicaSet 之间提供透明路由和读写分离功能。
+2. 适用场景 InnoDB ReplicaSet至少由两台MySQL服务器实例组成，提供MySQL主从复制功能。InnoDB ReplicaSet基于异步的主从复制实现，因此适用于用户对高可用性要求不高的环境。可以通过MySQL Shell快速搭建及管理主从复制，避免了搭建主从复制时大量的手动操作。
+InnoDB ReplicaSet的不足之处有：
+不支持自动故障转移。主库不可用时，需要通过AdminAPI手动发起故障转移。
+发生计划外的服务不可用时，可能会丢失部分数据。由于主备之间是异步复制，主库发生故障时，未提交的事务会丢失。
+发生计划外的服务不可用时，可能会产生数据不一致。例如由于网络原因导致主库连不上，将备库提升为主库后，可能会同时存在两个主库，即发生“脑裂”。
+不支持多主模式，即同一时刻只有一个主库可写。
+读扩展受限，不能像组复制那样对流量进行控制。
+所有的备库都从同一个主库复制数据。在有大量的小更新时，可能会对主库造成影响。
+仅支持MySQL 8.0及其以后的版本。
+仅支持基于GTID的日志复制。
+仅支持基于行的日志复制（Row-Based Replication, RBR），不支持基于SQL语句的复制（Statement-Based Replication, SBR）。
+不支持复制过滤。
+RS为一个主库加多个从库的架构。需要通过MySQL Router监视RS中的实例，因此从库的数量不能无限制增加。
+必须通过MySQL Shell配置和管理，包括复制用户的创建。
+3. 安装部署 IProlehostname版本OS192.168.10.31Mastermysql-rs-1MySQL 8.2Centos_7.9_x86_x64192.168.10.32Secondarymysql-rs-2MySQL 8.2Centos_7.9_x86_x64 3.1. 安装MySQL servers 分别在两个MySQL服务器下载MySQL Server安装包，并进行安装。
+# 配置主机名 echo &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/041e609e1f9807c8801ad91f0410f0f2/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-12-12T09:36:20+08:00" />
+<meta property="article:modified_time" content="2023-12-12T09:36:20+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">MySQL InnoDB Replication部署方案与实践</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2 style="background-color:transparent;">1. 概述</h2> 
+<p>MySQL Innodb ReplicaSet 是 MySQL 团队在 2020 年推出的一款产品，用来帮助用户快速部署和管理主从复制，在数据库层仍然使用的是主从复制技术。</p> 
+<p style="text-align:center;"><img alt="" src="https://images2.imgbox.com/29/bd/vC2cdSPq_o.png"></p> 
+<p>ReplicaSet 主要包含三个组件：MySQL Router、MySQL Server 以及 MySQL Shell 高级客户端。</p> 
+<p>MySQL Shell 负责管理 ReplicaSet 包括部署、切换、节点加入等，都可以通过内置 AdminAPI 自动化完成。</p> 
+<p>MySQL Router 是一款轻量级中间件，可在应用程序和 ReplicaSet 之间提供透明路由和读写分离功能。</p> 
+<h2 style="background-color:transparent;">2. 适用场景</h2> 
+<p>InnoDB ReplicaSet至少由两台MySQL服务器实例组成，提供MySQL主从复制功能。InnoDB ReplicaSet基于异步的主从复制实现，因此适用于用户对高可用性要求不高的环境。可以通过MySQL Shell快速搭建及管理主从复制，避免了搭建主从复制时大量的手动操作。</p> 
+<p>InnoDB ReplicaSet的不足之处有：</p> 
+<ul><li> <p>不支持自动故障转移。主库不可用时，需要通过AdminAPI手动发起故障转移。</p> </li><li> <p>发生计划外的服务不可用时，可能会丢失部分数据。由于主备之间是异步复制，主库发生故障时，未提交的事务会丢失。</p> </li><li> <p>发生计划外的服务不可用时，可能会产生数据不一致。例如由于网络原因导致主库连不上，将备库提升为主库后，可能会同时存在两个主库，即发生“脑裂”。</p> </li><li> <p>不支持多主模式，即同一时刻只有一个主库可写。</p> </li><li> <p>读扩展受限，不能像组复制那样对流量进行控制。</p> </li><li> <p>所有的备库都从同一个主库复制数据。在有大量的小更新时，可能会对主库造成影响。</p> </li><li> <p>仅支持MySQL 8.0及其以后的版本。</p> </li><li> <p>仅支持基于GTID的日志复制。</p> </li><li> <p>仅支持基于行的日志复制（Row-Based Replication, RBR），不支持基于SQL语句的复制（Statement-Based Replication, SBR）。</p> </li><li> <p>不支持复制过滤。</p> </li><li> <p>RS为一个主库加多个从库的架构。需要通过MySQL Router监视RS中的实例，因此从库的数量不能无限制增加。</p> </li><li> <p>必须通过MySQL Shell配置和管理，包括复制用户的创建。</p> </li></ul> 
+<h2 style="background-color:transparent;">3. 安装部署</h2> 
+<table><thead><tr><th>IP</th><th>role</th><th>hostname</th><th>版本</th><th>OS</th></tr></thead><tbody><tr><td>192.168.10.31</td><td>Master</td><td>mysql-rs-1</td><td>MySQL 8.2</td><td>Centos_7.9_x86_x64</td></tr><tr><td>192.168.10.32</td><td>Secondary</td><td>mysql-rs-2</td><td>MySQL 8.2</td><td>Centos_7.9_x86_x64</td></tr></tbody></table> 
+<h3 style="background-color:transparent;">3.1. 安装MySQL servers</h3> 
+<p>分别在两个MySQL服务器下载MySQL Server安装包，并进行安装。</p> 
+<pre><code class="language-bash"># 配置主机名
+echo "192.168.10.31   mysql-rs-1" &gt;&gt; /etc/hosts
+echo "192.168.10.32   mysql-rs-2" &gt;&gt; /etc/hosts
+​
+# 192.168.10.31执行
+hostnamectl set-hostname mysql-rs-1
+bash
+# 192.168.10.32执行
+hostnamectl set-hostname mysql-rs-2
+bash
+# 下载rpm安装包
+wget https://cdn.mysql.com//Downloads/MySQL-8.2/mysql-8.2.0-1.el7.x86_64.rpm-bundle.tar
+​
+# 解压
+tar -xvf mysql-8.2.0-1.el7.x86_64.rpm-bundle.tar
+​
+# 卸载mariadb
+rpm -e mariadb-libs-5.5.68-1.el7.x86_64 --nodeps
+​
+# 安装MySQL
+yum localinstall -y *.rpm</code></pre> 
+<p>分别配置root密码：</p> 
+<pre><code class="language-bash">[root@mysql-rs-2 server]# mysql -uroot -p
+Enter password: 
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 8
+Server version: 8.2.0
+​
+Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+​
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+​
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+​
+mysql&gt; 
+mysql&gt; 
+mysql&gt; alter user root@'localhost' identified by 'Abcd@1234';
+Query OK, 0 rows affected (0.00 sec)
+​
+mysql&gt; create user root@'%' identified by 'Abcd@1234';
+Query OK, 0 rows affected (0.01 sec)</code></pre> 
+<h3 style="background-color:transparent;">3.2. 安装mysqlsh</h3> 
+<pre><code class="language-bash"># 下载mysqlshell
+wget https://cdn.mysql.com//Downloads/MySQL-Shell/mysql-shell-8.2.0-1.el7.x86_64.rpm
+# 安装mysqlshell
+rpm -ivh mysql-shell-8.2.0-1.el7.x86_64.rpm</code></pre> 
+<p>验证mysql shell链接数据库</p> 
+<pre><code class="language-bash">[root@mysql-rs-1 software]# mysqlsh --mysql -u root -h localhost -C
+Please provide the password for 'root@localhost': ************
+Save password for 'root@localhost'? [Y]es/[N]o/Ne[v]er (default No): 
+Error during auto-completion cache update: You must reset your password using ALTER USER statement before executing this statement.
+MySQL Shell 8.2.0
+​
+Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+Oracle is a registered trademark of Oracle Corporation and/or its affiliates.
+Other names may be trademarks of their respective owners.
+​
+Type '\help' or '\?' for help; '\quit' to exit.
+Creating a Classic session to 'root@localhost?compression=REQUIRED'
+Your MySQL connection id is 8
+No default schema selected; type \use &lt;schema&gt; to set one.
+ MySQL  localhost  JS &gt; </code></pre> 
+<h3 style="background-color:transparent;">3.3. 配置实例</h3> 
+<p>在其中一个主机上启动mysqlsh连接</p> 
+<pre><code class="language-bash">[root@mysql-rs-1 software]# mysqlsh root@mysql-rs-1:3306
+MySQL Shell 8.2.0
+​
+Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+Oracle is a registered trademark of Oracle Corporation and/or its affiliates.
+Other names may be trademarks of their respective owners.
+​
+Type '\help' or '\?' for help; '\quit' to exit.
+Creating a session to 'root@mysql-rs-1:3306'
+Fetching schema names for auto-completion... Press ^C to stop.
+Your MySQL connection id is 21
+Server version: 8.2.0 MySQL Community Server - GPL
+No default schema selected; type \use &lt;schema&gt; to set one.</code></pre> 
+<p>分别给root用户授权：</p> 
+<pre><code class="language-sql">GRANT CLONE_ADMIN, CONNECTION_ADMIN, CREATE USER, EXECUTE, FILE, GROUP_REPLICATION_ADMIN, PERSIST_RO_VARIABLES_ADMIN, PROCESS, RELOAD, REPLICATION CLIENT, REPLICATION SLAVE, REPLICATION_APPLIER, REPLICATION_SLAVE_ADMIN, ROLE_ADMIN, SELECT, SHUTDOWN, SYSTEM_VARIABLES_ADMIN ON *.* TO 'root'@'%' WITH GRANT OPTION;
+GRANT DELETE, INSERT, UPDATE ON mysql.* TO 'root'@'%' WITH GRANT OPTION;
+GRANT ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TEMPORARY TABLES, CREATE VIEW, DELETE, DROP, EVENT, EXECUTE, INDEX, INSERT, LOCK TABLES, REFERENCES, SHOW VIEW, TRIGGER, UPDATE ON mysql_innodb_cluster_metadata.* TO 'root'@'%' WITH GRANT OPTION;
+GRANT ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TEMPORARY TABLES, CREATE VIEW, DELETE, DROP, EVENT, EXECUTE, INDEX, INSERT, LOCK TABLES, REFERENCES, SHOW VIEW, TRIGGER, UPDATE ON mysql_innodb_cluster_metadata_bkp.* TO 'root'@'%' WITH GRANT OPTION;
+GRANT ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TEMPORARY TABLES, CREATE VIEW, DELETE, DROP, EVENT, EXECUTE, INDEX, INSERT, LOCK TABLES, REFERENCES, SHOW VIEW, TRIGGER, UPDATE ON mysql_innodb_cluster_metadata_previous.* TO 'root'@'%' WITH GRANT OPTION;</code></pre> 
+<p>在MySQL Shell中执行：</p> 
+<p>配置mysql-rs-1：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:3306 ssl  JS &gt; dba.configureReplicaSetInstance('root@mysql-rs-1:3306', {clusterAdmin: "rs_admin"})
+Configuring local MySQL instance listening at port 3306 for use in an InnoDB ReplicaSet...
+​
+This instance reports its own address as mysql-rs-1:3306
+Clients and other cluster members will communicate with it through this address by default. If this is not correct, the report_host MySQL system variable should be changed.
+Assuming full account name 'rs_admin'@'%' for rs_admin
+Password for new account: *********
+Confirm password: *********
+​
+applierWorkerThreads will be set to the default value of 4.
+​
+NOTE: Some configuration options need to be fixed:
++----------------------------------------+---------------+----------------+--------------------------------------------------+
+| Variable                               | Current Value | Required Value | Note                                             |
++----------------------------------------+---------------+----------------+--------------------------------------------------+
+| binlog_transaction_dependency_tracking | COMMIT_ORDER  | WRITESET       | Update the server variable                       |
+| enforce_gtid_consistency               | OFF           | ON             | Update read-only variable and restart the server |
+| gtid_mode                              | OFF           | ON             | Update read-only variable and restart the server |
+| server_id                              | 1             | &lt;unique ID&gt;    | Update read-only variable and restart the server |
++----------------------------------------+---------------+----------------+--------------------------------------------------+
+​
+Some variables need to be changed, but cannot be done dynamically on the server.
+Do you want to perform the required configuration changes? [y/n]: y
+Do you want to restart the instance after configuring it? [y/n]: y
+​
+Creating user rs_admin@%.
+Account rs_admin@% was successfully created.
+​
+Configuring instance...
+​
+WARNING: '@@binlog_transaction_dependency_tracking' is deprecated and will be removed in a future release. (Code 1287).
+The instance 'mysql-rs-1:3306' was configured to be used in an InnoDB ReplicaSet.
+Restarting MySQL...
+NOTE: MySQL server at mysql-rs-1:3306 was restarted.</code></pre> 
+<p>配置mysql-rs-2：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:3306 ssl  JS &gt; dba.configureReplicaSetInstance('root@mysql-rs-2:3306', {clusterAdmin: "rs_admin"})
+Please provide the password for 'root@mysql-rs-2:3306': *********
+Save password for 'root@mysql-rs-2:3306'? [Y]es/[N]o/Ne[v]er (default No): Y
+Configuring MySQL instance at mysql-rs-2:3306 for use in an InnoDB ReplicaSet...
+​
+This instance reports its own address as mysql-rs-2:3306
+Clients and other cluster members will communicate with it through this address by default. If this is not correct, the report_host MySQL system variable should be changed.
+Assuming full account name 'rs_admin'@'%' for rs_admin
+Password for new account: *********
+Confirm password: *********
+​
+applierWorkerThreads will be set to the default value of 4.
+​
+NOTE: Some configuration options need to be fixed:
++----------------------------------------+---------------+----------------+--------------------------------------------------+
+| Variable                               | Current Value | Required Value | Note                                             |
++----------------------------------------+---------------+----------------+--------------------------------------------------+
+| binlog_transaction_dependency_tracking | COMMIT_ORDER  | WRITESET       | Update the server variable                       |
+| enforce_gtid_consistency               | OFF           | ON             | Update read-only variable and restart the server |
+| gtid_mode                              | OFF           | ON             | Update read-only variable and restart the server |
+| server_id                              | 1             | &lt;unique ID&gt;    | Update read-only variable and restart the server |
++----------------------------------------+---------------+----------------+--------------------------------------------------+
+​
+Some variables need to be changed, but cannot be done dynamically on the server.
+Do you want to perform the required configuration changes? [y/n]: y
+Do you want to restart the instance after configuring it? [y/n]: y
+​
+Creating user rs_admin@%.
+Account rs_admin@% was successfully created.
+​
+Configuring instance...
+​
+WARNING: '@@binlog_transaction_dependency_tracking' is deprecated and will be removed in a future release. (Code 1287).
+The instance 'mysql-rs-2:3306' was configured to be used in an InnoDB ReplicaSet.
+Restarting MySQL...
+NOTE: MySQL server at mysql-rs-2:3306 was restarted.</code></pre> 
+<h3 style="background-color:transparent;">3.4. 创建ReplicationSet</h3> 
+<p>创建ReplicationSet，默认会将当前进入的实例为主库实例：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:3306 ssl  JS &gt; dba.createReplicaSet('ReplicaSet')
+A new replicaset with instance 'mysql-rs-1:3306' will be created.
+​
+* Checking MySQL instance at mysql-rs-1:3306
+​
+This instance reports its own address as mysql-rs-1:3306
+mysql-rs-1:3306: Instance configuration is suitable.
+​
+* Checking connectivity and SSL configuration...
+* Updating metadata...
+​
+ReplicaSet object successfully created for mysql-rs-1:3306.
+Use rs.addInstance() to add more asynchronously replicated instances to this replicaset and rs.status() to check its status.
+​
+&lt;ReplicaSet:ReplicaSet&gt; </code></pre> 
+<h3 style="background-color:transparent;">3.5. 将另一个实例加入到创建的 ReplicaSet</h3> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:3306 ssl  JS &gt; var rs = dba.getReplicaSet()
+ You are connected to a member of replicaset 'ReplicaSet'.
+ 
+ MySQL  mysql-rs-1:3306 ssl  JS &gt; rs.addInstance('mysql-rs-2:3306')
+Adding instance to the replicaset...
+​
+* Performing validation checks
+​
+This instance reports its own address as mysql-rs-2:3306
+mysql-rs-2:3306: Instance configuration is suitable.
+​
+* Checking async replication topology...
+​
+* Checking connectivity and SSL configuration...
+​
+* Checking transaction state of the instance...
+​
+NOTE: The target instance 'mysql-rs-2:3306' has not been pre-provisioned (GTID set is empty). The Shell is unable to decide whether replication can completely recover its state.
+The safest and most convenient way to provision a new instance is through automatic clone provisioning, which will completely overwrite the state of 'mysql-rs-2:3306' with a physical snapshot from an existing replicaset member. To use this method by default, set the 'recoveryMethod' option to 'clone'.
+​
+WARNING: It should be safe to rely on replication to incrementally recover the state of the new instance if you are sure all updates ever executed in the replicaset were done with GTIDs enabled, there are no purged transactions and the new instance contains the same GTID set as the replicaset or a subset of it. To use this method by default, set the 'recoveryMethod' option to 'incremental'.
+​
+​
+Please select a recovery method [C]lone/[I]ncremental recovery/[A]bort (default Clone): 
+* Updating topology
+Monitoring Clone based state recovery of the new member. Press ^C to abort the operation.
+Clone based state recovery is now in progress.
+​
+NOTE: A server restart is expected to happen as part of the clone process. If the
+server does not support the RESTART command or does not come back after a
+while, you may need to manually start it back.
+​
+* Waiting for clone to finish...
+NOTE: mysql-rs-2:3306 is being cloned from mysql-rs-1:3306
+** Stage DROP DATA: Completed
+** Clone Transfer  
+    FILE COPY  ############################################################  100%  Completed
+    PAGE COPY  ############################################################  100%  Completed
+    REDO COPY  ############################################################  100%  Completed
+* Clone process has finished: 76.80 MB transferred in about 1 second (~76.80 MB/s)
+​
+** Changing replication source of mysql-rs-2:3306 to mysql-rs-1:3306
+** Waiting for new instance to synchronize with PRIMARY...
+** Transactions replicated  ############################################################  100% 
+​
+The instance 'mysql-rs-2:3306' was added to the replicaset and is replicating from mysql-rs-1:3306.
+​
+* Waiting for instance 'mysql-rs-2:3306' to synchronize the Metadata updates with the PRIMARY...
+** Transactions replicated  ############################################################  100% </code></pre> 
+<h3 style="background-color:transparent;">3.6. 查看副本集状态</h3> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:3306 ssl  JS &gt; var rs = dba.getReplicaSet()
+You are connected to a member of replicaset 'ReplicaSet'.
+ MySQL  mysql-rs-1:3306 ssl  JS &gt; rs.status()
+{
+    "replicaSet": {
+        "name": "ReplicaSet", 
+        "primary": "mysql-rs-1:3306", 
+        "status": "AVAILABLE", 
+        "statusText": "All instances available.", 
+        "topology": {
+            "mysql-rs-1:3306": {
+                "address": "mysql-rs-1:3306", 
+                "instanceRole": "PRIMARY", 
+                "mode": "R/W", 
+                "status": "ONLINE"
+            }, 
+            "mysql-rs-2:3306": {
+                "address": "mysql-rs-2:3306", 
+                "instanceRole": "SECONDARY", 
+                "mode": "R/O", 
+                "replication": {
+                    "applierStatus": "APPLIED_ALL", 
+                    "applierThreadState": "Waiting for an event from Coordinator", 
+                    "applierWorkerThreads": 4, 
+                    "receiverStatus": "ON", 
+                    "receiverThreadState": "Waiting for source to send event", 
+                    "replicationLag": null, 
+                    "replicationSsl": "ECDHE-RSA-AES128-GCM-SHA256 TLSv1.2", 
+                    "replicationSslMode": "REQUIRED"
+                }, 
+                "status": "ONLINE"
+            }
+        }, 
+        "type": "ASYNC"
+    }
+}</code></pre> 
+<h3 style="background-color:transparent;">3.7. 配置MySQL Router</h3> 
+<pre><code class="language-bash"># 下载MySQL Router
+wget https://cdn.mysql.com//Downloads/MySQL-Router/mysql-router-community-8.2.0-1.el7.x86_64.rpm
+# 安装
+rpm -ivh mysql-router-community-8.2.0-1.el7.x86_64.rpm
+ MySQL  mysql-rs-1:3306 ssl  JS &gt; var rs = dba.getReplicaSet()
+You are connected to a member of replicaset 'ReplicaSet'.
+ MySQL  mysql-rs-1:3306 ssl  JS &gt; rs.setupRouterAccount('rs_router1')
+​
+Missing the password for new account rs_router1@%. Please provide one.
+Password for new account: *********
+Confirm password: *********
+​
+​
+Creating user rs_router1@%.
+Account rs_router1@% was successfully created.</code></pre> 
+<h3 style="background-color:transparent;">3.8. 引导启动MySQL Router</h3> 
+<pre><code class="language-bash">[root@mysql-rs-1 software]# mysqlrouter --bootstrap root@mysql-rs-1:3306 --user mysqlrouter
+Please enter MySQL password for root: 
+# Bootstrapping system MySQL Router 8.2.0 (MySQL Community - GPL) instance...
+​
+- Creating account(s) (only those that are needed, if any)
+- Verifying account (using it to run SQL queries that would be run by Router)
+- Storing account in keyring
+- Adjusting permissions of generated files
+- Creating configuration /etc/mysqlrouter/mysqlrouter.conf
+​
+Existing configuration backed up to '/etc/mysqlrouter/mysqlrouter.conf.bak'
+​
+# MySQL Router configured for the InnoDB ReplicaSet 'ReplicaSet'
+​
+After this MySQL Router has been started with the generated configuration
+​
+    $ /etc/init.d/mysqlrouter restart
+or
+    $ systemctl start mysqlrouter
+or
+    $ mysqlrouter -c /etc/mysqlrouter/mysqlrouter.conf
+​
+InnoDB ReplicaSet 'ReplicaSet' can be reached by connecting to:
+​
+## MySQL Classic protocol
+​
+- Read/Write Connections: localhost:6446
+- Read/Only Connections:  localhost:6447
+- Read/Write Split Connections: localhost:6450
+​
+## MySQL X protocol
+​
+- Read/Write Connections: localhost:6448
+- Read/Only Connections:  localhost:6449</code></pre> 
+<h3 style="background-color:transparent;">3.9. 读写分离验证</h3> 
+<p>检查ReplicaSet，可以看到主节点（读写）为mysql-rs-1:3306，从节点（只读）为mysql-rs-2:3306</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:3306 ssl  JS &gt; rs.status()
+{
+    "replicaSet": {
+        "name": "ReplicaSet", 
+        "primary": "mysql-rs-1:3306", 
+        "status": "AVAILABLE", 
+        "statusText": "All instances available.", 
+        "topology": {
+            "mysql-rs-1:3306": {
+                "address": "mysql-rs-1:3306", 
+                "instanceRole": "PRIMARY", 
+                "mode": "R/W", 
+                "status": "ONLINE"
+            }, 
+            "mysql-rs-2:3306": {
+                "address": "mysql-rs-2:3306", 
+                "instanceRole": "SECONDARY", 
+                "mode": "R/O", 
+                "replication": {
+                    "applierStatus": "APPLIED_ALL", 
+                    "applierThreadState": "Waiting for an event from Coordinator", 
+                    "applierWorkerThreads": 4, 
+                    "receiverStatus": "ON", 
+                    "receiverThreadState": "Waiting for source to send event", 
+                    "replicationLag": null, 
+                    "replicationSsl": "ECDHE-RSA-AES128-GCM-SHA256 TLSv1.2", 
+                    "replicationSslMode": "REQUIRED"
+                }, 
+                "status": "ONLINE"
+            }
+        }, 
+        "type": "ASYNC"
+    }
+}</code></pre> 
+<p>检查mysqlrouter，可以看到MySQL Router读写端口为6450</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:3306 ssl  JS &gt; rs.listRouters()
+{
+    "replicaSetName": "ReplicaSet", 
+    "routers": {
+        "mysql-rs-1::system": {
+            "hostname": "mysql-rs-1", 
+            "lastCheckIn": "2023-11-14 11:40:21", 
+            "roPort": "6447", 
+            "roXPort": "6449", 
+            "rwPort": "6446", 
+            "rwSplitPort": "6450", 
+            "rwXPort": "6448", 
+            "version": "8.2.0"
+        }
+    }
+}</code></pre> 
+<p>下面通过MySQL Router的读写端口6450连接mysql数据库：</p> 
+<pre><code class="language-bash">[root@mysql-rs-1 ~]# mysqlsh mysql://root@mysql-rs-1:6450 --sql
+MySQL Shell 8.2.0
+​
+Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+Oracle is a registered trademark of Oracle Corporation and/or its affiliates.
+Other names may be trademarks of their respective owners.
+​
+Type '\help' or '\?' for help; '\quit' to exit.
+Creating a Classic session to 'root@mysql-rs-1:6450'
+Fetching global names for auto-completion... Press ^C to stop.
+Your MySQL connection id is 0
+Server version: 8.2.0 MySQL Community Server - GPL
+No default schema selected; type \use &lt;schema&gt; to set one.
+ MySQL  mysql-rs-1:6450 ssl  SQL &gt; </code></pre> 
+<p>查询数据，发现当前节点为从节点：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:6450 ssl  SQL &gt; select @@hostname, @@port;
++------------+--------+
+| @@hostname | @@port |
++------------+--------+
+| mysql-rs-2 |   3306 |
++------------+--------+
+1 row in set (0.0035 sec)
+Statement ID: 13700</code></pre> 
+<p>开启事务，会自动切换到主节点：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:6450 ssl  SQL &gt; start transaction;
+Query OK, 0 rows affected (0.0031 sec)
+Statement ID: 20477
+ MySQL  mysql-rs-1:6450 ssl  ★  SQL &gt; select @@hostname, @@port;
++------------+--------+
+| @@hostname | @@port |
++------------+--------+
+| mysql-rs-1 |   3306 |
++------------+--------+
+1 row in set (0.0007 sec)
+Statement ID: 20563</code></pre> 
+<p>提交或者回滚事务后，自动切换到从节点：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:6450 ssl  ★  SQL &gt; rollback;
+Query OK, 0 rows affected (0.0006 sec)
+Statement ID: 21909
+ MySQL  mysql-rs-1:6450 ssl  SQL &gt; select @@hostname, @@port;
++------------+--------+
+| @@hostname | @@port |
++------------+--------+
+| mysql-rs-2 |   3306 |
++------------+--------+
+1 row in set (0.0020 sec)
+Statement ID: 15489</code></pre> 
+<p>只读事务中，也会切换到从节点：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:6450 ssl  SQL &gt; start transaction read only;
+Query OK, 0 rows affected (0.0029 sec)
+Statement ID: 16970
+ MySQL  mysql-rs-1:6450 ssl  ☆  SQL &gt; select @@hostname, @@port;
++------------+--------+
+| @@hostname | @@port |
++------------+--------+
+| mysql-rs-2 |   3306 |
++------------+--------+
+1 row in set (0.0010 sec)
+Statement ID: 16996</code></pre> 
+<p>用户还可以在会话中使用ROUTER SET access_mode=命令来定义应用要连接的实例类型：</p> 
+<pre><code class="language-bash"> MySQL  mysql-rs-1:6450 ssl  SQL &gt; router set access_mode='read_write';
+Query OK, 0 rows affected (0.0004 sec)
+ MySQL  mysql-rs-1:6450 ssl  -  SQL &gt; select @@hostname, @@port;
++------------+--------+
+| @@hostname | @@port |
++------------+--------+
+| mysql-rs-1 |   3306 |
++------------+--------+
+1 row in set (0.0017 sec)
+Statement ID: 25535
+ MySQL  mysql-rs-1:6450 ssl  SQL &gt; router set access_mode='read_only';
+Query OK, 0 rows affected (0.0006 sec)
+ MySQL  mysql-rs-1:6450 ssl  -  SQL &gt; select @@hostname, @@port;
++------------+--------+
+| @@hostname | @@port |
++------------+--------+
+| mysql-rs-2 |   3306 |
++------------+--------+
+1 row in set (0.0043 sec)
+Statement ID: 18508</code></pre> 
+<h2 style="background-color:transparent;">4. 总结</h2> 
+<p>总之，MySQL Router 8.2支持读写分离。这是一项有价值的功能，可以优化数据库性能和可扩展性，而无需在应用程序中进行任何更改。这种配置使您能够将所有读流量引导到只读实例，将所有写流量引导到读写实例。这不仅增强了用户的整体体验，还简化了数据库管理和部署。</p> 
+<p>读写实例是主实例或源实例。只读实例是副本（InnoDB集群的非主实例、ReplicaSet的非主实例或复制集群中的非主实例）。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/105a55132e5efe98c1b8d7dd176a4567/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">@Autowired 找不到Bean的问题</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/c12b299b45ac65fd7b0d909b11e5019f/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">读取dicom序列并存为nii文件</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

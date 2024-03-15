@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Spring解决循环依赖为什么需要三级缓存？ - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Spring解决循环依赖为什么需要三级缓存？" />
+<meta property="og:description" content="前言 什么是循环依赖呢？我们抛开Spring这个框架来聊下什么是循环依赖，循环依赖可能在我们平时的开发过程中是属于比较常见的。Spring容器最大的功能就是对bean的生命周期进行管理，每个bean在创建的过程中，需要得到一个完整的bean需要对bean的所有属性进行赋值，如果两个bean出现了相互依赖的情况，如果Spring没有处理循环依赖，那么出现的结果就是在bean的创建过程中出现相互依赖，导致这个bean永远无法创建出来，则就导致一直在相互创建，那么Spring是如何来解决循环依赖的呢？
+什么情况下会循环依赖 1.先看如下demo: B和A相互循环依赖
+@Component public class B { @Autowired private A a; } @Component public class A { @Autowired private B b; } 启动项目：结果没有报错。 2.加入异步逻辑修改 @Component public class A { @Autowired private B b; @Async public void test(){ } } @Component public class B { @Autowired private A a; } @EnableAsync public class App { public static void main(String[] args) { ApplicationContext ctx = new AnnotationConfigApplicationContext(App.class); } } 启动后 ：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/dc9d9a0c7eddbdc58da7d12308ccc647/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-02-23T10:03:14+08:00" />
+<meta property="article:modified_time" content="2023-02-23T10:03:14+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Spring解决循环依赖为什么需要三级缓存？</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div class="kdocs-document"> 
+ <h3 style="text-align:left;"><span class="kdocs-bold" style="font-weight:bold;">前言</span></h3> 
+ <p style="text-align:left;">什么是循环依赖呢？我们抛开Spring这个框架来聊下什么是循环依赖，循环依赖可能在我们平时的开发过程中是属于比较常见的。Spring容器最大的功能就是对bean的生命周期进行管理，每个bean在创建的过程中，需要得到一个完整的bean需要对bean的所有属性进行赋值，如果两个bean出现了相互依赖的情况，如果Spring没有处理循环依赖，那么出现的结果就是在bean的创建过程中出现相互依赖，导致这个bean永远无法创建出来，则就导致一直在相互创建，那么Spring是如何来解决循环依赖的呢？</p> 
+ <h3 style="text-align:left;"><span class="kdocs-bold" style="font-weight:bold;">什么情况下会循环依赖</span></h3> 
+ <p style="text-align:left;">1.先看如下demo: B和A相互循环依赖</p> 
+ <pre class="kdocs-css"><code class="language-css">@Component
+public class B {
+    @Autowired
+    private A a;
+}
+
+@Component
+public class A {
+    @Autowired
+    private B b;
+}</code></pre> 
+ <p style="">启动项目：结果没有报错。 </p> 
+ <p style=""> 2.加入异步逻辑修改 </p> 
+ <pre class="kdocs-css"><code class="language-css">@Component
+public class A {
+    @Autowired
+    private B b;
+   @Async
+    public void test(){
+
+    }
+}
+
+@Component
+public class B {
+    @Autowired
+    private A a;
+}
+@EnableAsync
+public class App {
+    public static void main(String[] args) {
+        ApplicationContext ctx = new AnnotationConfigApplicationContext(App.class);
+    }
+
+}</code></pre> 
+ <p style="">启动后 ：</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1508px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:9.416446%;height:0;"> 
+    <img src="https://images2.imgbox.com/e2/7e/wLO1iLB9_o.png" style="margin-left:;display:block;width:1508px;margin-top:-9.416446%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">解决方案：加入lazy注解</p> 
+ <pre class="kdocs-css"><code class="language-css">@Component
+public class B {
+    @Autowired
+    @Lazy
+    private A a;
+}
+@Component
+public class A {
+    @Autowired
+    private B b;
+   @Async
+    public void test(){
+
+    }
+}</code></pre> 
+ <p style="">启动后：没有异常</p> 
+ <p style=""> 上面发现使用@Async异步注解，循环依赖就会报错，有可能是因为有了@Async注解修饰的方法，其对应的类被代理了，那代理了就会报错么？我们继续尝试事务注解看看。 </p> 
+ <pre class="kdocs-css"><code class="language-css">@Component
+public class A {
+    @Autowired
+    private B b;
+    @Transactional
+    public void test(){
+
+    }
+}
+
+@Component
+public class B {
+    @Autowired
+    private A a;
+}
+@EnableTransactionManagement
+public class App {
+    public static void main(String[] args) {
+        ApplicationContext ctx = new AnnotationConfigApplicationContext(App.class);
+    }
+
+}</code></pre> 
+ <p style="text-align:left;">启动后：正常，没有报错。</p> 
+ <p style=""></p> 
+ <p style="text-align:left;">于是我们不经要问：</p> 
+ <ol start="1"><li style="margin-left:1.4em;list-style-type:decimal;text-indent:0;"><p>循环依赖本来不会报错，为何添加@Async异步注解后就会导致报错</p></li></ol> 
+ <ol start="2"><li style="margin-left:1.4em;list-style-type:decimal;text-indent:0;"><p>为何添加@Transactional注解就不会报错</p></li></ol> 
+ <ol start="3"><li style="margin-left:1.4em;list-style-type:decimal;text-indent:0;"><p>使用了@Async异步注解的循环依赖，为何可以使用@lazy注解解决</p></li></ol> 
+ <p style="text-align:left;">我们要想清楚上面的问题，就需要了解Bean的生命周期。</p> 
+ <h3 style="text-align:left;"><span class="kdocs-bold" style="font-weight:bold;">Bean的生命周期</span></h3> 
+ <p style="">一个简单的Bean生命周期如下： </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:723px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:47.441216%;height:0;"> 
+    <img src="https://images2.imgbox.com/ee/17/WCQXNZ5J_o.png" style="margin-left:;display:block;width:723px;margin-top:-47.441216%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style=""></p> 
+ <p style="">问题出现就属性赋值这里： </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:747px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:51.807228%;height:0;"> 
+    <img src="https://images2.imgbox.com/61/df/HdhcEGpB_o.png" style="margin-left:;display:block;width:747px;margin-top:-51.807228%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">由图：我们知道，当B也依赖A时，需要去容器中找到A，A已经实例化了，只是还没属性赋值，所以，不应该再实例化，解决方案：在A创建的实例化后，用一个map存起来A来不就行了么？于是有了二级缓存 </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:723px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:62.79391%;height:0;"> 
+    <img src="https://images2.imgbox.com/34/f5/52WCrU5s_o.png" style="margin-left:;display:block;width:723px;margin-top:-62.79391%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="text-align:left;">似乎上面已经可以解决循环依赖了，但细想一下我们会发现问题：</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:727px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:65.47455%;height:0;"> 
+    <img src="https://images2.imgbox.com/9b/91/sB7pTg2p_o.png" style="margin-left:;display:block;width:727px;margin-top:-65.47455%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">通过上面的逻辑，我们发现了问题所在，B赋值属性A时，如果从Map中直接获取，那么得到的是原生对象，如果后续A没有被代理，一切没问题，如果A被代理了，那么B得到的对象就不对了，怎么解决，如果我们将aop提前是不是解决了问题。 </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:728px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:56.18132%;height:0;"> 
+    <img src="https://images2.imgbox.com/80/df/cZ3rQQ6n_o.png" style="margin-left:;display:block;width:728px;margin-top:-56.18132%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:740px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:55.67568%;height:0;"> 
+    <img src="https://images2.imgbox.com/22/07/pdVd4MUY_o.png" style="margin-left:;display:block;width:740px;margin-top:-55.67568%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="text-align:left;">由于A对象的Aop方式提前了，那么B依赖的A就是代理对象了，A对象执行赋值后，后续到Aop这一步，会判断是否已经AOP过了，是的话就不会再Aop了，问题来了:如果C也跟A相互依赖，难道C去依赖A时，也要通过ObjectFactory获取A的代理对象么？如果是这样，A就存在2个代理对象了，A是单例的，因此这样不行，于是产生了一个新的缓存，我们称之为三级缓存。</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:743px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:55.181698%;height:0;"> 
+    <img src="https://images2.imgbox.com/b2/d1/gC08HdIc_o.png" style="margin-left:;display:block;width:743px;margin-top:-55.181698%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">于是，spring似乎完美解决了循环依赖问题？但为何使用@Async进行异步代理，会报错？ </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:745px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:56.6443%;height:0;"> 
+    <img src="https://images2.imgbox.com/8d/7e/nxnCfEyf_o.png" style="margin-left:;display:block;width:745px;margin-top:-56.6443%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">我们看看报错的原因就知道： </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1019px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:12.266928%;height:0;"> 
+    <img src="https://images2.imgbox.com/f0/28/fvVkd8XP_o.png" style="margin-left:;display:block;width:1019px;margin-top:-12.266928%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">那为何@Transactional修饰就没问题呢？</span></p> 
+ <p style="">原因是因为：ObjectFactory.getObject()方法可以产生代理对象 </p> 
+ <p style=""> <span class="kdocs-bold" style="font-weight:bold;">为何使用@lazy注解修饰就能解决问题呢？</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:738px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:65.718155%;height:0;"> 
+    <img src="https://images2.imgbox.com/52/a7/jPQ7bNgN_o.png" style="margin-left:;display:block;width:738px;margin-top:-65.718155%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">我们看看源码： </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:738px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:45.12195%;height:0;"> 
+    <img src="https://images2.imgbox.com/44/c8/NbGWrvG1_o.png" style="margin-left:;display:block;width:738px;margin-top:-45.12195%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:738px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:78.59078%;height:0;"> 
+    <img src="https://images2.imgbox.com/8d/65/BBkQnu99_o.png" style="margin-left:;display:block;width:738px;margin-top:-78.59078%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:736px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:55.978264%;height:0;"> 
+    <img src="https://images2.imgbox.com/7d/2d/pAi7MJRv_o.png" style="margin-left:;display:block;width:736px;margin-top:-55.978264%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:740px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:56.08108%;height:0;"> 
+    <img src="https://images2.imgbox.com/a8/02/DLe5WM7F_o.png" style="margin-left:;display:block;width:740px;margin-top:-56.08108%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:742px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:42.183285%;height:0;"> 
+    <img src="https://images2.imgbox.com/37/c6/KdvaLNjb_o.png" style="margin-left:;display:block;width:742px;margin-top:-42.183285%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="text-align:left;">从源码来看，为何@Aync注解修饰，不能在ObjectFactory.getObject()方法实现代理对象：</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:742px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:15.22911%;height:0;"> 
+    <img src="https://images2.imgbox.com/38/3b/XRjCK4ul_o.png" style="margin-left:;display:block;width:742px;margin-top:-15.22911%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:739px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:34.776726%;height:0;"> 
+    <img src="https://images2.imgbox.com/38/cc/Kfknl3WH_o.png" style="margin-left:;display:block;width:739px;margin-top:-34.776726%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:742px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:45.552563%;height:0;"> 
+    <img src="https://images2.imgbox.com/54/3a/PLDIQJ7e_o.png" style="margin-left:;display:block;width:742px;margin-top:-45.552563%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="text-align:left;">而@Tranctional注解相关的处理器</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:739px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:35.317997%;height:0;"> 
+    <img src="https://images2.imgbox.com/26/3b/vgC8xORL_o.png" style="margin-left:;display:block;width:739px;margin-top:-35.317997%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:729px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:42.112484%;height:0;"> 
+    <img src="https://images2.imgbox.com/31/ad/mD2Hi3gK_o.png" style="margin-left:;display:block;width:729px;margin-top:-42.112484%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:737px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:43.147896%;height:0;"> 
+    <img src="https://images2.imgbox.com/e3/f0/YZ2Vtjbe_o.png" style="margin-left:;display:block;width:737px;margin-top:-43.147896%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">那么问题？如果A已经在getObject()方法后产生了代理类，后续init（）方法后，还会执行代理么？答案是不会了，因为： </p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:742px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:21.02426%;height:0;"> 
+    <img src="https://images2.imgbox.com/9f/01/XuMeTerg_o.png" style="margin-left:;display:block;width:742px;margin-top:-21.02426%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:741px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:29.014843%;height:0;"> 
+    <img src="https://images2.imgbox.com/34/99/qB3urq5D_o.png" style="margin-left:;display:block;width:741px;margin-top:-29.014843%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <h3 style="text-align:left;"><span class="kdocs-bold" style="font-weight:bold;">总结</span></h3> 
+ <p style="text-align:left;"><span class="kdocs-bold" style="font-weight:bold;">1、三级缓存各自的作用</span></p> 
+ <p style="text-align:left;">第一级缓存存的是对外暴露的对象，也就是我们应用需要用到的</p> 
+ <p style="text-align:left;">第二级缓存的作用是为了处理循环依赖的对象创建问题，里面存的是半成品对象或半成品对象的代理对象</p> 
+ <p style="text-align:left;">第三级缓存的作用处理存在 AOP + 循环依赖的对象创建问题，能将代理对象提前创建</p> 
+ <p style="text-align:left;"><span class="kdocs-bold" style="font-weight:bold;">2、Spring 为什么要引入第三级缓存</span></p> 
+ <p style="text-align:left;">严格来讲，第三级缓存并非缺它不可，因为可以提前创建代理对象</p> 
+ <p style="text-align:left;">提前创建代理对象只是会节省那么一丢丢内存空间，并不会带来性能上的提升，但是会破环 Spring 的设计原则</p> 
+ <p style="text-align:left;">Spring 的设计原则是尽可能保证普通对象创建完成之后，再生成其 AOP 代理（尽可能延迟代理对象的生成）</p> 
+ <p style="text-align:left;">所以 Spring 用了第三级缓存，既维持了设计原则，又处理了循环依赖；牺牲那么一丢丢内存空间是愿意接受的</p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/ae6a6ba59e899829e5baa1ad89240822/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">0303泰勒公式-微分中值定理与导数的应用</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e18f1e60a34ab7dfab8edc8dae0e6d68/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">springboot：如何扩展springmvc的配置</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

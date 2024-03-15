@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>linux逻辑卷/dev/mapper/centos-root扩容增加空间 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="linux逻辑卷/dev/mapper/centos-root扩容增加空间" />
+<meta property="og:description" content=" centos7中/dev/mapper/centos-root扩容 问题文件系统根目录，/dev/mapper/centos-root空间满了，导致k8s不停重启 1.查看磁盘情况 df -h #查看最大占用目录 du -h -x --max-depth=1 2.查看磁盘信息 fdisk -l 3.查看磁盘分区层级 lsblk 可见剩余空闲60G空间未被分配
+4.新建分区 在/dev/sda磁盘上使用剩余空间新建分区
+fdisk /dev/sda 新建分区：输入“n”，回车；（n：新建分区）
+主分区：不用输入，回车；（p：主分区）
+设置分区号：不用输入，回车；（t：设置分区号）
+设置扇区：下面几个选项不用输入，直接回车；
+保存修改：输入“w”，回车；（w：保存修改）
+5.刷新分区信息 #方式一：重启机器 reboot #方式二：直接命令刷新(未尝试) partprobe partprobe是一个Linux下的命令，它可以在不重启系统的情况下，通知操作系统重新加载分区表。有时候在分区之后，内核仍然使用的是旧的分区表和分区信息。
+6.查看新分区是否出现 lsblk 7.通过LVM工具创建物理卷 #创建物理卷 pvcreate /dev/sda3 #查看物理卷属性 pvdisplay 将物理硬盘分区初始化为物理卷，以便LVM使用
+8.添加物理卷到逻辑卷组centos vgextend centos /dev/sda3 扩展逻辑卷组的存储空间，使其能够容纳更多的物理卷。
+9.查看逻辑卷组属性 vgdisplay 10.逻辑卷扩容 lvextend -l &#43;100%FREE /dev/mapper/centos-root 将逻辑卷 /dev/mapper/centos-root 扩展到卷组中所有可用空闲空间的大小
+11.对root文件系统执行扩容 xfs_growfs /dev/mapper/centos-root 同步到文件系统 之前只是对逻辑卷扩容，还要同步到文件系统，实现对根目录的扩容
+将逻辑卷上的文件系统扩展到卷组中新增的物理卷的空间范围内，以便更有效地利用存储空间
+12.查看扩容结果 df -h " />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/978a9862ea66a5e62673f285e4687d54/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-23T14:19:22+08:00" />
+<meta property="article:modified_time" content="2024-02-23T14:19:22+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">linux逻辑卷/dev/mapper/centos-root扩容增加空间</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="centos7devmappercentosroot_0"></a>centos7中/dev/mapper/centos-root扩容</h2> 
+<h3><a id="devmappercentosrootk8s_1"></a>问题文件系统根目录，/dev/mapper/centos-root空间满了，导致k8s不停重启</h3> 
+<h3><a id="1_2"></a>1.查看磁盘情况</h3> 
+<pre><code class="prism language-bash"><span class="token function">df</span> <span class="token parameter variable">-h</span>
+<span class="token comment">#查看最大占用目录</span>
+<span class="token function">du</span> <span class="token parameter variable">-h</span> <span class="token parameter variable">-x</span> --max-depth<span class="token operator">=</span><span class="token number">1</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/86/28/BUF197IA_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="2_10"></a>2.查看磁盘信息</h3> 
+<pre><code class="prism language-bash"><span class="token function">fdisk</span> <span class="token parameter variable">-l</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/93/d0/bao5bMhm_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="3_15"></a>3.查看磁盘分区层级</h3> 
+<pre><code class="prism language-bash">lsblk
+</code></pre> 
+<p><img src="https://images2.imgbox.com/f7/4c/Vu6r8kSZ_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>可见剩余空闲60G空间未被分配</p> 
+</blockquote> 
+<h3><a id="4_21"></a>4.新建分区</h3> 
+<p>在/dev/sda磁盘上使用剩余空间新建分区</p> 
+<pre><code class="prism language-bash"><span class="token function">fdisk</span> /dev/sda
+</code></pre> 
+<p>新建分区：输入“n”，回车；（n：新建分区）</p> 
+<p>主分区：不用输入，回车；（p：主分区）</p> 
+<p>设置分区号：不用输入，回车；（t：设置分区号）</p> 
+<p>设置扇区：下面几个选项不用输入，直接回车；</p> 
+<p>保存修改：输入“w”，回车；（w：保存修改）<br> <img src="https://images2.imgbox.com/3a/04/OkR7G8Ae_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="5_36"></a>5.刷新分区信息</h3> 
+<pre><code class="prism language-bash"><span class="token comment">#方式一：重启机器</span>
+<span class="token function">reboot</span>
+
+<span class="token comment">#方式二：直接命令刷新(未尝试)</span>
+partprobe
+</code></pre> 
+<blockquote> 
+ <p>partprobe是一个Linux下的命令，它可以在不重启系统的情况下，通知操作系统重新加载分区表。有时候在分区之后，内核仍然使用的是旧的分区表和分区信息。</p> 
+</blockquote> 
+<h3><a id="6_45"></a>6.查看新分区是否出现</h3> 
+<pre><code class="prism language-bash">lsblk
+</code></pre> 
+<h3><a id="7LVM_49"></a>7.通过LVM工具创建物理卷</h3> 
+<pre><code class="prism language-bash"><span class="token comment">#创建物理卷</span>
+pvcreate /dev/sda3
+<span class="token comment">#查看物理卷属性</span>
+pvdisplay
+</code></pre> 
+<blockquote> 
+ <p>将物理硬盘分区初始化为物理卷，以便LVM使用</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/42/11/579YYxri_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="8centos_59"></a>8.添加物理卷到逻辑卷组centos</h3> 
+<pre><code class="prism language-bash">vgextend centos /dev/sda3
+</code></pre> 
+<blockquote> 
+ <p>扩展逻辑卷组的存储空间，使其能够容纳更多的物理卷。</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/94/a4/4rIeUXRK_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="9_67"></a>9.查看逻辑卷组属性</h3> 
+<pre><code class="prism language-bash">vgdisplay
+</code></pre> 
+<p><img src="https://images2.imgbox.com/80/b3/PD6YnRGC_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="10_72"></a>10.逻辑卷扩容</h3> 
+<pre><code class="prism language-bash">lvextend <span class="token parameter variable">-l</span> +100%FREE /dev/mapper/centos-root
+</code></pre> 
+<blockquote> 
+ <p>将逻辑卷 /dev/mapper/centos-root 扩展到卷组中所有可用空闲空间的大小</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/c2/0a/I5oPxKl2_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="11root_79"></a>11.对root文件系统执行扩容</h3> 
+<pre><code class="prism language-bash">xfs_growfs /dev/mapper/centos-root
+</code></pre> 
+<blockquote> 
+ <p>同步到文件系统 之前只是对逻辑卷扩容，还要同步到文件系统，实现对根目录的扩容</p> 
+</blockquote> 
+<blockquote> 
+ <p>将逻辑卷上的文件系统扩展到卷组中新增的物理卷的空间范围内，以便更有效地利用存储空间</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/8c/27/j6cpY1ZV_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="12_88"></a>12.查看扩容结果</h3> 
+<pre><code class="prism language-bash"><span class="token function">df</span> <span class="token parameter variable">-h</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/37/95/ZUPmNvYK_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/b03abe763b823a25dbc14a4f35a831c1/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【嵌入式——QT】字符串</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/9cb7917aa5936e5668a26fa7d3a7c2f1/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【算法分析与设计】1的个数</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

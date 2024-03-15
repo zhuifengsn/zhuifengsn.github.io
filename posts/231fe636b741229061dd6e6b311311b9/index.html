@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux地址空间 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux地址空间" />
+<meta property="og:description" content="Linux地址空间 进程地址空间进程地址空间是内存地址吗？ 什么是地址空间地址空间提出的原因？地址空间是怎么工作的？接下来深刻理解一下什么是进程地址空间的三种映射页表映射段表映射段页式内存管理 进程地址空间 进程地址空间是内存地址吗？ #include&lt;iostream&gt; #include&lt;unistd.h&gt; using namespace std; int g_val=100; int main() { cout&lt;&lt;&#34;this is my process&#34;&lt;&lt;endl; pid_t pd=fork(); if(pd&lt;0) { cerr&lt;&lt;&#34;failed&#34;&lt;&lt;endl; } else if(pd==0) { g_val=1000; cout&lt;&lt;&#34;i am son&#34;&lt;&lt;&#34;my val is&#34;&lt;&lt;g_val&lt;&lt;&#34; my address &#34;&lt;&lt;&amp;g_val&lt;&lt;endl; } else { sleep(2); cout&lt;&lt;&#34;i am father&#34;&lt;&lt;&#34;my val is&#34;&lt;&lt;g_val&lt;&lt;&#34; my address &#34;&lt;&lt;&amp;g_val&lt;&lt;endl; } return 0; } 实验结果：
+结论：地址空间绝对不是数据存储的真实物理地址。它是一段虚拟地址。最终一定要以某种方式转化为物理地址。
+由此可知，我们在任何情况下打印出来的地址都是虚拟地址，而不是其真实物理地址。
+什么是地址空间 地址空间就是一个结构体，通过结构体将我们所虚拟化出的栈、堆、数据段、代码段等组织起来的一个结构体
+其中进程的PCB中含有该结构体(mm_struct),因为内存的分配是离散分配的，所以我们不得不让该结构体将数据组织起来。
+解释一下：为什么两个不一样的数据其地址是相同的？
+1.因为子进程要拷贝父进程的PCB，所以它们是相同的。
+2.因为子进程在执行时对全局变量g_val进行了修改，此时它们虽然看起来地址是一样的，但在物理内存中，一定存在额外的物理地址去存储子进程的数据。这是进程独立性的特点。
+接下来回答一下到底什么是地址空间：
+地址空间，是对物理内存的一段虚拟化表示，虚拟地址一定要通过某种映射关系将其转化为物理地址。 通常有页表、段表、段页式结合，来将其变为物理内存的地址，后面阐述。
+地址空间提出的原因？ 如果没有地址空间的话，我们访问的永远都是真实的物理地址，会有两个弊端。
+1,保护内存。如果直接对物理内存进行操作的话，则有可能会对操作范围之外的数据进行错误的操作，比如野指针等概念。
+2.数据在内存中的存储是离散分配的，如果采用直接访存的话，非常的不方便，增加了越界访存的概率。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/231fe636b741229061dd6e6b311311b9/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-06-20T14:02:56+08:00" />
+<meta property="article:modified_time" content="2021-06-20T14:02:56+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux地址空间</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>Linux地址空间</h4> 
+ <ul><li><a href="#_1" rel="nofollow">进程地址空间</a></li><li><ul><li><a href="#_3" rel="nofollow">进程地址空间是内存地址吗？</a></li></ul> 
+  </li><li><a href="#_37" rel="nofollow">什么是地址空间</a></li><li><a href="#_49" rel="nofollow">地址空间提出的原因？</a></li><li><a href="#_53" rel="nofollow">地址空间是怎么工作的？</a></li><li><a href="#_217" rel="nofollow">接下来深刻理解一下什么是进程</a></li><li><a href="#_219" rel="nofollow">地址空间的三种映射</a></li><li><ul><li><a href="#_220" rel="nofollow">页表映射</a></li><li><a href="#_234" rel="nofollow">段表映射</a></li><li><a href="#_251" rel="nofollow">段页式内存管理</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_1"></a>进程地址空间</h2> 
+<p><img src="https://images2.imgbox.com/20/71/Xy3Dv1wU_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_3"></a>进程地址空间是内存地址吗？</h3> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span><span class="token string">&lt;iostream&gt;</span></span>
+ <span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span><span class="token string">&lt;unistd.h&gt;</span></span>
+<span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+<span class="token keyword">int</span> g_val<span class="token operator">=</span><span class="token number">100</span><span class="token punctuation">;</span>
+ <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+       cout<span class="token operator">&lt;&lt;</span><span class="token string">"this is my process"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+       pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+       <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+      <span class="token punctuation">{<!-- --></span>
+          cerr<span class="token operator">&lt;&lt;</span><span class="token string">"failed"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+     <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+     <span class="token punctuation">{<!-- --></span>
+         g_val<span class="token operator">=</span><span class="token number">1000</span><span class="token punctuation">;</span>
+        cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am son"</span><span class="token operator">&lt;&lt;</span><span class="token string">"my val is"</span><span class="token operator">&lt;&lt;</span>g_val<span class="token operator">&lt;&lt;</span><span class="token string">" my address "</span><span class="token operator">&lt;&lt;</span><span class="token operator">&amp;</span>g_val<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+     <span class="token keyword">else</span>
+      <span class="token punctuation">{<!-- --></span>
+          <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+          cout<span class="token operator">&lt;&lt;</span><span class="token string">"i am father"</span><span class="token operator">&lt;&lt;</span><span class="token string">"my val is"</span><span class="token operator">&lt;&lt;</span>g_val<span class="token operator">&lt;&lt;</span><span class="token string">" my address "</span><span class="token operator">&lt;&lt;</span><span class="token operator">&amp;</span>g_val<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+      <span class="token punctuation">}</span>
+      <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>                                                                                                                                                                         
+  <span class="token punctuation">}</span>
+
+</code></pre> 
+<p>实验结果：</p> 
+<p><img src="https://images2.imgbox.com/1a/56/JC03xtVC_o.png" alt="在这里插入图片描述"><br> 结论：<strong>地址空间绝对不是数据存储的真实物理地址。它是一段虚拟地址。最终一定要以某种方式转化为物理地址。</strong><br> <strong>由此可知，我们在任何情况下打印出来的地址都是虚拟地址，而不是其真实物理地址。</strong></p> 
+<h2><a id="_37"></a>什么是地址空间</h2> 
+<p><img src="https://images2.imgbox.com/f3/32/ijYjeT29_o.png" alt="在这里插入图片描述"><br> 地址空间就是一个结构体，<strong>通过结构体将我们所虚拟化出的栈、堆、数据段、代码段等组织起来的一个结构体</strong></p> 
+<p><strong>其中进程的PCB中含有该结构体(mm_struct),因为内存的分配是离散分配的，所以我们不得不让该结构体将数据组织起来。</strong><br> 解释一下：为什么两个不一样的数据其地址是相同的？<br> 1.因为子进程要拷贝父进程的PCB，所以它们是相同的。<br> 2.因为子进程在执行时对全局变量g_val进行了修改，此时它们虽然看起来地址是一样的，但在物理内存中，一定存在额外的物理地址去存储子进程的数据。这是进程独立性的特点。<br> 接下来回答一下到底什么是地址空间：<br> <strong>地址空间，是对物理内存的一段虚拟化表示，虚拟地址一定要通过某种映射关系将其转化为物理地址。</strong> 通常有页表、段表、段页式结合，来将其变为物理内存的地址，后面阐述。</p> 
+<h2><a id="_49"></a>地址空间提出的原因？</h2> 
+<p>如果没有地址空间的话，我们访问的永远都是真实的物理地址，会有两个弊端。<br> 1,<strong>保护内存。如果直接对物理内存进行操作的话，则有可能会对操作范围之外的数据进行错误的操作，比如野指针等概念。</strong><br> 2.<strong>数据在内存中的存储是离散分配的，如果采用直接访存的话，非常的不方便，增加了越界访存的概率。</strong></p> 
+<h2><a id="_53"></a>地址空间是怎么工作的？</h2> 
+<p>地址空间，利用虚拟内存将空间连续化处理了。<br> 地址空间的描述：<br> 通过mm_struct结构体组织出来</p> 
+<pre><code class="prism language-cpp"><span class="token keyword">struct</span> <span class="token class-name">mm_struct</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">//指向线性区对象的链表头</span>
+    <span class="token keyword">struct</span> <span class="token class-name">vm_area_struct</span> <span class="token operator">*</span> mmap<span class="token punctuation">;</span>       <span class="token comment">/* list of VMAs */</span>
+    <span class="token comment">//指向线性区对象的红黑树</span>
+    <span class="token keyword">struct</span> <span class="token class-name">rb_root</span> mm_rb<span class="token punctuation">;</span>
+    <span class="token comment">//指向最近找到的虚拟区间</span>
+    <span class="token keyword">struct</span> <span class="token class-name">vm_area_struct</span> <span class="token operator">*</span> mmap_cache<span class="token punctuation">;</span> <span class="token comment">/* last find_vma result */</span>
+
+    <span class="token comment">//用来在进程地址空间中搜索有效的进程地址空间的函数</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> <span class="token punctuation">(</span><span class="token operator">*</span>get_unmapped_area<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">file</span> <span class="token operator">*</span>filp<span class="token punctuation">,</span>
+                <span class="token keyword">unsigned</span> <span class="token keyword">long</span> addr<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">long</span> len<span class="token punctuation">,</span>
+                <span class="token keyword">unsigned</span> <span class="token keyword">long</span> pgoff<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">long</span> flags<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+       <span class="token keyword">unsigned</span> <span class="token keyword">long</span> <span class="token punctuation">(</span><span class="token operator">*</span>get_unmapped_exec_area<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">file</span> <span class="token operator">*</span>filp<span class="token punctuation">,</span>
+                <span class="token keyword">unsigned</span> <span class="token keyword">long</span> addr<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">long</span> len<span class="token punctuation">,</span>
+                <span class="token keyword">unsigned</span> <span class="token keyword">long</span> pgoff<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">long</span> flags<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">//释放线性区时调用的方法，          </span>
+    <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>unmap_area<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">mm_struct</span> <span class="token operator">*</span>mm<span class="token punctuation">,</span> <span class="token keyword">unsigned</span> <span class="token keyword">long</span> addr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">//标识第一个分配文件内存映射的线性地址</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> mmap_base<span class="token punctuation">;</span>        <span class="token comment">/* base of mmap area */</span>
+
+
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> task_size<span class="token punctuation">;</span>        <span class="token comment">/* size of task vm space */</span>
+    <span class="token comment">/*
+     * RHEL6 special for bug 790921: this same variable can mean
+     * two different things. If sysctl_unmap_area_factor is zero,
+     * this means the largest hole below free_area_cache. If the
+     * sysctl is set to a positive value, this variable is used
+     * to count how much memory has been munmapped from this process
+     * since the last time free_area_cache was reset back to mmap_base.
+     * This is ugly, but necessary to preserve kABI.
+     */</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> cached_hole_size<span class="token punctuation">;</span>
+
+    <span class="token comment">//内核进程搜索进程地址空间中线性地址的空间空间</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> free_area_cache<span class="token punctuation">;</span>      <span class="token comment">/* first hole of size cached_hole_size or larger */</span>
+
+    <span class="token comment">//指向页表的目录</span>
+    pgd_t <span class="token operator">*</span> pgd<span class="token punctuation">;</span>
+
+    <span class="token comment">//共享进程时的个数</span>
+    atomic_t mm_users<span class="token punctuation">;</span>          <span class="token comment">/* How many users with user space? */</span>
+
+    <span class="token comment">//内存描述符的主使用计数器，采用引用计数的原理，当为0时代表无用户再次使用</span>
+    atomic_t mm_count<span class="token punctuation">;</span>          <span class="token comment">/* How many references to "struct mm_struct" (users count as 1) */</span>
+
+    <span class="token comment">//线性区的个数</span>
+    <span class="token keyword">int</span> map_count<span class="token punctuation">;</span>              <span class="token comment">/* number of VMAs */</span>
+
+    <span class="token keyword">struct</span> <span class="token class-name">rw_semaphore</span> mmap_sem<span class="token punctuation">;</span>
+
+    <span class="token comment">//保护任务页表和引用计数的锁</span>
+    spinlock_t page_table_lock<span class="token punctuation">;</span>     <span class="token comment">/* Protects page tables and some counters */</span>
+
+    <span class="token comment">//mm_struct结构，第一个成员就是初始化的mm_struct结构，</span>
+    <span class="token keyword">struct</span> <span class="token class-name">list_head</span> mmlist<span class="token punctuation">;</span>        <span class="token comment">/* List of maybe swapped mm's.  These are globally strung
+                         * together off init_mm.mmlist, and are protected
+                         * by mmlist_lock
+                         */</span>
+
+    <span class="token comment">/* Special counters, in some configurations protected by the
+     * page_table_lock, in other configurations by being atomic.
+     */</span>
+
+    mm_counter_t _file_rss<span class="token punctuation">;</span>
+    mm_counter_t _anon_rss<span class="token punctuation">;</span>
+    mm_counter_t _swap_usage<span class="token punctuation">;</span>
+
+    <span class="token comment">//进程拥有的最大页表数目</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> hiwater_rss<span class="token punctuation">;</span>  <span class="token comment">/* High-watermark of RSS usage */</span>、
+    <span class="token comment">//进程线性区的最大页表数目</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> hiwater_vm<span class="token punctuation">;</span>   <span class="token comment">/* High-water virtual memory usage */</span>
+
+    <span class="token comment">//进程地址空间的大小，锁住无法换页的个数，共享文件内存映射的页数，可执行内存映射中的页数</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> total_vm<span class="token punctuation">,</span> locked_vm<span class="token punctuation">,</span> shared_vm<span class="token punctuation">,</span> exec_vm<span class="token punctuation">;</span>
+    <span class="token comment">//用户态堆栈的页数，</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> stack_vm<span class="token punctuation">,</span> reserved_vm<span class="token punctuation">,</span> def_flags<span class="token punctuation">,</span> nr_ptes<span class="token punctuation">;</span>
+    <span class="token comment">//维护代码段和数据段</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> start_code<span class="token punctuation">,</span> end_code<span class="token punctuation">,</span> start_data<span class="token punctuation">,</span> end_data<span class="token punctuation">;</span>
+    <span class="token comment">//维护堆和栈</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> start_brk<span class="token punctuation">,</span> brk<span class="token punctuation">,</span> start_stack<span class="token punctuation">;</span>
+    <span class="token comment">//维护命令行参数，命令行参数的起始地址和最后地址，以及环境变量的起始地址和最后地址</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> arg_start<span class="token punctuation">,</span> arg_end<span class="token punctuation">,</span> env_start<span class="token punctuation">,</span> env_end<span class="token punctuation">;</span>
+
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> saved_auxv<span class="token punctuation">[</span>AT_VECTOR_SIZE<span class="token punctuation">]</span><span class="token punctuation">;</span> <span class="token comment">/* for /proc/PID/auxv */</span>
+
+    <span class="token keyword">struct</span> <span class="token class-name">linux_binfmt</span> <span class="token operator">*</span>binfmt<span class="token punctuation">;</span>
+
+    cpumask_t cpu_vm_mask<span class="token punctuation">;</span>
+
+    <span class="token comment">/* Architecture-specific MM context */</span>
+    mm_context_t context<span class="token punctuation">;</span>
+
+    <span class="token comment">/* Swap token stuff */</span>
+    <span class="token comment">/*
+     * Last value of global fault stamp as seen by this process.
+     * In other words, this value gives an indication of how long
+     * it has been since this task got the token.
+     * Look at mm/thrash.c
+     */</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">int</span> faultstamp<span class="token punctuation">;</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">int</span> token_priority<span class="token punctuation">;</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">int</span> last_interval<span class="token punctuation">;</span>
+
+    <span class="token comment">//线性区的默认访问标志</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> flags<span class="token punctuation">;</span> <span class="token comment">/* Must use atomic bitops to access the bits */</span>
+
+    <span class="token keyword">struct</span> <span class="token class-name">core_state</span> <span class="token operator">*</span>core_state<span class="token punctuation">;</span> <span class="token comment">/* coredumping support */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">CONFIG_AIO</span></span>
+    spinlock_t      ioctx_lock<span class="token punctuation">;</span>
+    <span class="token keyword">struct</span> <span class="token class-name">hlist_head</span>   ioctx_list<span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">CONFIG_MM_OWNER</span></span>
+    <span class="token comment">/*
+     * "owner" points to a task that is regarded as the canonical
+     * user/owner of this mm. All of the following must be true in
+     * order for it to be changed:
+     *
+     * current == mm-&gt;owner
+     * current-&gt;mm != mm
+     * new_owner-&gt;mm == mm
+     * new_owner-&gt;alloc_lock is held
+     */</span>
+    <span class="token keyword">struct</span> <span class="token class-name">task_struct</span> <span class="token operator">*</span>owner<span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">CONFIG_PROC_FS</span></span>
+    <span class="token comment">/* store ref to file /proc/&lt;pid&gt;/exe symlink points to */</span>
+    <span class="token keyword">struct</span> <span class="token class-name">file</span> <span class="token operator">*</span>exe_file<span class="token punctuation">;</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> num_exe_file_vmas<span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">CONFIG_MMU_NOTIFIER</span></span>
+    <span class="token keyword">struct</span> <span class="token class-name">mmu_notifier_mm</span> <span class="token operator">*</span>mmu_notifier_mm<span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">CONFIG_TRANSPARENT_HUGEPAGE</span></span>
+    pgtable_t pmd_huge_pte<span class="token punctuation">;</span> <span class="token comment">/* protected by page_table_lock */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+    <span class="token comment">/* reserved for Red Hat */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">__GENKSYMS__</span></span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> rh_reserved<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">else</span></span>
+    <span class="token comment">/* How many tasks sharing this mm are OOM_DISABLE */</span>
+    <span class="token keyword">union</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">unsigned</span> <span class="token keyword">long</span> rh_reserved_aux<span class="token punctuation">;</span>
+        atomic_t oom_disable_count<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* base of lib map area (ASCII armour) */</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> shlib_base<span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+</code></pre> 
+<p>地址空间的组织：<br> 每个进程的PCB中都有一个mm_struct结构体，此时对虚拟地址进行映射，得到真实的物理地址。</p> 
+<h2><a id="_217"></a>接下来深刻理解一下什么是进程</h2> 
+<p><strong>进程就是，是程序的一次执行，是处理机调度和处理机资源分配的一个基本单位。由进程常见的数据结构(struct task_struct(进程控制块)&amp;&amp;struct mm_struct(地址空间))和代码、数据组成。</strong></p> 
+<h2><a id="_219"></a>地址空间的三种映射</h2> 
+<h3><a id="_220"></a>页表映射</h3> 
+<p>将程序的逻辑地址空间划分为固定大小的页(page)，而物理内存划分为同样大小的页框(page frame)。程序加载时，可将任意一页放人内存中任意一个页框，这些页框不必连续，从而实现了离散分配。在页式存储管理方式中地址结构由两部构成，前一部分是页号，后一部分为页内地址w（位移量）;</p> 
+<p><img src="https://images2.imgbox.com/85/86/KQE8yqDb_o.png" alt="在这里插入图片描述"><br> 需要几次访存？<br> 两次，首先明确页表是位于内存中的，第一次访存是为了获取块号，通过的出的块号+偏移地址得出它的物理地址，第二次访存去取数据或代码<br> 优缺点：<br> 1.没有外碎片，每个内碎片不超过页大比前面所讨论的几种管理方式的最大进步是<br> 2，一个程序不必连续存放。</p> 
+<p>3.便于改变程序占用空间的大小(主要指随着程序运行，动态生成的数据增多，所要求的地址空间相应增长)。</p> 
+<p>缺点：要求程序全部装入内存，没有足够的内存，程序就不能执行；</p> 
+<h3><a id="_234"></a>段表映射</h3> 
+<p><img src="https://images2.imgbox.com/cb/1e/vGbNanEz_o.png" alt="在这里插入图片描述"><br> 在段式存储管理中，将程序的地址空间划分为若干个段(segment)，这样每个进程有一个二维的地址空间。在前面所介绍的动态分区分配方式中，系统为整个进程分配一个连续的内存空间。而在<strong>段式存储管理系统中，则为每个段分配一个连续的分区，而进程中的各个段可以不连续地存放在内存的不同分区中</strong>。程序加载时，操作系统为所有段分配其所需内存，这些段不必连续，物理内存的管理采用动态分区的管理方法。<br> 简单来说，对于一个进程而言，其中不同的数据可能在栈上，可能在堆上，于是基于这种特点引进了分段式内存管理。<br> 当然， 虚拟地址和物理地址之间是通过段表来进行映射的。可以参考分页式内存管理。<br> 分段分页的异同<br> 1.需求 是信息的物理单位，分页是为了实现离散分配方式，以减少内存的碎片，提高内存的利用率。或者说，分页仅仅是由于系统管理的需要，而不是用户的需要。<strong>段是信息的逻辑单位，它含有一组其意义相对完整的信息。分段的目的是为了更好地满足用户的需要。</strong></p> 
+<p>2.指令 一条指令或一个操作数可能会跨越两个页的分界处，而不会跨越两个段的分界处。</p> 
+<p>3.大小 <strong>页大小固定且由系统</strong>决定，把逻辑地址划分为页号和页内地址两部分，是由机器硬件实现的。<strong>段的长度不固定，且决定于用户所编写的程序，通常由编译系统在对源程序进行编译时根据信息的性质来划分。</strong></p> 
+<p>4.逻辑地址表示 页式系统地址空间是一维的，即单一的线性地址空间，程序员只需利用一个标识符，即可表示一个地址。分段的作业地址空间是二维的，程序员在标识一个地址时，既需给出段名，又需给出段内地址。</p> 
+<p>5.查找 比页大，因而段表比页表短，可以缩短查找时间，提高访问速度。<br> 需要几次访存？<br> <strong>两次，第一次访问的是段的起始地址，进而通过与偏移地址相加得到的是真实物理地址，第二次取出相应的数据或代码。</strong></p> 
+<h3><a id="_251"></a>段页式内存管理</h3> 
+<p><img src="https://images2.imgbox.com/42/d5/FUIGKAog_o.png" alt="在这里插入图片描述"></p> 
+<p>段页式内存管理，结合了分页分段的优点，在进行分段的基础上又进行了分页式的内存管理。<br> 唯一缺点就是要求程序全部装入内存，没有足够的内存，程序就不能执行；<br> 虚拟地址空间是一个mm_struct结构体，是操作系统为进程描述的一个完整线性以及连续的内存空间，<strong>实现了进程在物理地址的离散式存储，提高了内存访问率。<strong>通过页表段表对内存进行控制。<br> 需要几次访存？<br> 段页式系统中，须三次访问内存。第一次访问是</strong>访问内存中的段表，从中取得页表始址</strong>；<strong>第二次是访问内存中的页表，从中取出该页所在的物理块号，并将该块号与业内地址一起形成指令或数据的物理地址；第三次访问从第二次访问所得的地址中，取出指令或数据。</strong></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/46eb24066160b85cccfbc990e9070a21/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">9.PyTorch实现MNIST（手写数字识别）（2卷积1全连接）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/01d993a924c4cb37342889ae31b03fff/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">pywinauto-PC端应用程序自动化</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

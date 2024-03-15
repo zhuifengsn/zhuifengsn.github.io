@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Posts - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Posts" />
+<meta property="og:description" content="追风少年的博客" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+	<link rel="alternate" type="application/rss+xml" href="/posts/index.xml" title="追风少年的博客">
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main list" role="main">
+	<header class="main__header">
+		<h1 class="main__title">Posts</h1>
+	</header><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/19a45e320f288e5a7f846efff97ae660/" rel="bookmark">
+			【JAVA】spring cloud微服务中使用spring security auth2登录认证流程和自定义手机号认证(1)
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		hey-girl东拼西凑原创文章，若有歧义可留言，若需转载需标明出处。
+1.概括：本文主要根据微服务pig&lt;v3.3.3&gt;项目pig码云地址，学习安全登录流程。通过扩展登录需求,自定义其他登录模式，比如常见的手机号登录或者微信登录等。不熟悉项目没有问题，因为文章重点还是介绍spring security auth2登录流程。
+2.涉及服务介绍：
+gateway:9999(网关服务)
+auth:3000(认证服务)
+upms:4000(资源服务)
+common-security(安全模块)
+3.先看看pig项目中登录大致流程图:
+9999/auth/aouth/token api gateway服务 auth认证服务 UPMS资源服务 接下来详细讲解登录流程，因为只有了解清楚了流程和其原理，才能更加方便我们扩展自己的需求。
+首先使用postman发起一个post请求。
+Q1-为什么请求地址是 http://localhost:9999/auth/oauth/token
+A1-/auth是因为在gateway服务中,配置了路由如下图，/oauth/token是auth2默认的端点。更多的endpoint可参考官方文档传送门
+Q2-请求参数讲解
+A2-username用户名；password是AES作为对称加密加密后的密码。加解密网站地址：加解密工具网站。红框中的key后端配置在yml中。也就是传的密码参数是加密后的密文。grant_type的值有五种。Oauth2.0定义了4种模式分别是:authorization_code(授权码模式)、password(密码模式)、client_credentials（客户端模式)、implicit(隐式授权模式）。加上一个refresh_token(令牌刷新)模式。scope作用域范围。
+Q3- 参数client_id和client_secret
+A3- 我用的是postman.所以直接把参数写上就会自动生成类似这样的字符串Basic cGlnOnBpZw==。其实就是请求头是一个"Basic"加一个空格加"clientId:clientSecret"base64化的一个Authorization字段。这里的pig和数据库表数据统一既可
+请求首先会来到GirlRequestGlobalFilter过滤器(自定义的过滤器)。
+这个过滤器主要就是2个作用。作用一清洗去除请求头中的的from参数,作用二重写StripPrefix,也就是/auth/oauth/token经过这个过滤器后会变成/oauth/token
+Q1- 为什么要清洗去除from参数？
+A1- 因为在整个项目中，把请求按分为了如下情况
+为了实现内部的调用。采取了@Inner注解方式实现。仔细想想其实这个实现思想很简单。当我们单个服务引入security的时候。服务里面的接口是不是都被保护起来了。你去请求就得验证了。这个时候，如果说我想不登录就访问服务中的A接口。我得怎么做。我是不是的配置ignoring,把不需要鉴权的url给放行下。那说白了。我内部之前的调用就是这么个道理。我得放行这个url。但是这就有个问题，我如何知道你是内部调用了。万一你是外部调用。我不就GG了。所以pig作者给内部请求头加上了from字段。为了防止外部调用的时候冒充。所以在网关进来第一步就把请求头全部清洗一遍。思想就是这么个思想。具体实现代码可以看源代码。
+Q2- order为啥是-1000
+A2- 过滤器的执行顺序是根据order值决定，值越低，执行的优先顺序越高。如下图。可以看见自定义的过滤器顺序
+在执行PasswordDecoderFilter过滤器（也是自定义过滤器）。主要就是判断请求路径是不是登录请求oauth/token。是得话就进行password字段解密操作。这里解密就是对应前面的AES加密。解密后拿到密码明文继续往下走。
+注意：这里去除了验证码过滤器，所以不说验证码这part
+经过了gateway之后，服务会被分发到auth认证服务。也就是我们熟悉的Security流程。不熟悉流程的兄弟，请移步Security工作原理这位作者大大解释的还是很清楚的，有图有真相。这里我就流程的几步关键点进行分析。
+请求先来到LogoutFilter过滤器，执行doFilter()判断当前是不是登出请求。如果是登出路径则到 logoutHandler ，如果登出成功则到 logoutSuccessHandler 登出成功处理，如果登出失败则由 ExceptionTranslationFilter ；如果不是登出路径则直接进入下一个过滤器。
+再会来到BasicAuthenticationFilter过滤器。主要看doFilterInternal()方法。这个过滤器主要检测和处理 http basic 认证。
+Q1-代码解析
+UsernamePasswordAuthenticationToken authRequest = this.authenticationConverter.convert(request); A1-convert()作用是去请求头获取Authorization，然后解码（想想我们请求的时候不就是把client_id和秘钥进行base64编码的么，这里其实就是获取它啦）。拿到以后并生成了UsernamePasswordAuthenticationToken。UsernamePasswordAuthenticationToken就很好理解了，所有提交给AuthenticationManager的认证请求都会被封装成一个Token的实现。
+Q2-代码解析
+Authentication authResult = this.authenticationManager.authenticate(authRequest); A2-封装好的UsernamePasswordAuthenticationToken,也就是上面代码中的变量authResult会交个AuthenticationManager，AuthenticationManager是用户认证的管理类，所有的认证请求都会通过提交一个token（也就是封装好的token，比如常见的UsernamePasswordAuthenticationToken）给AuthenticationManager的authenticate()方法来实现。说白了AuthenticationManager是一个接口。默认实现类ProviderManager。当然ProviderManager也不是干活的人。具体校验动作不是它完成，它只是转发。
+我们仔细看看providerManager.authenticate(authRequest)的作用。这里的authenticate(authRequest) 我贴下部分重要代码:
+上图代码，我把重要的拿出来唠唠
+// 获取当前的authentication对象的类 // authentication就是传入的UsernamePasswordAuthenticationToken Class&lt;?
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/19a45e320f288e5a7f846efff97ae660/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/fc470ef0b1736ee45443ee3a4e03756c/" rel="bookmark">
+			SQL-常用的5个聚合函数
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		平时最经常用到的聚合函数是这5个： SUM()：返回表达式中所有值的和或仅非重复值的和，SUM 只能用于数字列， Null 值会被忽略。 --返回表达式中所有值的和 SUM (all column_name) --all是默认值，一般省略不写 --返回表达式中仅非重复值的和 SUM (distinct column_name) --distinct去重column_name MIN()：返回表达式中最小的值，可用于 numeric、char、varchar、uniqueidentifier 或 datetime 列，Null 值会被忽略。 MIN(column_name) MAX()：返回表达式中最大的值，可用于 numeric、char、varchar、uniqueidentifier 或 datetime 列，Null 值会被忽略。 MAX(column_name) COUNT()：返回组中找到的项数量，返回int类型数据。 --返回查询数据中行计数 COUNT(*) --返回column_name计数,Null 值会被忽略。 COUNT(all column_name) --all是默认值，一般省略不写 --返回非重复column_name计数，Null 值会被忽略。 COUNT(distinct column_name) AVG()：返回组中各值的平均值，将忽略 null 值。 --向所有值应用此聚合函数 AVG(all column_name)--all是默认值，一般省略不写 --去重column_name后，返回求平均值 AVG(distinct column_name) SUM()示例：
+1.查询成绩表stud_grade中所有学生的总成绩(grade)：
+select sum(grade) grade from [student].[dbo].[stud_grade] 2.分别查询成绩表stud_grade中课程为‘计算机导论’和‘IT市场营销’的总成绩(grade)：
+select B.course_name, sum( grade) grade from [student].[dbo].[stud_grade] A inner join [dbo].[lesson_info] B on A.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/fc470ef0b1736ee45443ee3a4e03756c/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/8d46cf273c4c8ad9ef680ac43b57293d/" rel="bookmark">
+			pycharm出现“No module named ‘pymysql“其可能存在的问题并给出解决办法
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		出的一种原因 可能是你所下载的pymysql 并没有安装（放）到你pycharm的基本解释器里
+1 确定你的电脑已经安装好pymysql 2 在（安装pymysql）的盘中找到以下两个文件
+（1）pymysql
+（2）PyMySQL-0.10.1.dist-info
+3 去寻找到python安装的路径（你解释器使用的python环境，上图画红圈的）
+4 并把这两个文件复制到其中
+然后就可以了
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/713309e16d6a75761cd7105b6d984c89/" rel="bookmark">
+			taro安装_安装指定版本
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		 1.yarn 全局安装指定版本(后面跟版本号) yarn global add @tarojs/cli@2.2.17 2.npm 全局安装指定版本(后面跟版本号) npm install -g @tarojs/cli@1.3.33 
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/593c08d5f9f59ff81092de6d932a5c6b/" rel="bookmark">
+			nfs服务器搭建
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		概述 NFS：Network File System（网络文件系统），NFS只是一种文件系统，本身并没有传输功能，是基于RPC协议实现的，为C/S架构。也就是说，NFS也只是文件系统而已，与jffs2,yaffs,ext4等是一类东西。但是NFS的特殊之处在于，它可以通过网络来挂载文件系统，而不用烧写到设备上，从而方便我们调试。这就跟早期的网吧里使用PXE启动来搭建无盘系统一样：每台电脑并没有安装硬盘，而是直接通过PXE启动服务器上的系统，看起来每台电脑都有硬盘，其实都是挂载服务器上的硬盘。
+nfs服务器安装 不同的ubuntu，安装nfs的方法不同，本教程使用的是18.04版本，nfs的安装很简单，直接在网上获取并安装即可，见如下命令。
+安装服务器端 sudo apt-get install nfs-kernel-server
+安装客户端 sudo apt-get install nfs-common
+关闭防火墙 ufw disable
+root目录创建 创建rootfs文件夹 与tftp有些类似，并不是ubuntu中所有文件夹都可以进行网络传输或访问，必须指定固有的文件夹。因此我们创建一个专用文件夹。
+mkdir /home/hudaizhou/sound_code/rootfs/rootfs
+修改可执行权限 chmod 777 -R /home/hudaizhou/sound_code/rootfs/rootfs
+配置export export是用来指定可以用来做网络传输的文件夹，我们在export文件中添加该目录，如下：
+sudo vi /etc/exports
+添加：
+/home/hudaizhou/sound_code/rootfs/rootfs *(rw,sync,no_root_squash,no_subtree_check)
+命令释义：
+* 是IP地址rw：读写操作sync: 在应用之前将任何更改写入光盘no_subtree_check：阻止子树检查 导出共享目录 sudo exportfs -a
+重启服务器 sudo systemctl restart nfs-kernel-server
+查看nfs的rootfs文件夹目录 showmount localhost -e
+本地测试 挂载 sudo mount -t nfs -o nolock 192.168.10.51:/home/hudaizhou/sound_code/rootfs/rootfs /opt
+到/opt目录查看rootfs的文件是否显示。
+卸载 每次用完后需要卸载不然会影响opt目录：
+umount /opt
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/593c08d5f9f59ff81092de6d932a5c6b/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/104c383abd1ae8432d83e14b9f840c3b/" rel="bookmark">
+			【免费赠书】6 种在 JavaScript 中清理代码的方法
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		英文 | https://medium.com/@ignacioojan/6-ways-to-clean-up-your-code-in-javascript-20908f0a2467
+翻译 | 杨小爱
+这些方法将帮助您提高代码的清洁度。我不会在本文中介绍完全重构模式。这些方法是您现在可以马上应用的，它们是简单直接的更改。
+1、删除不必要的 return 语句：
+检查函数内部是否需要存在。可以简化为一行代码吗？如果是这样，JavaScript 允许使用隐式返回来简化代码。
+从下面检查代码。在那里，我删除了额外的变量声明 usersFound，让我可以选择删除未使用的 return 语句。
+// This function receives as arguments an array of objects, // [{ firstName: 'Test' }, { firstName: 'Ignacio' }, ...] // This function returns all the users with name 'Test' const findTestNameUsers = (users) =&gt; { const usersFound = users.filter((user) =&gt; { return user.firstName === 'Test' }) return usersFound } // This function has the same behaviour as the one above.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/104c383abd1ae8432d83e14b9f840c3b/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/106012aed6fe14e8402089fc97c19773/" rel="bookmark">
+			控制语句if丶循环语句switch语句丶while循环
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		if格式 if (关系表达式) { 语句体;	} if (关系表达式) { 语句体1;	} else { 语句体2;	} if (关系表达式1) { 语句体1;	} else if (关系表达式2) { 语句体2;	} … else { 语句体n; } 键盘录入一个星期数(1,2,...7)，输出对应的星期一，星期二，...星期日
+// 需求：键盘录入一个星期数(1~7)，输出对应的星期一~星期日 import java.util.Scanner; public class IfDemo03 { public static void main(String[] args) { System.out.println("开始"); Scanner sc = new Scanner(System.in); System.out.println("请输入一个星期数(1-7)："); int week = sc.nextInt(); if(week == 1) { System.out.println("星期一"); } else if(week == 2) { System.out.println("星期二"); } else if(week == 3) { System.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/106012aed6fe14e8402089fc97c19773/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/2955c173291f2a996be1a951d002150a/" rel="bookmark">
+			python比较火的培训机构
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		Python广告满天飞，培训机构不能说的秘密你知道吗？下定决心学Pytho计算机语言前，以下这几点还是很有必要了解的。
+python作为一门计算机语言，发展到如今真实正当时，由于其和人工智能，大数据的关联，使其从默默无闻的地位，飞升计算机语言排行榜第四位，且势头仍很强劲。
+有热度就会有需求，这不培训机构继JAVA饱和后，瞄准了Python语言这一新的市场，一时间各种python计算机语言的广告乱飞，微信朋友圈广告我都见了不下三回了（我想静静），更何况各种网页广告……真可谓无孔不入！
+很显然这些广告是培训机构为了吸引学员发的，但凡广告肯定都会选择扬长避短，而且多说夸大其词，Python语言的广告，无非是吸引那些在职场失意的职员或者对未来刚到迷茫的刚踏入社会的大学毕业生。
+1.培训机构会告诉你Python易学，对编程一窍不通的0基础的学生均可以轻松掌握
+事实是，这话它只说对了一半，确实Python计算机语言相对于其他计算机语言比如JAVA或者C语言来说起步要低些，没有那么多生硬的规范要遵守，确实降低了入学门槛，但是要想学精，那就绝非易事。所以如果没有死克的精气神和不怕脱发的胆识，很可能就是砸进去白花花的银子最终只能是学了个皮毛，落入到Python从入门到放弃的陷阱中，悔恨不已。
+2.培训机构会告诉你Python效率极高
+事实是：相比之下Python的效率其实是蛮低的，效率上肯定被C、C++等底层计算机语言吊打。其实冷静下来思考，Python效率高的这个谎言是很好拆穿的，试想Python语言其实不是一门新生计算机语言，如果效率极高为什么会默默问问那么久知道最近才冒头？所以说Python效率高其实是很矛盾的，那为什么Python计算机语言突然如日中天了呢，那又要说到科技的前沿——人工智能了。
+因为python与人工智能有关，人工智能火了，python跟着也火了，而不是因为python语言的效率高。
+3.培训机构会告诉你，学会Python年薪30W+很容易
+相信我这个培训机构绝对是夸大宣传了，如果你只是奔着它们说的这句话，而决心学Python，那我真要劝你放弃。事实上，学完培训机构课程的同学刚出来能顺利找到工作都是很不错的了（针对于0编程基础的），工资普遍6+左右算是不错的了，不信的话可以投几份简历试试水。
+有图有真相（图片来源智联招聘）
+4.学完Python计算机语言，各种人工智能、大数据、网络爬虫等新潮岗位任你挑
+这个明显是在逗你玩，我们要理顺一点，首先Python只是一门计算机语言，它充其量只是一个工具，正确的解读是，从事人工智能，和大数据岗位的人，学了Python会大幅度提高工作效率，而不是培训机构本末倒置的推销说法。举个简单的例子，修车师傅和扳手，修车师傅会使用扳手修车，但反过来，会使用扳手的不一定能成为修车师傅是一个道理。
+综上所述，还是劝被铺天的诱人广告撩到的各位三思而行，切莫盲目跟风，花了大把金钱事小，浪费了宝贵的青春就划不来了。
+如果不确定有没有兴趣或者擅长与否，最简单的测试方法就是花几十块钱买本书来检验下，这个试错成本还是蛮低的，这里特别推荐豆瓣评书上比较火的一本Python书籍（过来人亲测确实可以，前面基础后面有几个项目案例可以动手操作）——《Python编程从入门到实践》。
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/e7e862170aa6c92c70d5adfdcb50f0b6/" rel="bookmark">
+			阿里一面面经
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		2021.11.23
+主要问项目
+1.工作中使用线程池，线程池最小核心数和最大线程数关系
+2.工作中的mysql调优，依据什么建索引，怎么判断索引的效果
+3.对于springcloud的理解
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/d3baab712ee9b31f94821fe2079403a3/" rel="bookmark">
+			数据结构实验：线性表（一元多项式相加）
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		一、【实验目的】
+1、掌握线性表的链式存储结构；
+2、掌握链表的基本操作，并能进行应用实践；
+3、使用C/C++语言和线性表实现“一元多项式相加”专题。
+二、【实验内容】
+结合课本第41页的例子，采用链式存储结构，将两个线性链表表示的一元多项式相加，并输出。此一元多项式遵循多项式相加运算规则：对于两个一元多项式中存在指数相同的项时，其对应系数相加：合并时系数和为零时，删除“和多项式”中此项；合并时系数和不为零时，则构成“和多项式”中的一项。对于两个一元多项式中存在的指数不相同的项，则分别复抄到“和多项式”中去，原多项式保持不变。
+#include &lt;iostream&gt; using namespace std; typedef struct { float coef;//系数 int expn;//指数 }term,ElemType; typedef struct LNode { ElemType data; LNode* next; }LNode,*LinkList,*Polynomial; int InitList(LinkList&amp; P);//ok void CreatPolyn(Polynomial&amp; P, int m);//创建一个m项多项式pk int PrintPolyn(Polynomial&amp; P);//输出多项式ok int SortPolyn(Polynomial&amp; P);//按指数增序排序ok int AddPloyn(Polynomial&amp; P1, Polynomial&amp; P2, Polynomial&amp; P);//多项式相加ok void test01();//测试案例 下面是各函数的重写
+int InitList(LinkList&amp; P) { P = new LNode; P-&gt;next = NULL; return 1; } int SortPolyn(Polynomial&amp; P) { //BubbleSort LNode* q = P-&gt;next; int m = 0; while (q) { q = q-&gt;next; m++; } for (int i = 0; i &lt; m; i++) { q = P-&gt;next; for(int j = 0; j &lt; m-i-1; j++) { if (q-&gt;data.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/d3baab712ee9b31f94821fe2079403a3/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/c96dfcb45bd205a49b83af281a07464e/" rel="bookmark">
+			数据结构实验：链表的插入与删除
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		实验1 链表的插入和删除
+一、【实验目的】
+了解单链表、循环链表和双链表的基本知识；掌握算法思想和数据结构的描述；掌握链表的插入、删除的相关语句及基本方法。 二、【实验内容】
+设有两个无头结点的单链表，分别为ha，hb，其链中有数据域data，链域next，两链表的数据都按递增序存放。现要求将hb表归到ha表中，且归并后ha仍按递增排序，归并中ha表中已有的数据若与hb相同，则hb中的数据不归并到ha中，hb的链表在算法中不允许破坏。
+#include&lt;iostream&gt; using namespace std; typedef struct LNode { int data;//数据域 LNode* next;//指针域 }LNode,*LinkList; void CreatList(LinkList&amp; L, int n) { //从创建一个不带头结点的链表 if (n &gt; 0) { L = new LNode; L-&gt;next = NULL;//创造一个首元结点 if (n == 1) { cin &gt;&gt; L-&gt;data;//一个元素直接用头指针创造的头结点存 } else if (n &gt; 1) { LNode* r = L;//指针r记录最后一个结点所在位置 cin &gt;&gt; r-&gt;data;//首元结点数据赋值 for (int i = 0; i &lt; n - 1; i++) { LNode* p = new LNode;//开辟一个新结点 p-&gt;next = NULL; cin &gt;&gt; p-&gt;data;//数据域赋值 r-&gt;next = p;//原尾结点指针域指向p r = p;//尾结点地址r更新 } } } } void PrintList(LinkList&amp; L) { //输出链表 LNode* p = L; while (p) { cout &lt;&lt; p-&gt;data &lt;&lt; "
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/c96dfcb45bd205a49b83af281a07464e/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/be3258e6fd94cb7d304ee94e635f7cea/" rel="bookmark">
+			哈夫曼编码C&#43;&#43;实现
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		#include&lt;iostream&gt; #include&lt;iomanip&gt; using namespace std; #pragma warning (disable: 4996) 类型定义
+typedef struct {//哈夫曼树 int weight;//权值 int lch, rch, parent;//左右孩子，父结点 }HTNode,*HuffmanTree; 二级指针建立一个哈夫曼编码表
+typedef char** HuffmanCode; void CreatHuffmanTree(HuffmanTree&amp; HT, int n) { //构造哈夫曼树 if (n &lt;= 1)return; int m = 2 * n - 1;//数组2n-1个元素 HT = new HTNode[m + 1];//0号不用 for (int i = 1; i &lt;= m; i++) { //将2n-1个元素的lch，rch，parent设置为0 HT[i].lch = 0; HT[i].rch = 0; HT[i].parent = 0; } for (int i = 1; i &lt;= n; i++) cin &gt;&gt; HT[i].
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/be3258e6fd94cb7d304ee94e635f7cea/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/5cad3aafd7fbbf9b933049251c3890e8/" rel="bookmark">
+			如何用python读取超大文本文档
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		因为做实验的关系，必须要读入五六七个G的文本txt，刚开始用之前读小文件的代码，读入速度非常慢，读一行的速度比写一行的速度慢了几百倍，我直觉肯定是哪里把读入文件的问题复杂化了，于是开始查资料，终于找到了合适的解决方案
+总之就是python里map和split的正确使用
+def loaddata(memory, path): with open(path,'r') as f: X_row = 0 # 表示矩阵的行，从0行开始 for i in range(MEMORY_CAPACITY): line = f.readline() if i%100 == 0: print('load'+str(i)) #这里千万不要用split(' ')这种用字符将文件拆开的方法，这样做后续读入数组会非常慢，直接用()就可以 lis = line.split() # 将数据分隔开 numbers_float = list(map(float, lis)) # 这句是关键！！！ dqn.memory[X_row,:] = numbers_float[0:state_dim * 2 + 1 + 1 + 1] X_row += 1 # 然后方阵A的下一行接着读 return memory 感谢这位朋友和这位朋友的精彩回答！
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/33c32298e1eb5eb86fb05a1af28ebc12/" rel="bookmark">
+			云计算python Spring cloud 微服务
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		理论
+微服务概念
+微服务的概念源于2014年3月Martin Fowler所写的一篇文章“Microservices”,微服务架构是一种架构模式，他提倡将单一应用程序划分成一组小的服务，服务之间互相互相协调、互相配合，为用户提供最终价值，每个服务运行在其独立的进程中，服务与服务间采用器轻量级的通信机制互相沟通（通常是基于HTTP的RESTFUL API）。每个服务都围绕着具体业务进行构建，并且能够被独立的部署到生产环境、类生产环境等，另外，应尽量避免统一的、集中式的服务管理机制，对具体的一个服务而言，应根据业务上下文，选择合适的语言、工具对其进行构建。微服务是一种架构风格，一个大型复杂软件应用由一个或多个微服务组成。系统中的各个微服务可被独立部署，各个微服务之间是松耦合的（可以相互调用）。每个微服务仅关注于完成一件任务并很好的完成该任务，在所有的情况下，每个任务代表着一个小的业务能力。
+耦合：两个东西的关联度，根据关联度的高低来分耦合的程度，
+分为：完全耦合：关联紧密，不能分开，下一步以上一步为基础
+松耦合：关联度不高
+完全解耦：没有任何关联
+微服务可以放在容器里跑，容器需要给微服务提供环境，容器里跑的就是微服务，容器跟微服务没有关系
+为什么叫微服务架构？
+整个架构里只要有微服务层，就可以叫做微服务架构
+容易混淆的概念
+Spring boot：spring boot是一个框架，一种全新的编程规范，他的产生简化了框架的使用，所谓简化是指简化了spring众多框架中所需的大量且繁琐的配置文件，所以springboot是一个服务于框架的框架，服务范围是简化配置文件
+Spring cloud：spring cloud基于spring boot提供了一整套服务的解决方案，包括服务注册与发现，配置中心，全链路监控，服务网关，负载均衡，熔断器等组件
+Spring cloud利用spring boot的开发便利性巧妙的简化了分布式系统的基础设施开发，spring cloud为开发人员提供了快速构建分布式系统的一些工具，包扣配置管理、服务发现、断路器、路由、微代理、事件总线，他们都可以用spring boot的开发风格做到一键启动和部署
+Springboot与springcloud的区别
+Spring boot：专注于快速方便的开发单个个体微服务（关注微观，简化配置）；
+Spring cloud：关注全局的微服务协调治理框架，将spring boot开发的一个个单体微服务组合并管理起来（关注宏观）；
+Spring boot可以离开spring cloud独立使用，但是spring cloud不可以离开spring boot，属于依赖关系。
+Spring cloud全部组件的解析：
+Fegin(接口调用):微服务之间通过rest接口通讯，springcloud提供fegin框架来支持rest的调用，fegin使得不同进程的rest接口调用得以用优雅的方式进行，这种优雅表现的就像同一个进程调用一样（简化微服务的通信过程） Eureka（注册发现）：微服务模式下，一个大的web应用通常都被拆分为很多比较小的web应用（服务），这个时候就需要有一个地方保存这些服务的相关信息，才能让各个小的应用彼此知道对方，这个时候就需要在注册中心进行注册。每个应用启动时向配置的注册中心注册自己的信息（IP地址、端口号、服务名称等信息），注册中心将他们保存起来，服务间相互调用的时候，通过服务名称就可以到注册中心找到对应的服务信息，从而进行通讯，注测与发现服务为微服务之间的调用带来了方便，解决了硬编码的问题，服务间只通过对方的服务id，而无需知道其IP和端口即可，以获取对方服务 硬编码：代码写死，调用谁就写谁才能查找出来
+Ribbon（负载均衡）：ribbon是Netflix发布的负载均衡器，他有助于控制http和TCP客户端的行为，为ribbon配置服务提供者的地址列表后，ribbon就可基于某种负载均衡算法，自动的帮助服务消费者去请求。Ribbon默认为我们提供了很多的负载均衡算法，例如轮询、随机等，当然，我们也可为ribbon实现自定义的负载均衡算法，在spring cloud中，当ribbon与eureka配合使用时，ribbon可自动从eurekaserver获取服务提供者的地址列表，并基于负载均衡算法，请求其中一个服务提供者的实例（为了服务的可靠性，一个微服务可能部署多个实例） Hystrix(熔断器)：当服务提供者响应非常缓慢，那么消费者对提供者的请求就会被强制等待，直到提供者响应超时。在高负载场景下，如果不做任何处理，此类问题可能会导致服务提供者的资源耗竭甚至整个系统的崩溃（雪崩效应）。Hystrix正是为了防止此类问题发生。Hystirx是由Netflix开源的一个延迟和容错库，用于隔离访问远程系统、服务或第三方库，防止级联失败，从而提升系统的可用性与容错性。 第一台：192.168.2.10 第二台：192.168.2.20
+两台：
+[root@localhost ~]# yum -y install git
+[root@localhost ~]# git clone https://github.com/luojunyong/spring-cloud-examples.git
+注册中心的集群
+第一台：
+[root@localhost ~]# cd /root/spring-cloud-examples/eureka-producer-consumer/spring-cloud-eureka/
+[root@localhost spring-cloud-eureka]# ls
+pom.xml src
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/33c32298e1eb5eb86fb05a1af28ebc12/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/c76015e7143c4992543923e0d2406d5b/" rel="bookmark">
+			nginx 配置ssl配置文件内容
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		 server { listen 443 ssl; server_name www.langmanezhuang.com; # 改为绑定证书的域名 # ssl 配置 #ssl on; ssl_certificate 1_langmanezhuang.com_bundle.crt; # 改为自己申请得到的 crt 文件的名称 ssl_certificate_key 2_langmanezhuang.com.key; # 改为自己申请得到的 key 文件的名称 ssl_session_timeout 5m; ssl_protocols TLSv1 TLSv1.1 TLSv1.2; ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:HIGH:!aNULL:!MD5:!RC4:!DHE; ssl_prefer_server_ciphers on; location / { proxy_pass http://127.0.0.1:8765; } } 
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/07b1e30e71372d598ed9cea45d33c298/" rel="bookmark">
+			小程序webview上传图片出现闪退
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		问题描述： 用户上传照片，点击上传，图片没有正确上传，小程序webview页面刷新（类似闪退重启，用户区分不了闪退和刷新的概念）并跳转到webview首页。
+原因剖析 跳转到h5首页的原因是因为，上传事件结束后会调用小程序的onShow事件。onShow事件重新获取链接渲染了。
+问题解决 将web-view所在页面的onShow里的逻辑改到onLoad就可以了
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/05463addbc04c10c57ec6f9654c8a8e9/" rel="bookmark">
+			人工智胀 | 堂妹教你用KNN算法筛选约会对象
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		写在前面 咕咕咕~
+堂妹又回来啦😀
+早前读者群小伙伴希望我出「机器学习入门系列」，这就来安排~ 接下来，我会按照自己的节(慢)奏(慢)推出机器学习入门算法系列文章。
+我给这个系列取名为「人工智"胀"」，是人工智「能」和人工智「障」的兄弟，
+我知道我的读者很多不是这个领域的同学，没事儿，
+我们边玩边学，希望轻松看文的同时有所收获。
+当然，如果真的是想学技术，建议文档和源码。
+带有情绪的技术文，本身就是图个乐~
+开篇之作，我们先看个简易入门款：KNN。
+KNN全称是 K Nearest Neighbors，直译就是「K个最近的邻居」。
+理解一下这个表述，要「K个最近的邻居干啥呢」？
+邻居是相对的概念，相对应的那个主体就是要讨论的对象。
+换句话：“近朱者赤，近墨者黑”。
+所以，用近邻对象的特征来表示主体的特征，即K近邻算法。
+举个极端例子：
+当你想要了解某个人的特征，可以参考他身边人的特征，
+他身边人的性格也就大致上代表了他的性格。
+这里面有两个问题：
+问题1：参考几个人？
+问题2：怎么衡量"身边"这个概念？
+K值代表要参考的人数，当K为1，表示你只参考离它最近的☝️个人，显然很片面。
+所以，K值怎么选得到的结果最准确，这是个学问，后面我们慢慢来看。
+"身边"这个概念，可以量化成多种度量方式，最朴素的做法：欧氏距离。
+一句总结：通过计算一群人和目前对象各自的欧氏距离，得到与目标对象距离最近的K个人，这K个人中出现频率最高的性格标签即为目标对象的性格标签。
+so，快看看你身边有多少🦊朋🐕友（doge）。
+大概原理如上，光说不练假把式。
+我直接在数据集上验证一下这个算法的效果。
+我在某数据集上进行了算法实现，
+并给出了把准确率从76%提升到100%的优化思路和实现方案。
+代码链接已公开在文末，开箱即用。
+实验背景 数据来源：某约会网站上多个候选对象的三种行为数据统计。
+情境假设：我结合自己的要求，利用已有数据构建算法模型。当有新的候选人来的时候，直接丢进模型，我就知道是不是我喜欢的类型，如果是，再考虑要不要约出来喝咖啡。节省大家时间，真是太机智了😉。
+堂妹声明：以下措词不要代入我本人，结合场景介绍算法，而已。
+我将候选人分为三大类：
+类别标签一：不喜欢的人(didnotlike)
+类别标签二：魅力一般的人(smallDoses)
+类别标签三：极具魅力的人(largeDoses)
+而三大类别对应的考核标准如下：
+特征一：每年乘坐飞机的里程数
+特征二：玩视频游戏所消耗的时间百分比
+特征三：每周消费的冰淇凌公升数
+我们来做一个可视化，对整体的数据分布有个认识~
+从上面这幅图我们有个初步印象：如果考虑飞机里程和游戏时间这两个因素，🛬里程多的大概率被划分到不喜欢的一类。
+如果考虑飞机里程和喜欢吃冰激凌的程度两个因素，吃多少冰激凌不影响，有适当外出习惯的同学最佳。
+再看看玩游戏时间和冰激凌两个因素，从上面这幅图没有看出什么明显信息。
+因此，初步结论：
+太喜欢往外跑的，不考虑；
+冰激凌的摄入量对选择影响不大。
+带着这样的初步判断，我们实现一下算法。
+算法实现 算法流程：
+1. 准备待评测的数据
+2. 计算待评测数据与每个已知数据的欧式距离
+3. 将距离的结果排序，取前K个最近距离的类别标签
+4. 统计类别标签出现的频率
+5. 出现频率最高的类别标签即为待测数据的类别标签。
+根据这个流程，我们实现KNN算法如下：
+def classify(testData, knownData, labels, k): ''' testData代表待测数据 knownData代表已知数据 labels代表已知数据的标签 k代表统计前k个数据 ''' DataSetSize = knownData.
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/05463addbc04c10c57ec6f9654c8a8e9/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/53f10109e4321acb61bb414aa847a8c4/" rel="bookmark">
+			SpringBoot整合RabbitMQ与RabbitMQ高级特性
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		SpringBoot整合RabbitMQ与RabbitMQ高级特性 Spring整合RabbitMQ生产者消费者测试简单模式测试fanout广播模式小结 SpringBoot整合RabbitMQ生产端消费端案例测试小结 消息的可靠性投递生产端案例演示生产方确认Confirm小结Consumer AckConsumer Ack案例演示Consumer Ack 小结消息可靠性总结 消费端限流消费端限流案例消费端限流小结 Spring整合RabbitMQ 生产者 创建生产者工程
+添加依赖
+&lt;dependency&gt; &lt;groupId&gt;org.springframework&lt;/groupId&gt; &lt;artifactId&gt;spring-context&lt;/artifactId&gt; &lt;version&gt;5.1.7.RELEASE&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.amqp&lt;/groupId&gt; &lt;artifactId&gt;spring-rabbit&lt;/artifactId&gt; &lt;version&gt;2.1.8.RELEASE&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;junit&lt;/groupId&gt; &lt;artifactId&gt;junit&lt;/artifactId&gt; &lt;version&gt;4.12&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework&lt;/groupId&gt; &lt;artifactId&gt;spring-test&lt;/artifactId&gt; &lt;version&gt;5.1.7.RELEASE&lt;/version&gt; &lt;/dependency&gt; 配置整合
+rabbitmq.properties rabbitmq.host=192.168.1.104 rabbitmq.port=5672 rabbitmq.username=yemuxia rabbitmq.password=123456 rabbitmq.virtual-host=/yemuxia_vir spring-rabbitmq-producer.xml
+&lt;?xml version="1.0" encoding="UTF-8"?&gt; &lt;beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context" xmlns:rabbit="http://www.springframework.org/schema/rabbit" xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/rabbit http://www.springframework.org/schema/rabbit/spring-rabbit.xsd"&gt; &lt;!--加载配置文件--&gt; &lt;context:property-placeholder location="classpath:rabbitmq.properties"/&gt; &lt;!-- 定义rabbitmq connectionFactory --&gt; &lt;rabbit:connection-factory id="connectionFactory" host="${rabbitmq.host}" port="${rabbitmq.port}" username="${rabbitmq.username}" password="${rabbitmq.password}" virtual-host="${rabbitmq.virtual-host}"/&gt; &lt;!
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/53f10109e4321acb61bb414aa847a8c4/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/2cab613590ff7785a2689517f08bbe0c/" rel="bookmark">
+			【汇编语言】除法（DIV/IDIV）
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		除法（DIV/IDIV） 目录 除法（DIV/IDIV）`DIV`(unsigned divide)无符号数除法`IDIV`(signed divide)有符号数除法 DIV(unsigned divide)无符号数除法 格式：DIV SRC
+操作：
+S R C SRC SRC为字节时， ( A L ) ← ( A X ) / ( S R C ) (AL)\gets (AX)/(SRC) (AL)←(AX)/(SRC)的商， ( A H ) ← ( A X ) / ( S R C ) (AH)\gets (AX)/(SRC) (AH)←(AX)/(SRC)的余数 S R C SRC SRC为字时， ( A X ) ← ( D X , A X ) / ( S R C ) (AX)\gets (DX,AX)/(SRC) (AX)←(DX,AX)/(SRC)的商， ( D X ) ← ( D X , A X ) / ( S R C ) (DX)\gets (DX,AX)/(SRC) (DX)←(DX,AX)/(SRC)的余数 该指令将参与运算的数据默认为无符号数，则商和余数都是无符号数
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/2cab613590ff7785a2689517f08bbe0c/">Read more…</a>
+	</div>
+</article><article class="list__item post">
+	
+	<header class="list__header">
+		<h2 class="list__title post__title">
+			<a href="/posts/0842fc95af3fc06f6123f929414b8d1f/" rel="bookmark">
+			计算机组成原理： Disruptor分析
+			</a>
+		</h2>
+		
+	</header>
+	<div class="content list__excerpt post__content clearfix">
+		Disruptor是一个用Java语言开发的，充分利用CPU和告诉缓存的硬件特性的高性能系统
+文章目录 充分利用高速缓存Padding Cache Line，体验高速缓存的威力使用RingBuffer，利用缓存和分支预测小结 无锁缓慢的锁无锁的RingBuffer小结 充分利用高速缓存 Padding Cache Line，体验高速缓存的威力 我们先来看看 Disruptor 里面一段神奇的代码。这段代码里，Disruptor 在RingBufferPad 这个类里面定义了 p1，p2 一直到 p7 这样 7 个 long 类型的变量。
+abstract class RingBufferPad { protected long p1, p2, p3, p4, p5, p6, p7; } 我在看到这段代码的第一反应是，变量名取得不规范，p1-p7 这样的变量名没有明确的意义啊。不过，当我深入了解了 Disruptor 的设计和源代码，才发现这些变量名取得恰如其分。因为这些变量就是没有实际意义，只是帮助我们进行缓存行填充（padding cache line），使得我们能够尽可能的用上CPU高速缓存(CPU Cache)。那么缓存行填充这个黑科技到底是什么样的呢？我们接着往下看。
+如下图，内存的访问速度是远远慢于CPU的，想要追求极致性能，需要我们尽可能的多从CPU Cache里面拿数据，而不是从内存里面拿数据。
+CPU Cache装载内存里面的数据，不是一个一个字段加载的，而是加载一整个缓存行。举个例子，如果我们定义了一个长度为64的long 类型的数组，那么数据从内存加载到CPU Cache里面的时候，不是一个一个数组元素加载的，而是一次性加载固定长度的一个欢唱。
+64位的Intel CPU的计算机，缓存行通常是64个字节（bytes）。一个long类型的数据需要8个字节，所以我们一下子会加载8个long类型的数据。也就是说，一次加载数组里面连续的8个数值。这样的加载方式使得我们遍历数组元素的时候会很快。因为后面连续7次的数据访问都会命中缓存，不需要重新从内存里面去读取数据。
+但是，在我们不是使用数组，而是使用单独的变量的时候，这里就会出现问题了。在Disruptor的RingBuffer（环形缓冲区）的代码里面，定义了一个单独的long类型的变量。这个变量叫做INITIAL_CURSOR_VALUE ，用来存放RingBuffer起始的元素位置。
+CPU在加载数据的时候，自然也会把这个数据从内存加载到高速缓存里面来。不过，这个时候，高速缓存里面除了这个数据，还会加载这个数据前后定义的其他变量。这个时候，问题就来了，Disruptor是一个多线程的服务器框架，在这个数据前后定义的其他变量，可能会被多个不同的线程去更新数据、读取数据。这些写入以及读取的请求，会来自于不同的CPU Core。于是，为了保证数据的同步更新，我们不得不把CPU Cache里面的数据，重新写回内存里面去杭州重新从内存里面加载数据。
+而这些CPU Cache的写回和加载，都不是以一个变量作为单位的。这些动作都是以整个Cache Line作为单位的。所以，当 INITIAL_CURSOR_VALUE 前后的那些变量被写回到内存的时候，这个字段自己也写回到了内存，这个常量的缓存也就失效了。当我们要再次读取这个值的时候，要再重新从内存中读取。这就意味着，读取速度大大变慢了。
+面临这样一个情况，Disruptor里发明了一个神奇的代码技巧，这个技巧就是缓存行填充。Disruptor在INITIAL_CURSOR_VALUE 的前后，分布定义了7的long类型的变量。前面的7个来自继承的RingBufferPad 类，后面的7个则是直接定义在RingBuffer类里面。这14个变量没有任何实际的用途我们既不会去读它们，也不会去写它们
+...... abstract class RingBufferPad { protected long p1, p2, p3, p4, p5, p6, p7; } abstract class RingBufferFields&lt;E&gt; extends RingBufferPad { .
+	</div>
+	<div class="list__footer clearfix">
+		<a class="list__footer-readmore btn" href="/posts/0842fc95af3fc06f6123f929414b8d1f/">Read more…</a>
+	</div>
+</article>
+</main>
+
+<div class="pagination">
+	<a class="pagination__item pagination__item--prev btn" href="/posts/page/71/">«</a>
+	<span class="pagination__item pagination__item--current">72/128</span>
+	<a class="pagination__item pagination__item--next btn" href="/posts/page/73/">»</a>
+</div>
+
+			</div>
+			
+
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

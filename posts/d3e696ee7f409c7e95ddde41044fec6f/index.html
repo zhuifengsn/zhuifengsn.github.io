@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>BIO到NIO的演进 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="BIO到NIO的演进" />
+<meta property="og:description" content="BIO--&gt;NIO--&gt;Epoll--&gt;Netty
+IO多路复用、零拷贝 “I/O多路复用”，多路是指多个socket套接字，复用是指复用同一个进程
+一、传统IO的缺陷： 获取和读取数据都是阻塞的（同步阻塞BIO）
+如果要连接欸多个客户端 ，使用 多线程bio服务器，为每个链接创建一个线程服务 这样就会造成资源的浪费 每个连接可能一直没数据
+NIO提供了一套非阻塞接口，这样我们就不需要为每一个C/S 长连接保留一个单独的处理线程，一个线程可以检查多个Socket。
+有一个比较重要的api接口Selector ，我们可以吧要检查的socket 注册到Selector ，然后主线程阻塞在 Selector#Select（）方法里，当选择器发现某个socket就绪了，就唤醒主线程进行处理
+聊天：参考out.4177 socket(PF_FILE, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, 0) = 3 ？？？ 18775行 socket(PF_INET6, SOCK_STREAM, IPPROTO_IP) = 4 19005行 bind(4, {sa_family=AF_INET6, sin6_port=htons(9999), inet_pton(AF_INET6, &#34;::&#34;, &amp;sin6_addr), sin6_flowinfo=0, sin6_scope_id=0}, 28) = 0 listen(4, 50) selector = Selector.open(); epoll_create(256) = 7 listenerChannel.register(selector, SelectionKey.OP_ACCEPT); epoll_ctl(7, EPOLL_CTL_ADD, 4, {EPOLLIN, {u32=4, u64=16828906725976309764}}) = 0 while () { //遍历 int count = selector.select() epoll_wait(7, {{EPOLLIN, {u32=4, u64=16828906725976309764}}}, 8192, 4294967295) = 1 //连接事件来了 //接收连接 SocketChannel sc = listenerChannel." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/d3e696ee7f409c7e95ddde41044fec6f/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-03-13T20:10:08+08:00" />
+<meta property="article:modified_time" content="2021-03-13T20:10:08+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">BIO到NIO的演进</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>BIO--&gt;NIO--&gt;Epoll--&gt;Netty</p> 
+<p>IO多路复用、零拷贝  “I/O多路复用”，多路是指多个socket套接字，复用是指复用同一个进程</p> 
+<p>一、传统IO的缺陷： 获取和读取数据都是阻塞的（同步阻塞BIO）</p> 
+<p>如果要连接欸多个客户端 ，使用 多线程bio服务器，为每个链接创建一个线程服务   这样就会造成资源的浪费 每个连接可能一直没数据</p> 
+<p>NIO提供了一套非阻塞接口，这样我们就不需要为每一个C/S 长连接保留一个单独的处理线程，一个线程可以检查多个Socket。</p> 
+<p>有一个比较重要的api接口Selector ，我们可以吧要检查的socket 注册到Selector ，然后主线程阻塞在 Selector#Select（）方法里，当选择器发现某个socket就绪了，就唤醒主线程进行处理</p> 
+<pre><code class="language-java">聊天：参考out.4177
+socket(PF_FILE, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, 0) = 3 ？？？
+18775行
+socket(PF_INET6, SOCK_STREAM, IPPROTO_IP) = 4
+
+19005行
+bind(4, {sa_family=AF_INET6, sin6_port=htons(9999), inet_pton(AF_INET6, "::", &amp;sin6_addr), sin6_flowinfo=0, sin6_scope_id=0}, 28) = 0
+listen(4, 50)   
+
+selector = Selector.open();     
+epoll_create(256)                       = 7
+
+listenerChannel.register(selector, SelectionKey.OP_ACCEPT);
+epoll_ctl(7, EPOLL_CTL_ADD, 4, {EPOLLIN, {u32=4, u64=16828906725976309764}}) = 0
+
+while () {  
+   //遍历
+	int count = selector.select()
+	epoll_wait(7, {<!-- -->{EPOLLIN, {u32=4, u64=16828906725976309764}}}, 8192, 4294967295) = 1  //连接事件来了
+    //接收连接
+	SocketChannel sc = listenerChannel.accept();  
+	//返回个文件描述符？
+	accept(4, {sa_family=AF_INET6, sin6_port=htons(43727), inet_pton(AF_INET6, "::ffff:192.168.137.101", &amp;sin6_addr),
+	 sin6_flowinfo=0, sin6_scope_id=0}, [28]) = 10
+	 //xxx上线了  注册读取
+	sc.register(selector, SelectionKey.OP_READ);
+	epoll_ctl(7, EPOLL_CTL_ADD, 10, {EPOLLIN, {u32=10, u64=10}}) = 0
+	 
+	int count = selector.select()
+	epoll_wait(7, {<!-- -->{EPOLLIN, {u32=10, u64=10}}}, 8192, 4294967295) = 1  //读取数据事件来了
+
+	channel.read(buffer);
+	read(10, "2345\n", 1024)                = 5
+}
+
+</code></pre> 
+<p>二、select函数处理过程：如何发现就绪的socket？一直论循？</p> 
+<p>系统调用和中断 </p> 
+<p>缺点：</p> 
+<p> </p> 
+<p>参考资料：</p> 
+<p>一网打尽：面试中的 IO 多路复用高频题！<br> https://mp.weixin.qq.com/s/iVfLZJ89UMtu3Z5IgpoCoQ</p> 
+<p>框架篇：见识一下linux高性能网络IO+Reactor模型<br> https://mp.weixin.qq.com/s/JPcOKoWhBDW59GpO37Jq4w</p> 
+<p>从实践角度重新理解 BIO 和 NIO<br> https://mp.weixin.qq.com/s/lBg2YAunczH1DUjBvIurhQ</p> 
+<p>epoll<br> https://zhuanlan.zhihu.com/p/64138532</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/96bbb89f446cfd614c1cc58ad07af0cf/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">ros学习笔记（十）：树莓派 Ubuntu mate 16.04 开启vncserver 远程桌面&#43;自启动&#43;分辨率修改</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ca0e237002eaeb92376c1a26528f57b6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">opencv 读取视频及ret, frame = cap.read()函数含义</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【软件模块】适用于所有单片机的按键扫描算法 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【软件模块】适用于所有单片机的按键扫描算法" />
+<meta property="og:description" content="适用于所有单片机的按键扫描算法 前言一、算法设计二、代码实现参考资料 前言 单片机按键扫描是指利用微控制器（MCU）的数字输入口，定期检测按键的电平状态并进行去抖动处理（防止误操作），判断按键是否被按下或松开。
+常用的按键有两种：自复式按键和自锁式按键。自复式按键按下就通，松开就断，不会锁住。自锁式按键按下一次就通并锁住，再按一次就断并弹回，需要两次操作。
+本文介绍一种用于自复式按键的扫描算法，它有软件消抖功能，可以检测按键的短按和长按检测。
+一、算法设计 针对每一个独立按键，使用三个bits来标志按键的各个状态的转换：
+TrigFlag：按键被按下的触发标志，仅在按键被第一次检测到按下时置位为1，其它状态保持为0IdleFlag：按键被松开的触发标志，仅在按键被第一次检测到松开时置位为1，其它状态保持为0ContFlag：按键实时的状态标志，按键被检测到按下时为1，被检测到松开时为0ReadBit：扫描检测到的按键状态，按下时为1，松开时为0 以下一次按键过程中，这三个标志的状态变化情况：
+过程分析：
+初始状态下，扫描按键状态ReadBit = 0，状态标志TrigFlag = 0,IdleFlag = 0,ContFlag = 0;按下按键后，扫描按键状态ReadBit = 1，经计算处理TrigFlag = 1,IdleFlag = 0,ContFlag = 1;再次扫描按键状态（消抖）ReadBit = 1，经计算处理TrigFlag = 0,IdleFlag = 0,ContFlag = 1，
+标志由TrigFlag = 1,IdleFlag = 0,ContFlag = 1变到TrigFlag = 0,IdleFlag = 0,ContFlag = 1可以判断按键被按下;保持按键按下，扫描按键状态ReadBit = 1，状态标志也将保持TrigFlag = 0,IdleFlag = 0,ContFlag = 1不再变化;状态标志将保持为TrigFlag = 0,IdleFlag = 0,ContFlag = 1的时间达到设置的按键长按时间，可以判断按键被长按;当松开按键后，扫描按键状态ReadBit = 0，经计算处理TrigFlag = 0,IdleFlag = 1,ContFlag = 0;再次扫描按键状态（消抖）ReadBit = 0，经计算处理TrigFlag = 0,IdleFlag = 0,ContFlag = 0，" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/5ece8d83e78aec5159cdab04bad5700a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-14T19:34:44+08:00" />
+<meta property="article:modified_time" content="2023-03-14T19:34:44+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【软件模块】适用于所有单片机的按键扫描算法</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>适用于所有单片机的按键扫描算法</h4> 
+ <ul><li><a href="#_4" rel="nofollow">前言</a></li><li><a href="#_12" rel="nofollow">一、算法设计</a></li><li><a href="#_35" rel="nofollow">二、代码实现</a></li><li><a href="#_278" rel="nofollow">参考资料</a></li></ul> 
+</div> 
+<p></p> 
+<hr> 
+<h2><a id="_4"></a>前言</h2> 
+<p>单片机按键扫描是指利用微控制器（MCU）的数字输入口，定期检测按键的电平状态并进行去抖动处理（防止误操作），判断按键是否被按下或松开。</p> 
+<p>常用的按键有两种：自复式按键和自锁式按键。自复式按键按下就通，松开就断，不会锁住。自锁式按键按下一次就通并锁住，再按一次就断并弹回，需要两次操作。</p> 
+<p>本文介绍一种用于自复式按键的扫描算法，它有软件消抖功能，可以检测按键的短按和长按检测。</p> 
+<hr> 
+<h2><a id="_12"></a>一、算法设计</h2> 
+<p>针对每一个独立按键，使用三个bits来标志按键的各个状态的转换：</p> 
+<ol><li>TrigFlag：按键被按下的触发标志，仅在按键被第一次检测到按下时置位为1，其它状态保持为0</li><li>IdleFlag：按键被松开的触发标志，仅在按键被第一次检测到松开时置位为1，其它状态保持为0</li><li>ContFlag：按键实时的状态标志，按键被检测到按下时为1，被检测到松开时为0</li><li>ReadBit：扫描检测到的按键状态，按下时为1，松开时为0</li></ol> 
+<p>以下一次按键过程中，这三个标志的状态变化情况：<br> <img src="https://images2.imgbox.com/2b/f0/8xqC75Jv_o.png" alt="按键状态变化"><br> 过程分析：</p> 
+<ol><li>初始状态下，扫描按键状态<code>ReadBit = 0</code>，状态标志<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 0</code>;</li><li>按下按键后，扫描按键状态<code>ReadBit = 1</code>，经计算处理<code>TrigFlag = 1</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 1</code>;</li><li>再次扫描按键状态（消抖）<code>ReadBit = 1</code>，经计算处理<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 1</code>，<br> <strong>标志由<code>TrigFlag = 1</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 1</code>变到<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 1</code>可以判断按键被按下</strong>;</li><li>保持按键按下，扫描按键状态<code>ReadBit = 1</code>，状态标志也将保持<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 1</code>不再变化;</li><li><strong>状态标志将保持为<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 1</code>的时间达到设置的按键长按时间，可以判断按键被长按</strong>;</li><li>当松开按键后，扫描按键状态<code>ReadBit = 0</code>，经计算处理<code>TrigFlag = 0</code>,<code>IdleFlag = 1</code>,<code>ContFlag = 0</code>;</li><li>再次扫描按键状态（消抖）<code>ReadBit = 0</code>，经计算处理<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 0</code>，<br> <strong>标志由<code>TrigFlag = 0</code>,<code>IdleFlag = 1</code>,<code>ContFlag = 0</code>变到<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 1</code>可以判断按键被松开</strong>;</li><li>最后，按键状态将回到初始的松开状态<code>ReadBit = 0</code>，状态标志<code>TrigFlag = 0</code>,<code>IdleFlag = 0</code>,<code>ContFlag = 0</code>.</li></ol> 
+<p>根据上述过程的第3，5，7步的状态变化，就确定出按键的真实工作状态。</p> 
+<h2><a id="_35"></a>二、代码实现</h2> 
+<p>根据上述原理，使用C语言实现了该按键扫描算法，完整代码如下：</p> 
+<p><strong>头文件：bsp_key.h</strong></p> 
+<pre><code class="prism language-c"><span class="token comment">/**
+ * @file bsp_key.h
+ * @author Sean
+ * @brief The header file of key-scanning driver.
+ * @version 0.1
+ * @date 2023-02-28
+ *
+ * @copyright Copyright (c) 2023
+ *
+ */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifndef</span> <span class="token expression">__BSP_KEY_H__</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">__BSP_KEY_H__</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;stdint.h&gt;</span></span>
+
+<span class="token comment">// typedef for interface: function for scanning the key, return 1 means the key is pressed, 0 means the key is not pressed.</span>
+<span class="token keyword">typedef</span> <span class="token class-name">uint8_t</span> <span class="token punctuation">(</span><span class="token operator">*</span>key_scan<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// typedef for interface: function for callback when short press the key.</span>
+<span class="token keyword">typedef</span> <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>key_call_trig<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// typedef for interface: function for callback when long press the key.</span>
+<span class="token keyword">typedef</span> <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>key_call_cont<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// typedef for key config bit struct</span>
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// User set this bit for enable/disable the key keep press callback function.</span>
+    <span class="token class-name">uint8_t</span> bitEnableTrig <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token comment">// User set this bit for enable/disable the key long press callback function.</span>
+    <span class="token class-name">uint8_t</span> bitEnableCont <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// Handle task will use this bits, user not need to handle it.</span>
+    <span class="token class-name">uint8_t</span> bitTrigLast <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> bitIdleLast <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> bitContLast <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> bitTrig <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> bitIdle <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> bitCont <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> KeyConfig_b<span class="token punctuation">;</span>
+
+<span class="token comment">// typedef for key handle struct</span>
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// key config bit struct.</span>
+    KeyConfig_b bitKeyConfig<span class="token punctuation">;</span>
+    <span class="token comment">// Time for trigger long press = u16LongTrig * time between key_handle() calls.</span>
+    <span class="token keyword">const</span> <span class="token class-name">uint16_t</span> u16LongTrig<span class="token punctuation">;</span>
+
+    <span class="token comment">// Define the interface function.</span>
+    key_scan key_scan_func<span class="token punctuation">;</span>
+    key_call_trig key_call_trig_func<span class="token punctuation">;</span>
+    key_call_cont key_call_cont_func<span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token class-name">key_config_t</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Handle key task, this function should be called every 5-10ms generally.</span>
+<span class="token keyword">void</span> <span class="token function">key_handle</span><span class="token punctuation">(</span><span class="token class-name">key_config_t</span> <span class="token operator">*</span>ctx<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span> <span class="token comment">// __BSP_KEY_H__</span></span>
+
+</code></pre> 
+<p><strong>源文件：bsp_key.c</strong></p> 
+<pre><code class="prism language-c"><span class="token comment">/**
+ * @file bsp_key.c
+ * @author Sean
+ * @brief The source file of key-scanning driver.
+ * @version 0.1
+ * @date 2023-02-28
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"bsp_key.h"</span></span>
+
+<span class="token comment">/**
+ * @brief Handle key task.
+ *
+ * @warning This function should be called every 5-10ms generally, you can also make adjustments based on your keys.
+ *
+ * @param ctx Interface definitions.(ptr)
+ *
+ */</span>
+<span class="token keyword">void</span> <span class="token function">key_handle</span><span class="token punctuation">(</span><span class="token class-name">key_config_t</span> <span class="token operator">*</span>ctx<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token class-name">uint8_t</span> u8ReadKey <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">static</span> <span class="token class-name">uint8_t</span> u8PressType <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">static</span> <span class="token class-name">uint16_t</span> u16LongTrig <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    
+    <span class="token comment">// Check if interface functions are set.</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>key_scan_func <span class="token operator">==</span> <span class="token constant">NULL</span> <span class="token operator">||</span> ctx<span class="token operator">-&gt;</span>key_call_trig_func <span class="token operator">==</span> <span class="token constant">NULL</span> <span class="token operator">||</span> ctx<span class="token operator">-&gt;</span>key_call_cont_func <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token comment">// Backup last states of keys.</span>
+    ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrigLast <span class="token operator">=</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrig<span class="token punctuation">;</span>
+    ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdleLast <span class="token operator">=</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdle<span class="token punctuation">;</span>
+    ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitContLast <span class="token operator">=</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitCont<span class="token punctuation">;</span>
+
+    <span class="token comment">// Scan the states of keys and handle the current states of the keys.</span>
+    u8ReadKey <span class="token operator">=</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span><span class="token function">key_scan_func</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">?</span> <span class="token number">0</span> <span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrig <span class="token operator">=</span> u8ReadKey <span class="token operator">&amp;</span> <span class="token punctuation">(</span>u8ReadKey <span class="token operator">^</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitCont<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdle <span class="token operator">=</span> u8ReadKey <span class="token operator">^</span> <span class="token punctuation">(</span>u8ReadKey <span class="token operator">|</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitCont<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitCont <span class="token operator">=</span> u8ReadKey<span class="token punctuation">;</span>
+
+    <span class="token comment">// Check if the key is pressed.</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrigLast <span class="token operator">==</span> <span class="token number">1</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdleLast <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitContLast <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrig <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdle <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitCont <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">// check short press.</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitEnableTrig <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+            <span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">if</span><span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitEnableCont <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+                    u8PressType <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+                <span class="token keyword">else</span>
+                    ctx<span class="token operator">-&gt;</span><span class="token function">key_call_trig_func</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">// Check if the key is keep pressed.</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrigLast <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdleLast <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitContLast <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrig <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdle <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitCont <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+            <span class="token comment">// check long press.</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitEnableCont <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+            <span class="token punctuation">{<!-- --></span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>u16LongTrig <span class="token operator">&lt;</span> ctx<span class="token operator">-&gt;</span>u16LongTrig<span class="token punctuation">)</span>
+                <span class="token punctuation">{<!-- --></span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">++</span>u16LongTrig <span class="token operator">&gt;=</span> ctx<span class="token operator">-&gt;</span>u16LongTrig<span class="token punctuation">)</span>
+                    <span class="token punctuation">{<!-- --></span>
+                        u8PressType <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+                        ctx<span class="token operator">-&gt;</span><span class="token function">key_call_cont_func</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">// Check if the key is released.</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrigLast <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdleLast <span class="token operator">==</span> <span class="token number">1</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitContLast <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitTrig <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitIdle <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">&amp;&amp;</span> ctx<span class="token operator">-&gt;</span>bitKeyConfig<span class="token punctuation">.</span>bitCont <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">if</span><span class="token punctuation">(</span>u8PressType <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span>
+                ctx<span class="token operator">-&gt;</span><span class="token function">key_call_trig_func</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            
+            <span class="token comment">//ctx-&gt;key_call_idle_func();</span>
+            u8PressType <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+            u16LongTrig <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<p><em><strong>注意</strong>：如果只使能按键短按检测，按键短按的回调函数将在按键被按下时调用；如果只使能按键长按检测，按键长按的回调函数将在按键被按下到达设定的时间后调用；如果同时使能按键短按和长按检测，按键短按的回调函数将在按键被松开时调用，按键长按的回调函数将在按键被按下到达设定的时间后调用。</em></p> 
+<p><strong>使用方法</strong></p> 
+<ol><li>将代码文件拷贝到工程目录，并包含bsp_key.h头文件。</li></ol> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"bsp_key.h"</span></span>
+</code></pre> 
+<ol start="2"><li>先实现自己的按键状态检测函数<code>uint8_t u8KeyScan(void)</code>, 按键短按回调函数<code>void vKeyShort(void)</code>和按键长按回调函数<code>void vKeyLong(void)</code>，然后定义一个按键配置的结构体<code>pkey_config</code>，结构体中<code>pkey_config.bitKeyConfig.bitEnableTrig</code>为使能按键短按检测控制位，<code>pkey_config.bitKeyConfig.bitEnableCont</code>为使能按键长按检测控制位，<code>pkey_config.u16LongTrig</code>为设置按键长按检测时间（实际时间 = <code>key_handle()</code>函数调用间隔时间 * <code>pkey_config.u16LongTrig</code>），<code>pkey_config.key_scan_func</code>,<code>pkey_config.key_call_trig_func</code>和<code>pkey_config.key_call_cont_func</code>分别为注册自己实现的三个接口函数。</li></ol> 
+<pre><code class="prism language-c"><span class="token comment">// Function list</span>
+<span class="token class-name">uint8_t</span> <span class="token function">u8KeyScan</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">vKeyShort</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">vKeyLong</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Global variable</span>
+<span class="token class-name">key_config_t</span> pkey_config <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token punctuation">.</span>bitKeyConfig <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token punctuation">.</span>bitEnableTrig <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">,</span>  <span class="token comment">// Enable button short prass detection</span>
+        <span class="token punctuation">.</span>bitEnableCont <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">,</span>  <span class="token comment">// Enable button long prass detection</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">.</span>u16LongTrig <span class="token operator">=</span> <span class="token number">1000</span><span class="token punctuation">,</span>  <span class="token comment">// Set long prass detection time = 1000 * 5ms(key_handle() is called every 5ms)</span>
+    <span class="token punctuation">.</span>key_scan_func <span class="token operator">=</span> u8KeyScan<span class="token punctuation">,</span>  <span class="token comment">// Register interface function</span>
+    <span class="token punctuation">.</span>key_call_trig_func <span class="token operator">=</span> vKeyShort<span class="token punctuation">,</span>  <span class="token comment">// Register callback function</span>
+    <span class="token punctuation">.</span>key_call_cont_func <span class="token operator">=</span> vKeyLong<span class="token punctuation">}</span><span class="token punctuation">;</span>  <span class="token comment">// Register callback function</span>
+
+<span class="token comment">/**
+ * @brief The interface of key scan.
+ *
+ * @return uint8_t The state of key, 1: key down, 0: key up.
+ */</span>
+<span class="token class-name">uint8_t</span> <span class="token function">u8KeyScan</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token function">get_boot_key</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">?</span> <span class="token number">0x01</span> <span class="token operator">:</span> <span class="token number">0x00</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/**
+ * @brief The callback interface of key short.
+ *
+ */</span>
+<span class="token keyword">void</span> <span class="token function">vKeyShort</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token function">led_toggle</span><span class="token punctuation">(</span>LED5<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">ESP_LOGI</span><span class="token punctuation">(</span>TAG<span class="token punctuation">,</span> <span class="token string">"Key has been short pressed, Led5 have been toggle."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/**
+ * @brief The callback interface of key long.
+ *
+ */</span>
+<span class="token keyword">void</span> <span class="token function">vKeyLong</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token function">led_toggle</span><span class="token punctuation">(</span>LED4<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">ESP_LOGI</span><span class="token punctuation">(</span>TAG<span class="token punctuation">,</span> <span class="token string">"Key has been long pressed, Led4 have been toggle."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<ol start="3"><li>在<code>main（）</code>函数中定时调用<code>key_handle（）</code>函数，注意具体间隔时间可能需要按照使用按键的类型做一定调整。</li></ol> 
+<pre><code class="prism language-c"><span class="token comment">/**
+ * @brief Main function.
+ *
+ * @param pvParameters
+ */</span>
+<span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token comment">// Initialize the gpio of key.</span>
+    <span class="token function">gpio_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// put your main code here, to run Keepedly.</span>
+        <span class="token function">key_handle</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>pkey_config<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">vDelay_ms</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<hr> 
+<h2><a id="_278"></a>参考资料</h2> 
+<p>1.<a href="https://www.amobbs.com/thread-4308630-1-1.html" rel="nofollow">新型的按键扫描程序，仅三行程序：https://www.amobbs.com/thread-4308630-1-1.html</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4105d225a08224e488da128fb7530074/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Java Stream 实用特性：排序、分组和 teeing</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f30dbc654e1f3432b98f316fe793d859/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">BFS和DFS入门题 洛谷B3625</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

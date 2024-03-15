@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Airtest测试Windows窗口翻车？还是想跟你们聊聊测试win窗口的一些问题 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Airtest测试Windows窗口翻车？还是想跟你们聊聊测试win窗口的一些问题" />
+<meta property="og:description" content="版权声明：允许转载，但转载必须保留原链接；请勿用作商业或者非法用途
+此文章来源于项目官方公众号：“AirtestProject”
+前言 很多同学反馈在测试Windows应用窗口的时候，经常遇到 窗口连接不上 、不知道窗口句柄是什么 ，发送 删除/回车 等 keyevent 的时候总是 不生效 的情况，所以今天我们带大家一起来看看用airtest测试Windows窗口的常见问题。
+1.在IDE中连接Windows窗口 airtest提供了多种连接Windows应用窗口的方法，嵌入式连接和无嵌入式连接等，如果你使用嵌入式连接的方式不能正常连接待测的Windows窗口，比如出 现窗口被拉伸 、窗口黑屏、不能正常录制脚本 等情况，你还可以选择用无嵌入式连接或桌面模式。
+嵌入式连接 而嵌入式连接又分两种，一种是“选定窗口”，另外一种是“搜索窗口”。
+“选定窗口”的方式很简单，直接在IDE的Windows窗口连接那块面板上点击“选定窗口”，之后再把鼠标移动到待测窗口上，此时待测窗口会被一个绿色的矩形框圈住，单击鼠标左键即可把待测窗口嵌入到我们的IDE中：
+[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-GSaIdyme-1594810082407)(https://note.youdao.com/yws/public/resource/3304e6dc5125f0b2a20423dea86ea776/xmlnote/EE2DDA1FCC4143208E8AF9ABB7E464A0/26734)]
+当然如果我们不使用“选定窗口”，而是使用其旁边的“搜索窗口”，IDE则会弹出一个当前所有已打开窗口的title列表，此时我们只需要找到待测窗口的title，然后点击右侧对应的 连接 按钮即可把应用窗口嵌入到我们的IDE中：
+无嵌入式连接 无嵌入式连接，即 不用把应用窗口嵌入到IDE 上去，依旧可以对待测应用进行自动化测。在IDE的顶部菜单栏依次选择 选项--设置--勾选上Windows窗口无嵌入连接--OK ，之后再点击“选定窗口”，将鼠标移动到待测窗口上并单击，此时应用窗口没有被嵌入到IDE中，并且IDE的设备窗口也会自动隐藏起来。之后我们就可以像嵌入窗口那样对待测应用进行自动化测试操作：
+桌面模式 假如同学们想要测试的窗口不止一个（即拥有多个不同的窗口句柄），单独 嵌入/选定 一个窗口可能无法满足测试需求，此时我们就可以使用“桌面模式”。
+点击桌面模式按钮，此时AirtestIDE右侧的设备窗口将会完全隐藏，进入Windows桌面模式。在此模式下，录制脚本与运行脚本都与正常情况下没有区别，只不过执行时将会对整个桌面进行截图识别，甚至可以识别到AirtestIDE代码窗口里的截图语句（因此在执行脚本时，请尽量缩小AirtestIDE的窗口，避免脚本界面里的截图干扰执行结果）。
+2.用代码连接Windows窗口 使用窗口句柄 在AirtestIDE里连接的窗口，都是用窗口句柄连接的。窗口句柄是每个Windows窗口对象拥有的独一无二的32位无符号整数，而且每次打开窗口，句柄的数值都会变化。
+这就意味着，假如我们用某个窗口嵌入到AirtestIDE里写出了一个脚本，虽然这次可以直接运行，但是通过复制AirtestIDE里的脚本命令行的方式，是无法保证下一次还能够运行的。因为AirtestIDE里的命令行，将会有这样的参数内容 --device Windows:///句柄，而下次再打开窗口，可能句柄已经发生了变化。
+使用句柄连接窗口的脚本我们可以这么写：
+auto_setup(__file__,devices=[&#34;Windows:///133194&#34;]) 但是该连接脚本仅对本次打开的Windows窗口有效，如果Windows窗口被关闭后重新打开，句柄也将会发生变化，该脚本失效。
+使用正则表达式 上文我们提到，使用“搜索窗口”连接窗口的时候，IDE会列出当前所有打开窗口的title，我们可以 写一个正则表达式去匹配到待测窗口的title，并使用这个正则表达式来连接该窗口：
+# 例如匹配“吹梦到西洲”后面跟着换行符以外的任意字符的窗口title auto_setup(__file__,devices=[&#34;Windows:///?title_re=吹梦到西洲.*&#34;]) 大多数情况下，窗口的title比较不容易变化，所以使用正则表达式匹配窗口title来连接待测窗口的脚本，会相对稳定些。
+连接整个桌面 如果不需要置顶某个窗口应用的话，我们还可以使用如下代码直接连接整个桌面来做自动化：
+auto_setup(__file__,devices=[&#34;Windows:///&#34;]) 3.在Windows应用上发keyevent 最后我们来看一下在Windows应用上发送 keyevent 的失效的问题。举个很常见的例子：很多同学反馈，自己想在Windows窗口的某个输入框内删除一些字符，所以使用了 DELETE 这个键码，但是实际运行效果是不仅没有生效，而且还把键码 DELETE 写到了输入框里面，这是为什么呢？
+其实是因为同学们把Android的按键码和Windows的按键码混淆了。Android的按键码是基于ADB的，而Airtest的Windows模块则封装使用了pywinauto 支持的按键码，所以这就导致了 DELETE 键码在Android设备中生效，而在Windows窗口就不生效。
+在 pywinauto 库中，删除的键码实际上是 {DELETE} ，所以我们想要在Windows窗口上实现删除字符的效果，可以这么写：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/73061a1ed1c1588bfd3760b77af2a935/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-07-16T10:00:05+08:00" />
+<meta property="article:modified_time" content="2020-07-16T10:00:05+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Airtest测试Windows窗口翻车？还是想跟你们聊聊测试win窗口的一些问题</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <blockquote> 
+ <p>版权声明：允许转载，但转载必须保留原链接；请勿用作商业或者非法用途<br> 此文章来源于项目官方公众号：“AirtestProject”</p> 
+</blockquote> 
+<h4><a id="_2"></a>前言</h4> 
+<p>很多同学反馈在测试Windows应用窗口的时候，经常遇到 <strong>窗口连接不上</strong> 、<strong>不知道窗口句柄是什么</strong> ，发送 <strong>删除/回车</strong> 等 <code>keyevent</code> 的时候总是 <strong>不生效</strong> 的情况，所以今天我们带大家一起来看看用airtest测试Windows窗口的常见问题。</p> 
+<h4><a id="1IDEWindows_6"></a>1.在IDE中连接Windows窗口</h4> 
+<p>airtest提供了多种连接Windows应用窗口的方法，嵌入式连接和无嵌入式连接等，如果你使用嵌入式连接的方式不能正常连接待测的Windows窗口，比如出 <strong>现窗口被拉伸</strong> 、<strong>窗口黑屏</strong>、<strong>不能正常录制脚本</strong> 等情况，你还可以选择用无嵌入式连接或桌面模式。</p> 
+<h6><a id="_9"></a>嵌入式连接</h6> 
+<p>而嵌入式连接又分两种，一种是“<strong>选定窗口</strong>”，另外一种是“<strong>搜索窗口</strong>”。</p> 
+<p>“选定窗口”的方式很简单，直接在IDE的Windows窗口连接那块面板上点击“选定窗口”，之后再把鼠标移动到待测窗口上，此时待测窗口会被一个绿色的矩形框圈住，单击鼠标左键即可把待测窗口嵌入到我们的IDE中：</p> 
+<p>[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-GSaIdyme-1594810082407)(https://note.youdao.com/yws/public/resource/3304e6dc5125f0b2a20423dea86ea776/xmlnote/EE2DDA1FCC4143208E8AF9ABB7E464A0/26734)]</p> 
+<p>当然如果我们不使用“选定窗口”，而是使用其旁边的“搜索窗口”，IDE则会弹出一个当前所有已打开窗口的title列表，此时我们只需要找到待测窗口的title，然后点击右侧对应的 <code>连接</code> 按钮即可把应用窗口嵌入到我们的IDE中：</p> 
+<p><img src="https://images2.imgbox.com/d2/50/WNy9l21o_o.png" alt="image"></p> 
+<h6><a id="_20"></a>无嵌入式连接</h6> 
+<p>无嵌入式连接，即 <strong>不用把应用窗口嵌入到IDE</strong> 上去，依旧可以对待测应用进行自动化测。在IDE的顶部菜单栏依次选择 <code>选项--设置--勾选上Windows窗口无嵌入连接--OK</code> ，之后再点击“选定窗口”，将鼠标移动到待测窗口上并单击，此时应用窗口没有被嵌入到IDE中，并且IDE的设备窗口也会自动隐藏起来。之后我们就可以像嵌入窗口那样对待测应用进行自动化测试操作：</p> 
+<p><img src="https://images2.imgbox.com/d7/fc/bWrj7dZ1_o.png" alt="image"></p> 
+<h6><a id="_25"></a>桌面模式</h6> 
+<p>假如同学们想要测试的窗口不止一个（即拥有多个不同的窗口句柄），单独 嵌入/选定 一个窗口可能无法满足测试需求，此时我们就可以使用“桌面模式”。</p> 
+<p><img src="https://images2.imgbox.com/0d/b3/qDl6gtHh_o.png" alt="image"></p> 
+<p>点击桌面模式按钮，此时AirtestIDE右侧的设备窗口将会完全隐藏，进入Windows桌面模式。在此模式下，录制脚本与运行脚本都与正常情况下没有区别，只不过执行时将会对整个桌面进行截图识别，甚至可以识别到AirtestIDE代码窗口里的截图语句（因此在执行脚本时，请尽量缩小AirtestIDE的窗口，避免脚本界面里的截图干扰执行结果）。</p> 
+<p><img src="https://images2.imgbox.com/88/90/c5x3jr4T_o.png" alt="image"></p> 
+<h4><a id="2Windows_35"></a>2.用代码连接Windows窗口</h4> 
+<h6><a id="_37"></a>使用窗口句柄</h6> 
+<p>在AirtestIDE里连接的窗口，都是用窗口句柄连接的。窗口句柄是每个Windows窗口对象拥有的独一无二的32位无符号整数，而且<strong>每次打开窗口，句柄的数值都会变化</strong>。</p> 
+<p>这就意味着，假如我们用某个窗口嵌入到AirtestIDE里写出了一个脚本，虽然这次可以直接运行，但是通过复制AirtestIDE里的脚本命令行的方式，是无法保证下一次还能够运行的。因为AirtestIDE里的命令行，将会有这样的参数内容 <code>--device Windows:///句柄</code>，而下次再打开窗口，可能句柄已经发生了变化。</p> 
+<p><img src="https://images2.imgbox.com/09/9e/iCPiYOjN_o.png" alt="image"></p> 
+<p>使用句柄连接窗口的脚本我们可以这么写：</p> 
+<pre><code>auto_setup(__file__,devices=["Windows:///133194"])
+</code></pre> 
+<p>但是该连接脚本仅对本次打开的Windows窗口有效，如果Windows窗口被关闭后重新打开，句柄也将会发生变化，该脚本失效。</p> 
+<h6><a id="_50"></a>使用正则表达式</h6> 
+<p>上文我们提到，使用“搜索窗口”连接窗口的时候，IDE会列出当前所有打开窗口的title，我们可以 <strong>写一个正则表达式去匹配到待测窗口的title</strong>，并使用这个正则表达式来连接该窗口：</p> 
+<pre><code># 例如匹配“吹梦到西洲”后面跟着换行符以外的任意字符的窗口title
+auto_setup(__file__,devices=["Windows:///?title_re=吹梦到西洲.*"])
+</code></pre> 
+<p><img src="https://images2.imgbox.com/6f/0e/Ig0Hpbbs_o.png" alt="image"></p> 
+<p>大多数情况下，窗口的title比较不容易变化，所以使用正则表达式匹配窗口title来连接待测窗口的脚本，会相对稳定些。</p> 
+<h6><a id="_62"></a>连接整个桌面</h6> 
+<p>如果不需要置顶某个窗口应用的话，我们还可以使用如下代码直接连接整个桌面来做自动化：</p> 
+<pre><code>auto_setup(__file__,devices=["Windows:///"])
+</code></pre> 
+<h4><a id="3Windowskeyevent_70"></a>3.在Windows应用上发keyevent</h4> 
+<p>最后我们来看一下在Windows应用上发送 <code>keyevent</code> 的失效的问题。举个很常见的例子：很多同学反馈，自己想在Windows窗口的某个输入框内删除一些字符，所以使用了 <code>DELETE</code> 这个键码，但是实际运行效果是不仅没有生效，而且还把键码 <code>DELETE</code> 写到了输入框里面，这是为什么呢？</p> 
+<p>其实是因为同学们把Android的按键码和Windows的按键码混淆了。Android的按键码是基于ADB的，而<strong>Airtest的Windows模块则封装使用了<code>pywinauto</code> 支持的按键码</strong>，所以这就导致了 <code>DELETE</code> 键码在Android设备中生效，而在Windows窗口就不生效。</p> 
+<p>在 <code>pywinauto</code> 库中，删除的键码实际上是 <code>{DELETE}</code> ，所以我们想要在Windows窗口上实现删除字符的效果，可以这么写：</p> 
+<pre><code>keyevent("{DELETE}")
+</code></pre> 
+<p>更多Windows的键码可以参照下图，我们可以看到，Windows的键码都是用 <code>{}</code> 框起来的：</p> 
+<p><img src="https://images2.imgbox.com/98/4d/60hB1R4K_o.png" alt="image"></p> 
+<p>在 <code>keyevent()</code>中不使用 <code>{}</code> 框起来的字符，都会被当成需要输入的字符串，被输入到Windows窗口的输入框上。</p> 
+<p><a href="http://airtest.netease.com/" rel="nofollow">Airtest官网</a>：http://airtest.netease.com/<br> <a href="https://airtest.doc.io.netease.com/" rel="nofollow">Airtest教程官网</a>：https://airtest.doc.io.netease.com/<br> <a href="https://airlab.163.com/b2b" rel="nofollow">搭建企业私有云服务</a>：https://airlab.163.com/b2b</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/089565dae5f99d1553b026ba5c62b4a2/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">SQL分页查询：offset xxx rows fetch next xxx rows only 方式</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/1aac6ff32b39c20201d9c6168ac61e0e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Python-Opencv学习总结（五）：形态学转换</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【Spring Boot 源码学习】ApplicationListener 详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【Spring Boot 源码学习】ApplicationListener 详解" />
+<meta property="og:description" content="《Spring Boot 源码学习系列》
+ApplicationListener 详解 引言往期内容主要内容1. 初识 ApplicationListener2. 加载 ApplicationListener3. 响应应用程序事件 总结 引言 书接前文《初识 SpringApplication》，我们从 Spring Boot 的启动类 SpringApplication 上入手，了解了 SpringApplication 实例化过程。其中，《BootstrapRegistryInitializer 详解》 和 《ApplicationContextInitializer 详解》博文中，Huazie 已经带大家详细分析了 BootstrapRegistryInitializer 和 ApplicationContextInitializer 的加载和初始化过程，如下还有 2.5 还未详细分析：
+那本篇博文就主要围绕 2.5 的内容展开，详细分析一下 ApplicationListener 的加载和处理应用程序事件的逻辑。
+往期内容 在开始本篇的内容介绍之前，我们先来看看往期的系列文章【有需要的朋友，欢迎关注系列专栏】：
+Spring Boot 源码学习 Spring Boot 项目介绍 Spring Boot 核心运行原理介绍 【Spring Boot 源码学习】@EnableAutoConfiguration 注解 【Spring Boot 源码学习】@SpringBootApplication 注解 【Spring Boot 源码学习】走近 AutoConfigurationImportSelector 【Spring Boot 源码学习】自动装配流程源码解析（上） 【Spring Boot 源码学习】自动装配流程源码解析（下） 【Spring Boot 源码学习】深入 FilteringSpringBootCondition 【Spring Boot 源码学习】OnClassCondition 详解 【Spring Boot 源码学习】OnBeanCondition 详解 【Spring Boot 源码学习】OnWebApplicationCondition 详解 【Spring Boot 源码学习】@Conditional 条件注解 【Spring Boot 源码学习】HttpEncodingAutoConfiguration 详解 【Spring Boot 源码学习】RedisAutoConfiguration 详解 【Spring Boot 源码学习】JedisConnectionConfiguration 详解 【Spring Boot 源码学习】初识 SpringApplication 【Spring Boot 源码学习】Banner 信息打印流程 【Spring Boot 源码学习】自定义 Banner 信息打印 【Spring Boot 源码学习】BootstrapRegistryInitializer 详解 【Spring Boot 源码学习】ApplicationContextInitializer 详解 主要内容 注意： 以下涉及 Spring Boot 源码 均来自版本 2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ae5458a45e30b09775b2c3098518cf16/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-01-22T17:39:52+08:00" />
+<meta property="article:modified_time" content="2024-01-22T17:39:52+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【Spring Boot 源码学习】ApplicationListener 详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p><a href="https://blog.csdn.net/u012855229/category_12387912.html">《Spring Boot 源码学习系列》</a></p> 
+<p><img src="https://images2.imgbox.com/54/dc/prjMjFR9_o.jpg" alt="在这里插入图片描述"></p> 
+<p></p> 
+<div class="toc"> 
+ <h4>ApplicationListener 详解</h4> 
+ <ul><li><a href="#_7" rel="nofollow">引言</a></li><li><a href="#_15" rel="nofollow">往期内容</a></li><li><a href="#_126" rel="nofollow">主要内容</a></li><li><ul><li><a href="#1__ApplicationListener_128" rel="nofollow">1. 初识 ApplicationListener</a></li><li><a href="#2__ApplicationListener_154" rel="nofollow">2. 加载 ApplicationListener</a></li><li><a href="#3__187" rel="nofollow">3. 响应应用程序事件</a></li></ul> 
+  </li><li><a href="#_246" rel="nofollow">总结</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_7"></a>引言</h2> 
+<p>书接前文<a href="https://blog.csdn.net/u012855229/article/details/134266259">《初识 SpringApplication》</a>，我们从 <strong>Spring Boot</strong> 的启动类 <code>SpringApplication</code> 上入手，了解了 <code>SpringApplication</code> 实例化过程。其中，<a href="https://blog.csdn.net/u012855229/article/details/134515191">《BootstrapRegistryInitializer 详解》</a> 和 <a href="https://blog.csdn.net/u012855229/article/details/134515484">《ApplicationContextInitializer 详解》</a>博文中，Huazie 已经带大家详细分析了 <code>BootstrapRegistryInitializer</code> 和 <code>ApplicationContextInitializer</code> 的加载和初始化过程，如下还有 <strong>2.5</strong> 还未详细分析：<br> <img src="https://images2.imgbox.com/17/f1/1dbPzshl_o.png" alt="在这里插入图片描述"><br> 那本篇博文就主要围绕 <strong>2.5</strong> 的内容展开，详细分析一下 <code>ApplicationListener </code> 的加载和处理应用程序事件的逻辑。</p> 
+<p><a href="https://github.com/Huazie/flea-framework"><img src="https://images2.imgbox.com/a8/d0/fxi8fLFV_o.png" alt="在这里插入图片描述"></a></p> 
+<h2><a id="_15"></a>往期内容</h2> 
+<p>在开始本篇的内容介绍之前，我们先来看看往期的系列文章【有需要的朋友，欢迎关注系列专栏】：</p> 
+<table><tbody><tr><td rowspan="21" align="left"> <a href="https://blog.csdn.net/u012855229/category_12387912.html">Spring Boot 源码学习</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/129095276">Spring Boot 项目介绍</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/131692634">Spring Boot 核心运行原理介绍</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/131798732">【Spring Boot 源码学习】@EnableAutoConfiguration 注解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/131745159">【Spring Boot 源码学习】@SpringBootApplication 注解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/131988474">【Spring Boot 源码学习】走近 AutoConfigurationImportSelector</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/132023311">【Spring Boot 源码学习】自动装配流程源码解析（上）</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/132136590">【Spring Boot 源码学习】自动装配流程源码解析（下）</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/132432893">【Spring Boot 源码学习】深入 FilteringSpringBootCondition</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/132738150">【Spring Boot 源码学习】OnClassCondition 详解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/132912330">【Spring Boot 源码学习】OnBeanCondition 详解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/133624219">【Spring Boot 源码学习】OnWebApplicationCondition 详解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/133681149">【Spring Boot 源码学习】@Conditional 条件注解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/133902414">【Spring Boot 源码学习】HttpEncodingAutoConfiguration 详解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/133989164">【Spring Boot 源码学习】RedisAutoConfiguration 详解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/134233884">【Spring Boot 源码学习】JedisConnectionConfiguration 详解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/134266259">【Spring Boot 源码学习】初识 SpringApplication</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/134373269">【Spring Boot 源码学习】Banner 信息打印流程</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/134425752">【Spring Boot 源码学习】自定义 Banner 信息打印</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/134515191">【Spring Boot 源码学习】BootstrapRegistryInitializer 详解</a> </td></tr><tr><td align="left"> <a href="https://blog.csdn.net/u012855229/article/details/134515484">【Spring Boot 源码学习】ApplicationContextInitializer 详解</a> </td></tr></tbody></table> 
+<h2><a id="_126"></a>主要内容</h2> 
+<blockquote> 
+ <p><strong>注意：</strong> 以下涉及 <strong>Spring Boot</strong> 源码 均来自版本 <strong>2.7.9</strong>，其他版本有所出入，可自行查看源码。</p> 
+</blockquote> 
+<h3><a id="1__ApplicationListener_128"></a>1. 初识 ApplicationListener</h3> 
+<p>我们先来看看 <code>ApplicationListener </code> 接口的源码【<strong>spring-context-5.3.25.jar</strong>】：</p> 
+<pre><code class="prism language-java"><span class="token annotation punctuation">@FunctionalInterface</span>
+<span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">ApplicationListener</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">E</span> <span class="token keyword">extends</span> <span class="token class-name">ApplicationEvent</span><span class="token punctuation">&gt;</span></span> <span class="token keyword">extends</span> <span class="token class-name">EventListener</span> <span class="token punctuation">{<!-- --></span>
+
+	<span class="token keyword">void</span> <span class="token function">onApplicationEvent</span><span class="token punctuation">(</span><span class="token class-name">E</span> event<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token keyword">static</span> <span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token class-name">ApplicationListener</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">PayloadApplicationEvent</span><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span><span class="token punctuation">&gt;</span></span> <span class="token function">forPayload</span><span class="token punctuation">(</span><span class="token class-name">Consumer</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> consumer<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> event <span class="token operator">-&gt;</span> consumer<span class="token punctuation">.</span><span class="token function">accept</span><span class="token punctuation">(</span>event<span class="token punctuation">.</span><span class="token function">getPayload</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>从上述代码，我们可以看到 <code>ApplicationListener</code> 接口被 <code>@FunctionalInterface</code> 注解修饰。</p> 
+<blockquote> 
+ <p><strong>知识点：</strong> <code>@FunctionalInterface</code> 是 <strong>Java 8</strong> 中引入的一个注解，用于标识一个函数式接口。函数式接口是只有一个抽象方法的接口，常用于实现 <strong>Lambda</strong> 表达式和方法引用。<br> 使用 <code>@FunctionalInterface</code> 注解可以向编译器指示该接口是一个函数式接口，从而在编译时进行类型检查，确保该接口 <strong>只包含一个抽象方法</strong>。此外，该注解还可以为函数式接口生成特殊的方法，如默认方法（default method）和 静态方法（static method），这些方法可以在接口中提供更多的功能，这里就不赘述了，感兴趣的朋友可以自行查阅相关函数式接口的资料。</p> 
+</blockquote> 
+<p><code>ApplicationListener</code> 是 <strong>Spring</strong> 中应用程序事件监听器实现的接口。它基于观察者设计模式的<code>java.util.EventListener</code> 接口的标准。在注册到 <strong>Spring ApplicationContext</strong> 时，事件将进行相应的过滤，只有匹配的事件对象才会使该监听器被调用。</p> 
+<p>在 <code>ApplicationListener</code> 接口中，我们可以看到它定义了一个 <code>onApplicationEvent(E event)</code> 方法，当监听事件被触发时，<code>onApplicationEvent</code> 方法就会被调用执行。<code>onApplicationEvent</code> 方法一般用于处理应用程序事件，参数 <code>event</code> 为 <code>ApplicationEvent</code> 的子类，也就是具体要响应处理的各种类型的应用程序事件。例如，当某个特定事件发生时，你可能想要记录日志、更新数据库、发送电子邮件等等。</p> 
+<p>另外，<code>ApplicationListener</code> 接口还提供了一个静态方法 <code>forPayload(Consumer&lt;T&gt; consumer)</code>，用于创建一个新的 <code>ApplicationListener</code> 实例。这个方法接受一个 <code>Consumer&lt;T&gt;</code> 类型的参数，这个参数是一个函数接口，它接受一个泛型参数 <code>T</code>，并对其执行一些操作。通过这个方法，你可以将一个 <code>Consumer</code> 函数作为参数，然后返回一个对应的事件监听器。这个监听器会在事件发生时，调用 <code>Consumer</code> 函数处理事件的有效载荷【即事件中包含的有效信息或数据】。</p> 
+<h3><a id="2__ApplicationListener_154"></a>2. 加载 ApplicationListener</h3> 
+<pre><code class="prism language-java"><span class="token function">setListeners</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">Collection</span><span class="token punctuation">)</span> <span class="token function">getSpringFactoriesInstances</span><span class="token punctuation">(</span><span class="token class-name">ApplicationListener</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>上述代码是 <code>SpringApplication</code> 的核心构造方法中的逻辑，它用于加载实现了 <code>ApplicationListener</code> 接口的监听器实例集合，并将该监听器实例集合设置到 <code>SpringApplication</code> 的 <code>listeners</code> 变量中。</p> 
+<pre><code class="prism language-java"><span class="token keyword">private</span> <span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">ApplicationContextInitializer</span><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span><span class="token punctuation">&gt;</span></span> initializers<span class="token punctuation">;</span>
+</code></pre> 
+<p>我们进入 <code>getSpringFactoriesInstances</code> 方法，查看如下：</p> 
+<p><img src="https://images2.imgbox.com/66/3b/yqeYi4Cw_o.png" alt="在这里插入图片描述"></p> 
+<p>我们看到了如下的代码 ：</p> 
+<pre><code class="prism language-java"><span class="token class-name">SpringFactoriesLoader</span><span class="token punctuation">.</span><span class="token function">loadFactoryNames</span><span class="token punctuation">(</span>type<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>这里是通过 <code>SpringFactoriesLoader</code> 类的 <code>loadFactoryNames</code> 方法来获取 <code>META-INF/spring.factories</code> 中配置 key 为 <code>org.springframework.context.ApplicationListener</code> 的数据；</p> 
+<p>我们以 <strong>spring-boot-autoconfigure-2.7.9.jar</strong> 为例：</p> 
+<p><img src="https://images2.imgbox.com/4d/e4/OnVGgbYH_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-bash"><span class="token comment"># Application Listeners</span>
+<span class="token assign-left variable">org.springframework.context.ApplicationListener</span><span class="token operator">=</span><span class="token punctuation">\</span>
+org.springframework.boot.autoconfigure.BackgroundPreinitializer
+</code></pre> 
+<h3><a id="3__187"></a>3. 响应应用程序事件</h3> 
+<p>这里我们需要查看 <code>SpringApplication</code> 的 <code>run(String... args)</code> 方法，如下所示：</p> 
+<p><img src="https://images2.imgbox.com/d2/a9/TZ2tEkqW_o.png" alt="在这里插入图片描述"></p> 
+<p>我们看上面的 <code>SpringApplicationRunListeners</code> ，其内的 <code>listeners</code> 变量是 <code>SpringApplicationRunListener</code> 接口的集合，如下所示：</p> 
+<p><img src="https://images2.imgbox.com/5e/3b/lBAUdT13_o.png" alt="在这里插入图片描述"></p> 
+<p>而 <code>SpringApplicationRunListener</code> 接口的一个实现就是 <code>EventPublishingRunListener</code> 类，该类的作用就是根据 <strong>Spring Boot</strong> 程序启动过程的 <strong>不同阶段</strong> 发布对应的事件，然后由不同的实现 <code>ApplicationListener</code> 接口的应用程序监听器，来处理对应的事件【有关 <code>SpringApplicationRunListener</code> 监听器的内容，我们后续博文中会详细介绍，这里不展开了】。</p> 
+<p>如下图是 <code>SpringApplicationRunListeners</code> 类中的方法，它们分别对应了 <strong>Spring Boot</strong> 程序启动过程中要发布的<strong>不同阶段</strong>的事件的逻辑。</p> 
+<p><img src="https://images2.imgbox.com/ff/29/fNimseQh_o.png" alt="在这里插入图片描述"></p> 
+<ul><li><code>starting</code> ：当 <code>run</code> 方法第一次被执行时，该方法会立即被调用，可用于非常早期的初始化工作</li><li><code>environmentPrepared</code> ：当 <code>environment</code> 准备完成，在 <code>ApplicationContext</code> 创建之前，该方法被调用</li><li><code>contextPrepared</code> ：当 <code>ApplicationContext</code> 构建完成，资源还未被加载时，该方法被调用</li><li><code>contextLoaded</code> ：当 <code>ApplicationContext</code> 加载完成，未被刷新之前，该方法被调用</li><li><code>started</code> ：当 <code>ApplicationContext</code> 刷新并启动之后，<code>CommandLineRunner</code> 和 <code>ApplicationRunner</code> 未被调用之前，该方法被调用</li><li><code>ready</code> ：当所有准备工作就绪，<code>run</code> 方法执行完成之前，该方法被调用</li><li><code>failed</code> ：当应用程序出现错误时，该方法被调用</li></ul> 
+<p>我们以 <code>starting</code> 方法的逻辑为例，看一下 <code>ApplicationStartingEvent</code> 事件发布并被处理的过程。</p> 
+<pre><code class="prism language-java"><span class="token keyword">void</span> <span class="token function">starting</span><span class="token punctuation">(</span><span class="token class-name">ConfigurableBootstrapContext</span> bootstrapContext<span class="token punctuation">,</span> <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> mainApplicationClass<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token function">doWithListeners</span><span class="token punctuation">(</span><span class="token string">"spring.boot.application.starting"</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>listener<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> listener<span class="token punctuation">.</span><span class="token function">starting</span><span class="token punctuation">(</span>bootstrapContext<span class="token punctuation">)</span><span class="token punctuation">,</span>
+			<span class="token punctuation">(</span>step<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>mainApplicationClass <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					step<span class="token punctuation">.</span><span class="token function">tag</span><span class="token punctuation">(</span><span class="token string">"mainApplicationClass"</span><span class="token punctuation">,</span> mainApplicationClass<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>我们继续看 <code>doWithListeners</code> 方法：</p> 
+<p><img src="https://images2.imgbox.com/dc/f3/gc6slN5r_o.png" alt="在这里插入图片描述"></p> 
+<p>结合上面的截图，我们重点看下这行：</p> 
+<pre><code class="prism language-java"><span class="token punctuation">(</span>listener<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> listener<span class="token punctuation">.</span><span class="token function">starting</span><span class="token punctuation">(</span>bootstrapContext<span class="token punctuation">)</span>
+</code></pre> 
+<p>这里时调用了 <code>SpringApplicationRunListener</code> 接口的 <code>starting</code> 方法：</p> 
+<p><img src="https://images2.imgbox.com/d0/22/ats1rj1A_o.png" alt="在这里插入图片描述"></p> 
+<p>这里的 <code>multicastEvent</code> 方法就是用来发布一个指定的应用程序事件，比如这里发布的就是 <code>ApplicationStartingEvent</code> 事件。</p> 
+<p><img src="https://images2.imgbox.com/11/ea/ulCqIkoI_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/57/82/ti9pnLk8_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_246"></a>总结</h2> 
+<p>本篇 <strong>Huazie</strong> 带大家详细分析了 <code>ApplicationListener </code> 的加载和处理应用程序事件，这对于后续的 <code>SpringApplication</code> 运行流程的理解至关重要。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/1e367c8a55cf0d0cc31d8eabb08004a3/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">什么是低代码？一款很火的物联网低代码开发平台</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f0e53aceb01c00923fe7662c340128a3/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【leetcode】轮转数组</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

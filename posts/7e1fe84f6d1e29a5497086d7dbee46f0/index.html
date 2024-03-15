@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Hive拉链表设计、实现、总结 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Hive拉链表设计、实现、总结" />
+<meta property="og:description" content="水善利万物而不争，处众人之所恶，故几于道💦
+文章目录 环境介绍实现1. 初始化拉链表2. 后续拉链表数据的更新 总结彩蛋 - 想清空表的数据：转成内部表，清空数据后，再转成外部表，将分区目录删掉，然后再次跑脚本，其他表都没问题就拉链表新算出过期分区的数据拉不进去，这是啥原因？有高人指点一下吗？ 环境介绍 拉链表可以用来记录数据的声明周期，适合那种数据量大但新增和修改频率不是很高的场景。比如总共100万条数据，每天新增大约1万条，修改1万条，这种变化不是很大的维度数据可以用拉链表来存。
+我们这里将拉链表中每日最新的数据放入到9999-12-31分区中，过期的数据放入到前一天的分区中。
+比如，2024-01-12日所有新增和修改数据（该拉链表采用增量同步）被采集到数仓的ODS层中，进入DIM层的时候将2024-01-12日修改过的老状态的数据（也就是过期数据）结束时间设置为前一天（标志该条数据生命周期结束），并放入前一天的分区中，而新增的数据和没有修改（没有修改过，那么这条数据的状态目前也是最新数据）过的数据放入到9999-12-31分区中，表示这张表最新状态的数据。
+实现 1. 初始化拉链表 第一次向拉链表中导入数据的时候直接将ODS层中所有的数据overwrite到9999-12-31分区中就可以了，因为那天的数据就是最新的数据。
+insert overwrite table dim_user_zip partition(dt=&#34;9999-12-31&#34;) --insert overwrite local directory &#34;ods_user2&#34; select data.id, data.login_name, data.nick_name, data.name, data.phone_num, data.email, data.user_level, data.birthday, data.gender, data.create_time, data.operate_time, date_format(nvl(data.operate_time,data.create_time),&#34;yyyy-MM-dd&#34;) start_time, &#34;9999-12-31&#34; end_time from ods_user_info_inc where dt=&#34;2024-01-11&#34; and type=&#34;bootstrap-insert&#34; 这步完成后就初始化完成了拉链表，也就对应上图中左上角那个 “该表9999-12-31分区原来的数据” 表中的数据。
+2. 后续拉链表数据的更新 方式1：
+新增数据和原来分区的数据进行 full join 然后判断选择要哪条数据，然后overwrite到表中就行了
+with new as ( select *, &#34;2024-01-12&#34; start_date, &#34;9999-12-31&#34; end_date from ods_user_info_inc where dt = &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/7e1fe84f6d1e29a5497086d7dbee46f0/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-16T18:33:32+08:00" />
+<meta property="article:modified_time" content="2024-02-16T18:33:32+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Hive拉链表设计、实现、总结</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <blockquote> 
+ <p align="right">水善利万物而不争，处众人之所恶，故几于道💦</p> 
+</blockquote> 
+<p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><ul><li><ul><li><a href="#_5" rel="nofollow">环境介绍</a></li><li><a href="#_16" rel="nofollow">实现</a></li><li><ul><li><a href="#1__17" rel="nofollow">1. 初始化拉链表</a></li><li><a href="#2__44" rel="nofollow">2. 后续拉链表数据的更新</a></li></ul> 
+    </li><li><a href="#_339" rel="nofollow">总结</a></li><li><ul><li><ul><li><a href="#___349" rel="nofollow">彩蛋 - 想清空表的数据：转成内部表，清空数据后，再转成外部表，将分区目录删掉，然后再次跑脚本，其他表都没问题就拉链表新算出过期分区的数据拉不进去，这是啥原因？有高人指点一下吗？</a></li></ul> 
+    </li></ul> 
+   </li></ul> 
+  </li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h4><a id="_5"></a>环境介绍</h4> 
+<p>  拉链表可以用来记录数据的声明周期，适合那种数据量大但新增和修改频率不是很高的场景。比如总共100万条数据，每天新增大约1万条，修改1万条，这种变化不是很大的维度数据可以用拉链表来存。</p> 
+<p>  我们这里将拉链表中<code>每日最新的数据放入到9999-12-31分区中</code>，过期的数据放入到前一天的分区中。</p> 
+<p>  比如，2024-01-12日所有新增和修改数据（该拉链表采用增量同步）被采集到数仓的ODS层中，进入DIM层的时候将2024-01-12日修改过的老状态的数据（也就是过期数据）结束时间设置为前一天（标志该条数据生命周期结束），并放入前一天的分区中，而新增的数据和没有修改（没有修改过，那么这条数据的状态目前也是最新数据）过的数据放入到9999-12-31分区中，表示这张表最新状态的数据。</p> 
+<p><img src="https://images2.imgbox.com/ba/b4/MCyiv32B_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_16"></a>实现</h4> 
+<h5><a id="1__17"></a>1. 初始化拉链表</h5> 
+<p>  第一次向拉链表中导入数据的时候直接将ODS层中所有的数据overwrite到9999-12-31分区中就可以了，因为那天的数据就是最新的数据。</p> 
+<pre><code class="prism language-sql"><span class="token keyword">insert</span> overwrite <span class="token keyword">table</span> dim_user_zip <span class="token keyword">partition</span><span class="token punctuation">(</span>dt<span class="token operator">=</span><span class="token string">"9999-12-31"</span><span class="token punctuation">)</span>
+<span class="token comment">--insert overwrite local directory "ods_user2"</span>
+<span class="token keyword">select</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>id<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>login_name<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>nick_name<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>name<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>phone_num<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>email<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>user_level<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>birthday<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>gender<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>create_time<span class="token punctuation">,</span>
+<span class="token keyword">data</span><span class="token punctuation">.</span>operate_time<span class="token punctuation">,</span>
+date_format<span class="token punctuation">(</span>nvl<span class="token punctuation">(</span><span class="token keyword">data</span><span class="token punctuation">.</span>operate_time<span class="token punctuation">,</span><span class="token keyword">data</span><span class="token punctuation">.</span>create_time<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token string">"yyyy-MM-dd"</span><span class="token punctuation">)</span> start_time<span class="token punctuation">,</span>
+<span class="token string">"9999-12-31"</span> end_time
+<span class="token keyword">from</span> ods_user_info_inc
+<span class="token keyword">where</span> dt<span class="token operator">=</span><span class="token string">"2024-01-11"</span> <span class="token operator">and</span> <span class="token keyword">type</span><span class="token operator">=</span><span class="token string">"bootstrap-insert"</span>
+</code></pre> 
+<p>这步完成后就初始化完成了拉链表，也就对应上图中左上角那个 “该表9999-12-31分区原来的数据” 表中的数据。</p> 
+<h5><a id="2__44"></a>2. 后续拉链表数据的更新</h5> 
+<p>方式1：<br> 新增数据和原来分区的数据进行 full join 然后判断选择要哪条数据，然后overwrite到表中就行了</p> 
+<pre><code class="prism language-sql"><span class="token keyword">with</span> new <span class="token keyword">as</span> <span class="token punctuation">(</span>
+    <span class="token keyword">select</span> <span class="token operator">*</span><span class="token punctuation">,</span>
+           <span class="token string">"2024-01-12"</span> start_date<span class="token punctuation">,</span>
+           <span class="token string">"9999-12-31"</span> end_date
+    <span class="token keyword">from</span> ods_user_info_inc
+    <span class="token keyword">where</span> dt <span class="token operator">=</span> <span class="token string">"2024-01-12"</span>
+<span class="token punctuation">)</span><span class="token punctuation">,</span> old <span class="token keyword">as</span> <span class="token punctuation">(</span>
+         <span class="token keyword">select</span> 
+                <span class="token operator">*</span>
+         <span class="token keyword">from</span> dim_user_zip_inc
+         <span class="token keyword">where</span> dt <span class="token operator">=</span> <span class="token string">"9999-12-31"</span>
+<span class="token punctuation">)</span><span class="token punctuation">,</span> full_user <span class="token keyword">as</span> <span class="token punctuation">(</span>
+         <span class="token keyword">select</span> 
+                old表的所有字段<span class="token punctuation">,</span>
+                new表的所有字段
+         <span class="token keyword">from</span> old <span class="token keyword">full</span> <span class="token keyword">join</span> new
+         <span class="token keyword">on</span> old<span class="token punctuation">.</span>id<span class="token operator">=</span>new<span class="token punctuation">.</span>id
+<span class="token punctuation">)</span>
+<span class="token comment">-- 将数据更新到dim层的拉链表中，这里采用动态分区，按最后一列选插入到哪个分区</span>
+<span class="token keyword">insert</span> overwrite <span class="token keyword">table</span> dim_user_zip_inc <span class="token keyword">partition</span><span class="token punctuation">(</span>dt<span class="token punctuation">)</span>
+<span class="token keyword">select</span> 
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span> new_id<span class="token punctuation">,</span> old_id<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+    <span class="token comment">--取完表中的字段后，要多加一个字段，用来动态分区到哪个分区中，最新的数据要放入9999-12-31分区</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span> new_end_date<span class="token punctuation">,</span> old_end_date<span class="token punctuation">)</span>
+<span class="token keyword">from</span> full_user
+<span class="token comment">-- 这是筛选出新增的数据和没有修改过的数据</span>
+<span class="token keyword">where</span> new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span> <span class="token operator">or</span> <span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token boolean">null</span> <span class="token operator">and</span> old_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">)</span>
+<span class="token keyword">union</span> <span class="token keyword">all</span>
+<span class="token keyword">select</span>
+    选出老数据的字段<span class="token punctuation">,</span>注意最后一个失效时间要改成前一天
+    cast <span class="token punctuation">(</span>date_sub<span class="token punctuation">(</span><span class="token string">"2024-01-12"</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token keyword">as</span> string<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token comment">-- 最后还是要多加一个字段，用来动态分区到哪个分区中，过期的数据要放入前一天分区</span>
+    cast <span class="token punctuation">(</span>date_sub<span class="token punctuation">(</span><span class="token string">"2024-01-12"</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token keyword">as</span> string<span class="token punctuation">)</span>
+<span class="token keyword">from</span> full_user
+<span class="token comment">-- 这是筛选出修改过的老数据</span>
+<span class="token keyword">where</span> new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span> <span class="token operator">and</span> old_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">;</span>
+
+
+<span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span>
+
+
+<span class="token keyword">with</span> new <span class="token keyword">as</span> <span class="token punctuation">(</span>
+    <span class="token keyword">select</span> id<span class="token punctuation">,</span>
+           login_name<span class="token punctuation">,</span>
+           nick_name<span class="token punctuation">,</span>
+           name<span class="token punctuation">,</span>
+           phone_num<span class="token punctuation">,</span>
+           email<span class="token punctuation">,</span>
+           user_level<span class="token punctuation">,</span>
+           birthday<span class="token punctuation">,</span>
+           gender<span class="token punctuation">,</span>
+           create_time<span class="token punctuation">,</span>
+           operate_time<span class="token punctuation">,</span>
+           start_date<span class="token punctuation">,</span>
+           end_date
+    <span class="token keyword">from</span> <span class="token punctuation">(</span>
+             <span class="token keyword">select</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>id<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>login_name<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>nick_name<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>name<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>phone_num<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>email<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>user_level<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>birthday<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>gender<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>create_time<span class="token punctuation">,</span>
+                    <span class="token keyword">data</span><span class="token punctuation">.</span>operate_time<span class="token punctuation">,</span>
+                    <span class="token string">"2024-01-12"</span> start_date<span class="token punctuation">,</span>
+                    <span class="token string">"9999-12-31"</span> end_date<span class="token punctuation">,</span>
+                    row_number<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">over</span> <span class="token punctuation">(</span><span class="token keyword">partition</span> <span class="token keyword">by</span> <span class="token keyword">data</span><span class="token punctuation">.</span>id <span class="token keyword">order</span> <span class="token keyword">by</span> ts <span class="token keyword">desc</span><span class="token punctuation">)</span> rn
+             <span class="token keyword">from</span> ods_user_info_inc
+             <span class="token keyword">where</span> dt <span class="token operator">=</span> <span class="token string">"2024-01-12"</span>
+         <span class="token punctuation">)</span> t1
+    <span class="token keyword">where</span> rn <span class="token operator">=</span> <span class="token number">1</span>
+
+<span class="token punctuation">)</span><span class="token punctuation">,</span> old <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span> id<span class="token punctuation">,</span>
+           login_name<span class="token punctuation">,</span>
+           nick_name<span class="token punctuation">,</span>
+           name<span class="token punctuation">,</span>
+           phone_num<span class="token punctuation">,</span>
+           email<span class="token punctuation">,</span>
+           user_level<span class="token punctuation">,</span>
+           birthday<span class="token punctuation">,</span>
+           gender<span class="token punctuation">,</span>
+           create_time<span class="token punctuation">,</span>
+           operate_time<span class="token punctuation">,</span>
+           start_date<span class="token punctuation">,</span>
+           end_date
+    <span class="token keyword">from</span> dim_user_zip
+    <span class="token keyword">where</span> dt<span class="token operator">=</span><span class="token string">"9999-12-31"</span>
+<span class="token punctuation">)</span><span class="token punctuation">,</span> full_user <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span>
+    old<span class="token punctuation">.</span>id old_id<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>login_name old_login_name<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>nick_name old_nick_name<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>name old_name<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>phone_num old_phone_num<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>email old_email<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>user_level old_user_level<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>birthday old_birthday<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>gender old_gender<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>create_time old_create_time <span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>operate_time old_operate_time <span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>start_date old_start_date<span class="token punctuation">,</span>
+    old<span class="token punctuation">.</span>end_date old_end_date<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>id new_id<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>login_name new_login_name<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>nick_name new_nick_name<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>name new_name<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>phone_num new_phone_num<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>email new_email<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>user_level new_user_level<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>birthday new_birthday<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>gender new_gender<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>create_time new_create_time <span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>operate_time new_operate_time <span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>start_date new_start_date<span class="token punctuation">,</span>
+    new<span class="token punctuation">.</span>end_date new_end_date
+    <span class="token keyword">from</span> old <span class="token keyword">full</span> <span class="token keyword">join</span> new <span class="token keyword">on</span> old<span class="token punctuation">.</span>id<span class="token operator">=</span>new<span class="token punctuation">.</span>id
+<span class="token punctuation">)</span>
+<span class="token keyword">insert</span> overwrite <span class="token keyword">table</span> dim_user_zip <span class="token keyword">partition</span><span class="token punctuation">(</span>dt<span class="token punctuation">)</span>
+<span class="token keyword">select</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_id<span class="token punctuation">,</span>old_id<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_login_name<span class="token punctuation">,</span>old_login_name<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_nick_name<span class="token punctuation">,</span>old_nick_name<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_name<span class="token punctuation">,</span>old_name<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_phone_num<span class="token punctuation">,</span>old_phone_num<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_email<span class="token punctuation">,</span>old_email<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_user_level<span class="token punctuation">,</span>old_user_level<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_birthday<span class="token punctuation">,</span>old_birthday<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_gender<span class="token punctuation">,</span>old_gender<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_create_time<span class="token punctuation">,</span>old_create_time<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_operate_time<span class="token punctuation">,</span>old_operate_time<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_start_date<span class="token punctuation">,</span>old_start_date<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_end_date<span class="token punctuation">,</span>old_end_date<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">,</span>new_end_date<span class="token punctuation">,</span>old_end_date<span class="token punctuation">)</span>
+<span class="token keyword">from</span> full_user <span class="token keyword">where</span> new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span> <span class="token operator">or</span> <span class="token punctuation">(</span>new_id <span class="token operator">is</span> <span class="token boolean">null</span> <span class="token operator">and</span> old_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">)</span>
+<span class="token keyword">union</span> <span class="token keyword">all</span>
+<span class="token keyword">select</span>
+    old_id<span class="token punctuation">,</span>
+    old_login_name<span class="token punctuation">,</span>
+    old_nick_name<span class="token punctuation">,</span>
+    old_name<span class="token punctuation">,</span>
+    old_phone_num<span class="token punctuation">,</span>
+    old_email<span class="token punctuation">,</span>
+    old_user_level<span class="token punctuation">,</span>
+    old_birthday<span class="token punctuation">,</span>
+    old_gender<span class="token punctuation">,</span>
+    old_create_time <span class="token punctuation">,</span>
+    old_operate_time <span class="token punctuation">,</span>
+    old_start_date<span class="token punctuation">,</span>
+    cast<span class="token punctuation">(</span>date_sub<span class="token punctuation">(</span><span class="token string">"2024-01-12"</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token keyword">as</span> string<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    cast<span class="token punctuation">(</span>date_sub<span class="token punctuation">(</span><span class="token string">"2024-01-12"</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token keyword">as</span> string<span class="token punctuation">)</span>
+<span class="token keyword">from</span> full_user <span class="token keyword">where</span> new_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span> <span class="token operator">and</span> old_id <span class="token operator">is</span> <span class="token operator">not</span> <span class="token boolean">null</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>方式二：<br> 将旧数据和新数据都查出来然后union all到一起，然后根据用户id和start_time倒叙排序，编号为1的就是最新的数据，放到最新的分区，否则就是过期数据放到前一天的分区</p> 
+<pre><code class="prism language-sql"><span class="token keyword">with</span> new <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token comment">-- 取出当天修改的最后一条结果</span>
+    <span class="token keyword">select</span> <span class="token operator">*</span><span class="token punctuation">,</span>
+           <span class="token string">'2024-01-12'</span> start_time<span class="token punctuation">,</span>
+           <span class="token string">"9999-12-31"</span> end_time
+    <span class="token keyword">from</span> <span class="token punctuation">(</span><span class="token keyword">select</span>
+                 <span class="token operator">*</span><span class="token punctuation">,</span>
+                 row_number<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">over</span> <span class="token punctuation">(</span><span class="token keyword">partition</span> <span class="token keyword">by</span> user_id <span class="token keyword">order</span> <span class="token keyword">by</span> ts <span class="token keyword">desc</span><span class="token punctuation">)</span> rn
+          <span class="token keyword">from</span> ods_user_info_inc
+          <span class="token keyword">where</span> dt <span class="token operator">=</span> <span class="token string">'2024-01-12'</span>
+        <span class="token punctuation">)</span> t1
+    <span class="token keyword">where</span> rn <span class="token operator">=</span> <span class="token number">1</span>
+<span class="token punctuation">)</span><span class="token punctuation">,</span> old <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span>
+           <span class="token operator">*</span>
+    <span class="token keyword">from</span> dim_user_zip_inc
+    <span class="token keyword">where</span> dt <span class="token operator">=</span> <span class="token string">"9999-12-31"</span>
+<span class="token punctuation">)</span><span class="token punctuation">,</span> full_user <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span> <span class="token operator">*</span> <span class="token keyword">from</span> new
+    <span class="token keyword">union</span> <span class="token keyword">all</span>
+    <span class="token keyword">select</span> <span class="token operator">*</span> <span class="token keyword">from</span> old
+<span class="token punctuation">)</span><span class="token punctuation">,</span> ordered <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span> <span class="token operator">*</span><span class="token punctuation">,</span>
+           row_number<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">over</span> <span class="token punctuation">(</span><span class="token keyword">partition</span> <span class="token keyword">by</span> user_id <span class="token keyword">order</span> <span class="token keyword">by</span> start_time <span class="token keyword">desc</span><span class="token punctuation">)</span> rn
+    <span class="token keyword">from</span> full_user
+<span class="token punctuation">)</span>
+<span class="token keyword">insert</span> overwrite <span class="token keyword">table</span> dim_user_zip_inc <span class="token keyword">partition</span><span class="token punctuation">(</span>dt<span class="token punctuation">)</span>
+<span class="token keyword">select</span> <span class="token operator">*</span><span class="token punctuation">,</span>
+        <span class="token keyword">if</span><span class="token punctuation">(</span>rn<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token string">"9999-12-31"</span><span class="token punctuation">,</span>cast<span class="token punctuation">(</span>date_sub<span class="token punctuation">(</span><span class="token string">"2024-01-12"</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token keyword">as</span> string<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token keyword">if</span><span class="token punctuation">(</span>rn<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token string">"9999-12-31"</span><span class="token punctuation">,</span>cast<span class="token punctuation">(</span>date_sub<span class="token punctuation">(</span><span class="token string">"2024-01-12"</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token keyword">as</span> string<span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token keyword">from</span> ordered
+
+<span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span><span class="token operator">=</span>
+
+<span class="token keyword">with</span> new <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token comment">-- 取出当天修改的最后一条结果</span>
+    <span class="token keyword">select</span> id<span class="token punctuation">,</span>
+           login_name<span class="token punctuation">,</span>
+           nick_name<span class="token punctuation">,</span>
+           name<span class="token punctuation">,</span>
+           phone_num<span class="token punctuation">,</span>
+           email<span class="token punctuation">,</span>
+           user_level<span class="token punctuation">,</span>
+           birthday<span class="token punctuation">,</span>
+           gender<span class="token punctuation">,</span>
+           create_time<span class="token punctuation">,</span>
+           operate_time<span class="token punctuation">,</span>
+           start_time<span class="token punctuation">,</span>
+           end_time
+    <span class="token keyword">from</span><span class="token punctuation">(</span>
+            <span class="token keyword">select</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>id<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>login_name<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>nick_name<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>name<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>phone_num<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>email<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>user_level<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>birthday<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>gender<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>create_time<span class="token punctuation">,</span>
+                <span class="token keyword">data</span><span class="token punctuation">.</span>operate_time<span class="token punctuation">,</span>
+                <span class="token string">"2024-01-12"</span> start_time<span class="token punctuation">,</span>
+                <span class="token string">"9999-12-31"</span> end_time<span class="token punctuation">,</span>
+                row_number<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">over</span> <span class="token punctuation">(</span><span class="token keyword">partition</span> <span class="token keyword">by</span> <span class="token keyword">data</span><span class="token punctuation">.</span>id <span class="token keyword">order</span> <span class="token keyword">by</span> ts <span class="token keyword">desc</span><span class="token punctuation">)</span> rn
+          <span class="token keyword">from</span> ods_user_info_inc
+          <span class="token keyword">where</span> dt <span class="token operator">=</span> <span class="token string">'2024-01-12'</span>
+            <span class="token punctuation">)</span> t1 <span class="token keyword">where</span> rn<span class="token operator">=</span><span class="token number">1</span>
+<span class="token punctuation">)</span><span class="token punctuation">,</span> old <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span> id<span class="token punctuation">,</span>
+           login_name<span class="token punctuation">,</span>
+           nick_name<span class="token punctuation">,</span>
+           name<span class="token punctuation">,</span>
+           phone_num<span class="token punctuation">,</span>
+           email<span class="token punctuation">,</span>
+           user_level<span class="token punctuation">,</span>
+           birthday<span class="token punctuation">,</span>
+           gender<span class="token punctuation">,</span>
+           create_time<span class="token punctuation">,</span>
+           operate_time<span class="token punctuation">,</span>
+           start_date<span class="token punctuation">,</span>
+           end_date
+    <span class="token keyword">from</span> dim_user_zip
+    <span class="token keyword">where</span> dt <span class="token operator">=</span> <span class="token string">"9999-12-31"</span>
+<span class="token punctuation">)</span><span class="token punctuation">,</span> full_user <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span> <span class="token operator">*</span> <span class="token keyword">from</span> new
+    <span class="token keyword">union</span> <span class="token keyword">all</span>
+    <span class="token keyword">select</span> <span class="token operator">*</span> <span class="token keyword">from</span> old
+<span class="token punctuation">)</span><span class="token punctuation">,</span> ordered <span class="token keyword">as</span><span class="token punctuation">(</span>
+    <span class="token keyword">select</span> id<span class="token punctuation">,</span>
+           login_name<span class="token punctuation">,</span>
+           nick_name<span class="token punctuation">,</span>
+           name<span class="token punctuation">,</span>
+           phone_num<span class="token punctuation">,</span>
+           email<span class="token punctuation">,</span>
+           user_level<span class="token punctuation">,</span>
+           birthday<span class="token punctuation">,</span>
+           gender<span class="token punctuation">,</span>
+           create_time<span class="token punctuation">,</span>
+           operate_time<span class="token punctuation">,</span>
+           start_time<span class="token punctuation">,</span>
+           end_time<span class="token punctuation">,</span>
+           row_number<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">over</span> <span class="token punctuation">(</span><span class="token keyword">partition</span> <span class="token keyword">by</span> id <span class="token keyword">order</span> <span class="token keyword">by</span> start_time <span class="token keyword">desc</span><span class="token punctuation">)</span> rn
+    <span class="token keyword">from</span> full_user
+<span class="token punctuation">)</span>
+<span class="token keyword">insert</span> overwrite <span class="token keyword">table</span> dim_user_zip <span class="token keyword">partition</span><span class="token punctuation">(</span>dt<span class="token punctuation">)</span>
+<span class="token comment">--insert overwrite local directory "dim_user_zip2"</span>
+<span class="token keyword">select</span> id<span class="token punctuation">,</span>
+       login_name<span class="token punctuation">,</span>
+       nick_name<span class="token punctuation">,</span>
+       name<span class="token punctuation">,</span>
+       phone_num<span class="token punctuation">,</span>
+       email<span class="token punctuation">,</span>
+       user_level<span class="token punctuation">,</span>
+       birthday<span class="token punctuation">,</span>
+       gender<span class="token punctuation">,</span>
+       create_time<span class="token punctuation">,</span>
+       operate_time<span class="token punctuation">,</span>
+       start_time<span class="token punctuation">,</span>
+       <span class="token keyword">if</span><span class="token punctuation">(</span>rn<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span>end_time<span class="token punctuation">,</span>date_sub<span class="token punctuation">(</span><span class="token string">'2024-01-12'</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+       <span class="token keyword">if</span><span class="token punctuation">(</span>rn<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token string">'9999-12-31'</span><span class="token punctuation">,</span>cast<span class="token punctuation">(</span>date_sub<span class="token punctuation">(</span><span class="token string">'2024-01-12'</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token keyword">as</span> string<span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token keyword">from</span> ordered
+</code></pre> 
+<p>这样就完成了拉链表的制作，包括拉链表的初始化和后续拉链表数据的更新，以后只需要改里面的时间就可以了。</p> 
+<h4><a id="_339"></a>总结</h4> 
+<p>拉链表第一次导入数据就都是最新状态的数据，然后新采集到的数据和最新状态的数据join后将最新状态的数据写入最新的分区，过期数据写入前一天的分区，注意日期不要交叉。</p> 
+<p>踩坑：脚本中日期引用不要使用双引号，使用单引号就行了，也就是sql中变量字符等用单引号，双引号写入脚本中，最后再套一个双引号有问题。</p> 
+<p><img src="https://images2.imgbox.com/35/a1/ABEyIDLk_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-sql">FAILED: Execution Error<span class="token punctuation">,</span> <span class="token keyword">return</span> code <span class="token number">1</span> <span class="token keyword">from</span> org<span class="token punctuation">.</span>apache<span class="token punctuation">.</span>hadoop<span class="token punctuation">.</span>hive<span class="token punctuation">.</span>ql<span class="token punctuation">.</span><span class="token keyword">exec</span><span class="token punctuation">.</span>MoveTask<span class="token punctuation">.</span> Exception <span class="token keyword">when</span> loading <span class="token number">2</span> <span class="token operator">in</span> <span class="token keyword">table</span> dim_user_zip <span class="token keyword">with</span> loadPath<span class="token operator">=</span>hdfs:<span class="token comment">//hadoop101:8020/warehouse/gmall/dim/dim_user_zip/.hive-staging_hive_2024-02-16_14-55-57_153_8417650511018457362-1/-ext-10000</span>
+</code></pre> 
+<h6><a id="___349"></a>彩蛋 - 想清空表的数据：转成内部表，清空数据后，再转成外部表，将分区目录删掉，然后再次跑脚本，其他表都没问题就拉链表新算出过期分区的数据拉不进去，这是啥原因？有高人指点一下吗？</h6> 
+<p>我目前的解决方案是：删除了表然后重新建下就好了。</p> 
+<p>我查的原因是文件有特殊字符（这个不太可能，同样的数据重建表就能，应该不是数据问题），修复元数据也没用，分区字段有问题（这个也没问题，我检查了），重建元数据库（这个不靠谱，没试）搞了好久，没找到根本原因，放弃了，有大哥知道的话，麻烦指点一下🎈</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/8edea449114ee052ebde4f8764beba2e/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">spring boot 使用AOP实现是否已登录检测</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/770d52892afb9693539356926791e11e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">续第九届泰迪杯【缺失值处理&amp;过采样&amp;baseline训练】</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

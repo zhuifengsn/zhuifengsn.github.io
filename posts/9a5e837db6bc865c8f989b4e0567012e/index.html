@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>网络安全传输系统(5)—账号管理子系统设计 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="网络安全传输系统(5)—账号管理子系统设计" />
+<meta property="og:description" content="1.登录模块设计
+输入用户名和密码根据用户名从数据库提取密码比较用户输入密码和数据库提取密码，以决定是否登录成功 2.编译客户端程序
+arm-linux-gcc-L ../../008/openssl-1.0.0s/_install/lib/ -lssl -lcrypto-I ../../008/openssl-1.0.0s/_install/include/-L ../../010/sqlite-autoconf-3070800/_install/lib/ -lsqlite3-I ../../010/sqlite-autoconf-3070800/_install/include/client.c -o client 3.创建数据库
+./test_db user.db &#34;create table tb0(name varchar(10),passwd varchar(10));&#34;. 4.插入数据
+./test_db user.db &#34;insert into tb0 values(&#39;xxx&#39;,&#39;123&#39;);&#34;./test_db user.db &#34;insert into tb0 values(&#39;xxx&#39;,&#39;456&#39;);&#34;./test_db user.db &#34;insert into tb0 values(&#39;xxx&#39;,&#39;789&#39;);&#34; 5.改进的客户端代码
+#include &lt;stdio.h&gt; #include &lt;sys/types.h&gt; #include &lt;netinet/in.h&gt; #include &lt;sys/socket.h&gt; #include &lt;sys/stat.h&gt; #include &lt;errno.h&gt; #include &lt;unistd.h&gt; #include &lt;fcntl.h&gt; #include &lt;string.h&gt; #include &lt;openssl/ssl.h&gt; #include &lt;openssl/err.h&gt; #include &lt;sqlite3.h&gt; #define port 3333 int sockclient; struct sockaddr_in sockaddr1; char ipaddr[15]; SSL_CTX *ctx; SSL *ssl; int linkS() {	if((sockclient=socket(AF_INET,SOCK_STREAM,0))==-1) { perror(&#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9a5e837db6bc865c8f989b4e0567012e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-09-02T22:22:27+08:00" />
+<meta property="article:modified_time" content="2019-09-02T22:22:27+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">网络安全传输系统(5)—账号管理子系统设计</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>1.登录模块设计</strong></p> 
+<ol><li>输入用户名和密码</li><li>根据用户名从数据库提取密码</li><li>比较用户输入密码和数据库提取密码，以决定是否登录成功</li></ol> 
+<p><strong>2.编译客户端程序</strong></p> 
+<ul><li>arm-linux-gcc</li><li>-L ../../008/openssl-1.0.0s/_install/lib/ -lssl -lcrypto</li><li>-I ../../008/openssl-1.0.0s/_install/include/</li><li>-L ../../010/sqlite-autoconf-3070800/_install/lib/ -lsqlite3</li><li>-I ../../010/sqlite-autoconf-3070800/_install/include/</li><li>client.c -o client</li></ul> 
+<p><strong>3.创建数据库</strong></p> 
+<ul><li>./test_db user.db "create table tb0(name varchar(10),passwd varchar(10));".</li></ul> 
+<p><strong>4.插入数据</strong></p> 
+<ul><li>./test_db user.db "insert into tb0 values('xxx','123');"</li><li>./test_db user.db "insert into tb0 values('xxx','456');"</li><li>./test_db user.db "insert into tb0 values('xxx','789');"</li></ul> 
+<p><strong>5.改进的客户端代码</strong></p> 
+<pre class="has"><code class="language-cpp">#include &lt;stdio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;string.h&gt;
+#include &lt;openssl/ssl.h&gt;
+#include &lt;openssl/err.h&gt;
+#include &lt;sqlite3.h&gt; 
+
+#define port 3333
+ 
+int  sockclient;
+struct sockaddr_in sockaddr1;
+char ipaddr[15];
+
+SSL_CTX *ctx;
+SSL *ssl;
+
+int linkS() 
+{	
+	if((sockclient=socket(AF_INET,SOCK_STREAM,0))==-1)
+	{
+	    perror("socket");	
+	    exit(0);
+	}
+		
+	memset(&amp;sockaddr1,0,sizeof(sockaddr1));
+	sockaddr1.sin_family = AF_INET;
+	sockaddr1.sin_addr.s_addr = inet_addr(ipaddr);
+	sockaddr1.sin_port = htons(port);
+	
+	if(connect(sockclient,(struct sockaddr* )&amp;sockaddr1,sizeof(sockaddr1))==-1)
+	{
+	    perror("connect");
+	    exit(0);
+	}
+	
+	// 创建SSL
+	ssl = SSL_new(ctx);
+	SSL_set_fd(ssl, sockclient);
+	SSL_connect(ssl);
+
+	return 1;
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~上传文件~~~~~~~~~~~~~~~~~~~~~~~~~
+void upload_file(char *filename)
+{	
+	int fd;
+	char buf[1024];
+	int count=0;
+	int size = strlen(filename);
+	char cmd = 'U';
+
+	struct stat fstat;
+		
+	if((fd=open(filename,O_RDONLY))==-1)
+	{
+		perror("open: ");
+		return;
+	}
+	
+	/*发送上传命令*/
+	// write(sockclient,&amp;cmd,1);
+	SSL_write(ssl,&amp;cmd,1);
+	
+	/*发送文件名*/
+	// write(sockclient,(void *)&amp;size,4);
+	// write(sockclient,filename,size);
+	SSL_write(ssl,(void *)&amp;size,4);
+	SSL_write(ssl,filename,size);
+	
+	/*发送文件长度*/
+	if(stat(filename,&amp;fstat)==-1)
+		return;
+	
+	// write(sockclient,(void *)&amp;(fstat.st_size),4);
+	SSL_write(ssl,(void *)&amp;(fstat.st_size),4);
+	
+	/*发送文件内容*/
+	while((count=read(fd,(void *)buf,1024))&gt;0)
+	{
+		// write(sockclient,&amp;buf,count);	
+		SSL_write(ssl,&amp;buf,count);	
+	}		
+	
+	close(fd);
+
+}
+//~~~~~~~~~~~~~~~~~~~~~~~下载文件~~~~~~~~~~~~~~~~~~~~~~~~~
+void download_file(char *filename)
+{
+	int fd;
+	char buf[1024];
+	int count=0;
+	int filesize = 0;
+	int tmpsize = 0;
+	int namesize = 0;
+	char cmd = 'D';
+	
+	int size = strlen(filename);
+	
+	/*发送下载命令*/
+	// write(sockclient,(void *)&amp;cmd,1);
+	SSL_write(ssl,(void *)&amp;cmd,1);
+	
+	/*发送文件名*/
+	// write(sockclient,&amp;size,4);
+	// write(sockclient,filename,size);
+	SSL_write(ssl,&amp;size,4);
+	SSL_write(ssl,filename,size);
+	
+	/*创建文件*/
+	if((fd=open(filename,O_RDWR|O_CREAT,0777))&lt;0)
+	{
+		perror("open error:\n");	
+	}
+	
+	/*接收文件长度*/
+	// read(sockclient,&amp;filesize,4);
+	SSL_read(ssl,&amp;filesize,4);
+
+	while((count=SSL_read(ssl,(void *)buf,1024))&gt;0)
+	{
+		write(fd,&amp;buf,count);
+		tmpsize += count;
+		if(tmpsize==filesize)
+			break;	
+
+	}
+	
+	close(fd);	
+}
+
+void quit()
+{
+	char cmd = 'Q';
+	
+	// write(sockclient,(void *)&amp;cmd,1);
+	SSL_write(ssl,(void *)&amp;cmd,1);
+	
+	system("clear");
+	
+	// 关闭SSL
+	SSL_shutdown(ssl);
+	SSL_free(ssl);
+	close(sockclient);
+	SSL_CTX_free(ctx);
+    			
+	exit(0);	
+}
+
+void menu()
+{
+	char command;
+	char file_u[30];
+	char file_d[30];
+	char tmp;
+	char c;
+	
+	while(1)
+	{
+		printf("\n------------------------------  1.Upload Files  ------------------------------\n");
+		printf("------------------------------  2.Download Files  ------------------------------\n");
+		printf("------------------------------      3.Exit   ------------------------------------\n");
+		printf("Please input the Client command:");	
+
+		command=getchar();
+		
+		switch(command)
+		{
+			case '1':
+			{
+					printf("Upload File:");
+					
+					while ((c=getchar()) != '\n' &amp;&amp; c != EOF);
+					
+					fgets(file_u,30,stdin);
+					
+					file_u[strlen(file_u)-1]='\0';
+
+					upload_file(file_u);
+		  	}
+			break;
+				
+			case '2':
+				{
+					printf("Download Files:");
+					
+					while ((c=getchar()) != '\n' &amp;&amp; c != EOF);
+					
+					fgets(file_d,sizeof(file_d),stdin);
+					
+					file_d[strlen(file_d)-1]='\0';
+					
+					download_file(file_d);
+			  	}
+				break;
+				
+			case '3':
+				quit();
+				
+				break;
+			
+			default:
+				printf("Please input right command\n");
+				break;
+		}
+	}
+}
+
+char passwd_d[10];
+
+static int callback(void *NotUsed, int argc, char **argv, char **azColName) 
+{ 
+	int i; 
+    for (i=0; i&lt;argc; i++) 
+    { 
+    	// printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL"); 
+        strcpy(passwd_d, argv[i]);
+    } 
+    printf("\n"); 
+    return 0;
+} 
+
+int login()
+{
+     char username[10];
+     char passwd[10];
+     sqlite3 *db;
+     char sql[50];
+     
+     int success;
+     
+     //1. 通知用户输入用户名和密码
+     printf("User name: ");
+     scanf("%s",username);
+     
+     printf("Password: ");
+     scanf("%s",passwd);
+
+     //2. 根据用户名，从数据库提取正确的密码
+     sprintf(sql, "select passwd from tb0 where name='%s';", username); 
+     sqlite3_open("user.db", &amp;db); 
+     sqlite3_exec(db, sql, callback, 0, NULL);
+     sqlite3_close(db); 
+
+     //3. 比较用户输入的密码和数据库提取出的密码，以决定是否登录成功
+     success = strcmp(passwd, passwd_d);
+     	
+     return success;	
+}
+
+int main(int argc,char *args[])
+{
+    if(argc!=2)
+    {
+	    printf("format error: you mast enter ipaddr like this : client 192.168.0.111\n");
+	    exit(0);
+    }
+    
+    strcpy(ipaddr,args[1]); 
+    
+    if (login() != 0)
+    {
+         printf("wrong username or password!\n");
+         exit(0);	
+    }
+	
+    // SSL库初始化
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();
+    SSL_load_error_strings();
+    ctx = SSL_CTX_new(SSLv23_client_method());
+    
+    linkS();
+    
+    menu();
+    
+    return 0;
+}</code></pre> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/5ee8f7d4cdfb49d93a7105c27d6c6222/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">网络安全传输系统(4)—线程池优化</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/45ab57e53c06f253c19e3f0dbe52bbc0/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">第一课--jsp文件创建与运行--hello world</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

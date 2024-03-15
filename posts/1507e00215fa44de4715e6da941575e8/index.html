@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>蓝牙的Baseband说明 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="蓝牙的Baseband说明" />
+<meta property="og:description" content="蓝牙的radio部分使用2.4GHz的ISM段，2400 - 2483.5 MHz，通道间隔1MHz，GFS调制，采用跳频技术，每秒至少1600次。连接完成后的跳频次数为1600次/s，在inquiry和page时为3200次/s。 1.时钟
+有三种是CLK，如下图： CLK是Master的时钟，代表某一个piconet的是时钟。slave根据下图来调整自己的时钟以达到和master一致： Page过程中用到CLKE，时钟调整过程如下： 2.地址 蓝牙设备有一个唯一的48位地址(BD_ADDR)，结构如下图： 0x9E8B00-0x9E8B3F是LAP保留的一段，用来进行inquiry operations。 对于在piconet内的active状态的设备，都有一个Active Member Address(AM_ADDR），3bit，所以一个piconet内最多有8个active设备，AM_ADDR如果是all-zero，则代表是 broadcast address。 对于在piconet内的parked状态的设备，都有Parked Member Address(PM_ADDR)，8-bit，所以最多有256个处于parked状态的设备。 3.Physical Channel
+定义了四种phasical channnel： basic piconet channel和adapted piconet channel 用于两个已经连接的设备之间的通信，inquiry scan channel用来发现远端设备，the page scan channel用来连接设备。 4.Physical Links 一个physical Link代表两个设备在baseband层的连接，通常一个Physical Link与一条Physical Channel关联。 5.Logical Transport 一共定义了5种形式的Logical Transport： synchronous logical transports周期性的使用预留的Slots，如果SCO建立，ACL只能使用这些Slots之外的Slots。 每一个Logical Transport都有一个Address（LT_ADDR）。在一个piconet里，每一个active状态的设备都有一个3-bit的LT_ADDR，全部为0代表广播，Master没有LT_ADDR。【这与AM_ADDR相似，是一个意思？？】 (1)SCO和eSCO Master最多支持3条SCO Link，可以是一个Master和一个Slave之间，也可以是一个Master和几个Slave之间。SCO常用于语音等同步数据，没有重传机制。sSCO相比于SCO在固定的Slot后增加了一个retransmission window，支持重传机制。 (2)ACL Master和Slave只能存在一条link，并且在存在SCO link的情况下，ACL只能在预留给SCO的slots之外的Slots上传输数据。ACL支持重传。 6.Logical Links 定义了5中Logical links: LC在Packet的header部分，其余的Logical links在packet的payload部分。 注意： ACL-C可以用在SCO 或者 ACL logical transport中；SCO-S and eSCO-S用在synchronous logical transports中；ACL-U 通常用在ACL logical transport中。 ACL-C and ACL-U logical links 由packet中的payload部分的header中的logical link ID（LLID）指定。 （1）LC 携带底层的控制信息，除了ID Packet，所有的Packet中都包括LC信息。 （2）ALC-C 携带Link Manger层交换的控制信息，使用DM1或者DV packets。 （3）ALC-U 带入了L2CAP层用户的信息，可能由一个或者多个baseband包来进行传输。 （4）SCO-S和eSco-S 携带同步用户数据。 相比于除LC的几个Logical links，ALC-C拥有最高优先级。 7." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/1507e00215fa44de4715e6da941575e8/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2013-10-25T15:33:57+08:00" />
+<meta property="article:modified_time" content="2013-10-25T15:33:57+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">蓝牙的Baseband说明</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <span style="background-color:rgb(255,255,255)"><span style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px">蓝牙的radio部分使用2.4GHz的ISM段，2400 - 2483.5 MHz，通道间隔1MHz，GFS调制，采用跳频技术，每秒至少1600次。连接完成后</span><span style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px">的跳频次数为1600次/s，在inquiry和page时为3200次/s。</span></span> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><strong>1.时钟</strong><br> </span> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">有三种是CLK，如下图：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bj79M6Osc0" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/bb/44/zNX7JcZM_o.gif" name="image_operate_35381374657734794" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> </span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">CLK是Master的时钟，代表某一个piconet的是时钟。slave根据下图来调整自己的时钟以达到和master一致：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bj7xMIUZ6d" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/15/9f/FR7hdLzJ_o.gif" name="image_operate_64621374653035711" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> Page过程中用到CLKE，时钟调整过程如下：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bj9oncJW38" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/24/3e/udtHRFzm_o.gif" name="image_operate_29331374657792231" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> <br> </span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><strong>2.地址</strong></span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">蓝牙设备有一个唯一的48位地址(BD_ADDR)，结构如下图：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bj7TKXph6b" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/f2/ac/7KtCZebY_o.gif" name="image_operate_36421374657805607" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> </span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">0x9E8B00-0x9E8B3F是LAP保留的一段，用来进行inquiry operations。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">对于在piconet内的active状态的设备，都有一个Active Member Address(AM_ADDR），3bit，所以一个piconet内最多有8个active设备，AM_ADDR如果是all-zero，则代表是 broadcast address。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">对于在piconet内的parked状态的设备，都有Parked Member Address(PM_ADDR)，8-bit，所以最多有256个处于parked状态的设备。</span> 
+ </div> 
+ <div> 
+  <div> 
+   <span style="background-color:rgb(255,255,255)"><br> </span> 
+  </div> 
+  <div> 
+   <span style="background-color:rgb(255,255,255)"><strong>3.Physical Channel</strong><br> </span> 
+   <div> 
+    <span style="background-color:rgb(255,255,255)">定义了四种phasical channnel：</span> 
+   </div> 
+  </div> 
+ </div> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">basic piconet channel和adapted piconet channel 用于两个已经连接的设备之间的通信，inquiry scan channel用来发现远端设备，the page scan channel用来连接设备。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><strong>4.Physical Links</strong></span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">一个physical Link代表两个设备在baseband层的连接，通常一个Physical Link与一条Physical Channel关联。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><strong>5.Logical Transport</strong></span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">一共定义了5种形式的Logical Transport：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bj9Tb226c2" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/3b/f5/kK8xFU8d_o.gif" name="image_operate_61871374657824239" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> synchronous logical transports周期性的使用预留的Slots，如果SCO建立，ACL只能使用这些Slots之外的Slots。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">每一个Logical Transport都有一个Address（LT_ADDR）。在一个piconet里，每一个active状态的设备都有一个3-bit的LT_ADDR，全部为0代表广播，Master没有LT_ADDR。<span style="color:#FD3411; word-wrap:normal; word-break:normal; line-height:1.5">【这与AM_ADDR相似，是一个意思？？】</span></span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">(1)SCO和eSCO</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">Master最多支持3条SCO Link，可以是一个Master和一个Slave之间，也可以是一个Master和几个Slave之间。SCO常用于语音等同步数据，没有重传机制。sSCO相比于SCO在固定的Slot后增加了一个retransmission window，支持重传机制。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">(2)ACL</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">Master和Slave只能存在一条link，并且在存在SCO link的情况下，ACL只能在预留给SCO的slots之外的Slots上传输数据。ACL支持重传。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><strong>6.Logical Links</strong></span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">定义了5中Logical links:</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjaYYWpX11" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"></a><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjbjGvRA36" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/92/6a/CFrflDpN_o.gif" name="image_operate_47641374657827655" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> LC在Packet的header部分，其余的Logical links在packet的payload部分。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">注意：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">ACL-C可以用在SCO 或者 ACL logical transport中；SCO-S and eSCO-S用在synchronous logical transports中；ACL-U 通常用在ACL logical transport中。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">ACL-C and ACL-U logical links 由packet中的payload部分的header中的logical link ID（LLID）指定。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">（1）LC</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">携带底层的控制信息，除了ID Packet，所有的Packet中都包括LC信息。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">（2）ALC-C</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">携带Link Manger层交换的控制信息，使用DM1或者DV packets。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">（3）ALC-U</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">带入了L2CAP层用户的信息，可能由一个或者多个baseband包来进行传输。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">（4）SCO-S和eSco-S</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">携带同步用户数据。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">相比于除LC的几个Logical links，ALC-C拥有最高优先级。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><br> </span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><strong>7.packets</strong></span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">Basic Rate的packet的format如下：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bjceh3nQea" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/e7/14/cgdwksj3_o.gif" name="image_operate_98811374658007230" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> General enhanced data rate packet 的format如下：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bjcjizw8b4" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/ae/82/7lU2j0r9_o.gif" name="image_operate_38291374657961727" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> 注意：baseband层的数据时Little-Endian的，LSB首先传输。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">当Access Code为68bit时，称为shortened access code，用在paging, inquiry, and park时，shortened access code没有trailer。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><br> </span> 
+ </div> 
+ <div> 
+  <span style="line-height:1.5; background-color:rgb(255,255,255)">8.Access Code</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">在physical Channel上传输都需要Access code，定义了三种Access Code：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjdfISoN09" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/72/5f/kib9bog3_o.gif" name="image_operate_93991374658007515" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> IAC分为GIAC和DIAC，GIAC用于general inquiry operations，DIAC用于dedicated inquiry operations。</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">Baseband的每一个packet都是由Access Code开始的。Acess Code的格式如下：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjcI493R73" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/10/d5/pmbpfQpX_o.gif" name="image_operate_98051374657048790" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> Access Code有好几种类型：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjcQYYq05c" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/77/cd/5TXBXvj4_o.gif" name="image_operate_95951374658007781" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> <br> </span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">Preamble部分如下：</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjdsjHDT1d" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/b6/39/TbTd5V7z_o.gif" name="image_operate_45281374658008103" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> <br> </span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">SYNC根据24 bit address (LAP)计算得到。</span> 
+ </div> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">Trailer部分如下：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bjdye5cF75" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/95/54/pptoKvQt_o.gif" name="image_operate_3321374658008144" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> <br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">header由六部分组成：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjdCdnnza9" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/ba/98/cjbjDhV5_o.gif" name="image_operate_13811374658008224" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> 经过1/3FEC编码后变成54bit，LSB先传输。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">（1）Type部分</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">主要的功能如下：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">1.决定在哪一条logical transport上传输(SCO,eSCO或ACL）</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">2.是否使能Enhanced Data Rate</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">3.是哪种packet(SCO,eSCO或ACL）</span> 
+ </div> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6BjdMN6uA98" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/1d/3e/lwZHaSVw_o.gif" name="image_operate_37161374658987818" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> <br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">Packet Type：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">有5种Common Packet Types：ID Packet，NULL Packet，POLL Packet，FHS Packet和DM1 Packet。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">这几种Type称为Link control packets：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bjgdsj0884" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/eb/b7/v0gdITj3_o.gif" name="image_operate_60311374659009399" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> <br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">（1）SCO Packets</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">HV1 Packet， HV2 <wbr></wbr>Packet， HV3 Packet，DV Packet。</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">（2）eSCO packet</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">EV4、EV5  <wbr></wbr>for Basic Rate</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">2-EV3,3-EV3,2-EV5,3-EV5 for Enhanced Data Rate</span> 
+ </div> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">（3）ACL Packrt</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">DM1, DH1, DM3, DH3, DM5, DH5 and AUX1 for basic Rate</span> 
+ </div> 
+ <div> 
+  <span style="background-color:rgb(255,255,255)">2-DH1, 3-DH1, 2-DH3, 3-DH3, 2-DH5 and 3-DH5 for Enhanced Data Rate</span> 
+ </div> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">payLoad部分：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">synchronous data+asynchronous data两个部分组成。ACL packets only have the asynchronous data</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">field and the SCO and eSCO packets only have the synchronous data field with the exception of the DV packets which have both.</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">ACL PayLoad结构：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bjg1ILKge0" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/f2/54/23t71nHz_o.gif" name="image_operate_71821374658949321" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> <br> </span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)">LLID定义如下：</span> 
+</div> 
+<div style="color:rgb(50,62,50); font-family:simsun; font-size:14px; line-height:21px"> 
+ <span style="background-color:rgb(255,255,255)"><a target="_blank" href="http://photo.blog.sina.com.cn/showpic.html#blogid=69b5d2a50101eh4x&amp;url=http://album.sina.com.cn/pic/69b5d2a5gx6Bjg6xygR35" rel="nofollow noopener noreferrer" style="text-decoration:none; color:rgb(7,67,135)"><img src="https://images2.imgbox.com/66/db/gVS54ULE_o.gif" name="image_operate_66471374658948700" alt="蓝牙的Baseband说明" title="蓝牙的Baseband说明" style="margin:0px; padding:0px; border:0px; list-style:none"></a><br> </span> 
+ <br> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2d21d99ad622edf61e36f7e56a0cf4a9/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Linux LCD驅動架構學習（三）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/8c807abf019e5386593818396c5c34b2/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">基于KaKadu的JPEG2000解压缩算法的改进</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

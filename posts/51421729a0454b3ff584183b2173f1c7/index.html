@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>细聊init进程和Linux系统启动流程 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="细聊init进程和Linux系统启动流程" />
+<meta property="og:description" content="文章目录 一、关于init进程二、Linux系统启动流程 一、关于init进程 系统某些程序退出的时候是可以将它重启的；
+它可以产生新的进程；
+它是由内核启动的；
+它的进程号是1；
+它是所有进程的祖先。
+二、Linux系统启动流程 我们在PC上启动Windows 系统时，都知道有个东西叫BIOS（基本输入输出系统），我们Linux下也有个类似的东西，叫做U-Boot，其功能和BIOS类似，检查CPU、内存、硬盘、鼠标等设备有没有准备好，这一检查过程叫做POST，检查完后，就会去HDD（硬盘）、SDD、USB等地方寻找系统启动了。
+那做嵌入式开发的时候，系统的启动流程又是怎么样的呢？
+其实和Windows的情况类似，不过它的系统是放到Nandflash里面的，所有的程序都应该是放到内存中去的，启动系统之前也要做一些相应的初始化，这就需要一个启动程序Boatloader，常见的Boatloader是U-boot。
+SRAM是由晶体管组成的，不用初始化，速度高，但是价格贵，面积大，一般用cache中，DRAM的话用电容充放电，用的话，CPU上有DRAM控制器才能用DRAM，DRAM控制器里面都是寄存器。
+SDRAM和DDRAM又有什么区别呢？
+这里以A5核的处理器为例
+它其实有三级的boatloader的，它不止U-boot这个程序
+第一级：RomBOOT，它是出厂固化到CPU内部的，ROM为只读存储器的意思。
+第二级：为Bootstrap，其在CPU的SRAM进行运行引导，然后初始化SDRAM。
+第三级：U-boot，初始化SDRAM完成后，就可以将U-boot程序搬移到SDRAM运行启动了。
+不过前两级我们可以屏蔽不做考虑。
+启动U-boot
+关于U-boot的命令
+敲boot命令启动系统
+我在做4G模块的项目用的就是树莓派Linux内核的协议栈
+所以Linux内核就是提供这些基础的驱动
+这就是Linux内核启动的流程了，在最后，我们可以看到内核创建的第一个进程为init进程，这也是为什么init进程为所有进程的祖先的 缘故。
+在用户应用程序里面，可以使用fork()函数创建子线程，可以使用exec系列的函数执行程序。
+在用户应用程序，如果使用了一个野指针，会出现段错误，进程退出。
+而在内核驱动使用了野指针，就会出现Kernel panic的情况，内核死掉，上层应用程序就跑不了了。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/51421729a0454b3ff584183b2173f1c7/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-08-08T03:16:51+08:00" />
+<meta property="article:modified_time" content="2022-08-08T03:16:51+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">细聊init进程和Linux系统启动流程</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#init_1" rel="nofollow">一、关于init进程</a></li><li><a href="#Linux_7" rel="nofollow">二、Linux系统启动流程</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="init_1"></a>一、关于init进程</h2> 
+<p>系统某些程序退出的时候是可以将它重启的；<br> 它可以产生新的进程；<br> 它是由内核启动的；<br> 它的进程号是1；<br> 它是所有进程的祖先。</p> 
+<h2><a id="Linux_7"></a>二、Linux系统启动流程</h2> 
+<p>我们在PC上启动Windows 系统时，都知道有个东西叫BIOS（基本输入输出系统），我们Linux下也有个类似的东西，叫做U-Boot，其功能和BIOS类似，检查CPU、内存、硬盘、鼠标等设备有没有准备好，这一检查过程叫做POST，检查完后，就会去HDD（硬盘）、SDD、USB等地方寻找系统启动了。</p> 
+<p>那做嵌入式开发的时候，系统的启动流程又是怎么样的呢？<br> 其实和Windows的情况类似，不过它的系统是放到Nandflash里面的，所有的程序都应该是放到内存中去的，启动系统之前也要做一些相应的初始化，这就需要一个启动程序Boatloader，常见的Boatloader是U-boot。<br> SRAM是由晶体管组成的，不用初始化，速度高，但是价格贵，面积大，一般用cache中，DRAM的话用电容充放电，用的话，CPU上有DRAM控制器才能用DRAM，DRAM控制器里面都是寄存器。<br> <img src="https://images2.imgbox.com/33/4a/oyKEHgDj_o.png" alt="在这里插入图片描述"><br> SDRAM和DDRAM又有什么区别呢？<br> <img src="https://images2.imgbox.com/c2/81/bDAKZS6r_o.png" alt="在这里插入图片描述"><br> 这里以A5核的处理器为例<br> 它其实有三级的boatloader的，它不止U-boot这个程序<br> 第一级：RomBOOT，它是出厂固化到CPU内部的，ROM为只读存储器的意思。<br> 第二级：为Bootstrap，其在CPU的SRAM进行运行引导，然后初始化SDRAM。<br> 第三级：U-boot，初始化SDRAM完成后，就可以将U-boot程序搬移到SDRAM运行启动了。</p> 
+<p><img src="https://images2.imgbox.com/0a/e5/J5I73dC2_o.png" alt="在这里插入图片描述"><br> 不过前两级我们可以屏蔽不做考虑。<br> 启动U-boot<br> <img src="https://images2.imgbox.com/3c/57/fV8p63f9_o.png" alt="在这里插入图片描述"></p> 
+<p>关于U-boot的命令<br> <img src="https://images2.imgbox.com/c3/0c/R1V0KeYn_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/af/8d/0dt9EhH8_o.png" alt="在这里插入图片描述"></p> 
+<p>敲boot命令启动系统<br> <img src="https://images2.imgbox.com/a1/50/02HRZleW_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/90/1c/IR0vVGrv_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/77/6c/g16aF0SD_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/de/15/d9zKTE5G_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/32/3f/3PQ5QRxx_o.png" alt="在这里插入图片描述"><br> 我在做4G模块的项目用的就是树莓派Linux内核的协议栈<br> <img src="https://images2.imgbox.com/b9/34/MKkBdoiT_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/02/bf/NKSNUceA_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/b8/1b/LJv7qguf_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/51/cd/fGtLfwtg_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/cd/e1/1TvAjmuj_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/ff/40/m3QPjMwP_o.png" alt="在这里插入图片描述"><br> 所以Linux内核就是提供这些基础的驱动<br> <img src="https://images2.imgbox.com/6f/19/3FoMwawT_o.png" alt="在这里插入图片描述"><br> 这就是Linux内核启动的流程了，在最后，我们可以看到内核创建的第一个进程为init进程，这也是为什么init进程为所有进程的祖先的 缘故。<br> 在用户应用程序里面，可以使用fork()函数创建子线程，可以使用exec系列的函数执行程序。<br> 在用户应用程序，如果使用了一个野指针，会出现段错误，进程退出。<br> 而在内核驱动使用了野指针，就会出现Kernel panic的情况，内核死掉，上层应用程序就跑不了了。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/5279b9d25fbc9d5ea659d57eef5c255e/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">springboot：跨域支持Cors</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/a8631a03e9c1a363d1161ca2651409bf/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">iOS底层 Runtime深入理解</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

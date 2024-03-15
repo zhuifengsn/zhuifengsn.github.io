@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux下使用ioctl设置v4l2摄像头参数--------案例二 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux下使用ioctl设置v4l2摄像头参数--------案例二" />
+<meta property="og:description" content="#include&lt;stdio.h&gt; #include&lt;stdlib.h&gt; #include&lt;string.h&gt; #include&lt;sys/types.h&gt; #include&lt;fcntl.h&gt; #include&lt;linux/videodev2.h&gt; /*摄像头开关*/ //#define XXXX_150 /*摄像头参数id列表*/ #define BRIGHTNESS_ID 0x00980900 #define CONTRAST_ID 0x00980901 #define SATURATION_ID 0x00980902 #define HUE_ID 0x00980903 #define WHITE_BALANCE_TEMP_AUTO_ID 0x0098090c #define GAMMA_ID 0x00980910 #define POWER_LINE_FREQUENCY_ID 0x00980918 #define WHITE_BALANCE_TEMP_ID 0x0098091a #define SHARPNESS_ID 0x0098091b #define BACKLIGHT_COMPENSATION_ID 0x0098091c #define EXPOSURE_AUTO_ID 0x009a0901 #define EXPOSURE_ABSOLUTE_ID 0x009a0902 #define EXPOSURE_AUTO_PRIORITY_ID 0x009a0903 struct v4l2_capability cap; struct v4l2_queryctrl qctrl; struct v4l2_control ctrl; struct v4l2_format Format; struct v4l2_streamparm Stream_Parm; void get_v4l2_info(int fd) { printf(&#34;************************Get format info********************************\n&#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/421f85bfc8a43ffeb8781b9a8a98ab71/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2017-01-24T13:42:31+08:00" />
+<meta property="article:modified_time" content="2017-01-24T13:42:31+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux下使用ioctl设置v4l2摄像头参数--------案例二</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    #include&lt;stdio.h&gt; 
+<br> #include&lt;stdlib.h&gt; 
+<br> #include&lt;string.h&gt; 
+<br> #include&lt;sys/types.h&gt; 
+<br> #include&lt;fcntl.h&gt; 
+<br> #include&lt;linux/videodev2.h&gt; 
+<br> 
+<br> /*摄像头开关*/ 
+<br> 
+<br> //#define XXXX_150 
+<br> 
+<br> 
+<br> /*摄像头参数id列表*/ 
+<br> #define BRIGHTNESS_ID 0x00980900 
+<br> #define CONTRAST_ID 0x00980901 
+<br> #define SATURATION_ID 0x00980902 
+<br> #define HUE_ID 0x00980903 
+<br> #define WHITE_BALANCE_TEMP_AUTO_ID 0x0098090c 
+<br> #define GAMMA_ID 0x00980910 
+<br> #define POWER_LINE_FREQUENCY_ID 0x00980918 
+<br> #define WHITE_BALANCE_TEMP_ID 0x0098091a 
+<br> #define SHARPNESS_ID 0x0098091b 
+<br> #define BACKLIGHT_COMPENSATION_ID 0x0098091c 
+<br> #define EXPOSURE_AUTO_ID 0x009a0901 
+<br> #define EXPOSURE_ABSOLUTE_ID 0x009a0902 
+<br> #define EXPOSURE_AUTO_PRIORITY_ID 0x009a0903 
+<br> 
+<br> 
+<br> struct v4l2_capability cap; 
+<br> struct v4l2_queryctrl qctrl; 
+<br> struct v4l2_control ctrl; 
+<br> struct v4l2_format Format; 
+<br> struct v4l2_streamparm Stream_Parm; 
+<br> 
+<br> 
+<br> void get_v4l2_info(int fd) 
+<br> { 
+<br>     printf("************************Get format info********************************\n"); 
+<br>     Format.type= V4L2_BUF_TYPE_VIDEO_CAPTURE; 
+<br>     if(ioctl(fd,VIDIOC_G_FMT,&amp;Format)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[width:%d]\t[pixelformat:%d]\n",Format.fmt.pix.width,Format.fmt.pix.height); 
+<br>     printf("&gt;:[format:%d]\t[field:%d]\n",Format.fmt.pix.pixelformat,Format.fmt.pix.field); 
+<br>     printf("&gt;:[bytesperline:%d]\t[sizeimage:%d]\n",Format.fmt.pix.bytesperline,Format.fmt.pix.sizeimage); 
+<br>     printf("&gt;:[colorspace:%d]\n",Format.fmt.pix.colorspace); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br>      
+<br>     printf("************************Get Stream_Parm********************************\n"); 
+<br>     Stream_Parm.type=V4L2_BUF_TYPE_VIDEO_CAPTURE; 
+<br>     if(ioctl(fd,VIDIOC_G_PARM,&amp;Stream_Parm)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Frame rate:%u] [%u]\n",Stream_Parm.parm.capture.timeperframe.numerator,Stream_Parm.parm.capture.timeperframe.denominator); 
+<br>     printf("&gt;:[capability:%d] [capturemode:%d]\n",Stream_Parm.parm.capture.capability,Stream_Parm.parm.capture.capturemode); 
+<br>     printf("&gt;:[extendemode:%d] [readbuffers:%d]\n",Stream_Parm.parm.capture.extendedmode,Stream_Parm.parm.capture.readbuffers); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("*************************Get Exposure Auto*****************************\n"); 
+<br>     ctrl.id=EXPOSURE_AUTO_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:Get Exposure Auto:[%d]\n",ctrl.value);     
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("*************************Get Exposure Absolute*****************************\n"); 
+<br>     ctrl.id=EXPOSURE_ABSOLUTE_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:Get Exposure Absolute:[%d]\n",ctrl.value);     
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br>      
+<br>     printf("***************************Get Exposure Auto Priority************************\n"); 
+<br>     ctrl.id=EXPOSURE_AUTO_PRIORITY_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Get Exposure Auto Priority:%d] \n",ctrl.value); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> #ifdef XXXX_150     
+<br>     printf("***************************Get Gain value************************\n"); 
+<br>     ctrl.id=0x00980913; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Get Gain value:%d] \n",ctrl.value); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> #endif 
+<br>     printf("***************************Get white balance auto value************************\n"); 
+<br>     ctrl.id=WHITE_BALANCE_TEMP_AUTO_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Get white balance auto value:%d] \n",ctrl.value); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("***************************Get white balance value************************\n"); 
+<br>     ctrl.id=WHITE_BALANCE_TEMP_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Get white balance value:%d] \n",ctrl.value); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("***************************Get brightness value************************\n"); 
+<br>     ctrl.id=BRIGHTNESS_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Get brightness value:%d] \n",ctrl.value); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("***************************Get contrast value************************\n"); 
+<br>     ctrl.id=CONTRAST_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Get contrast value:%d] \n",ctrl.value); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> 
+<br>          
+<br>     printf("***************************Get saturation value************************\n"); 
+<br>     ctrl.id=SATURATION_ID; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("&gt;:[Get saturation value:%d] \n",ctrl.value); 
+<br>     printf("***********************************************************************\n"); 
+<br>     printf("\n"); 
+<br> 
+<br> } 
+<br> 
+<br> void set_v4l2_para(fd,value) 
+<br> { 
+<br>      
+<br>     printf("Set format………………………\n"); 
+<br>     memset(&amp;Format,0,sizeof(struct v4l2_format)); 
+<br>     Format.type= V4L2_BUF_TYPE_VIDEO_CAPTURE; 
+<br>     Format.fmt.pix.width =  320; 
+<br>     Format.fmt.pix.height = 240; 
+<br>     Format.fmt.pix.pixelformat= V4L2_PIX_FMT_YUYV; 
+<br>     Format.fmt.pix.field = (enum v4l2_field)1; 
+<br>     if(ioctl(fd,VIDIOC_S_FMT,&amp;Format)==-1) 
+<br>     {     
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br>      
+<br>     printf("Set Stream_Parm……………………\n"); 
+<br>     Stream_Parm.type=V4L2_BUF_TYPE_VIDEO_CAPTURE; 
+<br>     Stream_Parm.parm.capture.timeperframe.denominator =30; 
+<br>     Stream_Parm.parm.capture.timeperframe.numerator =1; 
+<br>     if(ioctl(fd,VIDIOC_S_PARM,&amp;Stream_Parm)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> #if 0 
+<br>     printf("Set Exposure Auto Type…………………\n"); 
+<br>     ctrl.id=0x009a0901; 
+<br>     ctrl.value=3; 
+<br>     if(ioctl(fd,VIDIOC_S_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> #endif 
+<br> #if 0 
+<br>     printf("Set Exposure value………………\n"); 
+<br>     ctrl.id=0x009a0902; 
+<br>     ctrl.value=312; 
+<br>     if(ioctl(fd,VIDIOC_S_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> #endif 
+<br> #if 1 
+<br>     printf("Set Exposure Auto Priority ………………\n"); 
+<br>     ctrl.id=0x009a0903; 
+<br>     ctrl.value=2; 
+<br>     if(ioctl(fd,VIDIOC_S_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> #endif 
+<br> #ifdef XXXX_150 
+<br>     printf("Set Gain value……………………\n"); 
+<br>     ctrl.id=0x00980913; 
+<br>     if(ioctl(fd,VIDIOC_S_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> #endif 
+<br> #if 1 
+<br>     printf("Set white balance Temperature Auto……………………\n"); 
+<br>     ctrl.id=WHITE_BALANCE_TEMP_AUTO_ID; 
+<br>     ctrl.value=value; 
+<br>     if(ioctl(fd,VIDIOC_S_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl");     
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> #endif 
+<br>     printf("Set white balance Temperature……………………\n"); 
+<br>     ctrl.id=WHITE_BALANCE_TEMP_ID; 
+<br>     ctrl.value=value; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("Set brightness value……………………\n"); 
+<br>     ctrl.id=BRIGHTNESS_ID; 
+<br>     ctrl.value=value; 
+<br>     if(ioctl(fd,VIDIOC_S_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("Set contrast value………………\n"); 
+<br>     ctrl.id=CONTRAST_ID; 
+<br>     ctrl.value=value; 
+<br>     if(ioctl(fd,VIDIOC_S_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br> 
+<br>     printf("Set saturation value…………………\n"); 
+<br>     ctrl.id=SATURATION_ID; 
+<br>     ctrl.value=value; 
+<br>     if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     sleep(1); 
+<br>     printf("\n"); 
+<br>     printf("**********************All Set Success*********************\n"); 
+<br> } 
+<br> 
+<br> void main() 
+<br> { 
+<br>     int fd=-1; 
+<br>     int rel=-1; 
+<br>     int i; 
+<br>     fd= open("/dev/video0",O_RDWR,0); 
+<br>     if(fd==-1) 
+<br>     { 
+<br>         perror("fd"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     rel= ioctl(fd,VIDIOC_QUERYCAP,&amp;cap); 
+<br>     if(rel==-1) 
+<br>     { 
+<br>         perror("ioctl"); 
+<br>         exit(EXIT_FAILURE); 
+<br>     } 
+<br>     printf("*********************Querycap Success**************************\n"); 
+<br>     if(cap.capabilities &amp; V4L2_CAP_VIDEO_CAPTURE) 
+<br>         printf("*****************capture is on*****************************\n"); 
+<br>     if(cap.capabilities &amp; V4L2_CAP_STREAMING) 
+<br>         printf("*****************Stream is on******************************\n"); 
+<br>     printf("\n"); 
+<br>     printf("\n"); 
+<br>     printf("*************************Capabilities**************************\n"); 
+<br>     printf("&gt;:[Driver:%s]\n&gt;:[card:%s]\n&gt;:[bus_info:%s]\n&gt;:[version:%d]\n", 
+<br>                              cap.driver,cap.card,cap.bus_info,cap.version); 
+<br>     printf("**************************************************************\n"); 
+<br>     printf("\n"); 
+<br>     printf("\n"); 
+<br>     for(i=V4L2_CID_BASE;i&lt;V4L2_CID_LASTP1;i++) 
+<br>     { 
+<br>         qctrl.id=i; 
+<br>         if(ioctl(fd,VIDIOC_QUERYCTRL,&amp;qctrl)==0) 
+<br>         { 
+<br>             ctrl.id=qctrl.id; 
+<br>             if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)&lt;0) 
+<br>                 perror("**********************get ctrl failed**************\n"); 
+<br>             printf("&gt;:[name:%s]\t[id:%08x]\n",qctrl.name,qctrl.id); 
+<br>             printf("&gt;:[type:%d]\n",qctrl.type); 
+<br>             printf("&gt;:[min:%d]\t[max:%d]\n",qctrl.minimum,qctrl.maximum); 
+<br>             printf("&gt;:[value:%d]\t[stp:%d]\n",ctrl.value,qctrl.step); 
+<br>             printf("&gt;:[default_value:%d]\n",qctrl.default_value); 
+<br>             printf("\n"); 
+<br>         } 
+<br>     } 
+<br>     printf("------------------------------------------------------------------\n"); 
+<br>     printf("&gt;:0x%08x\n",V4L2_CID_LASTP1); 
+<br>     for(i=0x009a0900;i&lt;0x009a091a;i++) 
+<br>     { 
+<br>         qctrl.id=i; 
+<br>         if(ioctl(fd,VIDIOC_QUERYCTRL,&amp;qctrl)==0) 
+<br>         { 
+<br>             ctrl.id=qctrl.id; 
+<br>             if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)&lt;0) 
+<br>                 perror("**********************get ctrl failed**************\n"); 
+<br>             printf("&gt;:[name:%s]\t[id:%08x]\n",qctrl.name,qctrl.id); 
+<br>             printf("&gt;:[type:%d]\n",qctrl.type); 
+<br>             printf("&gt;:[min:%d]\t[max:%d]\n",qctrl.minimum,qctrl.maximum); 
+<br>             printf("&gt;:[value:%d]\t[stp:%d]\n",ctrl.value,qctrl.step); 
+<br>             printf("&gt;:[default_value:%d]\n",qctrl.default_value); 
+<br>             printf("\n"); 
+<br>         } 
+<br>     } 
+<br>     #if 0 
+<br>     printf("---------------------------------2--------------------------------\n"); 
+<br>     for(i=0x08000000;i&lt;0x08000010;i++) 
+<br>     { 
+<br>         qctrl.id=i; 
+<br>         if(ioctl(fd,VIDIOC_QUERYCTRL,&amp;qctrl)==0) 
+<br>         { 
+<br>             ctrl.id=qctrl.id; 
+<br>             if(ioctl(fd,VIDIOC_G_CTRL,&amp;ctrl)&lt;0) 
+<br>                 perror("**********************get ctrl failed**************\n"); 
+<br>             printf("&gt;:[name:%s]\t[id:%08x]\n",qctrl.name,qctrl.id); 
+<br>             printf("&gt;:[type:%d]\n",qctrl.type); 
+<br>             printf("&gt;:[min:%d]\t[max:%d]\n",qctrl.minimum,qctrl.maximum); 
+<br>             printf("&gt;:[value:%d]\t[stp:%d]\n",ctrl.value,qctrl.step); 
+<br>             printf("&gt;:[default_value:%d]\n",qctrl.default_value); 
+<br>             printf("\n"); 
+<br>         } 
+<br>     } 
+<br>     #endif 
+<br> 
+<br>     get_v4l2_info(fd); 
+<br>      
+<br>     set_v4l2_para(fd,30); 
+<br> 
+<br> } 
+<br> 
+<br> 
+<br>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/238d72261b11f3a27d6f5b4afcac2e4d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">MYSQL 客户端与服务器关系</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b4485dd44f8ebf461c62748daeefe488/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">大数据学习线路</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

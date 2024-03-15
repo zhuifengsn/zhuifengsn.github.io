@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>网络原理——HTTPS - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="网络原理——HTTPS" />
+<meta property="og:description" content="HTTPS是 在HTTP的基础上，引入了一个加密层（SSL)。
+1. 为什么需要HTTPS 在我们使用浏览器下载一些软件时，相信大家都遇到过这种情况：明明这个链接显示的是下载A软件，点击下载时就变成了B软件，这种情况是运营商劫持。
+当我们点击下载时其实就是给服务器发送了一个HTTP请求，这个请求通过网络传输是就会通过很多设备，其中就有运营商的设备，服务器接收到请求之后，服务器会返回一个响应，这个响应就带有软件的下载链接，当这个响应经过运营商的设备时，运营商就可以把其中的链接篡改，于是就导致了我们得到的下载链接和想要下载的软件不一致。这就叫运营商劫持。
+不仅如此，我们的信息也可能会被泄露。
+为了解决此类问题，加密就是一个很好的方法，于是诞生了HTTPS。
+2. 什么是HTTPS？ HTTPS，全称为HyperText Transfer Protocol Secure，即超文本传输安全协议，是HTTP的安全版。通过使用SSL/TLS协议，HTTPS在传输层对数据进行加密，从而确保网络通信过程中的安全性和完整性。通常，HTTPS被用于安全地传输个人信息、金融交易数据、登录凭证等敏感信息，以防止被恶意攻击者窃取或篡改。
+2.1 密钥 密钥在加密通信中扮演着至关重要的角色，它用于加密和解密数据，确保数据传输的安全性。在HTTPS等加密通信中，通常会涉及到两种类型的密钥：对称密钥和公钥/私钥（非对称密钥）。
+对称密钥： 对称密钥是一种加密系统中使用的密钥，用于对数据进行加密和解密。在对称加密算法中，加密和解密使用相同的密钥，因此被称为对称密钥。对称加密算法的优点是加密解密速度快，缺点是密钥传输的安全性相对较低。在HTTPS握手过程中，通常会使用对称密钥来加密通信内容，以提高传输效率。
+公钥/私钥（非对称密钥）： 公钥/私钥是一对密钥，其中一个用于加密数据，一个用于解密数据。公钥可以自由发布给他人，而私钥则必须保密。非对称加密算法的优点是密钥传输的安全性高，缺点是加密解密速度较慢。在HTTPS的握手过程中，服务器会将其公钥发送给客户端，客户端使用该公钥加密生成的对称密钥，然后发送给服务器，从而建立安全连接。
+3. HTTPS工作过程 3.1 引入对称加密 对称加密时，客户端和服务器使用同一个密钥进行加密和解密，并且为了进一步提高安全，不同的客户端使用的密钥不相同，所以每个客户端连接到服务器时，都需要生成一个随机的密钥，并且把这个密钥告知给 服务器/客户端 ,但是由于密钥明文传输才能被对端理解，所以导致了黑客也能获取并理解密钥，一旦黑客拿到了密钥就意味着加密操作无意义了
+3.2 引入非对称加密 使用非对称加密主要是用于对对称密钥进行加密。
+服务器会把用于加密的公钥明文发送给客户端，客户端使用公钥对对称加密的密钥进行加密传输给服务器，由于黑客不持有私钥，所以无法的到对称密钥，后续客户端和服务器就可以使用对称加密来进行通信。
+由于非对称加密的资源消耗要远大于对称加密，所以不太适合用于正式的数据交互加密。
+3.3 中间人攻击 在我们3.2 中的加密方式还存在一个漏洞 ：
+服务器可以创建出一对公钥和私钥，那么黑客同样可以，于是当服务器发送公钥给客户端时，黑客可以把公钥修改为自己生成的公钥，客户端接受到这个公钥，就会用这个公钥对生成的对称密钥加密，然后发送给服务器，黑客就可以知道对称密钥，为了不被服务器发现，黑客会对客户端发送的对称密钥用服务器生成的公钥重新加密，再发送给服务器，于是后续客户端和服务器使用对称密钥通信时，黑客也能获取到并解密出数据。
+3.4 证书 中间人攻击能成功的最关键的一点就是客户端无法验证接受到的公钥是不是服务器的，为了防止中间人攻击，于是引入了证书。证书是一个结构化的数据，里面包含了很多属性，例如服务器的主域名，公钥，证书有效期等，以字符串的形式储存。证书是搭建服务器的公司要从第三方的公证机构申请。证书中有一个属性叫“签名”，这个“签名”本质上是一个经过加密的校验和，公证机构再发布证书时，会给这个证书计算出校验和，然后用非对称密钥的私钥进行加密，这个私钥不会公布出去，对应的公钥会内置在常见的系统中。服务器给客户端发送公钥时，会直接把证书发送过去，客户端拿到证书后会对证书中的校验和用该公证机构的公钥进行解密，再通过证书中提供的校验和算法对证书再次计算校验和然后和解密的到的校验和进行对比，即可判断出证书是否被修改。如果被修改过，浏览器就会提示 “你访问的网站有风险”。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/c2fd5983c66316d3b9a4a4eec1634a1a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-26T20:53:33+08:00" />
+<meta property="article:modified_time" content="2024-02-26T20:53:33+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">网络原理——HTTPS</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>HTTPS是 在HTTP的基础上，引入了一个加密层（SSL)。</p> 
+<h2>1. 为什么需要HTTPS</h2> 
+<p>在我们使用浏览器下载一些软件时，相信大家都遇到过这种情况：明明这个链接显示的是下载A软件，点击下载时就变成了B软件，这种情况是运营商劫持。</p> 
+<p>当我们点击下载时其实就是给服务器发送了一个HTTP请求，这个请求通过网络传输是就会通过很多设备，其中就有运营商的设备，服务器接收到请求之后，服务器会返回一个响应，这个响应就带有软件的下载链接，当这个响应经过运营商的设备时，运营商就可以把其中的链接篡改，于是就导致了我们得到的下载链接和想要下载的软件不一致。这就叫运营商劫持。<img alt="" height="522" src="https://images2.imgbox.com/92/1f/FXUywxrh_o.png" width="1060"></p> 
+<p> 不仅如此，我们的信息也可能会被泄露。</p> 
+<p>为了解决此类问题，加密就是一个很好的方法，于是诞生了HTTPS。</p> 
+<h2>2. 什么是HTTPS？</h2> 
+<p>HTTPS，全称为HyperText Transfer Protocol Secure，即超文本传输安全协议，是HTTP的安全版。通过使用SSL/TLS协议，HTTPS在传输层对数据进行加密，从而确保网络通信过程中的安全性和完整性。通常，HTTPS被用于安全地传输个人信息、金融交易数据、登录凭证等敏感信息，以防止被恶意攻击者窃取或篡改。</p> 
+<h4>2.1 密钥</h4> 
+<p>密钥在加密通信中扮演着至关重要的角色，它用于加密和解密数据，确保数据传输的安全性。在HTTPS等加密通信中，通常会涉及到两种类型的密钥：对称密钥和公钥/私钥（非对称密钥）。</p> 
+<ol><li> <p>对称密钥： 对称密钥是一种加密系统中使用的密钥，用于对数据进行加密和解密。在对称加密算法中，加密和解密使用相同的密钥，因此被称为对称密钥。对称加密算法的优点是加密解密速度快，缺点是密钥传输的安全性相对较低。在HTTPS握手过程中，通常会使用对称密钥来加密通信内容，以提高传输效率。</p> </li><li> <p>公钥/私钥（非对称密钥）： 公钥/私钥是一对密钥，其中一个用于加密数据，一个用于解密数据。公钥可以自由发布给他人，而私钥则必须保密。非对称加密算法的优点是密钥传输的安全性高，缺点是加密解密速度较慢。在HTTPS的握手过程中，服务器会将其公钥发送给客户端，客户端使用该公钥加密生成的对称密钥，然后发送给服务器，从而建立安全连接。</p> </li></ol> 
+<h2>3. HTTPS工作过程 </h2> 
+<h4>3.1 引入对称加密</h4> 
+<p>对称加密时，客户端和服务器使用同一个密钥进行加密和解密，并且为了进一步提高安全，不同的客户端使用的密钥不相同，所以每个客户端连接到服务器时，都需要生成一个随机的密钥，并且把这个密钥告知给 服务器/客户端 ,但是由于密钥明文传输才能被对端理解，所以导致了黑客也能获取并理解密钥，一旦黑客拿到了密钥就意味着加密操作无意义了</p> 
+<p> <img alt="" height="459" src="https://images2.imgbox.com/7b/ab/QeuCEkri_o.png" width="1099"></p> 
+<h4>3.2 引入非对称加密</h4> 
+<p>使用非对称加密主要是用于对对称密钥进行加密。</p> 
+<p>服务器会把用于加密的公钥明文发送给客户端，客户端使用公钥对对称加密的密钥进行加密传输给服务器，由于黑客不持有私钥，所以无法的到对称密钥，后续客户端和服务器就可以使用对称加密来进行通信。</p> 
+<p><img alt="" height="431" src="https://images2.imgbox.com/4d/10/gfGyfONu_o.png" width="920"></p> 
+<p>由于非对称加密的资源消耗要远大于对称加密，所以不太适合用于正式的数据交互加密。</p> 
+<h4>3.3 中间人攻击 </h4> 
+<p>在我们3.2 中的加密方式还存在一个漏洞 ：</p> 
+<p>服务器可以创建出一对公钥和私钥，那么黑客同样可以，于是当服务器发送公钥给客户端时，黑客可以把公钥修改为自己生成的公钥，客户端接受到这个公钥，就会用这个公钥对生成的对称密钥加密，然后发送给服务器，黑客就可以知道对称密钥，为了不被服务器发现，黑客会对客户端发送的对称密钥用服务器生成的公钥重新加密，再发送给服务器，于是后续客户端和服务器使用对称密钥通信时，黑客也能获取到并解密出数据。<img alt="" height="494" src="https://images2.imgbox.com/2b/e6/p6XXeIOJ_o.png" width="957"></p> 
+<h4>3.4 证书 </h4> 
+<p>中间人攻击能成功的最关键的一点就是客户端无法验证接受到的公钥是不是服务器的，为了防止中间人攻击，于是引入了证书。证书是一个结构化的数据，里面包含了很多属性，例如服务器的主域名，公钥，证书有效期等，以字符串的形式储存。证书是搭建服务器的公司要从第三方的公证机构申请。证书中有一个属性叫“签名”，这个“签名”本质上是一个经过加密的校验和，公证机构再发布证书时，会给这个证书计算出校验和，然后用非对称密钥的私钥进行加密，这个私钥不会公布出去，对应的公钥会内置在常见的系统中。服务器给客户端发送公钥时，会直接把证书发送过去，客户端拿到证书后会对证书中的校验和用该公证机构的公钥进行解密，再通过证书中提供的校验和算法对证书再次计算校验和然后和解密的到的校验和进行对比，即可判断出证书是否被修改。如果被修改过，浏览器就会提示  “你访问的网站有风险”。</p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/1790c03887f6c08fa1ed4ba2fbde96e5/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">防御保护----内容安全</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/078f82184228d149bfef563b716edfa8/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Arduino单片机基础介绍</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

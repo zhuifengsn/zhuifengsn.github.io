@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>单片机通识之按键扫描框架(非死等消抖) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="单片机通识之按键扫描框架(非死等消抖)" />
+<meta property="og:description" content="按键是用户向单片机输入信息的重要方式之一，最近遇到很多刚大学毕业的学生在写按键消抖时，都是在死等，这种方式并不实用，应该没有产品会采用这种低效的方式。
+本文就该问题展开叙述，提供一个可行的思想。在示例代码中，主要实现了: 若按键数目或所用引脚发生变化，仅需改变头文件按键定义即可，代码部分无需改动。
+文章目录 开发环境核心思想示例代码头文件源文件 结语 开发环境 STM32F103C8T6: 价格低，用来学习非常合适。
+核心思想 在商业用途的项目开发中，一个通用的框架是必须的，写一次框架，可应对多种场合、多次使用，这会很大的提升效率，所以在实现一个模块时，一定要考虑它的复用性。
+在示例代码中，实现 仅需改动头文件即可 这一功能的思想就是利用数组、指针数组，遍历的方式去检测每一个数组中的IO口，并且判断按键是否按下，再利用指针数组去调用按键对应的函数。在示例代码中会详细讲解。
+数组包括:
+用到的GPIO，例如 GPIOA、GPIOB等用到的引脚，例如　GPIOA的　第４个引脚、GPIOB的　第５个引脚等 指针数组:
+把每一个按键按下、松开要调用的函数地址放入数组中，这样就可以灵活的根据索引去调用对应的函数 示例代码 头文件 #ifndef __INDEPENDENTKEYH #define __INDEPENDENTKEYH #include &#34;stm32f10x.h&#34; // Device header // Debounce time (INDEPENDENT_KEY_DEBOUNCE_TIME) * 10us // 消抖时间为 320ms，利用 TIM2 计时，中断周期为 10us。 // 这里可以根据自己实际用到的定时器去 计时 #define INDEPENDENT_KEY_DEBOUNCE_TIME 320 // INDEPENDENT_KEY_GPIO_NUMBER 定义用到了几个GPIO // 因为STM32对每一个外设都设计了一个时钟，所以在用到GPIO前，都需要预先开启对应的时钟 // 这里是采用遍历的方式，去开启用到的GPIO，所以会产生以下两个宏定义 #define INDEPENDENT_KEY_GPIO_NUMBER 2 #define INDEPENDENT_KEY_GPIO_ENABLE_TABLE \ /* GPIOA */ RCC_APB2Periph_GPIOA, \ /* GPIOB */ RCC_APB2Periph_GPIOB // INDEPENDENT_KEY_NUMBER 一共用到了多少个 IO 口 // INDEPENDENT_KEY_PORT_TABLE 定义每一个按键对应的 IO 口 // INDEPENDENT_KEY_PIN_TABLE 定义每一个按键对用 IO口 的哪个引脚 // 这两个数组定义均要按照实际顺序，例如Key1 用到 GPIOA 的第4个引脚，KEY3 用到GPIOA的引脚的第6个引角 #define INDEPENDENT_KEY_NUMBER 5 #define INDEPENDENT_KEY_PORT_TABLE \ /* Port of key1 */ GPIOA, \ /* Port of key2 */ GPIOA, \ /* Port of key3 */ GPIOA, \ /* Port of key4 */ GPIOA, \ /* Port of key5 */ GPIOB, #define INDEPENDENT_KEY_PIN_TABLE \ /* Pin of key1 */ GPIO_Pin_4, \ /* Pin of key2 */ GPIO_Pin_5, \ /* Pin of key3 */ GPIO_Pin_6, \ /* Pin of key4 */ GPIO_Pin_7, \ /* Pin of key5 */ GPIO_Pin_11, // 这个数组定义了每个按键的触发电平，以适用不同电平的触发方式 // 这个触发电平要和 STM32 定义的BitAction一致，即 仅允许 低电平 Bit_RESET 和 高电平 Bit_SET #define INDEPENDENT_KEY_TRIGGER_LEVEL_TABLE \ /* Trigger level of key1 */ Bit_SET, \ /* Trigger level of key2 */ Bit_SET, \ /* Trigger level of key3 */ Bit_SET, \ /* Trigger level of key4 */ Bit_SET, \ /* Trigger level of key5 */ Bit_SET /* * @brief: 对按键进行初始化，包括 GPIO 和 用到的变量 * @param void * @retval void */ void Independent_Key_Init(void); /* * @brief: 放在主循环中检测按键状态 * @param void * @retval void */ void Independent_Key_Scan(void); /* * @brief: 按键状态发生变化，消抖时间需要清零，重新开始计时 * @param void * @retval void */ void Key_Changed(uint16_t current_buffer); /* * @brief: 按键状态未发生变化 * @param void * @retval void */ void Key_No_Changed(uint16_t current_buffer); /* * @brief: Key_Press_1 之后的函数为按键按下松开对应的触发函数，根据需要去添加功能 * @param void * @retval void */ void Key_Press_1(void); void Key_Press_2(void); void Key_Press_3(void); void Key_Press_4(void); void Key_Press_5(void); void Key_Release_1(void); void Key_Release_2(void); void Key_Release_3(void); void Key_Release_4(void); void Key_Release_5(void); #endif 源文件 #include &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/cd0edbd8afa5c68b6609e81dd3d310d4/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-07-01T22:45:44+08:00" />
+<meta property="article:modified_time" content="2023-07-01T22:45:44+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">单片机通识之按键扫描框架(非死等消抖)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>按键是用户向单片机输入信息的重要方式之一，最近遇到很多刚大学毕业的学生在写按键消抖时，都是在死等，这种方式并不实用，应该没有产品会采用这种低效的方式。</p> 
+<p>本文就该问题展开叙述，提供一个可行的思想。在示例代码中，主要实现了: 若按键数目或所用引脚发生变化，仅需改变头文件按键定义即可，代码部分无需改动。<br> </p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#_4" rel="nofollow">开发环境</a></li><li><a href="#_7" rel="nofollow">核心思想</a></li><li><a href="#_18" rel="nofollow">示例代码</a></li><li><ul><li><a href="#_19" rel="nofollow">头文件</a></li><li><a href="#_127" rel="nofollow">源文件</a></li></ul> 
+  </li><li><a href="#_361" rel="nofollow">结语</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_4"></a>开发环境</h2> 
+<p>STM32F103C8T6: 价格低，用来学习非常合适。</p> 
+<h2><a id="_7"></a>核心思想</h2> 
+<p>在商业用途的项目开发中，一个通用的框架是必须的，写一次框架，可应对多种场合、多次使用，这会很大的提升效率，所以在实现一个模块时，一定要考虑它的复用性。</p> 
+<p>在示例代码中，实现 <em>仅需改动头文件即可</em> 这一功能的思想就是利用数组、指针数组，遍历的方式去检测每一个数组中的IO口，并且判断按键是否按下，再利用指针数组去调用按键对应的函数。在示例代码中会详细讲解。</p> 
+<p>数组包括:</p> 
+<ol><li>用到的GPIO，例如 GPIOA、GPIOB等</li><li>用到的引脚，例如　GPIOA的　第４个引脚、GPIOB的　第５个引脚等</li></ol> 
+<p>指针数组:</p> 
+<ol><li>把每一个按键按下、松开要调用的函数地址放入数组中，这样就可以灵活的根据索引去调用对应的函数</li></ol> 
+<h2><a id="_18"></a>示例代码</h2> 
+<h3><a id="_19"></a>头文件</h3> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifndef</span> <span class="token expression">__INDEPENDENTKEYH</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">__INDEPENDENTKEYH</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"stm32f10x.h"</span>                  <span class="token comment">// Device header</span></span>
+
+
+<span class="token comment">// Debounce time (INDEPENDENT_KEY_DEBOUNCE_TIME) * 10us </span>
+<span class="token comment">// 消抖时间为 320ms，利用 TIM2 计时，中断周期为 10us。</span>
+<span class="token comment">// 这里可以根据自己实际用到的定时器去 计时</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INDEPENDENT_KEY_DEBOUNCE_TIME</span> <span class="token expression"><span class="token number">320</span></span></span>
+
+<span class="token comment">// INDEPENDENT_KEY_GPIO_NUMBER 定义用到了几个GPIO</span>
+<span class="token comment">// 因为STM32对每一个外设都设计了一个时钟，所以在用到GPIO前，都需要预先开启对应的时钟</span>
+<span class="token comment">// 这里是采用遍历的方式，去开启用到的GPIO，所以会产生以下两个宏定义</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INDEPENDENT_KEY_GPIO_NUMBER</span> <span class="token expression"><span class="token number">2</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INDEPENDENT_KEY_GPIO_ENABLE_TABLE</span> <span class="token punctuation">\</span>
+						<span class="token comment">/* GPIOA */</span> <span class="token expression">RCC_APB2Periph_GPIOA<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* GPIOB */</span> <span class="token expression">RCC_APB2Periph_GPIOB</span></span>
+
+<span class="token comment">// INDEPENDENT_KEY_NUMBER 一共用到了多少个 IO 口</span>
+<span class="token comment">// INDEPENDENT_KEY_PORT_TABLE 定义每一个按键对应的 IO 口</span>
+<span class="token comment">// INDEPENDENT_KEY_PIN_TABLE 定义每一个按键对用 IO口 的哪个引脚</span>
+<span class="token comment">// 这两个数组定义均要按照实际顺序，例如Key1 用到 GPIOA 的第4个引脚，KEY3 用到GPIOA的引脚的第6个引角</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INDEPENDENT_KEY_NUMBER</span> <span class="token expression"><span class="token number">5</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INDEPENDENT_KEY_PORT_TABLE</span> <span class="token punctuation">\</span>
+						<span class="token comment">/* Port of key1 */</span> <span class="token expression">GPIOA<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Port of key2 */</span> <span class="token expression">GPIOA<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Port of key3 */</span> <span class="token expression">GPIOA<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Port of key4 */</span> <span class="token expression">GPIOA<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Port of key5 */</span> <span class="token expression">GPIOB<span class="token punctuation">,</span></span></span>
+							  
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INDEPENDENT_KEY_PIN_TABLE</span> <span class="token punctuation">\</span>
+						<span class="token comment">/* Pin of key1 */</span> <span class="token expression">GPIO_Pin_4<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Pin of key2 */</span> <span class="token expression">GPIO_Pin_5<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Pin of key3 */</span> <span class="token expression">GPIO_Pin_6<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Pin of key4 */</span> <span class="token expression">GPIO_Pin_7<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Pin of key5 */</span> <span class="token expression">GPIO_Pin_11<span class="token punctuation">,</span> </span></span>
+
+<span class="token comment">// 这个数组定义了每个按键的触发电平，以适用不同电平的触发方式</span>
+<span class="token comment">// 这个触发电平要和 STM32 定义的BitAction一致，即 仅允许 低电平 Bit_RESET 和 高电平 Bit_SET</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INDEPENDENT_KEY_TRIGGER_LEVEL_TABLE</span> <span class="token punctuation">\</span>
+						<span class="token comment">/* Trigger level of key1 */</span> <span class="token expression">Bit_SET<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Trigger level of key2 */</span> <span class="token expression">Bit_SET<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Trigger level of key3 */</span> <span class="token expression">Bit_SET<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Trigger level of key4 */</span> <span class="token expression">Bit_SET<span class="token punctuation">,</span> </span><span class="token punctuation">\</span>
+						<span class="token comment">/* Trigger level of key5 */</span> <span class="token expression">Bit_SET</span></span>
+<span class="token comment">/*
+ * @brief: 对按键进行初始化，包括 GPIO 和 用到的变量
+ * @param  void
+ * @retval void
+ */</span>
+<span class="token keyword">void</span> <span class="token function">Independent_Key_Init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">/*
+ * @brief: 放在主循环中检测按键状态
+ * @param  void
+ * @retval void
+ */</span>
+<span class="token keyword">void</span> <span class="token function">Independent_Key_Scan</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+<span class="token comment">/*
+ * @brief: 按键状态发生变化，消抖时间需要清零，重新开始计时
+ * @param  void
+ * @retval void
+ */</span>
+<span class="token keyword">void</span> <span class="token function">Key_Changed</span><span class="token punctuation">(</span><span class="token class-name">uint16_t</span> current_buffer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+<span class="token comment">/*
+ * @brief: 按键状态未发生变化
+ * @param  void
+ * @retval void
+ */</span>
+<span class="token keyword">void</span> <span class="token function">Key_No_Changed</span><span class="token punctuation">(</span><span class="token class-name">uint16_t</span> current_buffer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+<span class="token comment">/*
+ * @brief: Key_Press_1 之后的函数为按键按下松开对应的触发函数，根据需要去添加功能
+ * @param  void
+ * @retval void
+ */</span>
+<span class="token keyword">void</span> <span class="token function">Key_Press_1</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_2</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_3</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_4</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_5</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_1</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_2</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_3</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_4</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_5</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span> </span>
+
+
+</code></pre> 
+<h3><a id="_127"></a>源文件</h3> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"IndependentKey.h"</span></span>
+<span class="token comment">// OLED.h 是使用 OLED屏幕 模块，不影响本文的阅读</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"OLED.h"</span></span>
+
+<span class="token comment">// key_flag 保存按键的状态</span>
+<span class="token comment">// 假若 key1 key3 在程序中已经确认被按下了，那么 key_flag 对应二进制 0000 0101</span>
+<span class="token class-name">uint16_t</span> key_flag<span class="token punctuation">;</span>
+
+<span class="token comment">// key_buffer 临时保存IO口的状态</span>
+<span class="token comment">// 假若key1 key3 被按下了，但是消抖时间还没到达，那么 key_buffer 对应二进制 0000 0101</span>
+<span class="token comment">// 注意，这时候 key_flag 的值 仍然是此刻之前的值</span>
+<span class="token comment">// 只有当消抖时间到达后，key_flag 的值才会更新为 key_buffer</span>
+<span class="token class-name">uint16_t</span> key_buffer<span class="token punctuation">;</span>
+
+<span class="token comment">// key_press 记录哪个按键被按下了</span>
+<span class="token comment">// 假若 key1 key3 被按下了，那么key_press 对应二进制 0000 0101</span>
+<span class="token class-name">uint16_t</span> key_press<span class="token punctuation">;</span>
+<span class="token comment">// 同 key_press </span>
+<span class="token class-name">uint16_t</span> key_release<span class="token punctuation">;</span>
+
+<span class="token comment">// key_debounce 记录消抖时间</span>
+<span class="token class-name">uint16_t</span> key_debounce<span class="token punctuation">;</span>
+
+<span class="token comment">// 定义 GPIO 指针数组，STM32 中的 GPIOA、GPIOB 均为一个指针，所以这个数组保存的全部是指针</span>
+<span class="token comment">// 同时，也是通过遍历这个指针数组，去开启用到的GPIO的时钟</span>
+GPIO_TypeDef<span class="token operator">*</span> independent_key_port_table<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span> INDEPENDENT_KEY_PORT_TABLE <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 下方三个数组，定义了按键对应的 GPIO 和 触发电平，在这里不容易讲解清楚，在下方代码处会讲解</span>
+<span class="token class-name">uint32_t</span> independent_key_gpio<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span> INDEPENDENT_KEY_GPIO_ENABLE_TABLE <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> <span class="token class-name">uint16_t</span> independent_key_pin_table<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span> INDEPENDENT_KEY_PIN_TABLE <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> <span class="token class-name">uint8_t</span> independent_key_trigger_level_table<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span> INDEPENDENT_KEY_TRIGGER_LEVEL_TABLE <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token comment">// 下方两个指针数组，定义了按键松开对应的函数</span>
+<span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>independent_key_press_handler<span class="token punctuation">[</span>INDEPENDENT_KEY_NUMBER <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span> Key_Press_1<span class="token punctuation">,</span> Key_Press_2<span class="token punctuation">,</span> Key_Press_3<span class="token punctuation">,</span> Key_Press_4<span class="token punctuation">,</span> Key_Press_5<span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>independent_key_release_handler<span class="token punctuation">[</span>INDEPENDENT_KEY_NUMBER <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span> Key_Release_1<span class="token punctuation">,</span> Key_Release_2<span class="token punctuation">,</span> Key_Release_3<span class="token punctuation">,</span> Key_Release_4<span class="token punctuation">,</span> Key_Release_5<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+
+<span class="token keyword">void</span> <span class="token function">Independent_Key_Init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token comment">// 遍历指针数组，开启用到的GPIO时钟</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">uint16_t</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> INDEPENDENT_KEY_GPIO_NUMBER<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">RCC_APB2PeriphClockCmd</span><span class="token punctuation">(</span>independent_key_gpio<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span> ENABLE<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">// 遍历数组，对用到的GPIO进行配置，</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">uint16_t</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> INDEPENDENT_KEY_NUMBER<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 这里就是用到定义的 independent_key_pin_table independent_key_port_table</span>
+		<span class="token comment">// 配置 GPIO的某个引脚 </span>
+		GPIO_InitTypeDef gpio_init_structure<span class="token punctuation">;</span>
+		gpio_init_structure<span class="token punctuation">.</span>GPIO_Mode <span class="token operator">=</span> GPIO_Mode_IPD<span class="token punctuation">;</span>
+		gpio_init_structure<span class="token punctuation">.</span>GPIO_Pin <span class="token operator">=</span> independent_key_pin_table<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">;</span>
+		gpio_init_structure<span class="token punctuation">.</span>GPIO_Speed <span class="token operator">=</span> GPIO_Speed_50MHz<span class="token punctuation">;</span>
+		<span class="token function">GPIO_Init</span><span class="token punctuation">(</span>independent_key_port_table<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>gpio_init_structure<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token comment">// 初始化变量</span>
+	key_flag <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	key_buffer <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	key_debounce <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	key_press <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	key_release <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/**
+  * @brief  
+  * @param  
+  * @retval  
+  */</span>
+<span class="token keyword">void</span> <span class="token function">Independent_Key_Scan</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token class-name">uint16_t</span> temp_buffer <span class="token operator">=</span> <span class="token number">0x0000</span><span class="token punctuation">;</span>
+	
+	<span class="token comment">// 通过遍历的方式去检测每一个IO口电平是否等于定义的触发电平</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">uint16_t</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> INDEPENDENT_KEY_NUMBER<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">uint8_t</span> gpio_read_res <span class="token operator">=</span> <span class="token function">GPIO_ReadInputDataBit</span><span class="token punctuation">(</span>independent_key_port_table<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span> independent_key_pin_table<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		
+		<span class="token comment">// Check if current level == trigger level</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>gpio_read_res <span class="token operator">==</span> independent_key_trigger_level_table<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token class-name">uint16_t</span> temp_level <span class="token operator">=</span> <span class="token number">0x0001</span><span class="token punctuation">;</span>
+			temp_level <span class="token operator">=</span> temp_level <span class="token operator">&lt;&lt;</span> i<span class="token punctuation">;</span>
+			temp_buffer <span class="token operator">|=</span> temp_level<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">// 如果 检测到的 temp_buffer 等于 key_flag，说明IO口状态没有发生变化</span>
+	<span class="token comment">// 将 IO 口状态保存至 key_buffer, 退出即可</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>temp_buffer <span class="token operator">==</span> key_flag<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">Key_No_Changed</span><span class="token punctuation">(</span>temp_buffer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">// 程序到这里，说明 IO 状态发生了变化，并判断此刻状态和上一次扫描后的状态是否一致</span>
+	<span class="token comment">// 可以理解为，按下了key1，这是IO状态是 0000 0001，假如 key2 按下了，IO状态就变为 0000 0011</span>
+	<span class="token comment">// 那么这时候就需要重新消抖</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>temp_buffer <span class="token operator">!=</span> key_buffer<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">Key_Changed</span><span class="token punctuation">(</span>temp_buffer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">// 程序到这里，说明 IO 稳定在了一个状态，并判断消抖时间是否到即可</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>key_debounce <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">// 这里异或可以理解为把 变化的 IO 口挑选出来</span>
+	<span class="token comment">// 加入此次按下是初始化过后的第一次按下，按下的按键时key1</span>
+	<span class="token comment">// 那么 key_flag 为 0000 0000, key_buffer 为 0000 0001 </span>
+	<span class="token comment">// 异或后的结果就是 0000 0001，即把状态变化的IO口给挑了出来 </span>
+	<span class="token class-name">uint16_t</span> changed_key <span class="token operator">=</span> key_buffer <span class="token operator">^</span> key_flag<span class="token punctuation">;</span>
+	<span class="token comment">// key_buffer 代表着此刻 IO口 状态，和 状态变化的 IO 口 与运算，就表示按键按下了</span>
+	key_press <span class="token operator">=</span> changed_key <span class="token operator">&amp;</span> key_buffer<span class="token punctuation">;</span>
+	<span class="token comment">// key_flag 代表着上一刻 IO口 状态，和 状态变化 IO口 与运算，就表示按键松开了</span>
+	key_release <span class="token operator">=</span> changed_key <span class="token operator">&amp;</span> key_flag<span class="token punctuation">;</span>
+	
+	<span class="token comment">// 这个函数就是通过索引去调用对应的按下函数</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">uint16_t</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> INDEPENDENT_KEY_NUMBER<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">uint16_t</span> temp_level <span class="token operator">=</span> <span class="token number">0x0001</span> <span class="token operator">&lt;&lt;</span> i<span class="token punctuation">;</span>
+		temp_level <span class="token operator">&amp;=</span> key_press<span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>temp_level<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token comment">// 在这里，假若 key1 和 key2 都按下了，那么就仅执行 key1 的功能</span>
+			<span class="token comment">// 可以根据自己的需要去修改</span>
+			<span class="token punctuation">(</span><span class="token operator">*</span>independent_key_press_handler<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">break</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// 同按键按下</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">uint16_t</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> INDEPENDENT_KEY_NUMBER<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">uint16_t</span> temp_level <span class="token operator">=</span> <span class="token number">0x0001</span> <span class="token operator">&lt;&lt;</span> i<span class="token punctuation">;</span>
+		temp_level <span class="token operator">&amp;=</span> key_release<span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>temp_level<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token punctuation">(</span><span class="token operator">*</span>independent_key_release_handler<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">break</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token comment">// 更新按键状态</span>
+	key_flag <span class="token operator">=</span> key_buffer<span class="token punctuation">;</span>
+	
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>	
+
+<span class="token keyword">void</span> <span class="token function">Key_Changed</span><span class="token punctuation">(</span><span class="token class-name">uint16_t</span> current_buffer<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	key_debounce <span class="token operator">=</span> INDEPENDENT_KEY_DEBOUNCE_TIME<span class="token punctuation">;</span>
+	key_buffer <span class="token operator">=</span> current_buffer<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_No_Changed</span><span class="token punctuation">(</span><span class="token class-name">uint16_t</span> current_buffer<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	key_buffer <span class="token operator">=</span> current_buffer<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_1</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 1 pressed"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_2</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 2 pressed"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_3</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 3 pressed"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_4</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 4 pressed"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Press_5</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_1</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 1 released"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_2</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 2 released"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_3</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 3 released"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_4</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">OLED_Clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">OLED_Show_String</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">"Key 4 released"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">Key_Release_5</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<h2><a id="_361"></a>结语</h2> 
+<p>本文仅讲述了一个思路，供一些基础不太好的朋友学习，仅是一个思路，有没有讲解清楚的地方，可以邮箱联系，一同探讨. CubicJar@163.com</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/bfb9bddaa33d110725dd28063f4b7f76/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">APP自动化之Poco框架</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/676c2d3b244565d74c0af8624d5f8c04/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">OpenCV(Mat类)</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

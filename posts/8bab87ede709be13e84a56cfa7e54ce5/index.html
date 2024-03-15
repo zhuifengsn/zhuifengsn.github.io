@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>一文教你搞懂Redis集群 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="一文教你搞懂Redis集群" />
+<meta property="og:description" content="一、Redis主从 1.1、搭建主从架构 单节点的Redis的并发能力是有上限的，要进一步的提高Redis的并发能力，据需要大家主从集群，实现读写分离。
+共包含三个实例，由于资源有限，所以在一台虚拟机上，开启多个redis的实例，端口不同，下面是具体的配置
+IPPORT角色192.168.152.1337001master192.168.152.1337002slave/replica192.168.152.1337003slave/replica 第一步：准备实例和配置 要在同一台虚拟机上开启三个redis实例，就必须要准备三分不同的redis.conf的配置文件，为了方便管理，这里创建三个文件夹，存放不同的配置文件
+创建目录 创建出三个分别以端口号命名的文件夹7001，7002，7003
+# 进入redis的按照目录 cd /usr/local/bin # 创建目录 mkdir -p 7001 7002 7003 ll 如图：
+修改配置文件 修改redis.conf的配置文件，将其中的持久化模式改为开启rdb，关闭aof，并指定ip，端口。
+其中如果想要用redis的可视化连接工具链接，还需要关闭保护模式protected-mode no
+# 关闭aof appendonly no 思考：为什么要开启rdb模式，关闭aof呢❓
+拷贝配置文件到7001，7002，7003 #方式一：逐个拷贝 cp /opt/redis-5/redis.conf ./7001/ cp /opt/redis-5/redis.conf ./7002/ cp /opt/redis-5/redis.conf ./7003/ #方式二：管道操作 echo 7001 7002 7003 | xargs -t -n 1 cp redis-5/redis.conf 修改端口，数据保存目录 sed -i -e &#39;s/6379/7001/g&#39; -e &#39;s/dir .\//dir \/usr\/local\/bin\/7001\//g&#39; ./7001/redis.conf sed -i -e &#39;s/6379/7002/g&#39; -e &#39;s/dir ." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/8bab87ede709be13e84a56cfa7e54ce5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-10-05T21:32:12+08:00" />
+<meta property="article:modified_time" content="2023-10-05T21:32:12+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">一文教你搞懂Redis集群</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-github-gist">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="Redis_1"></a>一、Redis主从</h2> 
+<h3><a id="11_3"></a>1.1、搭建主从架构</h3> 
+<p>单节点的Redis的并发能力是有上限的，要进一步的提高Redis的并发能力，据需要大家主从集群，实现读写分离。</p> 
+<p><img src="https://images2.imgbox.com/94/a3/PkzVMWs9_o.png" alt="在这里插入图片描述"></p> 
+<p>共包含三个实例，由于资源有限，所以在一台虚拟机上，开启多个redis的实例，端口不同，下面是具体的配置</p> 
+<table><thead><tr><th>IP</th><th>PORT</th><th>角色</th></tr></thead><tbody><tr><td>192.168.152.133</td><td>7001</td><td>master</td></tr><tr><td>192.168.152.133</td><td>7002</td><td>slave/replica</td></tr><tr><td>192.168.152.133</td><td>7003</td><td>slave/replica</td></tr></tbody></table> 
+<h4><a id="_18"></a>第一步：准备实例和配置</h4> 
+<p>要在同一台虚拟机上开启三个redis实例，就必须要准备三分不同的redis.conf的配置文件，为了方便管理，这里创建三个文件夹，存放不同的配置文件</p> 
+<ol><li><strong>创建目录</strong></li></ol> 
+<p>创建出三个分别以端口号命名的文件夹7001，7002，7003</p> 
+<pre><code class="prism language-shell"><span class="token comment"># 进入redis的按照目录</span>
+<span class="token builtin class-name">cd</span> /usr/local/bin
+<span class="token comment"># 创建目录</span>
+<span class="token function">mkdir</span> <span class="token parameter variable">-p</span> <span class="token number">7001</span> <span class="token number">7002</span> <span class="token number">7003</span>
+ll
+</code></pre> 
+<p>如图：</p> 
+<p><img src="https://images2.imgbox.com/1e/14/WXFQP5iC_o.png" alt="在这里插入图片描述"></p> 
+<ol start="2"><li><strong>修改配置文件</strong></li></ol> 
+<p>修改redis.conf的配置文件，将其中的持久化模式改为开启rdb，关闭aof，并指定ip，端口。</p> 
+<blockquote> 
+ <p>其中如果想要用redis的可视化连接工具链接，还需要关闭保护模式<code>protected-mode no</code></p> 
+</blockquote> 
+<pre><code class="prism language-shell"><span class="token comment"># 关闭aof</span>
+appendonly no
+</code></pre> 
+<p>思考：为什么要开启rdb模式，关闭aof呢❓</p> 
+<ol start="3"><li>拷贝配置文件到7001，7002，7003</li></ol> 
+<pre><code class="prism language-shell"><span class="token comment">#方式一：逐个拷贝</span>
+<span class="token function">cp</span> /opt/redis-5/redis.conf ./7001/
+<span class="token function">cp</span> /opt/redis-5/redis.conf ./7002/
+<span class="token function">cp</span> /opt/redis-5/redis.conf ./7003/
+<span class="token comment">#方式二：管道操作</span>
+<span class="token builtin class-name">echo</span> <span class="token number">7001</span> <span class="token number">7002</span> <span class="token number">7003</span> <span class="token operator">|</span> <span class="token function">xargs</span> <span class="token parameter variable">-t</span> <span class="token parameter variable">-n</span> <span class="token number">1</span> <span class="token function">cp</span> redis-5/redis.conf
+</code></pre> 
+<ol start="4"><li>修改端口，数据保存目录</li></ol> 
+<pre><code class="prism language-shell"><span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token parameter variable">-e</span> <span class="token string">'s/6379/7001/g'</span> <span class="token parameter variable">-e</span> <span class="token string">'s/dir .\//dir \/usr\/local\/bin\/7001\//g'</span> ./7001/redis.conf
+<span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token parameter variable">-e</span> <span class="token string">'s/6379/7002/g'</span> <span class="token parameter variable">-e</span> <span class="token string">'s/dir .\//dir \/usr\/local\/bin\/7002\//g'</span> ./7002/redis.conf
+<span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token parameter variable">-e</span> <span class="token string">'s/6379/7003/g'</span> <span class="token parameter variable">-e</span> <span class="token string">'s/dir .\//dir \/usr\/local\/bin\/7003\//g'</span> ./7003/redis.conf
+</code></pre> 
+<blockquote> 
+ <p>daemonize no：表示不后台启动，实际生产需要修改为yes，这里为了方便观察日志，暂时关闭</p> 
+</blockquote> 
+<ol start="5"><li>修改每个实例的声明IP</li></ol> 
+<p>虚拟机本身存在多个ip，为了避免混淆，我们需要在配置文件的第一行，声明每个实例的IP</p> 
+<pre><code class="prism language-shell"><span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token string">'1a replica-announce-ip 192.168.152.133'</span> ./7001/redis.conf
+<span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token string">'1a replica-announce-ip 192.168.152.133'</span> ./7002/redis.conf
+<span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token string">'1a replica-announce-ip 192.168.152.133'</span> ./7003/redis.conf
+</code></pre> 
+<h4><a id="redis_87"></a>第二步：启动redis实例</h4> 
+<p>执行如下命令</p> 
+<pre><code class="prism language-shell">redis-server ./7001/redis.conf
+redis-server ./7002/redis.conf
+redis-server ./7003/redis.conf
+</code></pre> 
+<p><img src="https://images2.imgbox.com/c1/a2/rohZp5fa_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_100"></a>第三步：构建主从关系</h4> 
+<p>完成上面的操作之后，其实还没有完成主从的搭建，因为这样只是启动三个单独的redis实例，这三个redis实例之间没有任何的联系。需要在从节点下执行如下命令：</p> 
+<pre><code class="prism language-shell"><span class="token comment"># 方式一：永久修改</span>
+在redis.conf文件里添加slaveof masterIp masterPort
+只要添加了这行命令的redis实例就会成为被添加的masterIp的从节点
+
+<span class="token comment"># 方式二，临时修改，重启后将失效</span>
+<span class="token comment"># 进入redis-cli客户端，执行slaveof</span>
+slaveof 主节点IP 主节点端口
+</code></pre> 
+<p><img src="https://images2.imgbox.com/85/8b/jfrk97md_o.png" alt="在这里插入图片描述"></p> 
+<p>观察日志变化：</p> 
+<p><img src="https://images2.imgbox.com/a9/17/7a7cVZHQ_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="12_124"></a>1.2、主从同步原理</h3> 
+<h4><a id="_126"></a>全量同步</h4> 
+<h5><a id="_128"></a>数据同步图解</h5> 
+<p><strong>数据同步原理</strong></p> 
+<p>Redis主从的第一次数据同步是全量同步：</p> 
+<p><img src="https://images2.imgbox.com/47/85/mxC4nZTo_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="_136"></a>如何判断是否是第一次</h5> 
+<p>那么由上图我们可以知道master必须要对发来的slave节点进行判断，看是不是第一次，如果是第一次，需要做全量同步数据，那么问题来了？master怎么知道是不是第一次呢？？？</p> 
+<p>这里就涉及到了两个概念：</p> 
+<ul><li> <p><strong>Replication Id:</strong> 简称replid，是数据集的标记，id一致则说明是同一个数据集，每一个master都有唯一的replid，slave则会继承master的replid。</p> </li><li> <p>**offset：**随着repl_back_log中地数据量的增大而增加，slave完成同步时也会记录当前地offset，所以slave地offset偏移量一定是小于等于，master地offset。</p> </li></ul> 
+<p><img src="https://images2.imgbox.com/36/42/LcWjqurf_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>答案是Replid，因为slave在成成为master地从节点之前，自己也是master，也有自己的replid，故replid是唯一的。</p> 
+</blockquote> 
+<h5><a id="_151"></a>日志分析</h5> 
+<p>接下来我们看下日志进行进一步的分析：</p> 
+<p>【步骤一】：</p> 
+<p><img src="https://images2.imgbox.com/6c/e1/jtMqR9lZ_o.png" alt="在这里插入图片描述"></p> 
+<p>【步骤二】：</p> 
+<p><img src="https://images2.imgbox.com/13/73/7udzPPJu_o.png" alt="在这里插入图片描述"></p> 
+<p>【步骤三】：</p> 
+<p>由于是第一次，所以没有offset，故没有日志，但是redis后台会监控</p> 
+<h4><a id="_169"></a>增量同步</h4> 
+<h5><a id="_171"></a>增量同步图解</h5> 
+<p><img src="https://images2.imgbox.com/de/13/YPlcKq4J_o.png" alt="在这里插入图片描述"></p> 
+<p>增量同步地关键就是repl_baklog，上面讲过一个概念offset，他记录的是主从节点同步的节点信息，也就是说假如slave宕机了，但是这个时候master还持续地往里面写数据，这个时候slave地offset一直没有增加，而master地offset一直在增加。当我们地slave重新恢复的时候，slave地offset与master地offset的差值，就是slave需要做增量同步的数据。</p> 
+<blockquote> 
+ <p><strong>那么repl_baklog是怎么实现记录的操作呢？</strong></p> 
+ <p>原理就如上图左下角所示：</p> 
+ <p><code>repl_baklog</code>数据结构实际上就是一个环形数组，绿色的部分代表slave的offset，而红色的部分代表需要同步的数据，也就是master的offset与slave的offset的差值，我们实际要关注的也就是这部分。</p> 
+</blockquote> 
+<h5><a id="_184"></a>什么时候无法增量同步</h5> 
+<p><img src="https://images2.imgbox.com/74/86/K4pWklTR_o.png" alt="在这里插入图片描述"></p> 
+<p>由于是一个环形的数据结构，所以一旦master的offset覆盖掉slave宕机前的offset位置，那么此时就无法实现增量同步。</p> 
+<h5><a id="_191"></a>如何优化主从集群</h5> 
+<p><img src="https://images2.imgbox.com/f3/b5/3HuWlGRe_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="Redis_196"></a>二、Redis哨兵</h2> 
+<blockquote> 
+ <p>🤔思考：</p> 
+ <ul><li>slave节点宕机恢复后可以找master节点数据同步，</li><li>那master节点宕机了呢，怎么办？</li></ul> 
+</blockquote> 
+<h3><a id="21_203"></a>2.1、哨兵的作用与原理</h3> 
+<h4><a id="_205"></a>哨兵的作用</h4> 
+<p>Redis提供了哨兵模式（Sentinel），其主要的作用就是监控主从集群，用于自动的故障检测与恢复，以及通知。</p> 
+<p><img src="https://images2.imgbox.com/66/19/f38HwJPa_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_212"></a>服务状态监控</h4> 
+<p><img src="https://images2.imgbox.com/fe/45/OIOIakCt_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="Master_217"></a>选举新的Master</h4> 
+<p><img src="https://images2.imgbox.com/e3/1b/BBvSGszy_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_222"></a>故障转移原理</h4> 
+<p><img src="https://images2.imgbox.com/d0/c9/17nIjfhi_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p><strong>⚓️注意：</strong></p> 
+ <p>当原master宕机后，sentinel会选举出新的master，同时会强制修改master节点的redis.conf配置文件，添加一行：<strong><code>slaveof &lt;新的masterip&gt; &lt;新的master端口&gt;</code></strong></p> 
+ <p>故，如果重新使用原理的redis.conf启动主从，就无法实现主从的搭建。</p> 
+</blockquote> 
+<h3><a id="22_235"></a>2.2、搭建哨兵集群</h3> 
+<table><thead><tr><th>节点</th><th>PORT</th><th>角色</th></tr></thead><tbody><tr><td>sentinel1</td><td>27001</td><td>master</td></tr><tr><td>sentinel2</td><td>27002</td><td>slave/replica</td></tr><tr><td>sentinel3</td><td>27003</td><td>slave/replica</td></tr></tbody></table> 
+<h4><a id="_245"></a>第一步：准备实例和配置</h4> 
+<p>必须要准备三分不同的sentinel.conf的配置文件，为了方便管理，这里创建三个文件夹，存放不同的配置文件：sentinel27001 sentinel27002 sentinel27003</p> 
+<ol><li><strong>创建目录</strong></li></ol> 
+<p>创建出三个分别以端口号命名的文件夹7001，7002，7003</p> 
+<pre><code class="prism language-shell"><span class="token comment"># 进入redis的按照目录</span>
+<span class="token builtin class-name">cd</span> /usr/local/bin
+<span class="token comment"># 创建目录</span>
+<span class="token function">mkdir</span> <span class="token parameter variable">-p</span> sentinel27001 sentinel27002 sentinel27003
+ll
+</code></pre> 
+<p>如图：</p> 
+<p><img src="https://images2.imgbox.com/99/7e/GbjdZtgF_o.png" alt="在这里插入图片描述"></p> 
+<ol start="2"><li><strong>修改配置文件</strong></li></ol> 
+<p>sentinel.conf的配置文件，</p> 
+<pre><code class="prism language-shell"><span class="token function">vim</span> ./sentinel27001/sentinel.conf
+
+port <span class="token number">27001</span>
+sentinel announce-ip <span class="token number">192.168</span>.152.133
+<span class="token comment"># 客观下线数目 2台sentinel都认为下线则认为主管下线</span>
+<span class="token comment"># mymaster 为sentinel的名字，随意，但是前后须保持一致</span>
+<span class="token comment"># 192.168.152.133 7001 为master主节点的ip，端口</span>
+sentinel monitor mymaster <span class="token number">192.168</span>.152.133 <span class="token number">7001</span> <span class="token number">2</span>
+sentinel down-after-milliseconds mymaster <span class="token number">5000</span>
+sentinel failover-timeout mymaster <span class="token number">60000</span>
+<span class="token function">dir</span> <span class="token string">"/usr/local/bin/sentinel27001"</span>
+</code></pre> 
+<ol start="3"><li>拷贝配置文件到sentinel27002，sentinel27003</li></ol> 
+<pre><code class="prism language-shell"><span class="token comment">#方式二：管道操作</span>
+<span class="token builtin class-name">echo</span> sentinel27002 sentinel27003 <span class="token operator">|</span> <span class="token function">xargs</span> <span class="token parameter variable">-t</span> <span class="token parameter variable">-n</span> <span class="token number">1</span> <span class="token function">cp</span> ./sentinel27001/sentinel.conf
+</code></pre> 
+<ol start="4"><li>修改端口，数据保存目录</li></ol> 
+<pre><code class="prism language-shell"><span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token parameter variable">-e</span> <span class="token string">'s/27001/27002/g'</span> <span class="token parameter variable">-e</span> <span class="token string">'s/sentinel27001/sentinel27002/g'</span> ./sentinel27002/sentinel.conf
+<span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token parameter variable">-e</span> <span class="token string">'s/27001/27003/g'</span> <span class="token parameter variable">-e</span> <span class="token string">'s/sentinel27001/sentinel27003/g'</span> ./sentinel27003/sentinel.conf
+</code></pre> 
+<blockquote> 
+ <p>daemonize no：表示不后台启动，实际生产需要修改为yes，这里为了方便观察日志，暂时关闭</p> 
+</blockquote> 
+<ol start="5"><li>修改每个实例的声明IP</li></ol> 
+<p>虚拟机本身存在多个ip，为了避免混淆，我们需要在配置文件的第一行，声明每个实例的IP</p> 
+<pre><code class="prism language-shell"><span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token string">'1a replica-announce-ip 192.168.152.133'</span> ./7001/redis.conf
+<span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token string">'1a replica-announce-ip 192.168.152.133'</span> ./7002/redis.conf
+<span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token string">'1a replica-announce-ip 192.168.152.133'</span> ./7003/redis.conf
+</code></pre> 
+<h4><a id="sentinel_310"></a>第二步：启动sentinel实例</h4> 
+<p>执行如下命令</p> 
+<pre><code class="prism language-shell">redis-sentinel ./sentinel27001/sentinel.conf
+redis-sentinel ./sentinel27002/sentinel.conf
+redis-sentinel ./sentinel27003/sentinel.conf
+</code></pre> 
+<p><img src="https://images2.imgbox.com/81/c0/WGZ3zni8_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="master_323"></a>第三步：模拟master宕机</h4> 
+<p><img src="https://images2.imgbox.com/d9/3d/XOo1LZ5y_o.png" alt="在这里插入图片描述"></p> 
+<p>哨兵服务监控7001状态，并完成新的sentinel-leader的选举，并最终由选举出来的sentinel-leader完成故障恢复</p> 
+<p><img src="https://images2.imgbox.com/0b/9f/ojvPH8EJ_o.png" alt="在这里插入图片描述"></p> 
+<p>由选举出来的27001哨兵选举出7003节点，成为新的master，并向7003发送了一个slaveof-noone的命令【起来，不愿做奴隶的人】，使得7003成为新的master</p> 
+<p><img src="https://images2.imgbox.com/43/d4/3FPmDvMh_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/c3/44/GgoyiEuv_o.png" alt="在这里插入图片描述"></p> 
+<p>向7001发起reconf命令<br> <img src="https://images2.imgbox.com/8f/78/CO8259Ks_o.png" alt="在这里插入图片描述"></p> 
+<p>恢复7001节点后，地位变成了slave，并实现了一次全量同步数据7003</p> 
+<p><img src="https://images2.imgbox.com/1d/79/hOJahVoe_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="23RedisTemplate_350"></a>2.3、RedisTemplate的哨兵模式</h3> 
+<p>SpringBoot为访问Redis，提供了一个RedisTemplate的包，集成了Lettuce和Jedis两种Java访问Redis的客户端，接下来，让我们来使用一下：</p> 
+<p>【引入依赖】</p> 
+<pre><code class="prism language-xml">		<span class="token comment">&lt;!-- redis核心依赖 --&gt;</span>
+		<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+			<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+			<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>spring-boot-starter-data-redis<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+		<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+
+		<span class="token comment">&lt;!-- 对象池框架，redis依赖 --&gt;</span>
+		<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+			<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>org.apache.commons<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+			<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>commons-pool2<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+		<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+		<span class="token comment">&lt;!-- 序列化 --&gt;</span>
+		<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">&gt;</span></span>
+			<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">&gt;</span></span>com.alibaba<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">&gt;</span></span>
+			<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">&gt;</span></span>fastjson<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">&gt;</span></span>
+			<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">&gt;</span></span>1.2.73<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">&gt;</span></span>
+		<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<p>application.yml</p> 
+<pre><code class="prism language-yml"><span class="token key atrule">server</span><span class="token punctuation">:</span>
+  <span class="token key atrule">port</span><span class="token punctuation">:</span> <span class="token number">9088</span>
+<span class="token comment"># 开启redis的日志</span>
+<span class="token key atrule">logging</span><span class="token punctuation">:</span>
+  <span class="token key atrule">level</span><span class="token punctuation">:</span>
+    <span class="token key atrule">'[io.lettuce.core]'</span><span class="token punctuation">:</span> debug
+  <span class="token key atrule">pattern</span><span class="token punctuation">:</span>
+    <span class="token key atrule">dateformat</span><span class="token punctuation">:</span> MM<span class="token punctuation">-</span>dd HH<span class="token punctuation">:</span>mm<span class="token punctuation">:</span>ss<span class="token punctuation">:</span>SSS
+<span class="token comment"># redis配置信息</span>
+<span class="token key atrule">spring</span><span class="token punctuation">:</span>
+  <span class="token key atrule">redis</span><span class="token punctuation">:</span>
+    <span class="token key atrule">sentinel</span><span class="token punctuation">:</span>
+      <span class="token key atrule">master</span><span class="token punctuation">:</span> mymaster
+      <span class="token key atrule">nodes</span><span class="token punctuation">:</span>
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">27001</span>
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">27002</span>
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">27003</span>
+</code></pre> 
+<p>【redisConfig配置类】</p> 
+<pre><code class="prism language-java"><span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>autoconfigure<span class="token punctuation">.</span></span><span class="token class-name">AutoConfigureBefore</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>autoconfigure<span class="token punctuation">.</span>data<span class="token punctuation">.</span>redis<span class="token punctuation">.</span></span><span class="token class-name">LettuceClientConfigurationBuilderCustomizer</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>boot<span class="token punctuation">.</span>autoconfigure<span class="token punctuation">.</span>data<span class="token punctuation">.</span>redis<span class="token punctuation">.</span></span><span class="token class-name">RedisAutoConfiguration</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Bean</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>annotation<span class="token punctuation">.</span></span><span class="token class-name">Configuration</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>data<span class="token punctuation">.</span>redis<span class="token punctuation">.</span>connection<span class="token punctuation">.</span></span><span class="token class-name">RedisConnectionFactory</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>data<span class="token punctuation">.</span>redis<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">RedisTemplate</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>data<span class="token punctuation">.</span>redis<span class="token punctuation">.</span>serializer<span class="token punctuation">.</span></span><span class="token class-name">Jackson2JsonRedisSerializer</span></span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>data<span class="token punctuation">.</span>redis<span class="token punctuation">.</span>serializer<span class="token punctuation">.</span></span><span class="token class-name">StringRedisSerializer</span></span><span class="token punctuation">;</span>
+
+<span class="token keyword">import</span> <span class="token import"><span class="token namespace">io<span class="token punctuation">.</span>lettuce<span class="token punctuation">.</span>core<span class="token punctuation">.</span></span><span class="token class-name">ReadFrom</span></span><span class="token punctuation">;</span>
+
+<span class="token comment">/**
+* @ClassName: RedisConfig
+* @Description: Redis配置类
+* @author weiyongpeng
+* @date 2023年10月5日 下午12:37:19
+ */</span>
+<span class="token annotation punctuation">@Configuration</span>
+<span class="token annotation punctuation">@AutoConfigureBefore</span><span class="token punctuation">(</span><span class="token class-name">RedisAutoConfiguration</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">RedisConfig</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">/**
+     * 方法描述： 初始化redis连接
+     * @param factory redis连接工厂
+     * @return {@link RedisTemplate}
+     */</span>
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> <span class="token class-name">RedisTemplate</span> <span class="token function">redisTemplate</span><span class="token punctuation">(</span><span class="token class-name">RedisConnectionFactory</span> factory<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// 新建redisTemplate对象</span>
+        <span class="token class-name">RedisTemplate</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">&gt;</span></span> template <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RedisTemplate</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 设置工厂</span>
+        template<span class="token punctuation">.</span><span class="token function">setConnectionFactory</span><span class="token punctuation">(</span>factory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//序列化配置</span>
+        <span class="token class-name">Jackson2JsonRedisSerializer</span> jackson2JsonRedisSerializer <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Jackson2JsonRedisSerializer</span><span class="token punctuation">(</span><span class="token class-name">Object</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">StringRedisSerializer</span> stringRedisSerializer <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">StringRedisSerializer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">//1，用StringRedisSerializer进行序列化的值，在Java和Redis中保存的内容是一样的</span>
+		<span class="token comment">//2，用Jackson2JsonRedisSerializer进行序列化的值，在Redis中保存的内容，比Java中多了一对双引号。</span>
+		<span class="token comment">//3，用JdkSerializationRedisSerializer进行序列化的值，对于Key-Value的Value来说，是在Redis中是不可读的。对于Hash的Value来说，比Java的内容多了一些字符。</span>
+		<span class="token comment">//如果Key的Serializer也用和Value相同的Serializer的话，在Redis中保存的内容和上面Value的差异是一样的，所以我们保存时，只用StringRedisSerializer进行序列化</span>
+        <span class="token comment">// key采用String的序列化方式</span>
+        template<span class="token punctuation">.</span><span class="token function">setKeySerializer</span><span class="token punctuation">(</span>stringRedisSerializer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// value序列化方式采用jackson</span>
+        template<span class="token punctuation">.</span><span class="token function">setValueSerializer</span><span class="token punctuation">(</span>stringRedisSerializer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// hash的key也采用String的序列化方式</span>
+        template<span class="token punctuation">.</span><span class="token function">setHashKeySerializer</span><span class="token punctuation">(</span>stringRedisSerializer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// hash的value序列化方式采用jackson</span>
+        template<span class="token punctuation">.</span><span class="token function">setHashValueSerializer</span><span class="token punctuation">(</span>stringRedisSerializer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// 返回redisTemplate对象</span>
+        <span class="token keyword">return</span> template<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    
+    <span class="token comment">/**
+    * 描述：配置读写分离
+    * @Title: configurationBuilderCustomizer
+    * @return
+    * @author weiyongpeng
+    * @date  2023年10月5日 上午10:20:57
+     */</span>
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> <span class="token class-name">LettuceClientConfigurationBuilderCustomizer</span> <span class="token function">configurationBuilderCustomizer</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token comment">// REPLICA_PERFERED：表示优先从从节点读取数据，当从节点都挂掉，才去读master</span>
+    	<span class="token keyword">return</span> configurate <span class="token operator">-&gt;</span> configurate<span class="token punctuation">.</span><span class="token function">readFrom</span><span class="token punctuation">(</span><span class="token class-name">ReadFrom</span><span class="token punctuation">.</span><span class="token constant">REPLICA_PREFERRED</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h2><a id="Redis_468"></a>三、Redis分片集群</h2> 
+<h3><a id="31_470"></a>3.1、搭建分片集群</h3> 
+<p>首先在搭建Redis分片集群之前，先了解下分片集群可以解决哨兵和主从无法解决的那些问题，以及分片式集群的特征：</p> 
+<p><img src="https://images2.imgbox.com/8e/b3/kS49DU2O_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>**🔥注意：**在使用RedisTemplate访问分片集群的时候，就不需要指定主从关系，可以访问任意一台节点，redis会实现自动的路由转发机制</p> 
+</blockquote> 
+<p>共包含六个实例，由于资源有限，所以在一台虚拟机上，开启多个redis的实例，端口不同，下面是具体的配置</p> 
+<table><thead><tr><th>IP</th><th>PORT</th><th>角色</th></tr></thead><tbody><tr><td>192.168.152.133</td><td>7001</td><td>master</td></tr><tr><td>192.168.152.133</td><td>7002</td><td>master</td></tr><tr><td>192.168.152.133</td><td>7003</td><td>master</td></tr><tr><td>192.168.152.133</td><td>8001</td><td>slave</td></tr><tr><td>192.168.152.133</td><td>8002</td><td>slave</td></tr><tr><td>192.168.152.133</td><td>8003</td><td>slave</td></tr></tbody></table> 
+<h4><a id="_490"></a>第一步：准备实例和配置</h4> 
+<p>为了完成3主3从的redis分片集群的搭建，必须要准备六份不同的redis.conf的配置文件，为了方便管理，这里创建六个文件夹，存放不同的配置文件：cluster7001 cluster7002 cluster7003 cluster8001 cluster8002 cluster8003</p> 
+<ol><li><strong>创建目录</strong></li></ol> 
+<p>创建出三个分别以端口号命名的文件夹cluster7001 cluster7002 cluster7003 cluster8001 cluster8002 cluster8003</p> 
+<pre><code class="prism language-shell"><span class="token comment"># 进入redis的按照目录</span>
+<span class="token builtin class-name">cd</span> /usr/local/bin
+<span class="token comment"># 创建目录</span>
+<span class="token function">mkdir</span> <span class="token parameter variable">-p</span> cluster7001 cluster7002 cluster7003 cluster8001 cluster8002 cluster8003
+ll
+</code></pre> 
+<p>如图：<br> <img src="https://images2.imgbox.com/3f/1d/kqppKaBr_o.png" alt="在这里插入图片描述"></p> 
+<ol start="2"><li><strong>修改配置文件</strong></li></ol> 
+<p>重新生成redis.conf的配置文件，</p> 
+<pre><code class="prism language-shell"><span class="token function">vim</span> ./cluster7001/redis.conf
+
+port <span class="token number">7001</span>
+<span class="token comment"># 开启集群功能</span>
+cluster-enabled <span class="token function">yes</span>
+<span class="token comment"># 集群的配置文件名称，不需要我们创建，需要redis自己维护</span>
+cluster-config-file /usr/local/bin/cluster7001/nodes.conf
+<span class="token comment"># 节点心跳超时链接时间</span>
+cluster-node-timeout <span class="token number">5000</span>
+<span class="token comment"># 持久化数据文件存放路径</span>
+<span class="token function">dir</span> <span class="token string">"/usr/local/bin/cluster7001"</span>
+<span class="token comment"># 绑定地址</span>
+<span class="token builtin class-name">bind</span> <span class="token number">192.168</span>.152.133
+<span class="token comment"># 开启后台运行</span>
+daemonize <span class="token function">yes</span>
+<span class="token comment"># 声明IP</span>
+replica-announce-ip <span class="token number">192.168</span>.152.133
+<span class="token comment"># 保护模式关闭</span>
+protected-mode no
+<span class="token comment"># 日志文件路径</span>
+logfile <span class="token string">"/usr/local/bin/cluster7001/cluster.log"</span>
+</code></pre> 
+<ol start="3"><li>拷贝配置文件到cluster7002 cluster7003 cluster8001，cluster8002 cluster8003</li></ol> 
+<pre><code class="prism language-shell"><span class="token comment">#方式二：管道操作</span>
+<span class="token builtin class-name">echo</span> cluster7002 cluster7003 cluster8001 cluster8002 cluster8003 <span class="token operator">|</span> <span class="token function">xargs</span> <span class="token parameter variable">-t</span> <span class="token parameter variable">-n</span> <span class="token number">1</span> <span class="token function">cp</span> ./cluster7001/redis.conf
+</code></pre> 
+<ol start="4"><li>修改端口，数据保存目录</li></ol> 
+<pre><code class="prism language-shell"><span class="token builtin class-name">printf</span> <span class="token string">'%s\n'</span> cluster7002 cluster7003 cluster8001 cluster8002 cluster8003 <span class="token operator">|</span> <span class="token function">xargs</span> -I<span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span> <span class="token parameter variable">-t</span> <span class="token function">sed</span> <span class="token parameter variable">-i</span> <span class="token string">'s/cluster7001/{}/g'</span> <span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>/redis.conf
+</code></pre> 
+<blockquote> 
+ <p>daemonize no：表示不后台启动，实际生产需要修改为yes，这里为了方便观察日志，暂时关闭</p> 
+</blockquote> 
+<h4><a id="_555"></a>第二步：启动</h4> 
+<p>执行如下命令</p> 
+<pre><code class="prism language-shell"><span class="token builtin class-name">cd</span> /usr/local/bin
+
+<span class="token builtin class-name">printf</span> <span class="token string">'%s\n'</span> cluster7001 cluster7002 cluster7003 cluster8001 cluster8002 cluster8003 <span class="token operator">|</span> <span class="token function">xargs</span> -I<span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span> <span class="token parameter variable">-t</span>  redis-server ./<span class="token punctuation">{<!-- --></span><span class="token punctuation">}</span>/redis.conf
+</code></pre> 
+<p><img src="https://images2.imgbox.com/62/43/4bfAAATE_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p><strong>🔥注意</strong>，此时还没有完成集群的配置，因为这个时候6台redis实例话没有形成任何的关联关系。</p> 
+</blockquote> 
+<h4><a id="_570"></a>第三步：创建集群</h4> 
+<p>针对redis5.x之后的把版本，执行下述命令：</p> 
+<pre><code class="prism language-shell">redis-cli <span class="token parameter variable">--cluster</span> create --cluster-replicas <span class="token number">1</span> <span class="token number">192.168</span>.152.133:7001 <span class="token number">192.168</span>.152.133:7002 <span class="token number">192.168</span>.152.133:7003 <span class="token number">192.168</span>.152.133:8001 <span class="token number">192.168</span>.152.133:8002 <span class="token number">192.168</span>.152.133:8003
+</code></pre> 
+<p><strong>命令说明</strong></p> 
+<ul><li><code>redis-cli --cluster</code>或者<code>./redis-trib.rb</code> ：代表集群操作命令</li><li><code>create</code>：代表创建集群</li><li><code>--replicas 1</code>或者<code>--cluster-replicas 1</code>：代表集群中每个master的副本个数为1，master+slave的比例就是2，那么<code>总节点数➗(master+salve的比例)</code> 就是当前master个数，那么其余的就是salve</li></ul> 
+<p><img src="https://images2.imgbox.com/04/66/dM7tGicK_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/ce/2e/f4QlnA10_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>自此集群创建完毕，那么我们如何查看集群的状态呢？</p> 
+ <p><code>redis-cli -p 7001 -h 192.168.152.133 cluster nodes</code></p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/d3/4a/GcwqMDqm_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="32_596"></a>3.2、散列插槽原理</h3> 
+<p>Redis会把每一个Master节点映射到0-16383之间共16384个插槽(hash solt)上，<strong>查看集群信息时就能看到：</strong></p> 
+<p><img src="https://images2.imgbox.com/01/e2/ukTgCKmR_o.png" alt="在这里插入图片描述"></p> 
+<p>这些的solts总和正好是16384。</p> 
+<p>为什么要使用插槽呢？原因很简单：</p> 
+<p>**<code>因为redis的节点时有可能宕机的，所以redis的key并不是与节点所绑定的，而是与插槽绑定。</code>**redis会根据key的有效部分计算插槽，分两种情况：</p> 
+<ol><li>key中包含{}，且{}中至少有一个字符，{}中的部分就是有效部分</li><li>key中不包含{}，整个key作为有效部分</li></ol> 
+<p><img src="https://images2.imgbox.com/41/63/TbYUAJoU_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>**🔥注意：<strong>在集群模式下，必须使用</strong><code>-c</code>**参数链接redis-cli</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/aa/36/MY7Ggun9_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/0b/5f/V98h42fg_o.png" alt="在这里插入图片描述"></p> 
+<p>所以这就是为什么我们说，访问集群的任意一个节点，都可以，因为他们是通过槽的值自动切换。</p> 
+<h5><a id="_625"></a>总结</h5> 
+<ol><li>如何将同一类的数据固定保存在同一个Redis实例中？</li></ol> 
+<p>这一类数据使用同样的key有效部分，例如key都以{typeid}作为前缀</p> 
+<h3><a id="33_631"></a>3.3、集群伸缩</h3> 
+<h5><a id="_633"></a>添加一个节点到集群</h5> 
+<p><img src="https://images2.imgbox.com/3a/b6/80Yp3YC8_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/cf/bd/po7zn7nY_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-shell"><span class="token punctuation">[</span>root@localhost bin<span class="token punctuation">]</span><span class="token comment"># mkdir -p cluster7004</span>
+<span class="token punctuation">[</span>root@localhost bin<span class="token punctuation">]</span><span class="token comment"># cp ./cluster7001/redis.conf ./cluster7004/</span>
+<span class="token punctuation">[</span>root@localhost bin<span class="token punctuation">]</span><span class="token comment"># sed -i 's/7001/7004/g' ./cluster7004/redis.conf</span>
+<span class="token punctuation">[</span>root@localhost bin<span class="token punctuation">]</span><span class="token comment"># redis-server ./cluster7004/redis.conf</span>
+<span class="token punctuation">[</span>root@localhost bin<span class="token punctuation">]</span><span class="token comment"># ps -ef | grep redis</span>
+root      <span class="token number">10717</span>      <span class="token number">1</span>  <span class="token number">0</span> <span class="token number">16</span>:05 ?        00:00:04 redis-server <span class="token number">192.168</span>.152.133:7001 <span class="token punctuation">[</span>cluster<span class="token punctuation">]</span>
+root      <span class="token number">10722</span>      <span class="token number">1</span>  <span class="token number">0</span> <span class="token number">16</span>:05 ?        00:00:04 redis-server <span class="token number">192.168</span>.152.133:7002 <span class="token punctuation">[</span>cluster<span class="token punctuation">]</span>
+root      <span class="token number">10724</span>      <span class="token number">1</span>  <span class="token number">0</span> <span class="token number">16</span>:05 ?        00:00:04 redis-server <span class="token number">192.168</span>.152.133:7003 <span class="token punctuation">[</span>cluster<span class="token punctuation">]</span>
+root      <span class="token number">10732</span>      <span class="token number">1</span>  <span class="token number">0</span> <span class="token number">16</span>:05 ?        00:00:04 redis-server <span class="token number">192.168</span>.152.133:8001 <span class="token punctuation">[</span>cluster<span class="token punctuation">]</span>
+root      <span class="token number">10734</span>      <span class="token number">1</span>  <span class="token number">0</span> <span class="token number">16</span>:05 ?        00:00:04 redis-server <span class="token number">192.168</span>.152.133:8002 <span class="token punctuation">[</span>cluster<span class="token punctuation">]</span>
+root      <span class="token number">10739</span>      <span class="token number">1</span>  <span class="token number">0</span> <span class="token number">16</span>:05 ?        00:00:04 redis-server <span class="token number">192.168</span>.152.133:8003 <span class="token punctuation">[</span>cluster<span class="token punctuation">]</span>
+root      <span class="token number">11285</span>      <span class="token number">1</span>  <span class="token number">0</span> <span class="token number">16</span>:48 ?        00:00:00 redis-server <span class="token number">192.168</span>.152.133:7004 <span class="token punctuation">[</span>cluster<span class="token punctuation">]</span>
+root      <span class="token number">11290</span>   <span class="token number">9739</span>  <span class="token number">0</span> <span class="token number">16</span>:48 pts/0    00:00:00 <span class="token function">grep</span> <span class="token parameter variable">--color</span><span class="token operator">=</span>auto redis
+<span class="token punctuation">[</span>root@localhost bin<span class="token punctuation">]</span><span class="token comment">#</span>
+</code></pre> 
+<p>启动完后，查看此时的7004的集群信息</p> 
+<p><img src="https://images2.imgbox.com/fa/af/cDaG5UQT_o.png" alt="在这里插入图片描述"></p> 
+<p>接下来，我们就要使用add-node添加到集群中</p> 
+<pre><code class="prism language-shell">redis-cli <span class="token parameter variable">--cluster</span> add-node <span class="token number">192.168</span>.152.133:7004 <span class="token number">192.168</span>.152.133:7001
+</code></pre> 
+<p><img src="https://images2.imgbox.com/2d/c6/LhWTKvEV_o.png" alt="在这里插入图片描述"></p> 
+<p>但是，我们这个时候查看一下redis7004的集群信息发现，新增的7004没有插槽分配</p> 
+<p><img src="https://images2.imgbox.com/86/65/KnP2P74I_o.png" alt="在这里插入图片描述"></p> 
+<p>使用reshard实现插槽的重新分配</p> 
+<pre><code class="prism language-shell">redis-cli <span class="token parameter variable">--cluster</span> reshard <span class="token number">192.168</span>.152.133:7001 <span class="token comment"># 表示重新分配7001的插槽</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/bd/34/cgM6fTOD_o.png" alt="在这里插入图片描述"></p> 
+<p>分配完后查看7004的集群状态，发现已经实现类分配</p> 
+<p><img src="https://images2.imgbox.com/4c/43/Rxg74gPN_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/67/07/TKBjwhJ7_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="34_694"></a>3.4、故障转移</h3> 
+<h5><a id="_696"></a>自动故障转移</h5> 
+<p><img src="https://images2.imgbox.com/9f/81/ti3cnWoG_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="_701"></a>手动故障转移</h5> 
+<p><img src="https://images2.imgbox.com/5e/82/u8x3YeR1_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="35RedisTemplate_705"></a>3.5、RedisTemplate访问分片集群</h3> 
+<pre><code class="prism language-yml"><span class="token key atrule">spring</span><span class="token punctuation">:</span>
+  <span class="token key atrule">redis</span><span class="token punctuation">:</span>
+    <span class="token key atrule">cluster</span><span class="token punctuation">:</span>
+      <span class="token comment"># 集群节点</span>
+      <span class="token key atrule">nodes</span><span class="token punctuation">:</span> 
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">7001</span>
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">7002</span> 
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">7003</span> 
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">8001</span> 
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">8002</span> 
+        <span class="token punctuation">-</span> 192.168.152.133<span class="token punctuation">:</span><span class="token number">8003</span>
+      <span class="token comment"># 最大重定向次数</span>
+      <span class="token key atrule">max-redirects</span><span class="token punctuation">:</span> <span class="token number">5</span>
+</code></pre> 
+<p>其余配置和哨兵一致，只需要修改application.yml文件即可</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4e0ad3aa0f42c8ea61348a4d6b1e992f/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Spring Boot：实现与数据库的连接</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/a4f670859b16ea57d4a2e5ea985fe9e7/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">因子分析 FA | Factor Analysis</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

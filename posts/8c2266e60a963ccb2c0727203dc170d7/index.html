@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>[转]一个严谨的STM32串口DMA发送&amp;接收（1.5Mbps波特率）机制 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="[转]一个严谨的STM32串口DMA发送&amp;接收（1.5Mbps波特率）机制" />
+<meta property="og:description" content="文章目录 1 前言2 串口有必要使用DMA吗3 实现方式4 STM32串口使用DMA5 串口DMA接收 5.1 基本流程5.2 相关配置5.3 接收处理 5.3 .1 接收数据大小5.3.2 接收数据偏移地址 5.4 应用读取串口数据方法 6 串口DMA发送 5.1 基本流程5.2 相关配置5.3 发送处理 6 串口设备 6.1 数据结构6.2 对外接口 7 相关文章8 完整源码 1 前言 直接存储器访问（Direct Memory Access），简称DMA。DMA是CPU一个用于数据从一个地址空间到另一地址空间“搬运”（拷贝）的组件，数据拷贝过程不需CPU干预，数据拷贝结束则通知CPU处理。因此，大量数据拷贝时，使用DMA可以释放CPU资源。DMA数据拷贝过程，典型的有：
+内存—&gt;内存，内存间拷贝外设—&gt;内存，如uart、spi、i2c等总线接收数据过程内存—&gt;外设，如uart、spi、i2c等总线发送数据过程 2 串口有必要使用DMA吗 串口(uart)是一种低速的串行异步通信，适用于低速通信场景，通常使用的波特率小于或等于115200bps。对于小于或者等于115200bps波特率的，而且数据量不大的通信场景，一般没必要使用DMA，或者说使用DMA并未能充分发挥出DMA的作用。
+对于数量大，或者波特率提高时，必须使用DMA以释放CPU资源，因为高波特率可能带来这样的问题：
+对于发送，使用循环发送，可能阻塞线程，需要消耗大量CPU资源“搬运”数据，浪费CPU对于发送，使用中断发送，不会阻塞线程，但需浪费大量中断资源，CPU频繁响应中断；以115200bps波特率，1s传输11520字节，大约69us需响应一次中断，如波特率再提高，将消耗更多CPU资源对于接收，如仍采用传统的中断模式接收，同样会因为频繁中断导致消耗大量CPU资源 因此，高波特率场景下，串口非常有必要使用DMA。
+3 实现方式 整体设计图
+4 STM32串口使用DMA 关于STM32串口使用DMA，不乏一些开发板例程及网络上一些博主的使用教程。使用步骤、流程、配置基本大同小异，正确性也没什么毛病，但都是一些基本的Demo例子，作为学习过程没问题；实际项目使用缺乏严谨性，数据量大时可能导致数据异常。
+测试平台:
+STM32F030C8T6UART1/UART2DMA1 Channel2—Channel5ST标准库主频48MHz（外部12MHz晶振） 5 串口DMA接收 5.1 基本流程 串口接收流程图
+5.2 相关配置 关键步骤
+【1】初始化串口
+【2】使能串口DMA接收模式，使能串口空闲中断
+【3】配置DMA参数，使能DMA通道buf半满（传输一半数据）中断、buf溢满（传输数据完成）中断
+为什么需要使用DMA 通道buf半满中断？
+很多串口DMA模式接收的教程、例子，基本是使用了“空间中断”&#43;“DMA传输完成中断”来接收数据。实质上这是存在风险的，当DMA传输数据完成，CPU介入开始拷贝DMA通道buf数据，如果此时串口继续有数据进来，DMA继续搬运数据到buf，就有可能将数据覆盖，因为DMA数据搬运是不受CPU控制的，即使你关闭了CPU中断。
+严谨的做法需要做双buf，CPU和DMA各自一块内存交替访问，即是&#34;乒乓缓存” ，处理流程步骤应该是这样：
+【1】第一步，DMA先将数据搬运到buf1，搬运完成通知CPU来拷贝buf1数据" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/8c2266e60a963ccb2c0727203dc170d7/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-02-23T10:07:14+08:00" />
+<meta property="article:modified_time" content="2022-02-23T10:07:14+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">[转]一个严谨的STM32串口DMA发送&amp;接收（1.5Mbps波特率）机制</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h4><a id="_0"></a>文章目录</h4> 
+<ul><li><a href="#1__5" rel="nofollow">1 前言</a></li><li><a href="#2_DMA_15" rel="nofollow">2 串口有必要使用DMA吗</a></li><li><a href="#3__33" rel="nofollow">3 实现方式</a></li><li><a href="#4_STM32DMA_43" rel="nofollow">4 STM32串口使用DMA</a></li><li><a href="#5_DMA_60" rel="nofollow">5 串口DMA接收</a></li><li> 
+  <ul><li><a href="#51__62" rel="nofollow">5.1 基本流程</a></li><li><a href="#52__71" rel="nofollow">5.2 相关配置</a></li><li><a href="#53__161" rel="nofollow">5.3 接收处理</a></li><li> 
+    <ul><li><a href="#53_1__173" rel="nofollow">5.3 .1 接收数据大小</a></li><li><a href="#532__284" rel="nofollow">5.3.2 接收数据偏移地址</a></li></ul> </li><li><a href="#54__301" rel="nofollow">5.4 应用读取串口数据方法</a></li></ul> </li><li><a href="#6_DMA_307" rel="nofollow">6 串口DMA发送</a></li><li> 
+  <ul><li><a href="#51__309" rel="nofollow">5.1 基本流程</a></li><li><a href="#52__320" rel="nofollow">5.2 相关配置</a></li><li><a href="#53__365" rel="nofollow">5.3 发送处理</a></li></ul> </li><li><a href="#6__471" rel="nofollow">6 串口设备</a></li><li> 
+  <ul><li><a href="#61__475" rel="nofollow">6.1 数据结构</a></li><li><a href="#62__494" rel="nofollow">6.2 对外接口</a></li></ul> </li><li><a href="#7__534" rel="nofollow">7 相关文章</a></li><li><a href="#8__544" rel="nofollow">8 完整源码</a></li></ul> 
+<hr> 
+<h2><a id="1__28"></a>1 前言</h2> 
+<p>直接存储器访问（Direct Memory Access），简称DMA。DMA是CPU一个用于数据从一个地址空间到另一地址空间“搬运”（拷贝）的组件，数据拷贝过程不需CPU干预，数据拷贝结束则通知CPU处理。因此，大量数据拷贝时，使用DMA可以释放CPU资源。DMA数据拷贝过程，典型的有：</p> 
+<ul><li>内存—&gt;内存，内存间拷贝</li><li>外设—&gt;内存，如uart、spi、i2c等总线接收数据过程</li><li>内存—&gt;外设，如uart、spi、i2c等总线发送数据过程</li></ul> 
+<h2><a id="2_DMA_39"></a>2 串口有必要使用DMA吗</h2> 
+<p>串口(uart)是一种低速的串行异步通信，适用于低速通信场景，通常使用的<a href="https://so.csdn.net/so/search?q=%E6%B3%A2%E7%89%B9%E7%8E%87&amp;spm=1001.2101.3001.7020">波特率</a>小于或等于115200bps。对于小于或者等于115200bps波特率的，而且数据量不大的通信场景，一般没必要使用DMA，或者说使用DMA并未能充分发挥出DMA的作用。</p> 
+<p>对于数量大，或者波特率提高时，必须使用DMA以释放CPU资源，因为高波特率可能带来这样的问题：</p> 
+<ul><li>对于发送，使用循环发送，可能阻塞线程，需要消耗大量CPU资源“搬运”数据，浪费CPU</li><li>对于发送，使用中断发送，不会阻塞线程，但需浪费大量中断资源，CPU频繁响应中断；以115200bps波特率，1s传输11520字节，大约69us需响应一次中断，如波特率再提高，将消耗更多CPU资源</li><li>对于接收，如仍采用传统的中断模式接收，同样会因为频繁中断导致消耗大量CPU资源</li></ul> 
+<p>因此，高波特率场景下，串口非常有必要使用DMA。</p> 
+<h2><a id="3__58"></a>3 实现方式</h2> 
+<p><img src="https://images2.imgbox.com/b7/03/GIpMHaD3_o.png" alt="在这里插入图片描述"></p> 
+<p>整体设计图</p> 
+<h2><a id="4_STM32DMA_69"></a>4 STM32串口使用DMA</h2> 
+<p>关于STM32串口使用DMA，不乏一些开发板例程及网络上一些博主的使用教程。使用步骤、流程、配置基本大同小异，正确性也没什么毛病，但都是一些基本的Demo例子，作为学习过程没问题；实际项目使用缺乏严谨性，数据量大时可能导致数据异常。</p> 
+<p><strong>测试平台:</strong></p> 
+<ul><li>STM32F030C8T6</li><li>UART1/UART2</li><li>DMA1 Channel2—Channel5</li><li>ST标准库</li><li>主频48MHz（外部12MHz晶振）</li></ul> 
+<p><img src="https://images2.imgbox.com/11/fb/V68n644e_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="5_DMA_87"></a>5 串口DMA接收</h2> 
+<h3><a id="51__90"></a>5.1 基本流程</h3> 
+<p><img src="https://images2.imgbox.com/f1/93/67CuCk7A_o.png" alt="在这里插入图片描述"></p> 
+<p>串口接收流程图</p> 
+<h3><a id="52__101"></a>5.2 相关配置</h3> 
+<p>关键步骤</p> 
+<p>【1】初始化串口</p> 
+<p>【2】使能串口DMA接收模式，使能串口空闲中断</p> 
+<p>【3】配置DMA参数，使能DMA通道buf半满（传输一半数据）中断、buf溢满（传输数据完成）中断</p> 
+<p><strong>为什么需要使用DMA 通道buf半满中断？</strong></p> 
+<p>很多串口DMA模式接收的教程、例子，基本是使用了“空间中断”+“DMA传输完成中断”来接收数据。实质上这是存在风险的，当DMA传输数据完成，CPU介入开始拷贝DMA通道buf数据，如果此时串口继续有数据进来，DMA继续搬运数据到buf，就有可能将数据覆盖，因为DMA数据搬运是不受CPU控制的，即使你关闭了CPU中断。</p> 
+<p>严谨的做法需要做双buf，CPU和DMA各自一块内存交替访问，即是"<strong>乒乓缓存</strong>” ，处理流程步骤应该是这样：</p> 
+<p>【1】第一步，DMA先将数据搬运到buf1，搬运完成通知CPU来拷贝buf1数据<br> 【2】第二步，DMA将数据搬运到buf2，与CPU拷贝buf1数据不会冲突<br> 【3】第三步，buf2数据搬运完成，通知CPU来拷贝buf2数据<br> 【4】执行完第三步，DMA返回执行第一步，一直循环</p> 
+<p><img src="https://images2.imgbox.com/b2/0d/Ok89ldAG_o.png" alt="在这里插入图片描述"></p> 
+<p>双缓存DMA数据搬运过程</p> 
+<p>STM32F0系列DMA不支持双缓存（以具体型号为准）机制，但提供了一个buf<code>"半满中断"</code>，即是数据搬运到buf大小的一半时，可以产生一个中断信号。基于这个机制，我们可以实现双缓存功能，只需将buf空间开辟大一点即可。</p> 
+<p>【1】第一步，DMA将数据搬运完成buf的前一半时，产生“半满中断”，CPU来拷贝buf前半部分数据<br> 【2】第二步，DMA继续将数据搬运到buf的后半部分，与CPU拷贝buf前半部数据不会冲突<br> 【3】第三步，buf后半部分数据搬运完成，触发“溢满中断”，CPU来拷贝buf后半部分数据<br> 【4】执行完第三步，DMA返回执行第一步，一直循环</p> 
+<p><img src="https://images2.imgbox.com/21/fa/Bqd8t7Kr_o.png" alt="在这里插入图片描述"></p> 
+<p>使用半满中断DMA数据搬运过程</p> 
+<p>UART2 DMA模式接收配置代码如下，与其他外设使用DMA的配置基本一致，留意关键配置：</p> 
+<ul><li> <p>串口接收，DMA通道工作模式设为连续模式</p> </li><li> <p>使能DMA通道接收buf半满中断、溢满（传输完成）中断</p> </li><li> <p>启动DMA通道前清空相关状态标识，防止首次传输错乱数据</p> <p>void bsp_uart2_dmarx_config(uint8_t *mem_addr, uint32_t mem_size)<br> {<!-- --><br> DMA_InitTypeDef DMA_InitStructure;</p> <pre><code>DMA_DeInit(DMA1_Channel5); 
+DMA_Cmd(DMA1_Channel5, DISABLE);
+DMA_InitStructure.DMA_PeripheralBaseAddr 	= (uint32_t)&amp;(USART2-&gt;RDR);/* UART2接收数据地址 */
+DMA_InitStructure.DMA_MemoryBaseAddr 		= (uint32_t)mem_addr; /* 接收buf */
+DMA_InitStructure.DMA_DIR 					= DMA_DIR_PeripheralSRC; 	/* 传输方向:外设-&gt;内存 */
+DMA_InitStructure.DMA_BufferSize 			= mem_size; /* 接收buf大小 */
+DMA_InitStructure.DMA_PeripheralInc 		= DMA_PeripheralInc_Disable; 
+DMA_InitStructure.DMA_MemoryInc 			= DMA_MemoryInc_Enable; 
+DMA_InitStructure.DMA_PeripheralDataSize 	= DMA_PeripheralDataSize_Byte; 
+DMA_InitStructure.DMA_MemoryDataSize 		= DMA_MemoryDataSize_Byte;
+DMA_InitStructure.DMA_Mode 					= DMA_Mode_Circular; /* 连续模式 */
+DMA_InitStructure.DMA_Priority 				= DMA_Priority_VeryHigh; 
+DMA_InitStructure.DMA_M2M 					= DMA_M2M_Disable; 
+DMA_Init(DMA1_Channel5, &amp;DMA_InitStructure); 
+DMA_ITConfig(DMA1_Channel5, DMA_IT_TC|DMA_IT_HT|DMA_IT_TE, ENABLE);/* 使能DMA半满、溢满、错误中断 */
+DMA_ClearFlag(DMA1_IT_TC5);	/* 清除相关状态标识 */
+DMA_ClearFlag(DMA1_IT_HT5);
+DMA_Cmd(DMA1_Channel5, ENABLE); 
+</code></pre> <p>}</p> </li></ul> 
+<blockquote> 
+ <p>DMA 错误中断<code>“DMA_IT_TE”</code>，一般用于前期调试使用，用于检查DMA出现错误的次数，发布软件可以不使能该中断。</p> 
+</blockquote> 
+<h3><a id="53__189"></a>5.3 接收处理</h3> 
+<p>基于上述描述机制，DMA方式接收串口数据，有三种中断场景需要CPU去将buf数据拷贝到fifo中，分别是：</p> 
+<ul><li>DMA通道buf溢满（传输完成）场景</li><li>DMA通道buf半满场景</li><li>串口空闲中断场景</li></ul> 
+<p>前两者场景，前面文章已经描述。串口空闲中断指的是，数据传输完成后，串口监测到一段时间内没有数据进来，则触发产生的中断信号。</p> 
+<h4><a id="53_1__202"></a>5.3 .1 接收数据大小</h4> 
+<p>数据传输过程是随机的，数据大小也是不定的，存在几类情况：</p> 
+<ul><li>数据刚好是DMA接收buf的整数倍，这是理想的状态</li><li>数据量小于DMA接收buf或者小于接收buf的一半，此时会触发串口空闲中断</li></ul> 
+<p>因此，我们需根据<code>“DMA通道buf大小”、“DMA通道buf剩余空间大小”、“上一次接收的总数据大小”</code>来计算当前接收的数据大小。</p> 
+<pre><code>/* 获取DMA通道接收buf剩余空间大小 */
+uint16_t DMA_GetCurrDataCounter(DMA_Channel_TypeDef* DMAy_Channelx);
+</code></pre> 
+<p><strong>DMA通道buf溢满场景计算</strong></p> 
+<pre><code>接收数据大小 = DMA通道buf大小 - 上一次接收的总数据大小
+</code></pre> 
+<p>DMA通道buf溢满中断处理函数：</p> 
+<pre><code>void uart_dmarx_done_isr(uint8_t uart_id)
+{
+  	uint16_t recv_size;
+	
+	recv_size = s_uart_dev[uart_id].dmarx_buf_size - s_uart_dev[uart_id].last_dmarx_size;
+
+	fifo_write(&amp;s_uart_dev[uart_id].rx_fifo, 
+				   (const uint8_t *)&amp;(s_uart_dev[uart_id].dmarx_buf[s_uart_dev[uart_id].last_dmarx_size]), recv_size);
+
+	s_uart_dev[uart_id].last_dmarx_size = 0;
+}
+</code></pre> 
+<p><strong>DMA通道buf半满场景计算</strong></p> 
+<pre><code>接收数据大小 = DMA通道接收总数据大小 - 上一次接收的总数据大小
+DMA通道接收总数据大小 = DMA通道buf大小 - DMA通道buf剩余空间大小
+</code></pre> 
+<p>DMA通道buf半满中断处理函数：</p> 
+<pre><code>void uart_dmarx_half_done_isr(uint8_t uart_id)
+{
+  	uint16_t recv_total_size;
+  	uint16_t recv_size;
+	
+	if(uart_id == 0)
+	{
+	  	recv_total_size = s_uart_dev[uart_id].dmarx_buf_size - bsp_uart1_get_dmarx_buf_remain_size();
+	}
+	else if (uart_id == 1)
+	{
+		recv_total_size = s_uart_dev[uart_id].dmarx_buf_size - bsp_uart2_get_dmarx_buf_remain_size();
+	}
+	recv_size = recv_total_size - s_uart_dev[uart_id].last_dmarx_size;
+	
+	fifo_write(&amp;s_uart_dev[uart_id].rx_fifo, 
+				   (const uint8_t *)&amp;(s_uart_dev[uart_id].dmarx_buf[s_uart_dev[uart_id].last_dmarx_size]), recv_size);
+	s_uart_dev[uart_id].last_dmarx_size = recv_total_size;/* 记录接收总数据大小 */
+}
+</code></pre> 
+<p><strong>串口空闲中断场景计算</strong></p> 
+<p>串口空闲中断场景的接收数据计算与“DMA通道buf半满场景”计算方式是一样的。</p> 
+<p>串口空闲中断处理函数：</p> 
+<pre><code>void uart_dmarx_idle_isr(uint8_t uart_id)
+{
+  	uint16_t recv_total_size;
+  	uint16_t recv_size;
+	
+	if(uart_id == 0)
+	{
+	  	recv_total_size = s_uart_dev[uart_id].dmarx_buf_size - bsp_uart1_get_dmarx_buf_remain_size();
+	}
+	else if (uart_id == 1)
+	{
+		recv_total_size = s_uart_dev[uart_id].dmarx_buf_size - bsp_uart2_get_dmarx_buf_remain_size();
+	}
+	recv_size = recv_total_size - s_uart_dev[uart_id].last_dmarx_size;
+	s_UartTxRxCount[uart_id*2+1] += recv_size;
+	fifo_write(&amp;s_uart_dev[uart_id].rx_fifo, 
+				   (const uint8_t *)&amp;(s_uart_dev[uart_id].dmarx_buf[s_uart_dev[uart_id].last_dmarx_size]), recv_size);
+	s_uart_dev[uart_id].last_dmarx_size = recv_total_size;
+}
+</code></pre> 
+<blockquote> 
+ <p>注：<br> 串口空闲中断处理函数，除了将数据拷贝到串口接收fifo中，还可以增加特殊处理，如作为串口数据传输完成标识、不定长度数据处理等等。</p> 
+</blockquote> 
+<h4><a id="532__308"></a>5.3.2 接收数据偏移地址</h4> 
+<p>将有效数据拷贝到fifo中，除了需知道有效数据大小外，还需知道数据存储于DMA 接收buf的偏移地址。有效数据偏移地址只需记录上一次接收的总大小即,可，在DMA通道buf全满中断处理函数将该值清零，因为下一次数据将从buf的开头存储。</p> 
+<p>在DMA通道buf溢满中断处理函数中将数据偏移地址清零：</p> 
+<pre><code>void uart_dmarx_done_isr(uint8_t uart_id)
+{
+ 	/* todo */
+	s_uart_dev[uart_id].last_dmarx_size = 0;
+}
+</code></pre> 
+<h3><a id="54__325"></a>5.4 应用读取串口数据方法</h3> 
+<p>经过前面的处理步骤，已将串口数据拷贝至接收fifo，应用程序任务只需从fifo获取数据进行处理。前提是，处理效率必须大于DAM接收搬运数据的效率，否则导致数据丢失或者被覆盖处理。</p> 
+<h2><a id="6_DMA_332"></a>6 串口DMA发送</h2> 
+<h3><a id="51__335"></a>5.1 基本流程</h3> 
+<p><img src="https://images2.imgbox.com/80/ef/Uy6wzHsv_o.png" alt="/20200903163632287.png#pic_center)"></p> 
+<p>串口发送流程图</p> 
+<h3><a id="52__346"></a>5.2 相关配置</h3> 
+<p>关键步骤</p> 
+<p>【1】初始化串口</p> 
+<p>【2】使能串口DMA发送模式</p> 
+<p>【3】配置DMA发送通道，这一步无需在初始化设置，有数据需要发送时才配置使能DMA发送通道</p> 
+<p>UART2 DMA模式发送配置代码如下，与其他外设使用DMA的配置基本一致，留意关键配置：</p> 
+<ul><li> <p>串口发送是，DMA通道工作模式设为单次模式（正常模式），每次需要发送数据时重新配置DMA</p> </li><li> <p>使能DMA通道传输完成中断，利用该中断信息处理一些必要的任务，如清空发送状态、启动下一次传输</p> </li><li> <p>启动DMA通道前清空相关状态标识，防止首次传输错乱数据</p> <p>void bsp_uart2_dmatx_config(uint8_t *mem_addr, uint32_t mem_size)<br> {<!-- --><br> DMA_InitTypeDef DMA_InitStructure;</p> <pre><code>DMA_DeInit(DMA1_Channel4);
+DMA_Cmd(DMA1_Channel4, DISABLE);
+DMA_InitStructure.DMA_PeripheralBaseAddr 	= (uint32_t)&amp;(USART2-&gt;TDR);/* UART2发送数据地址 */
+DMA_InitStructure.DMA_MemoryBaseAddr 		= (uint32_t)mem_addr; 	/* 发送数据buf */
+DMA_InitStructure.DMA_DIR 					= DMA_DIR_PeripheralDST; 	/* 传输方向:内存-&gt;外设 */
+DMA_InitStructure.DMA_BufferSize 			= mem_size; 			/* 发送数据buf大小 */
+DMA_InitStructure.DMA_PeripheralInc 		= DMA_PeripheralInc_Disable; 
+DMA_InitStructure.DMA_MemoryInc 			= DMA_MemoryInc_Enable; 
+DMA_InitStructure.DMA_PeripheralDataSize 	= DMA_PeripheralDataSize_Byte; 
+DMA_InitStructure.DMA_MemoryDataSize 		= DMA_MemoryDataSize_Byte;
+DMA_InitStructure.DMA_Mode 					= DMA_Mode_Normal; 		/* 单次模式 */
+DMA_InitStructure.DMA_Priority 				= DMA_Priority_High;	 
+DMA_InitStructure.DMA_M2M 					= DMA_M2M_Disable; 
+DMA_Init(DMA1_Channel4, &amp;DMA_InitStructure);  
+DMA_ITConfig(DMA1_Channel4, DMA_IT_TC|DMA_IT_TE, ENABLE); /* 使能传输完成中断、错误中断 */
+DMA_ClearFlag(DMA1_IT_TC4);	/* 清除发送完成标识 */
+DMA_Cmd(DMA1_Channel4, ENABLE); /* 启动DMA发送 */
+</code></pre> <p>}</p> </li></ul> 
+<h3><a id="53__391"></a>5.3 发送处理</h3> 
+<p>串口待发送数据存于发送fifo中，发送处理函数需要做的的任务就是循环查询发送fifo是否存在数据，如存在则将该数据拷贝到DMA发送buf中，然后启动DMA传输。前提是需要等待上一次DMA传输完毕，即是DMA接收到DMA传输完成中断信号<code>"DMA_IT_TC"</code>。</p> 
+<p><strong>串口发送处理函数：</strong></p> 
+<pre><code>void uart_poll_dma_tx(uint8_t uart_id)
+{
+  	uint16_t size = 0;
+	
+	if (0x01 == s_uart_dev[uart_id].status)
+    {
+        return;
+    }
+	size = fifo_read(&amp;s_uart_dev[uart_id].tx_fifo, s_uart_dev[uart_id].dmatx_buf,
+					 s_uart_dev[uart_id].dmatx_buf_size);
+	if (size != 0)
+	{
+        s_UartTxRxCount[uart_id*2+0] += size;
+	  	if (uart_id == 0)
+		{
+            s_uart_dev[uart_id].status = 0x01;	/* DMA发送状态 */
+		  	bsp_uart1_dmatx_config(s_uart_dev[uart_id].dmatx_buf, size);
+		}
+		else if (uart_id == 1)
+		{
+            s_uart_dev[uart_id].status = 0x01;	/* DMA发送状态,必须在使能DMA传输前置位，否则有可能DMA已经传输并进入中断 */
+			bsp_uart2_dmatx_config(s_uart_dev[uart_id].dmatx_buf, size);
+		}
+	}
+}
+</code></pre> 
+<ul><li>注意发送状态标识，必须先置为“发送状态”，然后启动DMA 传输。如果步骤反过来，在传输数据量少时，DMA传输时间短，<code>“DMA_IT_TC”</code>中断可能比“发送状态标识置位”先执行，导致程序误判DMA一直处理发送状态（发送标识无法被清除）。</li></ul> 
+<blockquote> 
+ <p>注：<br> 关于DMA发送数据启动函数，有些博客文章描述只需改变DMA发送buf的大小即可；经过测试发现，该方法在发送数据量较小时可行，数据量大后，导致发送失败，而且不会触发DMA发送完成中断。因此，可靠办法是：每次启动DMA发送，重新配置DMA通道所有参数。该步骤只是配置寄存器过程，实质上不会占用很多CPU执行时间。</p> 
+</blockquote> 
+<p><strong>DMA传输完成中断处理函数：</strong></p> 
+<pre><code>void uart_dmatx_done_isr(uint8_t uart_id)
+{
+ 	s_uart_dev[uart_id].status = 0;	/* 清空DMA发送状态标识 */
+}
+</code></pre> 
+<p>上述串口发送处理函数可以在几种情况调用：</p> 
+<ul><li> <p>主线程任务调用，前提是线程不能被其他任务阻塞，否则导致fifo溢出</p> <p>void thread(void)<br> {<!-- --><br> uart_poll_dma_tx(DEV_UART1);<br> uart_poll_dma_tx(DEV_UART2);<br> }</p> </li><li> <p>定时器中断中调用</p> <p>void TIMx_IRQHandler(void)<br> {<!-- --><br> uart_poll_dma_tx(DEV_UART1);<br> uart_poll_dma_tx(DEV_UART2);<br> }</p> </li><li> <p>DMA通道传输完成中断中调用</p> <p>void DMA1_Channel4_5_IRQHandler(void)<br> {<!-- --><br> if(DMA_GetITStatus(DMA1_IT_TC4))<br> {<!-- --><br> UartDmaSendDoneIsr(UART_2);<br> DMA_ClearFlag(DMA1_FLAG_TC4);<br> uart_poll_dma_tx(DEV_UART2);<br> }<br> }</p> </li></ul> 
+<p><strong>每次拷贝多少数据量到DMA发送buf：</strong></p> 
+<p>关于这个问题，与具体应用场景有关，遵循的原则就是：只要发送fifo的数据量大于等于DMA发送buf的大小，就应该填满DMA发送buf，然后启动DMA传输，这样才能充分发挥会DMA性能。因此，需兼顾每次DMA传输的效率和串口数据流实时性，参考着几类实现：</p> 
+<ul><li>周期查询发送fifo数据，启动DMA传输，充分利用DMA发送效率，但可能降低串口数据流实时性</li><li>实时查询发送fifo数据，加上超时处理，理想的方法</li><li>在DMA传输完成中断中处理，保证实时连续数据流</li></ul> 
+<h2><a id="6__489"></a>6 串口设备</h2> 
+<h3><a id="61__492"></a>6.1 数据结构</h3> 
+<pre><code>/* 串口设备数据结构 */
+typedef struct
+{
+	uint8_t status;			/* 发送状态 */
+	_fifo_t tx_fifo;		/* 发送fifo */
+	_fifo_t rx_fifo;		/* 接收fifo */
+	uint8_t *dmarx_buf;		/* dma接收缓存 */
+	uint16_t dmarx_buf_size;/* dma接收缓存大小*/
+	uint8_t *dmatx_buf;		/* dma发送缓存 */
+	uint16_t dmatx_buf_size;/* dma发送缓存大小 */
+	uint16_t last_dmarx_size;/* dma上一次接收数据大小 */
+}uart_device_t;
+</code></pre> 
+<h3><a id="62__511"></a>6.2 对外接口</h3> 
+<pre><code>/* 串口注册初始化函数 */
+void uart_device_init(uint8_t uart_id)
+{
+  	if (uart_id == 1)
+	{
+		/* 配置串口2收发fifo */
+		fifo_register(&amp;s_uart_dev[uart_id].tx_fifo, &amp;s_uart2_tx_buf[0], 
+                      sizeof(s_uart2_tx_buf), fifo_lock, fifo_unlock);
+		fifo_register(&amp;s_uart_dev[uart_id].rx_fifo, &amp;s_uart2_rx_buf[0], 
+                      sizeof(s_uart2_rx_buf), fifo_lock, fifo_unlock);
+		
+		/* 配置串口2 DMA收发buf */
+		s_uart_dev[uart_id].dmarx_buf = &amp;s_uart2_dmarx_buf[0];
+		s_uart_dev[uart_id].dmarx_buf_size = sizeof(s_uart2_dmarx_buf);
+		s_uart_dev[uart_id].dmatx_buf = &amp;s_uart2_dmatx_buf[0];
+		s_uart_dev[uart_id].dmatx_buf_size = sizeof(s_uart2_dmatx_buf);
+		bsp_uart2_dmarx_config(s_uart_dev[uart_id].dmarx_buf, 
+							   sizeof(s_uart2_dmarx_buf));
+		s_uart_dev[uart_id].status  = 0;
+	}
+}
+
+/* 串口发送函数 */
+uint16_t uart_write(uint8_t uart_id, const uint8_t *buf, uint16_t size)
+{
+	return fifo_write(&amp;s_uart_dev[uart_id].tx_fifo, buf, size);
+}
+
+/* 串口读取函数 */
+uint16_t uart_read(uint8_t uart_id, uint8_t *buf, uint16_t size)
+{
+	return fifo_read(&amp;s_uart_dev[uart_id].rx_fifo, buf, size);
+}
+</code></pre> 
+<h2><a id="7__551"></a>7 相关文章</h2> 
+<p>依赖的fifo参考该文章：</p> 
+<p>【1】<a href="https://acuity.blog.csdn.net/article/details/78902689" rel="nofollow">通用环形缓冲区模块</a></p> 
+<h2><a id="8__560"></a>8 完整源码</h2> 
+<p>代码仓库：<a href="https://github.com/Prry/stm32f0-uart-dma">https://github.com/Prry/stm32f0-uart-dma</a></p> 
+<p>串口&amp;DMA底层配置：</p> 
+<pre><code>#include 
+#include 
+#include 
+#include "stm32f0xx.h"
+#include "bsp_uart.h"
+
+/**
+ * @brief  
+ * @param  
+ * @retval 
+ */
+static void bsp_uart1_gpio_init(void)
+{
+    GPIO_InitTypeDef    GPIO_InitStructure;
+#if 0
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE);
+	
+    GPIO_PinAFConfig(GPIOB, GPIO_PinSource6, GPIO_AF_0);
+    GPIO_PinAFConfig(GPIOB, GPIO_PinSource7, GPIO_AF_0); 
+	
+	GPIO_InitStructure.GPIO_Pin 	= GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode 	= GPIO_Mode_AF;
+	GPIO_InitStructure.GPIO_OType 	= GPIO_OType_PP;
+    GPIO_InitStructure.GPIO_Speed  	= GPIO_Speed_Level_3;
+    GPIO_InitStructure.GPIO_PuPd 	= GPIO_PuPd_UP;
+    GPIO_Init(GPIOB, &amp;GPIO_InitStructure);
+#else
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
+	
+    GPIO_PinAFConfig(GPIOB, GPIO_PinSource9, GPIO_AF_1);
+    GPIO_PinAFConfig(GPIOB, GPIO_PinSource10, GPIO_AF_1); 
+	
+	GPIO_InitStructure.GPIO_Pin 	= GPIO_Pin_9 | GPIO_Pin_10;
+    GPIO_InitStructure.GPIO_Mode 	= GPIO_Mode_AF;
+	GPIO_InitStructure.GPIO_OType 	= GPIO_OType_PP;
+    GPIO_InitStructure.GPIO_Speed  	= GPIO_Speed_Level_3;
+    GPIO_InitStructure.GPIO_PuPd 	= GPIO_PuPd_UP;
+    GPIO_Init(GPIOA, &amp;GPIO_InitStructure);
+#endif
+}
+
+/**
+ * @brief  
+ * @param  
+ * @retval 
+ */
+static void bsp_uart2_gpio_init(void)
+{
+	GPIO_InitTypeDef GPIO_InitStructure;
+	
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE);
+	
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_1);
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_1);
+	
+	GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_2 | GPIO_Pin_3;
+	GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+	GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
+	GPIO_Init(GPIOA, &amp;GPIO_InitStructure);
+}
+
+/**
+ * @brief  
+ * @param  
+ * @retval 
+ */
+void bsp_uart1_init(void)
+{
+	USART_InitTypeDef USART_InitStructure;
+	NVIC_InitTypeDef NVIC_InitStructure;
+	
+	bsp_uart1_gpio_init();
+	
+	/* 使能串口和DMA时钟 */
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+	
+	USART_InitStructure.USART_BaudRate            = 57600;
+	USART_InitStructure.USART_WordLength          = USART_WordLength_8b;
+	USART_InitStructure.USART_StopBits            = USART_StopBits_1;
+	USART_InitStructure.USART_Parity              = USART_Parity_No;
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+	USART_InitStructure.USART_Mode                = USART_Mode_Rx | USART_Mode_Tx;
+	USART_Init(USART1, &amp;USART_InitStructure);
+	
+	USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);	/* 使能空闲中断 */
+	USART_OverrunDetectionConfig(USART1, USART_OVRDetection_Disable);
+	
+	USART_Cmd(USART1, ENABLE);
+	USART_DMACmd(USART1, USART_DMAReq_Rx|USART_DMAReq_Tx, ENABLE); /* 使能DMA收发 */
+
+	/* 串口中断 */
+	NVIC_InitStructure.NVIC_IRQChannel         = USART1_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPriority = 2;
+	NVIC_InitStructure.NVIC_IRQChannelCmd      = ENABLE;
+	NVIC_Init(&amp;NVIC_InitStructure);
+
+	/* DMA中断 */
+  	NVIC_InitStructure.NVIC_IRQChannel 		   = DMA1_Channel2_3_IRQn;       
+  	NVIC_InitStructure.NVIC_IRQChannelPriority = 0; 
+	NVIC_InitStructure.NVIC_IRQChannelCmd      = ENABLE;
+  	NVIC_Init(&amp;NVIC_InitStructure);
+}
+
+/**
+ * @brief  
+ * @param  
+ * @retval 
+ */
+void bsp_uart2_init(void)
+{
+	USART_InitTypeDef USART_InitStructure;
+	NVIC_InitTypeDef NVIC_InitStructure;
+	
+	bsp_uart2_gpio_init();
+	
+	/* 使能串口和DMA时钟 */
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+
+	USART_InitStructure.USART_BaudRate            = 57600;
+	USART_InitStructure.USART_WordLength          = USART_WordLength_8b;
+	USART_InitStructure.USART_StopBits            = USART_StopBits_1;
+	USART_InitStructure.USART_Parity              = USART_Parity_No;
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+	USART_InitStructure.USART_Mode                = USART_Mode_Rx | USART_Mode_Tx;
+	USART_Init(USART2, &amp;USART_InitStructure);
+	
+	USART_ITConfig(USART2, USART_IT_IDLE, ENABLE);	/* 使能空闲中断 */
+	USART_OverrunDetectionConfig(USART2, USART_OVRDetection_Disable);
+	
+	USART_Cmd(USART2, ENABLE);
+	USART_DMACmd(USART2, USART_DMAReq_Rx|USART_DMAReq_Tx, ENABLE); 	/* 使能DMA收发 */
+
+	/* 串口中断 */
+	NVIC_InitStructure.NVIC_IRQChannel         = USART2_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPriority = 2;
+	NVIC_InitStructure.NVIC_IRQChannelCmd      = ENABLE;
+	NVIC_Init(&amp;NVIC_InitStructure);
+
+	/* DMA中断 */
+	NVIC_InitStructure.NVIC_IRQChannel         = DMA1_Channel4_5_IRQn;       
+  	NVIC_InitStructure.NVIC_IRQChannelPriority = 0; 
+	NVIC_InitStructure.NVIC_IRQChannelCmd      = ENABLE;
+  	NVIC_Init(&amp;NVIC_InitStructure);
+}
+
+void bsp_uart1_dmatx_config(uint8_t *mem_addr, uint32_t mem_size)
+{
+  	DMA_InitTypeDef DMA_InitStructure;
+	
+	DMA_DeInit(DMA1_Channel2);
+	DMA_Cmd(DMA1_Channel2, DISABLE);
+	DMA_InitStructure.DMA_PeripheralBaseAddr 	= (uint32_t)&amp;(USART1-&gt;TDR);
+	DMA_InitStructure.DMA_MemoryBaseAddr 		= (uint32_t)mem_addr; 
+	DMA_InitStructure.DMA_DIR 					= DMA_DIR_PeripheralDST; 	/* 传输方向:内存-&gt;外设 */
+	DMA_InitStructure.DMA_BufferSize 			= mem_size; 
+	DMA_InitStructure.DMA_PeripheralInc 		= DMA_PeripheralInc_Disable; 
+	DMA_InitStructure.DMA_MemoryInc 			= DMA_MemoryInc_Enable; 
+	DMA_InitStructure.DMA_PeripheralDataSize 	= DMA_PeripheralDataSize_Byte; 
+	DMA_InitStructure.DMA_MemoryDataSize 		= DMA_MemoryDataSize_Byte;
+	DMA_InitStructure.DMA_Mode 					= DMA_Mode_Normal; 
+	DMA_InitStructure.DMA_Priority 				= DMA_Priority_High; 
+	DMA_InitStructure.DMA_M2M 					= DMA_M2M_Disable; 
+	DMA_Init(DMA1_Channel2, &amp;DMA_InitStructure);  
+	DMA_ITConfig(DMA1_Channel2, DMA_IT_TC|DMA_IT_TE, ENABLE); 
+	DMA_ClearFlag(DMA1_IT_TC2);	/* 清除发送完成标识 */
+	DMA_Cmd(DMA1_Channel2, ENABLE); 
+}
+
+void bsp_uart1_dmarx_config(uint8_t *mem_addr, uint32_t mem_size)
+{
+  	DMA_InitTypeDef DMA_InitStructure;
+	
+	DMA_DeInit(DMA1_Channel3); 
+	DMA_Cmd(DMA1_Channel3, DISABLE);
+	DMA_InitStructure.DMA_PeripheralBaseAddr 	= (uint32_t)&amp;(USART1-&gt;RDR);
+	DMA_InitStructure.DMA_MemoryBaseAddr 		= (uint32_t)mem_addr; 
+	DMA_InitStructure.DMA_DIR 					= DMA_DIR_PeripheralSRC; 	/* 传输方向:外设-&gt;内存 */
+	DMA_InitStructure.DMA_BufferSize 			= mem_size; 
+	DMA_InitStructure.DMA_PeripheralInc 		= DMA_PeripheralInc_Disable; 
+	DMA_InitStructure.DMA_MemoryInc 			= DMA_MemoryInc_Enable; 
+	DMA_InitStructure.DMA_PeripheralDataSize 	= DMA_PeripheralDataSize_Byte; 
+	DMA_InitStructure.DMA_MemoryDataSize 		= DMA_MemoryDataSize_Byte;
+	DMA_InitStructure.DMA_Mode 					= DMA_Mode_Circular; 
+	DMA_InitStructure.DMA_Priority 				= DMA_Priority_VeryHigh; 
+	DMA_InitStructure.DMA_M2M 					= DMA_M2M_Disable; 
+	DMA_Init(DMA1_Channel3, &amp;DMA_InitStructure); 
+	DMA_ITConfig(DMA1_Channel3, DMA_IT_TC|DMA_IT_HT|DMA_IT_TE, ENABLE);/* 使能DMA半满、全满、错误中断 */
+	DMA_ClearFlag(DMA1_IT_TC3);
+	DMA_ClearFlag(DMA1_IT_HT3);
+	DMA_Cmd(DMA1_Channel3, ENABLE); 
+}
+
+uint16_t bsp_uart1_get_dmarx_buf_remain_size(void)
+{
+	return DMA_GetCurrDataCounter(DMA1_Channel3);	/* 获取DMA接收buf剩余空间 */
+}
+
+void bsp_uart2_dmatx_config(uint8_t *mem_addr, uint32_t mem_size)
+{
+  	DMA_InitTypeDef DMA_InitStructure;
+	
+	DMA_DeInit(DMA1_Channel4);
+	DMA_Cmd(DMA1_Channel4, DISABLE);
+	DMA_InitStructure.DMA_PeripheralBaseAddr 	= (uint32_t)&amp;(USART2-&gt;TDR);
+	DMA_InitStructure.DMA_MemoryBaseAddr 		= (uint32_t)mem_addr; 
+	DMA_InitStructure.DMA_DIR 					= DMA_DIR_PeripheralDST; 	/* 传输方向:内存-&gt;外设 */
+	DMA_InitStructure.DMA_BufferSize 			= mem_size; 
+	DMA_InitStructure.DMA_PeripheralInc 		= DMA_PeripheralInc_Disable; 
+	DMA_InitStructure.DMA_MemoryInc 			= DMA_MemoryInc_Enable; 
+	DMA_InitStructure.DMA_PeripheralDataSize 	= DMA_PeripheralDataSize_Byte; 
+	DMA_InitStructure.DMA_MemoryDataSize 		= DMA_MemoryDataSize_Byte;
+	DMA_InitStructure.DMA_Mode 					= DMA_Mode_Normal; 
+	DMA_InitStructure.DMA_Priority 				= DMA_Priority_High; 
+	DMA_InitStructure.DMA_M2M 					= DMA_M2M_Disable; 
+	DMA_Init(DMA1_Channel4, &amp;DMA_InitStructure);  
+	DMA_ITConfig(DMA1_Channel4, DMA_IT_TC|DMA_IT_TE, ENABLE); 
+	DMA_ClearFlag(DMA1_IT_TC4);	/* 清除发送完成标识 */
+	DMA_Cmd(DMA1_Channel4, ENABLE); 
+}
+
+void bsp_uart2_dmarx_config(uint8_t *mem_addr, uint32_t mem_size)
+{
+  	DMA_InitTypeDef DMA_InitStructure;
+	
+	DMA_DeInit(DMA1_Channel5); 
+	DMA_Cmd(DMA1_Channel5, DISABLE);
+	DMA_InitStructure.DMA_PeripheralBaseAddr 	= (uint32_t)&amp;(USART2-&gt;RDR);
+	DMA_InitStructure.DMA_MemoryBaseAddr 		= (uint32_t)mem_addr; 
+	DMA_InitStructure.DMA_DIR 					= DMA_DIR_PeripheralSRC; 	/* 传输方向:外设-&gt;内存 */
+	DMA_InitStructure.DMA_BufferSize 			= mem_size; 
+	DMA_InitStructure.DMA_PeripheralInc 		= DMA_PeripheralInc_Disable; 
+	DMA_InitStructure.DMA_MemoryInc 			= DMA_MemoryInc_Enable; 
+	DMA_InitStructure.DMA_PeripheralDataSize 	= DMA_PeripheralDataSize_Byte; 
+	DMA_InitStructure.DMA_MemoryDataSize 		= DMA_MemoryDataSize_Byte;
+	DMA_InitStructure.DMA_Mode 					= DMA_Mode_Circular; 
+	DMA_InitStructure.DMA_Priority 				= DMA_Priority_VeryHigh; 
+	DMA_InitStructure.DMA_M2M 					= DMA_M2M_Disable; 
+	DMA_Init(DMA1_Channel5, &amp;DMA_InitStructure); 
+	DMA_ITConfig(DMA1_Channel5, DMA_IT_TC|DMA_IT_HT|DMA_IT_TE, ENABLE);/* 使能DMA半满、全满、错误中断 */
+	DMA_ClearFlag(DMA1_IT_TC5);
+	DMA_ClearFlag(DMA1_IT_HT5);
+	DMA_Cmd(DMA1_Channel5, ENABLE); 
+}
+
+uint16_t bsp_uart2_get_dmarx_buf_remain_size(void)
+{
+	return DMA_GetCurrDataCounter(DMA1_Channel5);	/* 获取DMA接收buf剩余空间 */
+}
+</code></pre> 
+<p>压力测试：</p> 
+<ul><li>1.5Mbps波特率，串口助手每毫秒发送1k字节数据，stm32f0 DMA接收数据，再通过DMA发送回串口助手，毫无压力。</li><li>1.5Mbps波特率，可传输大文件测试，将接收数据保存为文件，与源文件比较。</li><li>串口高波特率测试需要USB转TLL工具及串口助手都支持才可行，推荐CP2102、FT232芯片的USB转TTL工具。</li></ul> 
+<p><img src="https://images2.imgbox.com/a2/74/UfC4Zv3g_o.png" alt="在这里插入图片描述"></p> 
+<p>1.5Mbps串口回环压力测试</p> 
+<p>---------------------<br> 作者：Acuity.<br> 来源：CSDN<br> 原文：https://blog.csdn.net/qq_20553613/article/details/108367512?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522164551722316780271546096%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&amp;request_id=164551722316780271546096&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2<sub>blog</sub>first_rank_ecpm_v1~rank_v31_ecpm-1-108367512.nonecase&amp;utm_term=%E4%B8%B2%E5%8F%A3&amp;spm=1018.2226.3001.4450<br> 版权声明：本文为作者原创文章，转载请附上博文链接！<br> 内容解析By：<a href="https://greasyfork.org/zh-CN/scripts/381053-csdn-cnblog%E5%8D%9A%E5%AE%A2%E6%96%87%E7%AB%A0%E4%B8%80%E9%94%AE%E8%BD%AC%E8%BD%BD%E6%8F%92%E4%BB%B6" rel="nofollow">CSDN,CNBLOG博客文章一键转载插件</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/97a35e45af2934ab188f1a90360c8e7f/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【Spring源码三千问】为什么要用三级缓存来解决循环依赖问题？二级缓存行不行？一级缓存行不行？</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/0ac743031db50b203aae61975f94fec0/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">SPRINGBOOT视图跳转问题</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>springcloud学习笔记2：eureka - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="springcloud学习笔记2：eureka" />
+<meta property="og:description" content="在之前，没有学习springcloud之前，学习了dubbo，dubbo是一个远程调用(RPC)框架，当时使用的是zookeeper注册中心，但是在springcloud2.x之前，springcloud是没有zookeeper的，那么是如何实现远程调用的呢？
+1.eureka（springcloud1.x版本的注册中心） springcloud在2019年也就是springcloud2之后才添加的zookeeper，在这之前，都是使用的springcloud自带的eureka注册中心实现的远程调用。
+eureka是springcloud的核心，许多的服务都需要依赖eureka实现。
+eureka与zookeeper的比较：
+在之前使用的是zookeeper，现在学习eureka了解到，eureka也是一个注册中心，那么两个注册中心有什么区别呢？（如果都一样的话，为什么要开发它）
+首先回顾zookeeper：
+zookeeper保证的是数据的一致性（CP特性），zookeeper是一主多从机制，也就是三台zookeeper只有一台是leader，其他的两台是follower，消费者请求进来后，无论是进入leader还是follower，都会被移交给leader进行处理。
+zookeeper的缺陷：因为保证了数据的一致性，那么如果leader宕机的话，就会读取到脏数据，之前zookeeper中有详细的介绍
+Eureka：
+eureka保证的是服务的可用性（AP特性），eureka集群中每个节点都是平等的，因此在服务注册时，就需要在每个节点都注册一份，三台节点中的数据都是一样的。这样就不会出现zookeeper中leader宕机读取脏数据的情况。解决了zookeeper的缺陷。
+eureka的自我保护机制：
+如果长时间不激活eureka的时候就会出现自我保护机制。
+eureka在启动后，生产者每隔一段时间就会向eureka中发送心跳，eureka接收生产者的心跳，当网络延迟/服务器宕机等情况发生后，生产者不在向eureka发送心跳，eureka从接收不到心跳开始，默认90后，就会踢出这个生产者（Provider），但是如果出现大面积的生产者宕机——生产者的机房停电了，所有的服务器都无法发送心跳，这时eureka就不会踢出任何一个服务（会将所有的服务都保留下来，这就是AP性）
+Eureka为什么不会踢出大量的服务？
+如果把eureka中的所有服务都踢出，当consumer进来后，发现没有可用的服务了，就会报错500，整个项目于就瘫痪了。
+当大面积服务没有心跳，但是eureka不踢出的话，consumer进来后，仍然可以获取到服务，可以获取到数据，这个数据可能不是最新的数据（假如说因为网络延迟，导致eureka没有接收到心跳，这样eureka不会讲服务全部踢出，也就是说consumer仍然可以找到provider，provider仍然可以工作，只是因为网络延迟的原因，可能现在获取的数据，其实已经被删除了，只不过删除的操作发生网络拥堵还没有到生产者中，这就会造成数据的不一致）
+AP性：保证服务的可用性，不保证数据的一致性
+CP性：保证数据的一致性，不保证服务的可用性
+如何关闭eureka的自我保护机制 可以关，但是不能这么做
+如果现在有一个服务就是不需要eureka的自我保护机制，那么可以想办法让eureka的自我保护失效。
+方法：provider告诉eureka我每隔5秒给你发送一次心跳，如果你八秒后仍没有接受到我的心跳，那么你就将我踢出。
+# 规定自己向eureka发送心跳的时间 # 单位是秒 eureka.instance.lease-renewal-interval-in-seconds=5 # 当eureka最后一次检测到心跳的时间间隔(单位是秒) # eg:15:05:20是最后一次检测到心跳--&gt;检测8秒之后还是无法检测心跳的时候直接剔除 eureka.instance.lease-expiration-duration-in-seconds=8 eureka中设置，默认等待provider10秒，10秒后还没有接受到心跳，就将provider踢出
+# eureka自己检测服务的心跳时间(90秒) # 单位是毫秒，先把eureka检测心跳的时间缩短为10秒 # 也就是说每个10秒就会检测一次服务的心跳 eureka.server.eviction-interval-timer-in-ms=10000 具体使用：https://github.com/Zs-xiazhi/springcloud-parent
+转载于:https://www.cnblogs.com/Zs-book1/p/11603833.html" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/bf7dc4e1eea26595bd70b7a212376a25/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-09-28T17:01:00+08:00" />
+<meta property="article:modified_time" content="2019-09-28T17:01:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">springcloud学习笔记2：eureka</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div id="cnblogs_post_body" class="blogpost-body"> 
+ <p>在之前，没有学习springcloud之前，学习了dubbo，dubbo是一个远程调用(RPC)框架，当时使用的是zookeeper注册中心，但是在springcloud2.x之前，springcloud是没有zookeeper的，那么是如何实现远程调用的呢？</p> 
+ <h4><strong>1.eureka（springcloud1.x版本的注册中心）</strong></h4> 
+ <p><strong>　　</strong>springcloud在2019年也就是springcloud2之后才添加的zookeeper，在这之前，都是使用的springcloud自带的eureka注册中心实现的远程调用。</p> 
+ <p>　　eureka是springcloud的核心，许多的服务都需要依赖eureka实现。</p> 
+ <p><strong>　　eureka与zookeeper的比较：</strong></p> 
+ <p><strong>　　</strong>在之前使用的是zookeeper，现在学习eureka了解到，eureka也是一个注册中心，那么两个注册中心有什么区别呢？（如果都一样的话，为什么要开发它）</p> 
+ <p>　　<strong>首先回顾zookeeper：</strong></p> 
+ <p>　　zookeeper保证的是数据的一致性（CP特性），zookeeper是一主多从机制，也就是三台zookeeper只有一台是leader，其他的两台是follower，消费者请求进来后，无论是进入leader还是follower，都会被移交给leader进行处理。</p> 
+ <p>　　zookeeper的缺陷：因为保证了数据的一致性，那么如果leader宕机的话，就会读取到脏数据，之前zookeeper中有详细的介绍</p> 
+ <p>　　<strong>Eureka：</strong></p> 
+ <p><strong>　</strong>　eureka保证的是服务的可用性（AP特性），eureka集群中每个节点都是平等的，因此在服务注册时，就需要在每个节点都注册一份，三台节点中的数据都是一样的。这样就不会出现zookeeper中leader宕机读取脏数据的情况。解决了zookeeper的缺陷。</p> 
+ <p>　　<strong>eureka的自我保护机制：</strong></p> 
+ <p><strong>　　</strong>如果长时间不激活eureka的时候就会出现自我保护机制。</p> 
+ <p>　　eureka在启动后，生产者每隔一段时间就会向eureka中发送心跳，eureka接收生产者的心跳，当网络延迟/服务器宕机等情况发生后，生产者不在向eureka发送心跳，eureka从接收不到心跳开始，默认90后，就会踢出这个生产者（Provider），但是如果出现大面积的生产者宕机——生产者的机房停电了，所有的服务器都无法发送心跳，这时eureka就不会踢出任何一个服务（会将所有的服务都保留下来，这就是AP性）</p> 
+ <p>　　<strong>Eureka为什么不会踢出大量的服务？</strong></p> 
+ <p><strong>　　</strong>如果把eureka中的所有服务都踢出，当consumer进来后，发现没有可用的服务了，就会报错500，整个项目于就瘫痪了。</p> 
+ <p>　　当大面积服务没有心跳，但是eureka不踢出的话，consumer进来后，仍然可以获取到服务，可以获取到数据，这个数据可能不是最新的数据（假如说因为网络延迟，导致eureka没有接收到心跳，这样eureka不会讲服务全部踢出，也就是说consumer仍然可以找到provider，provider仍然可以工作，只是因为网络延迟的原因，可能现在获取的数据，其实已经被删除了，只不过删除的操作发生网络拥堵还没有到生产者中，这就会造成数据的不一致）</p> 
+ <p><strong>　　</strong>AP性：保证服务的可用性，不保证数据的一致性</p> 
+ <p>　　CP性：保证数据的一致性，不保证服务的可用性</p> 
+ <h4>如何关闭eureka的自我保护机制</h4> 
+ <p>　　<strong>可以关，但是不能这么做</strong></p> 
+ <p><strong>　　</strong>如果现在有一个服务就是不需要eureka的自我保护机制，那么可以想办法让eureka的自我保护失效。</p> 
+ <p>　　方法：provider告诉eureka我每隔5秒给你发送一次心跳，如果你八秒后仍没有接受到我的心跳，那么你就将我踢出。</p> 
+ <div class="cnblogs_code"> 
+  <pre><span style="color:#008000;">#</span><span style="color:#008000;"> 规定自己向eureka发送心跳的时间</span><span style="color:#008000;">
+#</span><span style="color:#008000;"> 单位是秒</span>
+eureka.instance.lease-renewal-interval-in-seconds=5
+<span style="color:#008000;">#</span><span style="color:#008000;"> 当eureka最后一次检测到心跳的时间间隔(单位是秒)</span><span style="color:#008000;">
+#</span><span style="color:#008000;"> eg:15:05:20是最后一次检测到心跳--&gt;检测8秒之后还是无法检测心跳的时候直接剔除</span>
+eureka.instance.lease-expiration-duration-in-seconds=8</pre> 
+ </div> 
+ <p>　　　　　　eureka中设置，默认等待provider10秒，10秒后还没有接受到心跳，就将provider踢出</p> 
+ <div class="cnblogs_code"> 
+  <pre><span style="color:#008000;">#</span><span style="color:#008000;"> eureka自己检测服务的心跳时间(90秒)</span><span style="color:#008000;">
+#</span><span style="color:#008000;"> 单位是毫秒，先把eureka检测心跳的时间缩短为10秒</span><span style="color:#008000;">
+#</span><span style="color:#008000;"> 也就是说每个10秒就会检测一次服务的心跳</span>
+eureka.server.eviction-interval-timer-in-ms=10000</pre> 
+ </div> 
+ <p> 具体使用：<a href="https://github.com/Zs-xiazhi/springcloud-parent">https://github.com/Zs-xiazhi/springcloud-parent</a></p> 
+</div> 
+<p>转载于:https://www.cnblogs.com/Zs-book1/p/11603833.html</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/b6f0cb5a1295f805ea7c3a5e15d540ac/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">[LGOJ5558]心上秋（倍增）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b4dd4c94bdc90069ef3e563369694ebb/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">保存远程共享文件夹的文件</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>基于状态机的按键检测 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="基于状态机的按键检测" />
+<meta property="og:description" content="基于状态机的按键检测 一般在学单片机的时候，最基础的一个内容就是学习按键的输入扫描，最简单的方式当然是读IO电平然后再加上一段延时做消抖。今天要分享的是我自己写的一个基于状态机检测的按键扫描程序，使用状态机可以根据按键按下时长的不同状态实现短按单击、长按连击、长时间长按高速连击（我叫超级连击）的区分。
+今天我所说的按键扫描程序全部是基于这种5向开关来做的，如果是矩阵按键扫描的话得做一些相应的修改 原理图如下，一共6个引脚。一个公共端上拉，其他5个引脚接单片机IO口就可以了。 首先是最简单的按键输入方式，哪个按键按下就返回哪个按键的值，没有按下的时候就返回空格键，这里是纯粹的按键扫描，一般还要加入一个20ms到150ms之间的延迟函数来做按键消抖：
+uint8_t GetKeyInpt(){ uint8_t Key_x; if(Key_Up) Key_x = &#39;U&#39;; else if(Key_Down) Key_x = &#39;D&#39;; else if(Key_Left) Key_x = &#39;L&#39;; else if(Key_Rignt) Key_x = &#39;R&#39;; else if(Key_Center) Key_x = &#39;C&#39;; else Key_x = &#39; &#39;; return Key_x; } 因为一个比较大延迟的加入，这样的按键检测也是缺点非常明显的，无论你有没有按下按键都会有一个固定的100ms左右的延迟，它大大的降低了整个程序的执行的速度。之前做智能车的时候有一次学弟跟我说他的舵机感觉不管怎么调总是反应特别慢，最后检测才发现他的按键检测和舵机控制是放在main函数里的，而罪魁祸首就是按键检测里的Delay();
+而基于状态机做的按键检测在没有按键按下的时候完全不需要做延迟，几乎不花时间，实测我的按键检测程序在48M主频的KEAZ128上之花了13us。
+在说程序之前先说说什么是状态机，这是百度百科上的说法： 简单的理解就是通过不停的检测系统输入的状态，然后根据不同的条件让系统处于不同的状态，然后得到不同的输出。 对于按键的输入，我的按键扫描状态转移图可以由下表示： 这只是一个按键的输入扫描，如果多个按键怎么办？其实也很简单弄一个数组然后用循环不就可以啦！
+具体实现的代码如下：
+///////////////////////////////////////////// 按键输入检测 //////////////////////////////////////////////////////////////// //功能：5向开关检测按键 //返回值 ： &#39;U&#39; &#39;D&#39; &#39;L&#39; &#39;R&#39; &#39;C&#39; 分别代表5向按键的 上、下、左、右、中 5个方向上的某个被按下了 ，没有任何按键按下返回 &#39; &#39; // // 注意： // 1、需要在头文件中配置按键的引脚，以及按下/松开按键时的电平状态 // 2、按键输入分为不按，短按单击，长按连击,超级连击四种模式。可以在头文件中把短按配置成按下时返回按键值或松开的时候返回按键值 // 短按的时候在 按下/松开 的时候返回一次按键值（需要头文件配置），短按超过一段时间之后，自动进入连击和超级连击模式（进入的时间 // 以及连击的速度可以在头文件中配置），连击模式下持续返回按键值 // 3、5个按键是有优先级的，分别为 ： 上 &gt; 下 &gt; 左 &gt; 右 &gt; 中 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// uint8_t GetKeyInpt(){ //这个数组表示按键的状态，0表示已经松开，1表示短按，2表示长按进入连击模式，3表示超级连击（连击速度超快） static uint8_t key_state[] = {0 , 0 , 0 , 0 , 0 }; // 对应的按键 &#39;U&#39; &#39;D&#39; &#39;L&#39; &#39;R&#39; &#39;C&#39; uint8_t key_input[5] = {0}; //按键当前的输入状态 #if Key_Trigger_Rising_Edge == 1 static uint8_t key_input_1[5] = {0}; //上一次按键的输入 #endif static uint8_t key_con[5] = {0}; //按键计数，控制按下的持续时间 static uint16_t key_con_s[5] = {0}; //进入超级连击的计数 static uint8_t Key_x[] = {&#39;U&#39;,&#39;D&#39;,&#39;L&#39;,&#39;R&#39;,&#39;C&#39;}; //返回值 uint8_t i = 0; //获取当前键盘状态 key_input[0] = Key_Up; key_input[1] = Key_Down; key_input[2] = Key_Left; key_input[3] = Key_Right; key_input[4] = Key_Center; for(i = 0;i&lt;5;i&#43;&#43;){ if(key_state[i]==0 &amp;&amp; key_input[i] == Key_Press){//某个按键的之前状态是松开的，然后又被按下了,这是短按模式 KEY_Delay(50); //消抖 key_state[i] = 1; //按键状态改为按下 #if Key_Trigger_falling_Edge == 1 KEY_Delay(50); return Key_x[i]; //返回按键值，在这返回相当于是下降沿触发（短按按下的时候返回值） #elif Key_Trigger_Rising_Edge == 1 return &#39; &#39;; //上升沿在这不返回按键值 #endif } else if(key_state[i] == 1 &amp;&amp; key_input[i] == Key_Press){ //上次某个按键被按下了，这次还是按下的，检测长按模式 key_con[i]&#43;&#43;; KEY_Delay(Delay_Tim); if(key_con[i]&gt;=Time_Multiple_Hit){ //设置计数时间 key_state[i] = 2; //该按键状态改为长按连击模式 key_con[i] = 0; //清空计数值 #if Key_Trigger_Rising_Edge == 1 return Key_x[i]; //上升沿模式下，在进入连击模式之前先返回一次单击的按键值 #endif } } else if(key_state[i] == 2 &amp;&amp; key_input[i] == Key_Press){ //如果还一直按着这个按键，进入长按模式 key_con[i]&#43;&#43;; key_con_s[i]&#43;&#43;; //超级连击计数 KEY_Delay(Delay_Tim); if(key_con[i]&gt;=Speed_Multiple_Hit){ //设置计数时间 key_con[i] = 0; //清空计数值 return Key_x[i]; //返回按键值 } if(key_con_s[i] &gt;= Time_Super_Multiple_Hit){ key_con[i] = 0; //清空计数值 key_con_s[i] = 0; //清空计数值 key_state[i] = 3; //进入超级连击模式 return Key_x[i]; //返回按键值 } } else if(key_state[i] == 3 &amp;&amp; key_input[i] == Key_Press){ //处于超级连击状态还按着按键 key_con_s[i]&#43;&#43;; KEY_Delay(Delay_Tim); if(key_con_s[i] &gt;= Super_Speed_Multiple_Hit){ key_con_s[i] = 0; //清计数值 return Key_x[i]; //返回按键值 } } else if(key_state[i] == 2 &amp;&amp; key_input[i] == Key_Release){ //某按键上次状态是长按，但是这次没有按键按下 key_state[i] = 0; //状态改为没按下 key_con[i] = 0; //检测长按计数清0 } #if Key_Trigger_Rising_Edge == 1 //这一次检测某按键是松开的，但是上一次是按下的，而且按键的状态是短按的时候，返回按键值（这个if相当于上升沿，短按松开的时候返回按键值） else if((key_input[i] == Key_Release &amp;&amp; key_input_1[i] == Key_Press) &amp;&amp; (key_state[i] == 1)){ key_state[i] = 0; KEY_Delay(20); //消抖 return Key_x[i]; //返回按键值 } #endif else if(key_input[i] == Key_Release){ //某按键没有按下 key_state[i] = 0; //状态改为没按下 key_con[i] = 0; //检测长按连击计数清0 key_con_s[i] = 0; //检测超级连击计数清0 } #if Key_Trigger_Rising_Edge == 1 key_input_1[i] = key_input[i]; //记录按键 #endif } return &#39; &#39;; //没有任何按键按下时返回空格&#39; &#39; } 这里面用了一些条件编译，实现了按键单击是下降沿触发（按键按下的时间就返回按键值）还是上升沿触发（按键松开的时候才返回按键值），还有按键从单击转换到连击所需的时间、连击的速度、进入高速连击的时间、进入高速连击的速度都是用宏在头文件中定义的，方便做相应的修改。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/c70abefd7266c4dd677e88f618b919ba/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-01-05T11:48:22+08:00" />
+<meta property="article:modified_time" content="2018-01-05T11:48:22+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">基于状态机的按键检测</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3 id="基于状态机的按键检测">基于状态机的按键检测</h3> 
+<p>一般在学单片机的时候，最基础的一个内容就是学习按键的输入扫描，最简单的方式当然是读IO电平然后再加上一段延时做消抖。今天要分享的是我自己写的一个基于状态机检测的按键扫描程序，使用状态机可以根据按键按下时长的不同状态实现短按单击、长按连击、长时间长按高速连击（我叫超级连击）的区分。</p> 
+<p>今天我所说的按键扫描程序全部是基于这种5向开关来做的，如果是矩阵按键扫描的话得做一些相应的修改 <br> <img src="https://images2.imgbox.com/b4/a5/exajPbJj_o.png" alt="这里写图片描述" title=""> <br> 原理图如下，一共6个引脚。一个公共端上拉，其他5个引脚接单片机IO口就可以了。 <br> <img src="https://images2.imgbox.com/7e/a7/xWuVFZ7q_o.png" alt="这里写图片描述" title=""></p> 
+<p>首先是最简单的按键输入方式，哪个按键按下就返回哪个按键的值，没有按下的时候就返回空格键，这里是纯粹的按键扫描，一般还要加入一个20ms到150ms之间的延迟函数来做按键消抖：</p> 
+<pre class="prettyprint"><code class=" hljs bash">uint8_t <span class="hljs-function"><span class="hljs-title">GetKeyInpt</span></span>(){
+
+    uint8_t Key_x;
+
+    <span class="hljs-keyword">if</span>(Key_Up) Key_x = <span class="hljs-string">'U'</span>;
+    <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(Key_Down) Key_x = <span class="hljs-string">'D'</span>;
+    <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(Key_Left) Key_x = <span class="hljs-string">'L'</span>;
+    <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(Key_Rignt) Key_x = <span class="hljs-string">'R'</span>;
+    <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(Key_Center) Key_x = <span class="hljs-string">'C'</span>;
+    <span class="hljs-keyword">else</span> Key_x = <span class="hljs-string">' '</span>;
+
+    <span class="hljs-keyword">return</span> Key_x;
+}</code></pre> 
+<p>因为一个比较大延迟的加入，这样的按键检测也是缺点非常明显的，无论你有没有按下按键都会有一个固定的100ms左右的延迟，它大大的降低了整个程序的执行的速度。之前做智能车的时候有一次学弟跟我说他的舵机感觉不管怎么调总是反应特别慢，最后检测才发现他的按键检测和舵机控制是放在main函数里的，而罪魁祸首就是按键检测里的Delay();</p> 
+<p>而基于状态机做的按键检测在没有按键按下的时候完全不需要做延迟，几乎不花时间，实测我的按键检测程序在48M主频的KEAZ128上之花了13us。</p> 
+<p>在说程序之前先说说什么是状态机，这是百度百科上的说法： <br> <img src="https://images2.imgbox.com/d1/bd/SbN7LSt6_o.png" alt="这里写图片描述" title=""> <br> 简单的理解就是通过不停的检测系统输入的状态，然后根据不同的条件让系统处于不同的状态，然后得到不同的输出。 <br> 对于按键的输入，我的按键扫描状态转移图可以由下表示： <br> <img src="https://images2.imgbox.com/21/f5/TMAP52I5_o.png" alt="这里写图片描述" title=""></p> 
+<p>这只是一个按键的输入扫描，如果多个按键怎么办？其实也很简单弄一个数组然后用循环不就可以啦！</p> 
+<p>具体实现的代码如下：</p> 
+<pre class="prettyprint"><code class=" hljs cs"><span class="hljs-comment"><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span>  按键输入检测   <span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span>/</span>
+<span class="hljs-comment">//功能：5向开关检测按键</span>
+<span class="hljs-comment">//返回值 ： 'U' 'D' 'L' 'R' 'C' 分别代表5向按键的 上、下、左、右、中 5个方向上的某个被按下了 ，没有任何按键按下返回 ' '</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">//     注意：</span>
+<span class="hljs-comment">//         1、需要在头文件中配置按键的引脚，以及按下/松开按键时的电平状态</span>
+<span class="hljs-comment">//         2、按键输入分为不按，短按单击，长按连击,超级连击四种模式。可以在头文件中把短按配置成按下时返回按键值或松开的时候返回按键值</span>
+<span class="hljs-comment">//            短按的时候在 按下/松开 的时候返回一次按键值（需要头文件配置），短按超过一段时间之后，自动进入连击和超级连击模式（进入的时间</span>
+<span class="hljs-comment">//            以及连击的速度可以在头文件中配置），连击模式下持续返回按键值</span>
+<span class="hljs-comment">//         3、5个按键是有优先级的，分别为 ： 上 &gt; 下 &gt; 左 &gt; 右 &gt; 中</span>
+<span class="hljs-comment"><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span>/</span>
+uint8_t GetKeyInpt(){
+
+    <span class="hljs-comment">//这个数组表示按键的状态，0表示已经松开，1表示短按，2表示长按进入连击模式，3表示超级连击（连击速度超快）</span>
+    <span class="hljs-keyword">static</span> uint8_t key_state[] =   {<!-- --><span class="hljs-number">0</span> , <span class="hljs-number">0</span> , <span class="hljs-number">0</span> , <span class="hljs-number">0</span> , <span class="hljs-number">0</span> };
+    <span class="hljs-comment">//                   对应的按键 'U' 'D' 'L' 'R' 'C'</span>
+
+    uint8_t key_input[<span class="hljs-number">5</span>] = {<!-- --><span class="hljs-number">0</span>}; <span class="hljs-comment">//按键当前的输入状态</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">if</span> Key_Trigger_Rising_Edge == 1</span>
+    <span class="hljs-keyword">static</span> uint8_t key_input_1[<span class="hljs-number">5</span>] = {<!-- --><span class="hljs-number">0</span>}; <span class="hljs-comment">//上一次按键的输入</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">endif</span></span>
+    <span class="hljs-keyword">static</span> uint8_t key_con[<span class="hljs-number">5</span>] = {<!-- --><span class="hljs-number">0</span>}; <span class="hljs-comment">//按键计数，控制按下的持续时间  </span>
+    <span class="hljs-keyword">static</span> uint16_t key_con_s[<span class="hljs-number">5</span>] = {<!-- --><span class="hljs-number">0</span>}; <span class="hljs-comment">//进入超级连击的计数</span>
+
+    <span class="hljs-keyword">static</span> uint8_t Key_x[] = {<!-- --><span class="hljs-string">'U'</span>,<span class="hljs-string">'D'</span>,<span class="hljs-string">'L'</span>,<span class="hljs-string">'R'</span>,<span class="hljs-string">'C'</span>}; <span class="hljs-comment">//返回值</span>
+    uint8_t i = <span class="hljs-number">0</span>;
+
+    <span class="hljs-comment">//获取当前键盘状态</span>
+    key_input[<span class="hljs-number">0</span>] = Key_Up;
+    key_input[<span class="hljs-number">1</span>] = Key_Down;
+    key_input[<span class="hljs-number">2</span>] = Key_Left;
+    key_input[<span class="hljs-number">3</span>] = Key_Right;
+    key_input[<span class="hljs-number">4</span>] = Key_Center;
+
+    <span class="hljs-keyword">for</span>(i = <span class="hljs-number">0</span>;i&lt;<span class="hljs-number">5</span>;i++){
+
+        <span class="hljs-keyword">if</span>(key_state[i]==<span class="hljs-number">0</span> &amp;&amp; key_input[i] == Key_Press){<!-- --><span class="hljs-comment">//某个按键的之前状态是松开的，然后又被按下了,这是短按模式</span>
+
+            KEY_Delay(<span class="hljs-number">50</span>); <span class="hljs-comment">//消抖</span>
+            key_state[i] = <span class="hljs-number">1</span>; <span class="hljs-comment">//按键状态改为按下</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">if</span> Key_Trigger_falling_Edge == 1</span>
+            KEY_Delay(<span class="hljs-number">50</span>); 
+            <span class="hljs-keyword">return</span> Key_x[i]; <span class="hljs-comment">//返回按键值，在这返回相当于是下降沿触发（短按按下的时候返回值）</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">elif</span> Key_Trigger_Rising_Edge == 1</span>
+            <span class="hljs-keyword">return</span> <span class="hljs-string">' '</span>; <span class="hljs-comment">//上升沿在这不返回按键值</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">endif</span></span>
+        }
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(key_state[i] == <span class="hljs-number">1</span> &amp;&amp; key_input[i] == Key_Press){ <span class="hljs-comment">//上次某个按键被按下了，这次还是按下的，检测长按模式</span>
+
+            key_con[i]++;
+            KEY_Delay(Delay_Tim);
+
+            <span class="hljs-keyword">if</span>(key_con[i]&gt;=Time_Multiple_Hit){   <span class="hljs-comment">//设置计数时间</span>
+                key_state[i] = <span class="hljs-number">2</span>; <span class="hljs-comment">//该按键状态改为长按连击模式</span>
+                key_con[i] = <span class="hljs-number">0</span>;   <span class="hljs-comment">//清空计数值</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">if</span> Key_Trigger_Rising_Edge == 1</span>
+                <span class="hljs-keyword">return</span> Key_x[i];  <span class="hljs-comment">//上升沿模式下，在进入连击模式之前先返回一次单击的按键值</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">endif</span></span>
+            }
+        }
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(key_state[i] == <span class="hljs-number">2</span> &amp;&amp; key_input[i] == Key_Press){ <span class="hljs-comment">//如果还一直按着这个按键，进入长按模式</span>
+
+            key_con[i]++;
+            key_con_s[i]++; <span class="hljs-comment">//超级连击计数</span>
+            KEY_Delay(Delay_Tim);
+            <span class="hljs-keyword">if</span>(key_con[i]&gt;=Speed_Multiple_Hit){   <span class="hljs-comment">//设置计数时间</span>
+                key_con[i] = <span class="hljs-number">0</span>;   <span class="hljs-comment">//清空计数值</span>
+                <span class="hljs-keyword">return</span> Key_x[i]; <span class="hljs-comment">//返回按键值</span>
+            }
+            <span class="hljs-keyword">if</span>(key_con_s[i] &gt;= Time_Super_Multiple_Hit){
+
+                key_con[i] = <span class="hljs-number">0</span>;   <span class="hljs-comment">//清空计数值</span>
+                key_con_s[i] = <span class="hljs-number">0</span>;   <span class="hljs-comment">//清空计数值</span>
+                key_state[i] = <span class="hljs-number">3</span>; <span class="hljs-comment">//进入超级连击模式</span>
+                <span class="hljs-keyword">return</span> Key_x[i]; <span class="hljs-comment">//返回按键值</span>
+            }
+        }
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(key_state[i] == <span class="hljs-number">3</span> &amp;&amp; key_input[i] == Key_Press){ <span class="hljs-comment">//处于超级连击状态还按着按键</span>
+
+            key_con_s[i]++;
+            KEY_Delay(Delay_Tim);
+            <span class="hljs-keyword">if</span>(key_con_s[i] &gt;= Super_Speed_Multiple_Hit){
+
+                key_con_s[i] = <span class="hljs-number">0</span>; <span class="hljs-comment">//清计数值</span>
+                <span class="hljs-keyword">return</span> Key_x[i]; <span class="hljs-comment">//返回按键值</span>
+            }
+        }
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(key_state[i] == <span class="hljs-number">2</span> &amp;&amp; key_input[i] == Key_Release){ <span class="hljs-comment">//某按键上次状态是长按，但是这次没有按键按下</span>
+
+            key_state[i] = <span class="hljs-number">0</span>; <span class="hljs-comment">//状态改为没按下</span>
+            key_con[i] = <span class="hljs-number">0</span>; <span class="hljs-comment">//检测长按计数清0</span>
+        }
+<span class="hljs-preprocessor">#<span class="hljs-keyword">if</span> Key_Trigger_Rising_Edge == 1</span>
+        <span class="hljs-comment">//这一次检测某按键是松开的，但是上一次是按下的，而且按键的状态是短按的时候，返回按键值（这个if相当于上升沿，短按松开的时候返回按键值）</span>
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>((key_input[i] == Key_Release &amp;&amp; key_input_1[i] == Key_Press) &amp;&amp; (key_state[i] == <span class="hljs-number">1</span>)){
+
+            key_state[i] = <span class="hljs-number">0</span>;
+            KEY_Delay(<span class="hljs-number">20</span>); <span class="hljs-comment">//消抖</span>
+            <span class="hljs-keyword">return</span> Key_x[i]; <span class="hljs-comment">//返回按键值</span>
+        }
+<span class="hljs-preprocessor">#<span class="hljs-keyword">endif</span></span>
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>(key_input[i] == Key_Release){ <span class="hljs-comment">//某按键没有按下</span>
+
+            key_state[i] = <span class="hljs-number">0</span>; <span class="hljs-comment">//状态改为没按下</span>
+            key_con[i] = <span class="hljs-number">0</span>; <span class="hljs-comment">//检测长按连击计数清0</span>
+            key_con_s[i] = <span class="hljs-number">0</span>; <span class="hljs-comment">//检测超级连击计数清0</span>
+        } 
+<span class="hljs-preprocessor">#<span class="hljs-keyword">if</span> Key_Trigger_Rising_Edge == 1</span>
+        key_input_1[i] = key_input[i]; <span class="hljs-comment">//记录按键</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">endif</span></span>
+    }
+    <span class="hljs-keyword">return</span> <span class="hljs-string">' '</span>; <span class="hljs-comment">//没有任何按键按下时返回空格' '</span>
+}</code></pre> 
+<p>这里面用了一些条件编译，实现了按键单击是下降沿触发（按键按下的时间就返回按键值）还是上升沿触发（按键松开的时候才返回按键值），还有按键从单击转换到连击所需的时间、连击的速度、进入高速连击的时间、进入高速连击的速度都是用宏在头文件中定义的，方便做相应的修改。</p> 
+<p>关于按键输入的IO口，输入时候触发电平是高电平还是低电平也可以通过宏定义修改。</p> 
+<p>头文件键里相关的宏定义如下：</p> 
+<pre class="prettyprint"><code class=" hljs cs">
+<span class="hljs-comment"><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span>/  按键I/O相关配置   <span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span>//</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Up           gpio_get(E0)</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Down         gpio_get(E3)</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Left         gpio_get(E2)</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Right        gpio_get(I3)</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Center       gpio_get(I2)</span>
+
+
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> KeyUPin          E0</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> KeyDPin          E3</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> KeyLPin          E2</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> KeyRPin          I3</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> KeyCPin          I2</span>
+
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Hight            1       //高电平</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Low              0       //低电平</span>
+
+<span class="hljs-comment">//配置按键按下的时候和松开的时候的电平状态</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Press        Hight   //按键按下时的电平状态</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Release      Low     //按键松开是的电平状态</span>
+
+<span class="hljs-comment"><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span>/  按键检测相关配置   <span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span><span class="hljs-xmlDocTag">///</span>//</span>
+
+<span class="hljs-comment">//按键短按的时候是下降沿触发还是上升沿触发触发方式同时只能存在一个，两个都存在的时候上升沿优先级比较高，下降沿无效</span>
+<span class="hljs-comment">//注意：两个触发方式都为0的时候短按会失效</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Trigger_Rising_Edge     0  //上升沿触发：按键短按松开的时候才返回按键值</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Key_Trigger_falling_Edge    1  //下降沿触发：按键短按按下的时候就返回按键值</span>
+
+<span class="hljs-comment">//按键短按多久进入连击模式的时间，这个时间大概 = Delay_Tim * Time_Multiple_Hit,最大为255（用的uint8_t型变量来计数）</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Time_Multiple_Hit  8</span>
+
+<span class="hljs-comment">//进入连击模式后连击的速度,每次连击之间的间隔为 Speed_Multiple_Hit * Delay_Tim   ms</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Speed_Multiple_Hit  5</span>
+
+<span class="hljs-comment">//在长按连击的模式下，一直长按进入超级连击模式的时间，时间大概 = 10ms * Time_Super_Multiple_Hit</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Time_Super_Multiple_Hit  65</span>
+
+<span class="hljs-comment">//进入超级连击模式后连击的速度，每次连击之间的间隔为 Super_Speed_Multiple_Hit * Delay_Tim   ms  如果速度和长按连击一样，相当于没有超级连击</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Super_Speed_Multiple_Hit 2</span>
+
+<span class="hljs-comment">//替换延迟函数</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> KEY_Delay  systick_delay_ms</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> Delay_Tim  5</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/546b287ee9803dd76fa6e92debc1364f/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">MySQL基础教程22-Mysql列属性-唯一键</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/7ee0930a94f88fcfdd8d89ae44d8f1cd/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">1.2MySQL-InnoDB-READ COMMITTED（读已提交）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

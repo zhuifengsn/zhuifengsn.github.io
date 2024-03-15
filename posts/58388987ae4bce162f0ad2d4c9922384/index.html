@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux SYN报文接收及发送SYNACK报文 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux SYN报文接收及发送SYNACK报文" />
+<meta property="og:description" content="注：本文分析基于3.10.0-693.el7内核版本，即CentOS 7.4
+在分析connect()系统调用时，我们已经发送SYN报文，所以服务端就需要作出回应了。我们依然只分析TCP层的操作。SYN报文到达TCP层由tcp_v4_rcv()接管。
+int tcp_v4_rcv(struct sk_buff *skb) { const struct iphdr *iph; const struct tcphdr *th; struct sock *sk; int ret; struct net *net = dev_net(skb-&gt;dev); ... //checksum检查，其实也就是完整性校验 if (skb_checksum_init(skb, IPPROTO_TCP, inet_compute_pseudo)) goto csum_error; th = tcp_hdr(skb);//获取TCP头部 iph = ip_hdr(skb);//获取ip头部 TCP_SKB_CB(skb)-&gt;seq = ntohl(th-&gt;seq); TCP_SKB_CB(skb)-&gt;end_seq = (TCP_SKB_CB(skb)-&gt;seq &#43; th-&gt;syn &#43; th-&gt;fin &#43; skb-&gt;len - th-&gt;doff * 4); TCP_SKB_CB(skb)-&gt;ack_seq = ntohl(th-&gt;ack_seq); TCP_SKB_CB(skb)-&gt;tcp_flags = tcp_flag_byte(th); TCP_SKB_CB(skb)-&gt;tcp_tw_isn = 0; TCP_SKB_CB(skb)-&gt;ip_dsfield = ipv4_get_dsfield(iph); TCP_SKB_CB(skb)-&gt;sacked = 0; //根据报文的源和目的地址在established哈希表以及listen哈希表中查找连接 //对于正要建立的连接，返回的就是listen哈希表的连接 sk = __inet_lookup_skb(&amp;tcp_hashinfo, skb, th-&gt;source, th-&gt;dest); if (!" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/58388987ae4bce162f0ad2d4c9922384/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-06-03T10:43:39+08:00" />
+<meta property="article:modified_time" content="2018-06-03T10:43:39+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux SYN报文接收及发送SYNACK报文</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>注：本文分析基于3.10.0-693.el7内核版本，即CentOS 7.4</p> 
+<p>在分析connect()系统调用时，我们已经发送SYN报文，所以服务端就需要作出回应了。我们依然只分析TCP层的操作。SYN报文到达TCP层由<strong>tcp_v4_rcv()</strong>接管。</p> 
+<pre class="prettyprint"><code class=" hljs coffeescript">int tcp_v4_rcv(struct sk_buff *skb)
+{
+    <span class="hljs-reserved">const</span> struct iphdr *iph;
+    <span class="hljs-reserved">const</span> struct tcphdr *th;
+    struct sock *sk;
+    int ret;
+    struct net *net = dev_net(skb-&gt;dev);
+...
+    <span class="hljs-regexp">//</span>checksum检查，其实也就是完整性校验
+    <span class="hljs-keyword">if</span> (skb_checksum_init(skb, IPPROTO_TCP, inet_compute_pseudo))
+        goto csum_error;
+
+    th = tcp_hdr(skb);<span class="hljs-regexp">//</span>获取TCP头部
+    iph = ip_hdr(skb);<span class="hljs-regexp">//</span>获取ip头部
+    TCP_SKB_CB<span class="hljs-function"><span class="hljs-params">(skb)</span>-&gt;</span>seq = ntohl(th-&gt;seq);
+    TCP_SKB_CB<span class="hljs-function"><span class="hljs-params">(skb)</span>-&gt;</span><span class="hljs-function"><span class="hljs-title">end_seq</span> = <span class="hljs-params">(TCP_SKB_CB(skb)-&gt;seq + th-&gt;syn + th-&gt;fin +
+                    skb-&gt;len - th-&gt;doff * <span class="hljs-number">4</span>)</span>;
+    <span class="hljs-title">TCP_SKB_CB</span><span class="hljs-params">(skb)</span>-&gt;</span>ack_seq = ntohl(th-&gt;ack_seq);
+    TCP_SKB_CB<span class="hljs-function"><span class="hljs-params">(skb)</span>-&gt;</span>tcp_flags = tcp_flag_byte(th);
+    TCP_SKB_CB<span class="hljs-function"><span class="hljs-params">(skb)</span>-&gt;</span>tcp_tw_isn = <span class="hljs-number">0</span>;
+    TCP_SKB_CB<span class="hljs-function"><span class="hljs-params">(skb)</span>-&gt;</span>ip_dsfield = ipv4_get_dsfield(iph);
+    TCP_SKB_CB<span class="hljs-function"><span class="hljs-params">(skb)</span>-&gt;</span>sacked  = <span class="hljs-number">0</span>;
+
+    <span class="hljs-regexp">//</span>根据报文的源和目的地址在established哈希表以及listen哈希表中查找连接
+    <span class="hljs-regexp">//</span>对于正要建立的连接，返回的就是listen哈希表的连接
+    sk = __inet_lookup_skb(&amp;tcp_hashinfo, skb, th-&gt;source, th-&gt;dest);
+    <span class="hljs-keyword">if</span> (!sk)
+        goto no_tcp_socket;
+
+<span class="hljs-attribute">process</span>:
+    <span class="hljs-regexp">//</span>如果此时socket状态处于time_wait，那就进入对应的处理流程中
+    <span class="hljs-keyword">if</span> (sk-&gt;sk_state == TCP_TIME_WAIT)
+        goto do_time_wait;
+...
+    th = (<span class="hljs-reserved">const</span> struct tcphdr *)skb-&gt;data;
+    iph = ip_hdr(skb);
+
+    sk_mark_napi_id(sk, skb);<span class="hljs-regexp">//</span>记录napi的id
+    skb-&gt;dev = NULL;
+
+    bh_lock_sock_nested(sk);
+    tcp_sk<span class="hljs-function"><span class="hljs-params">(sk)</span>-&gt;</span>segs_in += max_t<span class="hljs-function"><span class="hljs-params">(u16, <span class="hljs-number">1</span>, skb_shinfo(skb)-&gt;gso_segs)</span>;
+    <span class="hljs-title">ret</span> = 0;
+    <span class="hljs-title">if</span> <span class="hljs-params">(!sock_owned_by_user(sk))</span> {//如果<span class="hljs-title">sk</span>没有被用户锁定，即没在使用
+        //检查是否需要先进入<span class="hljs-title">prequeue</span>队列
+        <span class="hljs-title">if</span> <span class="hljs-params">(!tcp_prequeue(sk, skb))</span>
+            <span class="hljs-title">ret</span> = <span class="hljs-title">tcp_v4_do_rcv</span><span class="hljs-params">(sk, skb)</span>;//进入到主处理函数
+
+    //如果用户正在使用，则数据包进入<span class="hljs-title">backlog</span>中
+    //不太理解的是为什么<span class="hljs-title">limit</span>入参是<span class="hljs-title">sk_rcvbuf</span>和<span class="hljs-title">sk_sndbuf</span>之和
+    } <span class="hljs-title">else</span> <span class="hljs-title">if</span> <span class="hljs-params">(unlikely(sk_add_backlog(sk, skb,
+                       sk-&gt;sk_rcvbuf + sk-&gt;sk_sndbuf)))</span> {
+        <span class="hljs-title">bh_unlock_sock</span><span class="hljs-params">(sk)</span>;
+        <span class="hljs-title">NET_INC_STATS_BH</span><span class="hljs-params">(net, LINUX_MIB_TCPBACKLOGDROP)</span>;
+        <span class="hljs-title">goto</span> <span class="hljs-title">discard_and_relse</span>;
+    }
+    <span class="hljs-title">bh_unlock_sock</span><span class="hljs-params">(sk)</span>;
+
+    <span class="hljs-title">sock_put</span><span class="hljs-params">(sk)</span>;
+
+    <span class="hljs-title">return</span> <span class="hljs-title">ret</span>;
+...
+
+<span class="hljs-title">do_time_wait</span>:
+    <span class="hljs-title">if</span> <span class="hljs-params">(!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb))</span> {
+        <span class="hljs-title">inet_twsk_put</span><span class="hljs-params">(inet_twsk(sk))</span>;
+        <span class="hljs-title">goto</span> <span class="hljs-title">discard_it</span>;
+    }
+
+    <span class="hljs-title">if</span> <span class="hljs-params">(skb-&gt;len &lt; (th-&gt;doff &lt;&lt; <span class="hljs-number">2</span>))</span> {
+        <span class="hljs-title">inet_twsk_put</span><span class="hljs-params">(inet_twsk(sk))</span>;
+        <span class="hljs-title">goto</span> <span class="hljs-title">bad_packet</span>;
+    }
+    <span class="hljs-title">if</span> <span class="hljs-params">(tcp_checksum_complete(skb))</span> {
+        <span class="hljs-title">inet_twsk_put</span><span class="hljs-params">(inet_twsk(sk))</span>;
+        <span class="hljs-title">goto</span> <span class="hljs-title">csum_error</span>;
+    }
+    //处理在<span class="hljs-title">time_wait</span>状态收到报文的情况
+    <span class="hljs-title">switch</span> <span class="hljs-params">(tcp_timewait_state_process(inet_twsk(sk), skb, th))</span> {
+    <span class="hljs-title">case</span> <span class="hljs-title">TCP_TW_SYN</span>: {
+        <span class="hljs-title">struct</span> <span class="hljs-title">sock</span> *<span class="hljs-title">sk2</span> = <span class="hljs-title">inet_lookup_listener</span><span class="hljs-params">(dev_net(skb-&gt;dev),
+                            &amp;tcp_hashinfo,
+                            iph-&gt;saddr, th-&gt;source,
+                            iph-&gt;daddr, th-&gt;dest,
+                            inet_iif(skb))</span>;
+        <span class="hljs-title">if</span> <span class="hljs-params">(sk2)</span> {
+            <span class="hljs-title">inet_twsk_deschedule</span><span class="hljs-params">(inet_twsk(sk), &amp;tcp_death_row)</span>;
+            <span class="hljs-title">inet_twsk_put</span><span class="hljs-params">(inet_twsk(sk))</span>;
+            <span class="hljs-title">sk</span> = <span class="hljs-title">sk2</span>;
+            <span class="hljs-title">goto</span> <span class="hljs-title">process</span>;
+        }
+        /* <span class="hljs-title">Fall</span> <span class="hljs-title">through</span> <span class="hljs-title">to</span> <span class="hljs-title">ACK</span> */
+    }
+    <span class="hljs-title">case</span> <span class="hljs-title">TCP_TW_ACK</span>:
+        <span class="hljs-title">tcp_v4_timewait_ack</span><span class="hljs-params">(sk, skb)</span>;
+        <span class="hljs-title">break</span>;
+    <span class="hljs-title">case</span> <span class="hljs-title">TCP_TW_RST</span>:
+        <span class="hljs-title">tcp_v4_send_reset</span><span class="hljs-params">(sk, skb)</span>;
+        <span class="hljs-title">inet_twsk_deschedule</span><span class="hljs-params">(inet_twsk(sk), &amp;tcp_death_row)</span>;
+        <span class="hljs-title">inet_twsk_put</span><span class="hljs-params">(inet_twsk(sk))</span>;
+        <span class="hljs-title">goto</span> <span class="hljs-title">discard_it</span>;
+    <span class="hljs-title">case</span> <span class="hljs-title">TCP_TW_SUCCESS</span>:;
+    }
+    <span class="hljs-title">goto</span> <span class="hljs-title">discard_it</span>;
+}
+</span></code></pre> 
+<p>接收到SYN包后要查看下该报文是否之前已建立的连接，通过<strong>__inet_lookup_skb()</strong>查找是否有匹配的连接。</p> 
+<pre class="prettyprint"><code class=" hljs objectivec"><span class="hljs-keyword">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-keyword">struct</span> sock *__inet_lookup_skb(<span class="hljs-keyword">struct</span> inet_hashinfo *hashinfo,
+                         <span class="hljs-keyword">struct</span> sk_buff *skb,
+                         <span class="hljs-keyword">const</span> __be16 sport,
+                         <span class="hljs-keyword">const</span> __be16 dport)
+{
+    <span class="hljs-comment">//sk_buff结构体里有一个变量指向sock，即skb-&gt;sk</span>
+    <span class="hljs-comment">//但是对于尚未建立连接的skb来说，其sk变量为空，因此会走进__inet_lookup()</span>
+    <span class="hljs-keyword">struct</span> sock *sk = skb_steal_sock(skb);
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">struct</span> iphdr *iph = ip_hdr(skb);
+
+    <span class="hljs-keyword">if</span> (sk)
+        <span class="hljs-keyword">return</span> sk;
+    <span class="hljs-keyword">else</span>
+        <span class="hljs-keyword">return</span> __inet_lookup(dev_net(skb_dst(skb)-&gt;dev), hashinfo,
+                     iph-&gt;saddr, sport,
+                     iph-&gt;daddr, dport, inet_iif(skb));
+}
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-keyword">struct</span> sock *__inet_lookup(<span class="hljs-keyword">struct</span> net *net,
+                     <span class="hljs-keyword">struct</span> inet_hashinfo *hashinfo,
+                     <span class="hljs-keyword">const</span> __be32 saddr, <span class="hljs-keyword">const</span> __be16 sport,
+                     <span class="hljs-keyword">const</span> __be32 daddr, <span class="hljs-keyword">const</span> __be16 dport,
+                     <span class="hljs-keyword">const</span> <span class="hljs-keyword">int</span> dif)
+{
+    u16 hnum = ntohs(dport);
+    <span class="hljs-comment">//查找established哈希表</span>
+    <span class="hljs-keyword">struct</span> sock *sk = __inet_lookup_established(net, hashinfo,
+                saddr, sport, daddr, hnum, dif);
+    <span class="hljs-comment">//查找listen哈希表</span>
+    <span class="hljs-keyword">return</span> sk ? : __inet_lookup_listener(net, hashinfo, saddr, sport,
+                         daddr, hnum, dif);
+}</code></pre> 
+<p>最终会在listen哈希表中找到该连接，也就是服务端的监听socket。</p> 
+<p>之后如果当前这个监听socket没有被使用，就会进入<strong>prequeue</strong>队列中处理，但是由于这是SYN报文，还没有进程接收数据，所以不会进入prequeue的真正处理中。</p> 
+<pre class="prettyprint"><code class=" hljs lasso">bool tcp_prequeue(struct sock <span class="hljs-subst">*</span>sk, struct sk_buff <span class="hljs-subst">*</span>skb)
+{
+    struct tcp_sock <span class="hljs-subst">*</span>tp <span class="hljs-subst">=</span> tcp_sk(sk);
+
+    <span class="hljs-comment">//如果设置了/proc/sys/net/ipv4/tcp_low_latency(低时延)参数，默认为0</span>
+    <span class="hljs-comment">//或者用户还没有调用接收函数接收数据,那么不使用prequeue队列</span>
+    <span class="hljs-comment">//ucopy.task会在接收数据函数recvmsg()中设置为接收数据的当前进程</span>
+    <span class="hljs-comment">//所以对于第一个SYN报文，会从以下分支返回</span>
+    <span class="hljs-keyword">if</span> (sysctl_tcp_low_latency <span class="hljs-subst">||</span> <span class="hljs-subst">!</span>tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>task)
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
+
+    <span class="hljs-keyword">if</span> (skb<span class="hljs-subst">-&gt;</span>len <span class="hljs-subst">&lt;=</span> tcp_hdrlen(skb) <span class="hljs-subst">&amp;&amp;</span>
+        skb_queue_len(<span class="hljs-subst">&amp;</span>tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>prequeue) <span class="hljs-subst">==</span> <span class="hljs-number">0</span>)
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
+
+    <span class="hljs-keyword">if</span> (likely(sk<span class="hljs-subst">-&gt;</span>sk_rx_dst))
+        skb_dst_drop(skb);
+    <span class="hljs-keyword">else</span>
+        skb_dst_force_safe(skb);
+
+    <span class="hljs-comment">//加入到prequeue队列尾部</span>
+    __skb_queue_tail(<span class="hljs-subst">&amp;</span>tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>prequeue, skb);
+    tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>memory <span class="hljs-subst">+=</span> skb<span class="hljs-subst">-&gt;</span>truesize;
+    <span class="hljs-comment">//如果prequeue队列长度大于socket连接的接收缓冲区，</span>
+    <span class="hljs-comment">//将prequeue中的数据报文转移到receive_queue中</span>
+    <span class="hljs-keyword">if</span> (tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>memory <span class="hljs-subst">&gt;</span> sk<span class="hljs-subst">-&gt;</span>sk_rcvbuf) {
+        struct sk_buff <span class="hljs-subst">*</span>skb1;
+
+        BUG_ON(sock_owned_by_user(sk));
+        <span class="hljs-comment">//从prequeue中摘链</span>
+        <span class="hljs-keyword">while</span> ((skb1 <span class="hljs-subst">=</span> __skb_dequeue(<span class="hljs-subst">&amp;</span>tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>prequeue)) <span class="hljs-subst">!=</span> <span class="hljs-built_in">NULL</span>) {
+            sk_backlog_rcv(sk, skb1);<span class="hljs-comment">//放入backlog中</span>
+            NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPPREQUEUEDROPPED);
+        }
+
+        tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>memory <span class="hljs-subst">=</span> <span class="hljs-number">0</span>;
+    <span class="hljs-comment">//如果prequeue中有报文了，那么唤醒睡眠的进程来收取报文</span>
+    } <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (skb_queue_len(<span class="hljs-subst">&amp;</span>tp<span class="hljs-subst">-&gt;</span>ucopy<span class="hljs-built_in">.</span>prequeue) <span class="hljs-subst">==</span> <span class="hljs-number">1</span>) {
+        <span class="hljs-comment">//唤醒sk上睡眠的进程，这里只唤醒其中一个，避免惊群现象</span>
+        <span class="hljs-comment">//至于怎么唤醒，选择哪个唤醒，暂未研究</span>
+        wake_up_interruptible_sync_poll(sk_sleep(sk),
+                       POLLIN <span class="hljs-subst">|</span> POLLRDNORM <span class="hljs-subst">|</span> POLLRDBAND);
+        <span class="hljs-comment">//没有ACK需要发送，重置延时ACK定时器</span>
+        <span class="hljs-keyword">if</span> (<span class="hljs-subst">!</span>inet_csk_ack_scheduled(sk))
+            inet_csk_reset_xmit_timer(sk, ICSK_TIME_DACK,
+                          (<span class="hljs-number">3</span> <span class="hljs-subst">*</span> tcp_rto_min(sk)) <span class="hljs-subst">/</span> <span class="hljs-number">4</span>,
+                          TCP_RTO_MAX);
+    }
+    <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;
+}</code></pre> 
+<p>既然不会进入到prequeue队列中，那就进入<strong>tcp_v4_do_rcv()</strong>的处理，这是个主要的报文处理函数。</p> 
+<pre class="prettyprint"><code class=" hljs r">int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
+{
+    struct sock *rsk;
+<span class="hljs-keyword">...</span>
+    //SYN报文走的是这里
+    <span class="hljs-keyword">if</span> (sk-&gt;sk_state == TCP_LISTEN) {
+        //查找对应的半连接状态的socket
+        struct sock *nsk = tcp_v4_hnd_req(sk, skb);
+        <span class="hljs-keyword">if</span> (!nsk)
+            goto discard;
+
+        //可知，对于SYN报文，返回的还是入参sk，即nsk=sk
+        <span class="hljs-keyword">if</span> (nsk != sk) {
+            sock_rps_save_rxhash(nsk, skb);
+            <span class="hljs-keyword">if</span> (tcp_child_process(sk, nsk, skb)) {
+                rsk = nsk;
+                goto reset;
+            }
+            <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;
+        }
+    } <span class="hljs-keyword">else</span>
+        sock_rps_save_rxhash(sk, skb);
+
+    //这里是除ESTABLISHED and TIME_WAIT状态外报文的归宿。。。
+    <span class="hljs-keyword">if</span> (tcp_rcv_state_process(sk, skb, tcp_hdr(skb), skb-&gt;len)) {
+        rsk = sk;
+        goto reset;
+    }
+    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;
+<span class="hljs-keyword">...</span>
+}</code></pre> 
+<p>半连接状态socket通过<strong>tcp_v4_hnd_req()</strong>查找。</p> 
+<pre class="prettyprint"><code class=" hljs cs"><span class="hljs-keyword">static</span> <span class="hljs-keyword">struct</span> sock *tcp_v4_hnd_req(<span class="hljs-keyword">struct</span> sock *sk, <span class="hljs-keyword">struct</span> sk_buff *skb)
+{
+    <span class="hljs-keyword">struct</span> tcphdr *th = tcp_hdr(skb);
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">struct</span> iphdr *iph = ip_hdr(skb);
+    <span class="hljs-keyword">struct</span> sock *nsk;
+    <span class="hljs-keyword">struct</span> request_sock **prev;
+    <span class="hljs-comment">/* Find possible connection requests. */</span>
+    <span class="hljs-comment">//查找半连接队列，对于SYN报文肯定找不到</span>
+    <span class="hljs-keyword">struct</span> request_sock *req = inet_csk_search_req(sk, &amp;prev, th-&gt;source,
+                               iph-&gt;saddr, iph-&gt;daddr);
+    <span class="hljs-keyword">if</span> (req)
+        <span class="hljs-keyword">return</span> tcp_check_req(sk, skb, req, prev, <span class="hljs-keyword">false</span>);
+
+    <span class="hljs-comment">//再一次查找established哈希表，以防在此期间重传过SYN报文且建立了连接</span>
+    <span class="hljs-comment">//对于SYN报文这里也是返回空的</span>
+    nsk = inet_lookup_established(sock_net(sk), &amp;tcp_hashinfo, iph-&gt;saddr,
+            th-&gt;source, iph-&gt;daddr, th-&gt;dest, inet_iif(skb));
+
+    <span class="hljs-keyword">if</span> (nsk) {
+        <span class="hljs-keyword">if</span> (nsk-&gt;sk_state != TCP_TIME_WAIT) {
+            bh_lock_sock(nsk);
+            <span class="hljs-keyword">return</span> nsk;
+        }
+        inet_twsk_put(inet_twsk(nsk));
+        <span class="hljs-keyword">return</span> NULL;
+    }
+
+<span class="hljs-preprocessor">#ifdef CONFIG_SYN_COOKIES</span>
+    <span class="hljs-keyword">if</span> (!th-&gt;syn)
+        sk = cookie_v4_check(sk, skb, &amp;(IPCB(skb)-&gt;opt));
+<span class="hljs-preprocessor">#<span class="hljs-keyword">endif</span></span>
+    <span class="hljs-comment">//所以最终返回的还是原来的连接，即该函数对于SYN报文啥都没做</span>
+    <span class="hljs-keyword">return</span> sk;
+}
+</code></pre> 
+<p>接下来就是进入tcp_rcv_state_process()处理，这个函数处理绝大多数状态的报文处理。</p> 
+<pre class="prettyprint"><code class=" hljs r">int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
+              const struct tcphdr *th, unsigned int len)
+{
+    struct tcp_sock *tp = tcp_sk(sk);
+    struct inet_connection_sock *icsk = inet_csk(sk);
+    struct request_sock *req;
+    int queued = <span class="hljs-number">0</span>;
+    bool acceptable;
+    u32 synack_stamp;
+
+    tp-&gt;rx_opt.saw_tstamp = <span class="hljs-number">0</span>;
+
+    <span class="hljs-keyword">switch</span> (sk-&gt;sk_state) {
+    case TCP_CLOSE:
+        goto discard;
+
+    case TCP_LISTEN:
+<span class="hljs-keyword">...</span>
+        <span class="hljs-keyword">if</span> (th-&gt;syn) {//LISTEN状态收到SYN报文
+            <span class="hljs-keyword">if</span> (th-&gt;fin)
+                goto discard;
+            //这里其实就是将请求放入半连接队列，必要时启动SYNACK定时器
+            <span class="hljs-keyword">if</span> (icsk-&gt;icsk_af_ops-&gt;conn_request(sk, skb) &lt; <span class="hljs-number">0</span>)
+                <span class="hljs-keyword">return</span> <span class="hljs-number">1</span>;
+
+            kfree_skb(skb);
+            <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;
+        }
+        goto discard;
+    }
+<span class="hljs-keyword">...</span>
+}</code></pre> 
+<p>加入半连接队列通过<strong>icsk-&gt;icsk_af_ops-&gt;conn_request</strong>操作。我们知道icsk-&gt;icsk_af_ops指向<strong>ipv4_specific</strong>，</p> 
+<pre class="prettyprint"><code class=" hljs r">const struct inet_connection_sock_af_ops ipv4_specific = {
+    .queue_xmit    = ip_queue_xmit,
+    .send_check    = tcp_v4_send_check,
+    .rebuild_header    = inet_sk_rebuild_header,
+    .sk_rx_dst_set     = inet_sk_rx_dst_set,
+    .conn_request      = tcp_v4_conn_request,
+<span class="hljs-keyword">...</span>
+};</code></pre> 
+<p>所以加入半连接的操作就是由<strong>tcp_v4_conn_request()</strong>操刀。</p> 
+<pre class="prettyprint"><code class=" hljs coffeescript">int tcp_v4_conn_request(struct sock *sk, struct sk_buff *skb)
+{
+    <span class="hljs-regexp">/* Never answer to SYNs send to broadcast or multicast */</span>
+    <span class="hljs-keyword">if</span> <span class="hljs-function"><span class="hljs-params">(skb_rtable(skb)-&gt;rt_flags &amp; (RTCF_BROADCAST | RTCF_MULTICAST))</span>
+        <span class="hljs-title">goto</span> <span class="hljs-title">drop</span>;
+
+    <span class="hljs-title">return</span> <span class="hljs-title">tcp_conn_request</span><span class="hljs-params">(&amp;tcp_request_sock_ops,
+                &amp;tcp_request_sock_ipv4_ops, sk, skb)</span>;
+<span class="hljs-title">drop</span>:
+    <span class="hljs-title">NET_INC_STATS_BH</span><span class="hljs-params">(sock_net(sk), LINUX_MIB_LISTENDROPS)</span>;
+    <span class="hljs-title">return</span> 0;
+}</span></code></pre> 
+<p>tcp_v4_conn_request()对<strong>tcp_conn_request()</strong>做了一个简单的封装。</p> 
+<pre class="prettyprint"><code class=" hljs objectivec"><span class="hljs-keyword">int</span> tcp_conn_request(<span class="hljs-keyword">struct</span> request_sock_ops *rsk_ops,
+             <span class="hljs-keyword">const</span> <span class="hljs-keyword">struct</span> tcp_request_sock_ops *af_ops,
+             <span class="hljs-keyword">struct</span> sock *sk, <span class="hljs-keyword">struct</span> sk_buff *skb)
+{
+    <span class="hljs-keyword">struct</span> tcp_options_received tmp_opt;
+    <span class="hljs-keyword">struct</span> request_sock *req;
+    <span class="hljs-keyword">struct</span> tcp_sock *tp = tcp_sk(sk);
+    <span class="hljs-keyword">struct</span> dst_entry *dst = <span class="hljs-literal">NULL</span>;
+    __u32 isn = TCP_SKB_CB(skb)-&gt;tcp_tw_isn;
+    <span class="hljs-keyword">bool</span> want_cookie = <span class="hljs-literal">false</span>, fastopen;
+    <span class="hljs-keyword">struct</span> flowi fl;
+    <span class="hljs-keyword">struct</span> tcp_fastopen_cookie foc = { <span class="hljs-variable">.len</span> = -<span class="hljs-number">1</span> };
+    <span class="hljs-keyword">int</span> err;
+
+    <span class="hljs-comment">//如果开启了syncookies选项，/proc/sys/net/ipv4/</span>
+    <span class="hljs-keyword">if</span> ((sysctl_tcp_syncookies == <span class="hljs-number">2</span> ||
+         <span class="hljs-comment">//或者此时半连接队列已经满了</span>
+         <span class="hljs-comment">//同时isn不是由tcp_timewait_state_process()函数选择</span>
+         <span class="hljs-comment">//那么判断是否需要发送syncookie</span>
+         inet_csk_reqsk_queue_is_full(sk)) &amp;&amp; !isn) {
+        want_cookie = tcp_syn_flood_action(sk, skb, rsk_ops-&gt;slab_name);
+        <span class="hljs-comment">//不需要发送syncookies就直接丢弃报文</span>
+        <span class="hljs-keyword">if</span> (!want_cookie)
+            <span class="hljs-keyword">goto</span> drop;
+    }
+
+    <span class="hljs-comment">//如果全连接队列满了，同时半连接队列里尚未重传过的SYN报文个数大于1</span>
+    <span class="hljs-comment">//那么就直接丢弃报文</span>
+    <span class="hljs-keyword">if</span> (sk_acceptq_is_full(sk) &amp;&amp; inet_csk_reqsk_queue_young(sk) &gt; <span class="hljs-number">1</span>) {
+        NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_LISTENOVERFLOWS);
+        <span class="hljs-keyword">goto</span> drop;
+    }
+
+    <span class="hljs-comment">//都没问题的话，那就分配一个request_sock，表示一个请求</span>
+    <span class="hljs-comment">//这个内存分配是从tcp的slab中分配的</span>
+    req = inet_reqsk_alloc(rsk_ops);
+    <span class="hljs-keyword">if</span> (!req)
+        <span class="hljs-keyword">goto</span> drop;
+
+    inet_rsk(req)-&gt;ireq_family = sk-&gt;sk_family;
+
+    <span class="hljs-comment">//af_ops即为tcp_request_sock_ipv4_ops，这个结构体比较重要，请留意</span>
+    tcp_rsk(req)-&gt;af_specific = af_ops;
+
+    tcp_clear_options(&amp;tmp_opt);
+    tmp_opt<span class="hljs-variable">.mss_clamp</span> = af_ops-&gt;mss_clamp;
+    tmp_opt<span class="hljs-variable">.user_mss</span>  = tp-&gt;rx_opt<span class="hljs-variable">.user_mss</span>;
+    <span class="hljs-comment">//分析该请求的tcp各个选项，比如时间戳、窗口大小、快速开启等选项</span>
+    tcp_parse_options(skb, &amp;tmp_opt, <span class="hljs-number">0</span>, want_cookie ? <span class="hljs-literal">NULL</span> : &amp;foc);
+
+    <span class="hljs-keyword">if</span> (want_cookie &amp;&amp; !tmp_opt<span class="hljs-variable">.saw_tstamp</span>)
+        tcp_clear_options(&amp;tmp_opt);
+
+    tmp_opt<span class="hljs-variable">.tstamp_ok</span> = tmp_opt<span class="hljs-variable">.saw_tstamp</span>;<span class="hljs-comment">//记录时间戳选项开启情况</span>
+    <span class="hljs-comment">//将刚才分析的请求的TCP选项记录到刚刚分配的request_sock中，即req中</span>
+    tcp_openreq_init(req, &amp;tmp_opt, skb);
+
+    af_ops-&gt;init_req(req, sk, skb);
+
+    <span class="hljs-keyword">if</span> (security_inet_conn_request(sk, skb, req))
+        <span class="hljs-keyword">goto</span> drop_and_free;
+
+    <span class="hljs-comment">//如果不需要发送syncookies</span>
+    <span class="hljs-comment">//同时isn不是由tcp_timewait_state_process()函数选择</span>
+    <span class="hljs-keyword">if</span> (!want_cookie &amp;&amp; !isn) {
+        <span class="hljs-comment">//如果开启了time_wait状态连接快速回收</span>
+        <span class="hljs-comment">//即设置/proc/sys/net/ipv4/tcp_tw_recycle</span>
+        <span class="hljs-keyword">if</span> (tcp_death_row<span class="hljs-variable">.sysctl_tw_recycle</span>) {
+            <span class="hljs-keyword">bool</span> strict;
+            <span class="hljs-comment">//查找路由</span>
+            dst = af_ops-&gt;route_req(sk, &amp;fl, req, &amp;strict);
+
+            <span class="hljs-keyword">if</span> (dst &amp;&amp; strict &amp;&amp;
+                <span class="hljs-comment">//主要用于判断是否会和该IP的旧连接冲突</span>
+                <span class="hljs-comment">//这里就涉及到nat环境下丢包的问题</span>
+                !tcp_peer_is_proven(req, dst, <span class="hljs-literal">true</span>, tmp_opt<span class="hljs-variable">.saw_tstamp</span>)) {
+                NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSPASSIVEREJECTED);
+                <span class="hljs-keyword">goto</span> drop_and_release;
+            }
+        }
+        <span class="hljs-comment">/* Kill the following clause, if you dislike this way. */</span>
+        <span class="hljs-comment">//如果没有开启syncookies选项</span>
+        <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (!sysctl_tcp_syncookies &amp;&amp;
+             <span class="hljs-comment">//同时，半连接队列长度已经大于syn backlog队列的3/4</span>
+             (sysctl_max_syn_backlog - inet_csk_reqsk_queue_len(sk) &lt;
+              (sysctl_max_syn_backlog &gt;&gt; <span class="hljs-number">2</span>)) &amp;&amp;
+             <span class="hljs-comment">//并且当前连接和旧连接有冲突</span>
+             !tcp_peer_is_proven(req, dst, <span class="hljs-literal">false</span>, tmp_opt<span class="hljs-variable">.saw_tstamp</span>)) {
+            <span class="hljs-comment">//很有可能遭受synflood 攻击</span>
+            pr_drop_req(req, ntohs(tcp_hdr(skb)-&gt;source), rsk_ops-&gt;family);
+            <span class="hljs-keyword">goto</span> drop_and_release;
+        }
+        <span class="hljs-comment">//生成随机报文序列号</span>
+        isn = af_ops-&gt;init_seq(skb);
+    }
+    <span class="hljs-keyword">if</span> (!dst) {
+        dst = af_ops-&gt;route_req(sk, &amp;fl, req, <span class="hljs-literal">NULL</span>);
+        <span class="hljs-keyword">if</span> (!dst)
+            <span class="hljs-keyword">goto</span> drop_and_free;
+    }
+
+    tcp_ecn_create_request(req, skb, sk, dst);
+
+    <span class="hljs-comment">//如果要发送syncookies，那就发送</span>
+    <span class="hljs-keyword">if</span> (want_cookie) {
+        isn = cookie_init_sequence(af_ops, sk, skb, &amp;req-&gt;mss);
+        req-&gt;cookie_ts = tmp_opt<span class="hljs-variable">.tstamp_ok</span>;
+        <span class="hljs-keyword">if</span> (!tmp_opt<span class="hljs-variable">.tstamp_ok</span>)
+            inet_rsk(req)-&gt;ecn_ok = <span class="hljs-number">0</span>;
+    }
+
+    tcp_rsk(req)-&gt;snt_isn = isn;
+    tcp_openreq_init_rwin(req, sk, dst);
+    fastopen = !want_cookie &amp;&amp; tcp_try_fastopen(sk, skb, req, &amp;foc, dst);
+    <span class="hljs-comment">//这里便是调用tcp_v4_send_synack()发送SYNACK报文了</span>
+    err = af_ops-&gt;send_synack(sk, dst, &amp;fl, req,
+                  skb_get_queue_mapping(skb), &amp;foc);
+    <span class="hljs-keyword">if</span> (!fastopen) {
+        <span class="hljs-keyword">if</span> (err || want_cookie)
+            <span class="hljs-keyword">goto</span> drop_and_free;
+
+        tcp_rsk(req)-&gt;listener = <span class="hljs-literal">NULL</span>;
+        <span class="hljs-comment">//发送报文后将该请求加入半连接队列，同时启动SYNACK定时器</span>
+        <span class="hljs-comment">//调用inet_csk_reqsk_queue_hash_add()完成上述操作</span>
+        af_ops-&gt;queue_hash_add(sk, req, TCP_TIMEOUT_INIT);
+    }
+
+    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;
+...
+}
+</code></pre> 
+<p>要加入半连接队列首先要创建一个request_sock，用于表示客户端发起的请求，然后是做一些初始化，其中<strong>req-&gt;ts_recent</strong>后续会用到多次，这个变量表示的就是对端发送报文的时间(前提是对端开启了时间戳选项)。</p> 
+<pre class="prettyprint"><code class=" hljs lasso">static <span class="hljs-keyword">inline</span> <span class="hljs-literal">void</span> tcp_openreq_init(struct request_sock <span class="hljs-subst">*</span>req,
+                    struct tcp_options_received <span class="hljs-subst">*</span>rx_opt,
+                    struct sk_buff <span class="hljs-subst">*</span>skb)
+{
+    struct inet_request_sock <span class="hljs-subst">*</span>ireq <span class="hljs-subst">=</span> inet_rsk(req);
+
+    req<span class="hljs-subst">-&gt;</span>rcv_wnd <span class="hljs-subst">=</span> <span class="hljs-number">0</span>;       <span class="hljs-comment">/* So that tcp_send_synack() knows! */</span>
+    req<span class="hljs-subst">-&gt;</span>cookie_ts <span class="hljs-subst">=</span> <span class="hljs-number">0</span>;
+    tcp_rsk(req)<span class="hljs-subst">-&gt;</span>rcv_isn <span class="hljs-subst">=</span> TCP_SKB_CB(skb)<span class="hljs-subst">-&gt;</span>seq;
+    tcp_rsk(req)<span class="hljs-subst">-&gt;</span>rcv_nxt <span class="hljs-subst">=</span> TCP_SKB_CB(skb)<span class="hljs-subst">-&gt;</span>seq <span class="hljs-subst">+</span> <span class="hljs-number">1</span>;
+    tcp_rsk(req)<span class="hljs-subst">-&gt;</span>snt_synack <span class="hljs-subst">=</span> tcp_time_stamp;
+    tcp_rsk(req)<span class="hljs-subst">-&gt;</span>last_oow_ack_time <span class="hljs-subst">=</span> <span class="hljs-number">0</span>;
+    req<span class="hljs-subst">-&gt;</span>mss <span class="hljs-subst">=</span> rx_opt<span class="hljs-subst">-&gt;</span>mss_clamp;
+    <span class="hljs-comment">//如果对端开启时间戳，那么记录下这个时间，也就是对方发送SYN报文的时间</span>
+    req<span class="hljs-subst">-&gt;</span>ts_recent <span class="hljs-subst">=</span> rx_opt<span class="hljs-subst">-&gt;</span>saw_tstamp <span class="hljs-subst">?</span> rx_opt<span class="hljs-subst">-&gt;</span>rcv_tsval : <span class="hljs-number">0</span>;
+    ireq<span class="hljs-subst">-&gt;</span>tstamp_ok <span class="hljs-subst">=</span> rx_opt<span class="hljs-subst">-&gt;</span>tstamp_ok;<span class="hljs-comment">//时间戳开启标志</span>
+    ireq<span class="hljs-subst">-&gt;</span>sack_ok <span class="hljs-subst">=</span> rx_opt<span class="hljs-subst">-&gt;</span>sack_ok;
+    ireq<span class="hljs-subst">-&gt;</span>snd_wscale <span class="hljs-subst">=</span> rx_opt<span class="hljs-subst">-&gt;</span>snd_wscale;
+    ireq<span class="hljs-subst">-&gt;</span>wscale_ok <span class="hljs-subst">=</span> rx_opt<span class="hljs-subst">-&gt;</span>wscale_ok;
+    ireq<span class="hljs-subst">-&gt;</span>acked <span class="hljs-subst">=</span> <span class="hljs-number">0</span>;
+    ireq<span class="hljs-subst">-&gt;</span>ecn_ok <span class="hljs-subst">=</span> <span class="hljs-number">0</span>;
+    ireq<span class="hljs-subst">-&gt;</span>ir_rmt_port <span class="hljs-subst">=</span> tcp_hdr(skb)<span class="hljs-subst">-&gt;</span>source;
+    <span class="hljs-comment">//目的端口，也就是当前服务端的监听端口</span>
+    ireq<span class="hljs-subst">-&gt;</span>ir_num <span class="hljs-subst">=</span> ntohs(tcp_hdr(skb)<span class="hljs-subst">-&gt;</span>dest);
+}</code></pre> 
+<p>初始化完这个请求后就要看下这个请求是否有问题。主要检查的就是看是否会和当前ip的上次通讯有冲突。该操作通过<strong>tcp_peer_is_proven()</strong>检查。</p> 
+<pre class="prettyprint"><code class=" hljs cs"><span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> TCP_PAWS_MSL    60      /* Per-host timestamps are invalidated</span>
+                     * after <span class="hljs-keyword">this</span> time. It should be equal
+                     * (or greater than) TCP_TIMEWAIT_LEN
+                     * to provide reliability equal to one
+                     * provided by timewait state.
+                     */
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> TCP_PAWS_WINDOW 1       /* Replay window for per-host</span>
+                     * timestamps. It must be less than
+                     * minimal timewait lifetime.
+                     */
+<span class="hljs-keyword">bool</span> tcp_peer_is_proven(<span class="hljs-keyword">struct</span> request_sock *req, <span class="hljs-keyword">struct</span> dst_entry *dst,
+            <span class="hljs-keyword">bool</span> paws_check, <span class="hljs-keyword">bool</span> timestamps)
+{
+    <span class="hljs-keyword">struct</span> tcp_metrics_block *tm;
+    <span class="hljs-keyword">bool</span> ret;
+
+    <span class="hljs-keyword">if</span> (!dst)
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">false</span>;
+
+    rcu_read_lock();
+    tm = __tcp_get_metrics_req(req, dst);
+    <span class="hljs-keyword">if</span> (paws_check) {
+        <span class="hljs-comment">//如果当前ip的上次tcp通讯发生在60s内</span>
+        <span class="hljs-keyword">if</span> (tm &amp;&amp; (u32)get_seconds() - tm-&gt;tcpm_ts_stamp &lt; TCP_PAWS_MSL &amp;&amp;
+            <span class="hljs-comment">//同时当前ip上次tcp通信的时间戳大于本次tcp，或者没有开启时间戳开关</span>
+            <span class="hljs-comment">//从这里看，快速回收打开选项就很容易导致nat环境丢包</span>
+            ((s32)(tm-&gt;tcpm_ts - req-&gt;ts_recent) &gt; TCP_PAWS_WINDOW ||!timestamps))
+            ret = <span class="hljs-keyword">false</span>;
+        <span class="hljs-keyword">else</span>
+            ret = <span class="hljs-keyword">true</span>;
+    } <span class="hljs-keyword">else</span> {
+        <span class="hljs-keyword">if</span> (tm &amp;&amp; tcp_metric_get(tm, TCP_METRIC_RTT) &amp;&amp; tm-&gt;tcpm_ts_stamp)
+            ret = <span class="hljs-keyword">true</span>;
+        <span class="hljs-keyword">else</span>
+            ret = <span class="hljs-keyword">false</span>;
+    }
+    rcu_read_unlock();
+
+    <span class="hljs-keyword">return</span> ret;
+}</code></pre> 
+<p>从这个冲突判断上看有这么几个条件：</p> 
+<ol><li>同个ip的此次通信和上次通信间隔时间在60s(刚好等于time_wait状态默认持续时间)内</li><li>上次通信时间大于此次通信时间，或者没有开时间戳选项</li></ol> 
+<p>所以，这样看来在nat环境下就很容易有问题。nat环境下的机器时间可能不统一，也就有可能出现某个机器先发的报文时间比较靠前，后面其他机器发的报文时间比较靠后，那个这个报文就会被丢弃，也就经常出现nat环境下有些机器无法连接网络的问题。</p> 
+<p>对于这种情况呢，我们注意到这是在快速回收选项开启的前提下才会检查，所以只要把快速回收选项<strong>tcp_tw_recycle</strong>关闭即可。因此nat环境最好不要打开这个选项。</p> 
+<p>一切OK的情况下，接着就该发送SYNACK报文了，通过<strong>af_ops-&gt;send_synack()</strong>。上面我们说过af_ops即为<strong>tcp_request_sock_ipv4_ops</strong>，</p> 
+<pre class="prettyprint"><code class=" hljs r">static const struct tcp_request_sock_ops tcp_request_sock_ipv4_ops = {
+    <span class="hljs-keyword">...</span>
+    .route_req  =   tcp_v4_route_req,
+    .init_seq   =   tcp_v4_init_sequence,
+    .send_synack    =   tcp_v4_send_synack,
+    .queue_hash_add =   inet_csk_reqsk_queue_hash_add,
+};</code></pre> 
+<p>因此，SYNACK报文就是通过<strong>tcp_v4_send_synack()</strong>发送的。</p> 
+<pre class="prettyprint"><code class=" hljs rust"><span class="hljs-keyword">static</span> <span class="hljs-keyword">int</span> tcp_v4_send_synack(<span class="hljs-keyword">struct</span> sock *sk, <span class="hljs-keyword">struct</span> dst_entry *dst,
+                  <span class="hljs-keyword">struct</span> flowi *fl,
+                  <span class="hljs-keyword">struct</span> request_sock *req,
+                  <span class="hljs-keyword">u16</span> queue_mapping,
+                  <span class="hljs-keyword">struct</span> tcp_fastopen_cookie *foc)
+{
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">struct</span> inet_request_sock *ireq = inet_rsk(req);
+    <span class="hljs-keyword">struct</span> flowi4 fl4;
+    <span class="hljs-keyword">int</span> err = -<span class="hljs-number">1</span>;
+    <span class="hljs-keyword">struct</span> sk_buff * skb;
+
+    <span class="hljs-comment">//获取路由</span>
+    <span class="hljs-keyword">if</span> (!dst &amp;&amp; (dst = inet_csk_route_req(sk, &amp;fl4, req)) == NULL)
+        <span class="hljs-keyword">return</span> -<span class="hljs-number">1</span>;
+
+    <span class="hljs-comment">//准备synack报文，该报文使用的是用户的send buffer内存</span>
+    skb = tcp_make_synack(sk, dst, req, foc);
+
+    <span class="hljs-keyword">if</span> (skb) {
+        <span class="hljs-number">__</span>tcp_v4_send_check(skb, ireq-&gt;ir_loc_addr, ireq-&gt;ir_rmt_addr);
+
+        skb_set_queue_mapping(skb, queue_mapping);
+        <span class="hljs-comment">//传到IP层继续处理，组建ip头，然后发送报文</span>
+        err = ip_build_and_send_pkt(skb, sk, ireq-&gt;ir_loc_addr,
+                        ireq-&gt;ir_rmt_addr,
+                        ireq-&gt;opt);
+        err = net_xmit_eval(err);
+    }
+
+    <span class="hljs-keyword">return</span> err;
+}
+</code></pre> 
+<p>发送完SYNACK报文，接着就是将该连接放入半连接队列了，同时启动我们的SYNACK定时器。这一动作通过af_ops-&gt;queue_hash_add实现，由上面结构体可知，也就是调用<strong>inet_csk_reqsk_queue_hash_add()</strong>。</p> 
+<pre class="prettyprint"><code class=" hljs objectivec"><span class="hljs-keyword">void</span> inet_csk_reqsk_queue_hash_add(<span class="hljs-keyword">struct</span> sock *sk, <span class="hljs-keyword">struct</span> request_sock *req,
+                   <span class="hljs-keyword">unsigned</span> <span class="hljs-keyword">long</span> timeout)
+{
+    <span class="hljs-keyword">struct</span> inet_connection_sock *icsk = inet_csk(sk);
+    <span class="hljs-keyword">struct</span> listen_sock *lopt = icsk-&gt;icsk_accept_queue<span class="hljs-variable">.listen_opt</span>;
+    <span class="hljs-keyword">const</span> u32 h = inet_synq_hash(inet_rsk(req)-&gt;ir_rmt_addr,
+                     inet_rsk(req)-&gt;ir_rmt_port,
+                     lopt-&gt;hash_rnd, lopt-&gt;nr_table_entries);
+    <span class="hljs-comment">//添加到半连接队列</span>
+    reqsk_queue_hash_req(&amp;icsk-&gt;icsk_accept_queue, h, req, timeout);
+    <span class="hljs-comment">//更新半连接队列统计信息，同时开启SYNACK定时器</span>
+    inet_csk_reqsk_queue_added(sk, timeout);
+}</code></pre> 
+<p>有关SYNACK定时器的介绍，可以参看<a href="https://blog.csdn.net/u010039418/article/details/78444849"><strong>TCP SYNACK定时器梳理</strong></a>。</p> 
+<p>至此，TCP层的处理就算是结束了，后面进入IP层处理，然后通过网卡发送出去。</p> 
+<p>我们大概总结一下总体流程：</p> 
+<ol><li>根据SYN报文查找到服务端的监听socket；</li><li>查找是否有对应的半连接socket(第一个SYN报文肯定是没有的)；</li><li>接着检查半连接队列和全连接队列是否满了，满了就丢弃报文；</li><li>然后就是创建和初始化一个request_sock，表示这个请求；</li><li>检查该请求是否和同IP的上个连接冲突；</li><li>一起OK的情况下，发送SYNACK报文；</li><li>报文发送完，请求入半连接队列，开启SYNACK定时器。</li></ol> 
+<p>不过，有个问题不知大家有没有发现，为什么在接收到SYN报文后socket的状态没有改变，变成<strong>SYN_RECV</strong>呢？理论上收到SYN报文后就应该进入SYN_RECV的，至少从netstat命令查看是这样，书上也都是这么说的，但是代码里确实没有这么做，不知道是怎么回事？虽然我后面知道其实是在服务端接收到第三次握手报文后才会进入SYN_RECV转态，然后转为ESTABLISHED。不解不解。。。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/75be1b395f5807f36bd216f17699a927/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Java程序健康检查，查看相关Bean对象是否存在、各种服务是否正常运行</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/3541e8d4adead37a97a948b83058e0ac/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">urllib.request.urlretrieve()函数</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

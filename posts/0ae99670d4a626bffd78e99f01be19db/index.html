@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Docker镜像与容器常用命令图文详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Docker镜像与容器常用命令图文详解" />
+<meta property="og:description" content="docker镜像,容器常用命令 一.系统命令二.镜像命令:1 .镜像是什么?(1): UnionFS(联合文件系统)(2): Docker镜像加载原理(3): 分层的镜像(4): 为什么Docker镜像要采用这种分层的结构(5): 特点 2.查看本机镜像:3.搜索镜像:4.下载镜像:5.删除镜像:6.通过$()表达式删除镜像: 三.容器命令:1.新建容器并启动:2.后台启动容器:3.退出容器:4. 查看正在运行的容器:5.删除容器:6.启动,重启,停止容器:7.查看容器日志:8.查看容器中的进程:9.获取容器/镜像的元数据:10进入正在运行的容器:①: 第一种:②: 第二种: 11.拷贝文件:①: 从容器中拷贝内容到主机:②: 从主机中中拷贝内容到容器: 12.commit提交镜像 四.综合使用: 一.系统命令 #查看docker版本 docker version #查看docker的系统信息,包含镜像容器的数量 docker info #查看docker的所有命令 docker --help #查看该docker命令的帮助信息 docker 命令 --help 二.镜像命令: 1 .镜像是什么? 镜像是一种轻量级、可执行的独立软件包，用来打包软件运行环境和基于运行环境开发的软件，它包含运行某个软件所需的所有内容，包括代码、运行时、库、环境变量和配置文件
+(1): UnionFS(联合文件系统) UnionFS（联合文件系统）：Union文件系统是一种分层、轻量级并且高性能的文件系统，它支持对文件系统的修改作为一次提交来一层层的叠加，同时可以将不同目录挂载到同一个虚拟文件系统下，Union文件系统是Dokcer镜像的基础。镜像可以通过分层来进行继承，基于基础镜像（没有父镜像），可以制作各种具体的镜像。
+特性:一次同时加载多个文件系统，但从外面看起来，只能看到一个文件系统，联合加载会把各层文件系统加载起来，这样最终的文件系统会包含所有的底层文件和目录
+(2): Docker镜像加载原理 docker的镜像实际上是由一层一层的文件系统构成，这种层级的文件系统UnionFS。
+主要包含bootloader和kernel，bootloader主要是引导加载kernel，Linux刚启动时会加载bootfs文件系统，在Docker镜像的最底层是bootfs。这一层与我们典型的linux/unix系统是一样的，包含boot加载器内核。当boot加载完之后整个内核就都在内存中了，此时内存的使用权已经由bootfs交给内核了，此时系统也会卸载bootfs
+平时我们安装进虚拟机的CentOS都是好几个G，为什么docker这里才200M。
+对以一个精简的OS，rootfs可以很小，只需要包括最基本的命令、工具和程序库就行，因为底层直接用host和kernel，自己只需要提供rootfs就行。由此可见对于不同的Linux发行版，bootfs基本是一致的，rootfs会有差别，因此不同的发行版可以公用bootfs。
+(3): 分层的镜像 以pull为例，在下载的过程中我么可以看到docker的镜像好像是在一层一层的下载
+(4): 为什么Docker镜像要采用这种分层的结构 最大一个好处就是——共享资源
+比如：有多个镜像都从相同的base镜像构建而来，那么宿主机只需要在磁盘上保存一份base镜像，同时内存中也需要加载一份base镜像，就可以为所有服务器服务了。而且镜像的每一层都可以被共享。
+(5): 特点 docker镜像都是只读的
+当容器启动时，一个新的可写层被加载到镜像的顶部。
+这一层通常被称作“容器层”，“容器层”之下都叫“镜像层”
+所有的docker镜像都源自于基础镜像层，当我们进行修改或增加新的内容时，就会在当前镜像层之上，创建新的镜像层。举一个简单的例子，假如基于Ubuntu Linux16.04创建一个新的镜像，这就是新镜像的第一层；如果在新镜像中添加Python包，就会在基础镜像层上创建第二个镜像层；如果继续添加一个安全补丁，就会添加第三个镜像层。如下图:
+2.查看本机镜像: #查看本机所有镜像 docker images [可选命令] 从下图我们可以看到镜像的信息,
+每个标签的含义如下:
+标签含义REPOSITORY来自于哪个仓库，比如 ubuntuTAG镜像的标签,TAG 信息用来标记来自同一个仓库的不同镜像,例如 ubuntu 仓库中有多个镜像，通过 TAG 信息来区分发行版本，例如 10." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/0ae99670d4a626bffd78e99f01be19db/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-07-07T17:16:38+08:00" />
+<meta property="article:modified_time" content="2020-07-07T17:16:38+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Docker镜像与容器常用命令图文详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>docker镜像,容器常用命令</h4> 
+ <ul><li><ul><li><a href="#_1" rel="nofollow">一.系统命令</a></li><li><a href="#_15" rel="nofollow">二.镜像命令:</a></li><li><ul><li><a href="#1__17" rel="nofollow">1 .镜像是什么?</a></li><li><ul><li><a href="#1_UnionFS_21" rel="nofollow">(1): UnionFS(联合文件系统)</a></li><li><a href="#2_Docker_27" rel="nofollow">(2): Docker镜像加载原理</a></li><li><a href="#3__38" rel="nofollow">(3): 分层的镜像</a></li><li><a href="#4_Docker_43" rel="nofollow">(4): 为什么Docker镜像要采用这种分层的结构</a></li><li><a href="#5__49" rel="nofollow">(5): 特点</a></li></ul> 
+    </li><li><a href="#2_59" rel="nofollow">2.查看本机镜像:</a></li><li><a href="#3_93" rel="nofollow">3.搜索镜像:</a></li><li><a href="#4_116" rel="nofollow">4.下载镜像:</a></li><li><a href="#5_179" rel="nofollow">5.删除镜像:</a></li><li><a href="#6_204" rel="nofollow">6.通过$()表达式删除镜像:</a></li></ul> 
+   </li><li><a href="#_218" rel="nofollow">三.容器命令:</a></li><li><ul><li><a href="#1_226" rel="nofollow">1.新建容器并启动:</a></li><li><a href="#2_256" rel="nofollow">2.后台启动容器:</a></li><li><a href="#3_268" rel="nofollow">3.退出容器:</a></li><li><a href="#4__275" rel="nofollow">4. 查看正在运行的容器:</a></li><li><a href="#5_292" rel="nofollow">5.删除容器:</a></li><li><a href="#6_304" rel="nofollow">6.启动,重启,停止容器:</a></li><li><a href="#7_326" rel="nofollow">7.查看容器日志:</a></li><li><a href="#8_350" rel="nofollow">8.查看容器中的进程:</a></li><li><a href="#9_359" rel="nofollow">9.获取容器/镜像的元数据:</a></li><li><a href="#10_375" rel="nofollow">10进入正在运行的容器:</a></li><li><ul><li><a href="#__376" rel="nofollow">①: 第一种:</a></li><li><a href="#__396" rel="nofollow">②: 第二种:</a></li></ul> 
+    </li><li><a href="#11_413" rel="nofollow">11.拷贝文件:</a></li><li><ul><li><a href="#__414" rel="nofollow">①: 从容器中拷贝内容到主机:</a></li><li><a href="#__424" rel="nofollow">②: 从主机中中拷贝内容到容器:</a></li></ul> 
+    </li><li><a href="#12commit_432" rel="nofollow">12.commit提交镜像</a></li></ul> 
+   </li><li><a href="#_474" rel="nofollow">四.综合使用:</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h3><a id="_1"></a>一.系统命令</h3> 
+<pre><code class="prism language-powershell"><span class="token comment">#查看docker版本</span>
+docker version
+<span class="token comment">#查看docker的系统信息,包含镜像容器的数量</span>
+docker info
+<span class="token comment">#查看docker的所有命令</span>
+docker <span class="token operator">--</span>help
+<span class="token comment">#查看该docker命令的帮助信息</span>
+docker 命令 <span class="token operator">--</span>help
+</code></pre> 
+<h3><a id="_15"></a>二.镜像命令:</h3> 
+<h4><a id="1__17"></a>1 .镜像是什么?</h4> 
+<p><strong>镜像是一种轻量级、可执行的独立软件包，用来打包软件运行环境和基于运行环境开发的软件，它包含运行某个软件所需的所有内容，包括代码、运行时、库、环境变量和配置文件</strong></p> 
+<h5><a id="1_UnionFS_21"></a>(1): UnionFS(联合文件系统)</h5> 
+<p>UnionFS（联合文件系统）：Union文件系统是一种分层、轻量级并且高性能的文件系统，它支持对文件系统的修改作为一次提交来一层层的叠加，同时可以将不同目录挂载到同一个虚拟文件系统下，Union文件系统是Dokcer镜像的基础。镜像可以通过分层来进行继承，基于基础镜像（没有父镜像），可以制作各种具体的镜像。</p> 
+<p><strong>特性:一次同时加载多个文件系统，但从外面看起来，只能看到一个文件系统，联合加载会把各层文件系统加载起来，这样最终的文件系统会包含所有的底层文件和目录</strong></p> 
+<h5><a id="2_Docker_27"></a>(2): Docker镜像加载原理</h5> 
+<p><strong>docker的镜像实际上是由一层一层的文件系统构成，这种层级的文件系统UnionFS。</strong></p> 
+<p>主要包含bootloader和kernel，bootloader主要是引导加载kernel，Linux刚启动时会加载bootfs文件系统，在Docker镜像的最底层是bootfs。这一层与我们典型的linux/unix系统是一样的，包含boot加载器内核。当boot加载完之后整个内核就都在内存中了，此时内存的使用权已经由bootfs交给内核了，此时系统也会卸载bootfs</p> 
+<p><strong>平时我们安装进虚拟机的CentOS都是好几个G，为什么docker这里才200M。</strong></p> 
+<p>对以一个精简的OS，rootfs可以很小，只需要包括最基本的命令、工具和程序库就行，因为底层直接用host和kernel，自己只需要提供rootfs就行。由此可见对于不同的Linux发行版，bootfs基本是一致的，rootfs会有差别，因此不同的发行版可以公用bootfs。</p> 
+<h5><a id="3__38"></a>(3): 分层的镜像</h5> 
+<p><strong>以pull为例，在下载的过程中我么可以看到docker的镜像好像是在一层一层的下载</strong><br> <img src="https://images2.imgbox.com/6c/21/QbVJmarl_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="4_Docker_43"></a>(4): 为什么Docker镜像要采用这种分层的结构</h5> 
+<p><strong>最大一个好处就是——共享资源</strong></p> 
+<p>比如：有多个镜像都从相同的base镜像构建而来，那么宿主机只需要在磁盘上保存一份base镜像，同时内存中也需要加载一份base镜像，就可以为所有服务器服务了。而且镜像的每一层都可以被共享。</p> 
+<h5><a id="5__49"></a>(5): 特点</h5> 
+<ul><li> <p>docker镜像都是只读的</p> </li><li> <p>当容器启动时，一个新的可写层被加载到镜像的顶部。</p> </li><li> <p>这一层通常被称作“容器层”，“容器层”之下都叫“镜像层”</p> </li></ul> 
+<p><strong>所有的docker镜像都源自于基础镜像层，当我们进行修改或增加新的内容时，就会在当前镜像层之上，创建新的镜像层。举一个简单的例子，假如基于Ubuntu Linux16.04创建一个新的镜像，这就是新镜像的第一层；如果在新镜像中添加Python包，就会在基础镜像层上创建第二个镜像层；如果继续添加一个安全补丁，就会添加第三个镜像层。如下图:</strong><br> <img src="https://images2.imgbox.com/7f/03/TB2BdeuU_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="2_59"></a>2.查看本机镜像:</h4> 
+<pre><code class="prism language-powershell"><span class="token comment">#查看本机所有镜像</span>
+docker images <span class="token punctuation">[</span>可选命令<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>从下图我们可以看到镜像的信息,</strong><br> <img src="https://images2.imgbox.com/38/91/w3uGSSAM_o.png" alt="在这里插入图片描述"><br> <strong>每个标签的含义如下:</strong></p> 
+<table><thead><tr><th>标签</th><th>含义</th></tr></thead><tbody><tr><td>REPOSITORY</td><td>来自于哪个仓库，比如 ubuntu</td></tr><tr><td>TAG</td><td>镜像的标签,TAG 信息用来标记来自同一个仓库的不同镜像,例如 ubuntu 仓库中有多个镜像，通过 TAG 信息来区分发行版本，例如 10.04、12.04、12.10、13.04、14.04 等。</td></tr><tr><td>IMAGE ID</td><td>镜像的唯一id,如果镜像的id相同,说明它们实际上是同一镜像。</td></tr><tr><td>CREATED</td><td>镜像的创建时间</td></tr><tr><td>SIZE</td><td>镜像的大小</td></tr></tbody></table> 
+<p><strong>命令可选项讲解:</strong></p> 
+<table><thead><tr><th>参数</th><th>描述</th></tr></thead><tbody><tr><td>-a, --all</td><td>显示所有镜像 all可以简写成-a,也就是说 -a ,–all都能显示所有镜像</td></tr><tr><td>-f, --filter</td><td>根据所提供的条件过滤输出</td></tr><tr><td>-q</td><td>只显示镜像的id</td></tr></tbody></table> 
+<p><strong>可选参数用法:</strong></p> 
+<pre><code class="prism language-powershell"><span class="token comment">#显示所有镜像</span>
+docker images <span class="token operator">-</span>a
+<span class="token comment">#显示所有镜像,但是只展示镜像id</span>
+docker images <span class="token operator">-</span>aq
+</code></pre> 
+<h4><a id="3_93"></a>3.搜索镜像:</h4> 
+<pre><code class="prism language-powershell">docker search 
+</code></pre> 
+<p><strong>搜索结果如下:</strong><br> <img src="https://images2.imgbox.com/1a/2b/Gv8Sk78Q_o.png" alt="在这里插入图片描述"><br> <strong>每个标签的含义如下:</strong></p> 
+<pre><code class="prism language-powershell">NAME             <span class="token comment">#名称                                    </span>
+DESCRIPTION      <span class="token comment">#描述                                </span>
+STARS            <span class="token comment">#相当于GitHub的STARS,表示受欢迎程度</span>
+OFFICIAL         <span class="token comment">#是否为官方的</span>
+AUTOMATED        <span class="token comment">#自动构建，表示该镜像由Docker Hub自动构建流程创建的</span>
+</code></pre> 
+<p><strong>可选项:</strong></p> 
+<pre><code class="prism language-powershell"><span class="token operator">-</span>f<span class="token punctuation">,</span> <span class="token operator">--</span><span class="token keyword">filter</span> <span class="token keyword">filter</span>   根据所提供的条件过滤输出
+
+<span class="token comment">#例如:搜索仓库中镜像中mysql STARS大于1000的</span>
+docker search  mysql <span class="token operator">--</span><span class="token keyword">filter</span>=STARS=1000
+</code></pre> 
+<p><img src="https://images2.imgbox.com/76/b7/2xMpwTTS_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="4_116"></a>4.下载镜像:</h4> 
+<pre><code class="prism language-powershell">docker pull 镜像名<span class="token punctuation">[</span>:tag<span class="token punctuation">]</span>
+
+<span class="token comment">#运行效果:</span>
+<span class="token namespace">[root@iZwz94ro78u8c5qdlixltzZ /]</span><span class="token comment"># docker pull mysql</span>
+<span class="token keyword">Using</span> default tag: latest  <span class="token comment">#如果不写tag,默认为latest  </span>
+Trying to pull repository docker<span class="token punctuation">.</span>io<span class="token operator">/</span>library<span class="token operator">/</span>mysql <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> 
+latest: Pulling <span class="token keyword">from</span> docker<span class="token punctuation">.</span>io<span class="token operator">/</span>library<span class="token operator">/</span>mysql   
+8559a31e96f4: Pull complete    <span class="token comment">#分层下载,docker镜像的核心</span>
+d51ce1c2e575: Pull complete    <span class="token comment">#分层下载,docker镜像的核心</span>
+c2344adc4858: Pull complete    
+fcf3ceff18fc: Pull complete    
+16da0c38dc5b: Pull complete   
+b905d1797e97: Pull complete    
+4b50d1c6b05c: Pull complete   
+c75914a65ca2: Pull complete    
+1ae8042bdd09: Pull complete    
+453ac13c00a3: Pull complete    
+9e680cd72f08: Pull complete   
+a6b5dc864b6c: Pull complete    
+Digest: sha256:8b7b328a7ff6de46ef96bcf83af048cb00a1c86282bfca0cb119c84568b4caf6  <span class="token comment">#签名</span>
+Status: Downloaded newer image <span class="token keyword">for</span> docker<span class="token punctuation">.</span>io<span class="token operator">/</span>mysql:latest <span class="token comment">#状态</span>
+
+</code></pre> 
+<p><strong>我们可以看到第二句:<br> Using default tag: latest 不加参数,默认为下载最新版本</strong><br> <img src="https://images2.imgbox.com/ca/6c/jCVOUXET_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>指定镜像版本下载:</strong></p> 
+<pre><code class="prism language-powershell">docker pull mysql:5<span class="token punctuation">.</span>7
+
+运行效果:
+<span class="token namespace">[root@iZwz94ro78u8c5qdlixltzZ /]</span><span class="token comment"># docker pull mysql:5.7</span>
+Trying to pull repository docker<span class="token punctuation">.</span>io<span class="token operator">/</span>library<span class="token operator">/</span>mysql <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> 
+5<span class="token punctuation">.</span>7: Pulling <span class="token keyword">from</span> docker<span class="token punctuation">.</span>io<span class="token operator">/</span>library<span class="token operator">/</span>mysql
+8559a31e96f4: Already exists   <span class="token comment">#共用文件,无需下载,节省资源,得益于docker联合文件系统</span>
+d51ce1c2e575: Already exists   <span class="token comment">#共用文件,无需下载 </span>
+c2344adc4858: Already exists   <span class="token comment">#共用文件,无需下载 </span>
+fcf3ceff18fc: Already exists   <span class="token comment">#共用文件,无需下载 </span>
+16da0c38dc5b: Already exists   <span class="token comment">#共用文件,无需下载 </span>
+b905d1797e97: Already exists   <span class="token comment">#共用文件,无需下载 </span>
+4b50d1c6b05c: Already exists   <span class="token comment">#共用文件,无需下载 </span>
+d85174a87144: Pull complete 
+a4ad33703fa8: Pull complete 
+f7a5433ce20d: Pull complete 
+3dcd2a278b4a: Pull complete 
+Digest: sha256:32f9d9a069f7a735e28fd44ea944d53c61f990ba71460c5c183e610854ca4854
+Status: Downloaded newer image <span class="token keyword">for</span> docker<span class="token punctuation">.</span>io<span class="token operator">/</span>mysql:5<span class="token punctuation">.</span>7
+
+</code></pre> 
+<p><strong>该版本需要在docker仓库中存在,<a href="https://hub.docker.com/" rel="nofollow">点击传送仓库地址</a>:</strong><br> <img src="https://images2.imgbox.com/8b/fd/o6A41lih_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>查看下载的镜像:</strong><br> <img src="https://images2.imgbox.com/38/44/E84jRgW0_o.png" alt="在这里插入图片描述"><br> <strong>mysql镜像下载成功~</strong></p> 
+<h4><a id="5_179"></a>5.删除镜像:</h4> 
+<pre><code class="prism language-powershell">docker rmi <span class="token namespace">[id或者名称]</span>
+<span class="token comment">#rm linux中的删除命令 i代表为镜像</span>
+<span class="token comment">#rmi 删除镜像</span>
+</code></pre> 
+<p><strong>例如根据名字删除镜像:</strong></p> 
+<pre><code class="prism language-powershell">docker rmi 镜像名
+</code></pre> 
+<p><img src="https://images2.imgbox.com/ee/6b/13ibBnYf_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>根据id删除:</strong></p> 
+<pre><code class="prism language-powershell"><span class="token comment">#删除指定id的容器</span>
+docker rmi imageID
+<span class="token comment">#删除指定id的多个容器:</span>
+docker rmi imageID imageID imageID
+</code></pre> 
+<p><img src="https://images2.imgbox.com/49/f5/S5Y6VT1S_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="6_204"></a>6.通过$()表达式删除镜像:</h4> 
+<pre><code class="prism language-powershell"><span class="token comment">#删除全部的容器</span>
+docker rmi $<span class="token punctuation">(</span>docker images <span class="token operator">-</span>aq<span class="token punctuation">)</span>
+<span class="token comment">#命令详解</span>
+<span class="token comment">#docker rmi 删除镜像</span>
+<span class="token comment">#$(docker images -aq)  查询所有镜像id   a查询所有   q查询镜像id</span>
+<span class="token comment">#可以使用$()来查询,当做参数传递,然后递归删除所有.</span>
+</code></pre> 
+<p><strong>已经全部删除:</strong><br> <img src="https://images2.imgbox.com/66/a7/JzZclVcF_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_218"></a>三.容器命令:</h3> 
+<p><strong>我们有了镜像才能创建容器,接下来我们下载一个CentOS镜像来创建一个容器:<br> 下载镜像:</strong></p> 
+<pre><code class="prism language-powershell">docker pull centos
+</code></pre> 
+<p><strong>效果如下:</strong><br> <img src="https://images2.imgbox.com/a8/aa/F3FIXx5H_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="1_226"></a>1.新建容器并启动:</h4> 
+<pre><code class="prism language-powershell">docker run <span class="token punctuation">[</span>可选参数<span class="token punctuation">]</span> 镜像名
+<span class="token comment">#常用可选参数讲解:</span>
+<span class="token operator">--</span>name=<span class="token string">"name"</span>  给运行的容器起个名字<span class="token punctuation">,</span>用来区分容器
+<span class="token operator">-</span>d             后台运行<span class="token punctuation">,</span>相当于nohup 
+<span class="token operator">-</span>it            使用交互方式<span class="token punctuation">,</span>可以进入容器<span class="token punctuation">,</span>以便查看内容
+<span class="token operator">-</span>p             指定容器运行的端口
+     <span class="token operator">-</span>p 四种使用方式:
+     1<span class="token punctuation">.</span>  <span class="token operator">-</span>p 主机端口:容器端口    主机端口映射到容器端口    ▲常用
+     2<span class="token punctuation">.</span>  <span class="token operator">-</span>p 容器端口   不做映射处理
+     3<span class="token punctuation">.</span>  直接写容器端口
+     4<span class="token punctuation">.</span>  <span class="token operator">-</span>p ip:主机端口:容器端口
+   
+<span class="token operator">-</span>P             大写p<span class="token punctuation">,</span>随机指定端口
+</code></pre> 
+<p><strong>接下来让我们使用命令试一下:</strong></p> 
+<pre><code class="prism language-powershell">docker run <span class="token operator">-</span>it centos <span class="token operator">/</span>bin<span class="token operator">/</span>bash
+<span class="token comment">#命令解释:</span>
+docker run 启动
+<span class="token operator">-</span>it 进入容器<span class="token punctuation">,</span>并以交互方式运行
+centos 镜像名
+<span class="token operator">/</span>bin<span class="token operator">/</span>bash 进入bash shell以实现交互
+</code></pre> 
+<p><img src="https://images2.imgbox.com/48/4e/EUZQYT15_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="2_256"></a>2.后台启动容器:</h4> 
+<pre><code class="prism language-powershell">docker run <span class="token operator">-</span>d 镜像名
+</code></pre> 
+<p><img src="https://images2.imgbox.com/8c/66/3Ake1qmk_o.png" alt="在这里插入图片描述"><br> <strong>我们会发现一个问题,应用在后台启动之后,我们通过docker ps查看正在运行的容器,发现没有正在运行的,也就是说,容器停止了.但是我们不是以后台的形式启动了一个吗?<br> 原因:<br> 1、docker容器运行必须有一个前台进程， 如果没有前台进程执行，那么容器会被认为空闲，就会自行退出<br> 2、容器运行的命令如果不是那些一直挂起的命令（ 运行top，tail、循环等），就是会自动退出<br> 这种情况一般会发生在容器中没有服务的情况,如果容器中一直运行着tomcat,那么就不会出现这种情况了.</strong></p> 
+<h4><a id="3_268"></a>3.退出容器:</h4> 
+<pre><code class="prism language-powershell"><span class="token keyword">exit</span>   <span class="token comment">#停止容器,并且退出</span>
+Ctrl <span class="token operator">+</span> P <span class="token operator">+</span> Q  快捷键  退出容器但不停止容器
+</code></pre> 
+<p><img src="https://images2.imgbox.com/83/8a/WAg0RFxh_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="4__275"></a>4. 查看正在运行的容器:</h4> 
+<pre><code class="prism language-powershell"><span class="token comment">#不加参数,显示当前正在运行的容器</span>
+docker <span class="token function">ps</span>  <span class="token punctuation">[</span>可选参数<span class="token punctuation">]</span>
+</code></pre> 
+<p><strong>可选参数详解:</strong></p> 
+<table><thead><tr><th>参数</th><th>作用</th></tr></thead><tbody><tr><td>-a</td><td>显示当前正在运行和曾经运行过的容器</td></tr><tr><td>-n int</td><td>显示最近创建的容器,int 为显示个数.</td></tr><tr><td>-q</td><td>只显示的id</td></tr></tbody></table> 
+<p><img src="https://images2.imgbox.com/b9/90/TCHssVOl_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="5_292"></a>5.删除容器:</h4> 
+<pre><code class="prism language-powershell"><span class="token comment">#删除指定的容器  不能删除正在运行的容器</span>
+docker <span class="token function">rm</span> 容器id
+<span class="token comment">#删除所有容器</span>
+docker <span class="token function">rm</span> <span class="token operator">-</span>f $<span class="token punctuation">(</span>docker <span class="token function">ps</span> <span class="token operator">-</span>aq<span class="token punctuation">)</span> <span class="token comment">#可以使用$()来查询,当做参数传递,然后递归删除所有.</span>
+<span class="token comment">#通过管道命令删除所有容器,此处不做演示</span>
+docker <span class="token function">ps</span> <span class="token operator">-</span>a <span class="token operator">-</span>q <span class="token punctuation">|</span> xargs docker <span class="token function">rm</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/d4/2b/te43OFUE_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="6_304"></a>6.启动,重启,停止容器:</h4> 
+<table><thead><tr><th>命令</th><th>作用</th></tr></thead><tbody><tr><td>docker start 容器id</td><td>启动容器</td></tr><tr><td>docker restart 容器id</td><td>重启容器</td></tr><tr><td>docker stop 容器id</td><td>停止当前正在运行的容器</td></tr><tr><td>docker kill 容器id</td><td>强制停止当前容器</td></tr></tbody></table> 
+<p><img src="https://images2.imgbox.com/db/d5/z2OOZyZZ_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>扩展:</strong></p> 
+<pre><code class="prism language-java"> docker ps <span class="token operator">-</span>aq <span class="token comment">// 查看所有容器ID</span>
+ docker stop $<span class="token punctuation">(</span>docker ps <span class="token operator">-</span>aq<span class="token punctuation">)</span> <span class="token comment">//  stop停止所有容器</span>
+ docker  rm $<span class="token punctuation">(</span>docker ps <span class="token operator">-</span>aq<span class="token punctuation">)</span> <span class="token comment">//   remove删除所有容器</span>
+ docker stop $<span class="token punctuation">(</span>docker ps <span class="token operator">-</span>q<span class="token punctuation">)</span> <span class="token operator">&amp;</span> docker rm $<span class="token punctuation">(</span>docker ps <span class="token operator">-</span>aq<span class="token punctuation">)</span>  <span class="token comment">//一次性停止删除容器</span>
+</code></pre> 
+<h4><a id="7_326"></a>7.查看容器日志:</h4> 
+<pre><code class="prism language-powershell"><span class="token comment">#语法:</span>
+docker logs <span class="token namespace">[OPTIONS]</span> CONTAINER
+
+  Options:
+        <span class="token operator">--</span>details        显示更多的信息
+    <span class="token operator">-</span>f<span class="token punctuation">,</span> <span class="token operator">--</span>follow         跟踪实时日志
+        <span class="token operator">--</span>since string   显示自某个timestamp之后的日志，或相对时间，如42m（即42分钟）
+        <span class="token operator">--</span>tail string    从日志末尾显示多少行日志， 默认是all
+    <span class="token operator">-</span>t<span class="token punctuation">,</span> <span class="token operator">--</span>timestamps     显示时间戳
+        <span class="token operator">--</span><span class="token keyword">until</span> string   显示自某个timestamp之前的日志，或相对时间，如42m（即42分钟）
+<span class="token comment">#例子:</span>
+<span class="token comment">#实时加时间戳显示名字为centos的最近一百条日志</span>
+docker logs <span class="token operator">-</span>f <span class="token operator">-</span>t <span class="token operator">--</span>tail 100 centos
+<span class="token comment">#拆分解析:</span>
+docker logs  显示日志
+<span class="token operator">-</span>f           显示实时日志
+<span class="token operator">-</span>t           显示时间戳
+<span class="token operator">--</span>tail 100   显示一百条日志
+</code></pre> 
+<h4><a id="8_350"></a>8.查看容器中的进程:</h4> 
+<pre><code class="prism language-powershell"><span class="token comment">#语法</span>
+docker top  CONTAINER
+</code></pre> 
+<p><img src="https://images2.imgbox.com/15/e7/X5nBZERi_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="9_359"></a>9.获取容器/镜像的元数据:</h4> 
+<pre><code class="prism language-powershell"><span class="token comment">#语法:</span>
+docker inspect <span class="token namespace">[OPTIONS]</span> NAME<span class="token punctuation">|</span>ID <span class="token namespace">[NAME|ID...]</span>
+
+OPTIONS说明：
+
+<span class="token operator">-</span>f :指定返回值的模板文件。
+
+<span class="token operator">-</span>s :显示总的文件大小。
+
+<span class="token operator">--</span><span class="token function">type</span> :为指定类型返回JSON。
+</code></pre> 
+<p><img src="https://images2.imgbox.com/12/c6/V0TLvg2v_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="10_375"></a>10进入正在运行的容器:</h4> 
+<h5><a id="__376"></a>①: 第一种:</h5> 
+<pre><code class="prism language-powershell"><span class="token comment">#语法</span>
+docker exec <span class="token namespace">[OPTIONS]</span> CONTAINER COMMAND <span class="token namespace">[ARG...]</span>
+
+OPTIONS说明：
+
+<span class="token operator">-</span>d :分离模式: 在后台运行
+
+<span class="token operator">-</span>i :即使没有附加也保持STDIN 打开
+
+<span class="token operator">-</span>t :分配一个终端
+
+<span class="token comment">#例子:</span>
+docker exec <span class="token operator">-</span>it 1e685cda7bf4 <span class="token operator">/</span>bin<span class="token operator">/</span>bash
+
+</code></pre> 
+<p><strong>效果如下:</strong><br> <img src="https://images2.imgbox.com/2b/43/Po6o2a3S_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="__396"></a>②: 第二种:</h5> 
+<pre><code class="prism language-powershell"><span class="token comment">#语法:</span>
+docker attach <span class="token namespace">[OPTIONS]</span> CONTAINER
+连接到正在运行中的容器<span class="token punctuation">,</span>本机的输入直接输到容器中，容器的输出会直接显示在本机的屏幕上<span class="token punctuation">,</span>但需要容器处于运行状态<span class="token punctuation">.</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/e9/e6/LycJkvij_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>两者区别:</strong></p> 
+<pre><code class="prism language-powershell">docker exec    进入容器之后<span class="token punctuation">,</span>开启一个新的终端<span class="token punctuation">,</span>
+docker attach  进入容器正在执行的终端<span class="token punctuation">.</span>
+</code></pre> 
+<h4><a id="11_413"></a>11.拷贝文件:</h4> 
+<h5><a id="__414"></a>①: 从容器中拷贝内容到主机:</h5> 
+<pre><code class="prism language-powershell">语法:
+<span class="token comment">#即使容器不处于运行状态也能从中拷贝文件,但容器必须存在,不能被移除.</span>
+docker <span class="token function">cp</span> 容器id:容器内路径 目的地主机路径
+</code></pre> 
+<p><img src="https://images2.imgbox.com/56/e2/x1ixi75N_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="__424"></a>②: 从主机中中拷贝内容到容器:</h5> 
+<pre><code class="prism language-powershell">docker <span class="token function">cp</span> 主机目录 容器id:容器目录
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/75/8a/CbVnkshV_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="12commit_432"></a>12.commit提交镜像</h4> 
+<p><strong>此处以tomcat举例:<br> 首先我们下载一个tomcat镜像,</strong></p> 
+<pre><code class="prism language-powershell">docker pull toncat
+</code></pre> 
+<p><strong>启动tomcat</strong></p> 
+<pre><code class="prism language-powershell">docker run <span class="token operator">-</span>d <span class="token operator">-</span>p 8080:8080 tomcat
+</code></pre> 
+<p><strong>测试访问:</strong><br> <img src="https://images2.imgbox.com/31/cf/2gvzRiDE_o.png" alt="在这里插入图片描述"></p> 
+<p>发现tomcat中什么都没有,404错误.</p> 
+<p>但是,我们知道,tomcat Windows版本或者linux版本,是有默认页面的,如下:<br> <img src="https://images2.imgbox.com/a6/0b/ZasbDGAB_o.png" alt="在这里插入图片描述"><br> 其实,docker中tomcat镜像也存在默认页面,我们打开镜像查看目录:<br> <img src="https://images2.imgbox.com/9f/83/OTVuWKAz_o.png" alt="在这里插入图片描述"><br> 会发现一个名为:webapps.dist的文件夹,此处便是tomcat 的欢迎页在里面.我们将里所有的文件都拷贝到webapps中,重新访问:<br> <img src="https://images2.imgbox.com/de/0c/I65PyGMs_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>发现欢迎页可以打开了,那我们怎么将我们修改过的tomcat制作一个镜像呢?</strong></p> 
+<pre><code class="prism language-powershell"><span class="token comment">#容器成为一个新的镜像</span>
+docker commit <span class="token operator">-</span>m=<span class="token string">"描述信息"</span> <span class="token operator">-</span>a=<span class="token string">"作者"</span> 容器id 目标镜像名:<span class="token namespace">[tag]</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/c8/f7/BObXbTFc_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>查询是否成功:</strong></p> 
+<pre><code class="prism language-powershell">docker images
+</code></pre> 
+<p><img src="https://images2.imgbox.com/c2/bb/d5OSIQsB_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>以后我们想保存容器的状态,可以通过commit来提交,保存为一个新的镜像</strong></p> 
+<h3><a id="_474"></a>四.综合使用:</h3> 
+<pre><code class="prism language-powershell"><span class="token comment">#1.搜索镜像</span>
+docker search Image
+<span class="token comment">#2.下载镜像</span>
+docker pull Image
+<span class="token comment">#3.启动容器</span>
+docker run 
+<span class="token comment">#4.命名容器</span>
+<span class="token operator">--</span>name string
+<span class="token comment">#5.映射端口</span>
+<span class="token operator">-</span>p 主机端口:容器端口
+</code></pre> 
+<p><img src="https://images2.imgbox.com/f0/85/L8LHTddr_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/58/a2/O6wRLJf5_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>附:docker命令思维导图:</strong><br> <img src="https://images2.imgbox.com/49/1e/bctR4EoD_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/720bf2139aa77f33e504a1cf631e10b2/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Linux大实验 (图书管理系统)</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/0481a205a5d69d58b1c7e91bc355cdbb/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">group by与order by的区别</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

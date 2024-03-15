@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【JAVA】spring cloud微服务中使用spring security auth2登录认证流程和自定义手机号认证(1) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【JAVA】spring cloud微服务中使用spring security auth2登录认证流程和自定义手机号认证(1)" />
+<meta property="og:description" content="hey-girl东拼西凑原创文章，若有歧义可留言，若需转载需标明出处。
+1.概括：本文主要根据微服务pig&lt;v3.3.3&gt;项目pig码云地址，学习安全登录流程。通过扩展登录需求,自定义其他登录模式，比如常见的手机号登录或者微信登录等。不熟悉项目没有问题，因为文章重点还是介绍spring security auth2登录流程。
+2.涉及服务介绍：
+gateway:9999(网关服务)
+auth:3000(认证服务)
+upms:4000(资源服务)
+common-security(安全模块)
+3.先看看pig项目中登录大致流程图:
+9999/auth/aouth/token api gateway服务 auth认证服务 UPMS资源服务 接下来详细讲解登录流程，因为只有了解清楚了流程和其原理，才能更加方便我们扩展自己的需求。
+首先使用postman发起一个post请求。
+Q1-为什么请求地址是 http://localhost:9999/auth/oauth/token
+A1-/auth是因为在gateway服务中,配置了路由如下图，/oauth/token是auth2默认的端点。更多的endpoint可参考官方文档传送门
+Q2-请求参数讲解
+A2-username用户名；password是AES作为对称加密加密后的密码。加解密网站地址：加解密工具网站。红框中的key后端配置在yml中。也就是传的密码参数是加密后的密文。grant_type的值有五种。Oauth2.0定义了4种模式分别是:authorization_code(授权码模式)、password(密码模式)、client_credentials（客户端模式)、implicit(隐式授权模式）。加上一个refresh_token(令牌刷新)模式。scope作用域范围。
+Q3- 参数client_id和client_secret
+A3- 我用的是postman.所以直接把参数写上就会自动生成类似这样的字符串Basic cGlnOnBpZw==。其实就是请求头是一个&#34;Basic&#34;加一个空格加&#34;clientId:clientSecret&#34;base64化的一个Authorization字段。这里的pig和数据库表数据统一既可
+请求首先会来到GirlRequestGlobalFilter过滤器(自定义的过滤器)。
+这个过滤器主要就是2个作用。作用一清洗去除请求头中的的from参数,作用二重写StripPrefix,也就是/auth/oauth/token经过这个过滤器后会变成/oauth/token
+Q1- 为什么要清洗去除from参数？
+A1- 因为在整个项目中，把请求按分为了如下情况
+为了实现内部的调用。采取了@Inner注解方式实现。仔细想想其实这个实现思想很简单。当我们单个服务引入security的时候。服务里面的接口是不是都被保护起来了。你去请求就得验证了。这个时候，如果说我想不登录就访问服务中的A接口。我得怎么做。我是不是的配置ignoring,把不需要鉴权的url给放行下。那说白了。我内部之前的调用就是这么个道理。我得放行这个url。但是这就有个问题，我如何知道你是内部调用了。万一你是外部调用。我不就GG了。所以pig作者给内部请求头加上了from字段。为了防止外部调用的时候冒充。所以在网关进来第一步就把请求头全部清洗一遍。思想就是这么个思想。具体实现代码可以看源代码。
+Q2- order为啥是-1000
+A2- 过滤器的执行顺序是根据order值决定，值越低，执行的优先顺序越高。如下图。可以看见自定义的过滤器顺序
+在执行PasswordDecoderFilter过滤器（也是自定义过滤器）。主要就是判断请求路径是不是登录请求oauth/token。是得话就进行password字段解密操作。这里解密就是对应前面的AES加密。解密后拿到密码明文继续往下走。
+注意：这里去除了验证码过滤器，所以不说验证码这part
+经过了gateway之后，服务会被分发到auth认证服务。也就是我们熟悉的Security流程。不熟悉流程的兄弟，请移步Security工作原理这位作者大大解释的还是很清楚的，有图有真相。这里我就流程的几步关键点进行分析。
+请求先来到LogoutFilter过滤器，执行doFilter()判断当前是不是登出请求。如果是登出路径则到 logoutHandler ，如果登出成功则到 logoutSuccessHandler 登出成功处理，如果登出失败则由 ExceptionTranslationFilter ；如果不是登出路径则直接进入下一个过滤器。
+再会来到BasicAuthenticationFilter过滤器。主要看doFilterInternal()方法。这个过滤器主要检测和处理 http basic 认证。
+Q1-代码解析
+UsernamePasswordAuthenticationToken authRequest = this.authenticationConverter.convert(request); A1-convert()作用是去请求头获取Authorization，然后解码（想想我们请求的时候不就是把client_id和秘钥进行base64编码的么，这里其实就是获取它啦）。拿到以后并生成了UsernamePasswordAuthenticationToken。UsernamePasswordAuthenticationToken就很好理解了，所有提交给AuthenticationManager的认证请求都会被封装成一个Token的实现。
+Q2-代码解析
+Authentication authResult = this.authenticationManager.authenticate(authRequest); A2-封装好的UsernamePasswordAuthenticationToken,也就是上面代码中的变量authResult会交个AuthenticationManager，AuthenticationManager是用户认证的管理类，所有的认证请求都会通过提交一个token（也就是封装好的token，比如常见的UsernamePasswordAuthenticationToken）给AuthenticationManager的authenticate()方法来实现。说白了AuthenticationManager是一个接口。默认实现类ProviderManager。当然ProviderManager也不是干活的人。具体校验动作不是它完成，它只是转发。
+我们仔细看看providerManager.authenticate(authRequest)的作用。这里的authenticate(authRequest) 我贴下部分重要代码:
+上图代码，我把重要的拿出来唠唠
+// 获取当前的authentication对象的类 // authentication就是传入的UsernamePasswordAuthenticationToken Class&lt;?" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/19a45e320f288e5a7f846efff97ae660/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-07T13:42:51+08:00" />
+<meta property="article:modified_time" content="2021-12-07T13:42:51+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【JAVA】spring cloud微服务中使用spring security auth2登录认证流程和自定义手机号认证(1)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p><strong>hey-girl东拼西凑原创文章，若有歧义可留言，若需转载需标明出处。</strong></p> 
+<p>1.概括：本文主要根据微服务pig&lt;v3.3.3&gt;项目<a href="https://gitee.com/log4j/pig" rel="nofollow">pig码云地址</a>，学习安全登录流程。通过扩展登录需求,自定义其他登录模式，比如常见的手机号登录或者微信登录等。不熟悉项目没有问题，因为文章重点还是介绍spring security auth2登录流程。</p> 
+<p>2.涉及服务介绍：<br> gateway:9999(网关服务)<br> auth:3000(认证服务)<br> upms:4000(资源服务)<br> common-security(安全模块)</p> 
+<p>3.先看看pig项目中登录大致流程图:</p> 
+<div class="mermaid"> 
+ <svg id="mermaid-svg-vugV0UrudubbjVhw" width="175.25" xmlns="http://www.w3.org/2000/svg" height="376" viewbox="0 0 175.25 376"> 
+  <style>#mermaid-svg-vugV0UrudubbjVhw .label{font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family);fill:#333;color:#333}#mermaid-svg-vugV0UrudubbjVhw .label text{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .node rect,#mermaid-svg-vugV0UrudubbjVhw .node circle,#mermaid-svg-vugV0UrudubbjVhw .node ellipse,#mermaid-svg-vugV0UrudubbjVhw .node polygon,#mermaid-svg-vugV0UrudubbjVhw .node path{fill:#ECECFF;stroke:#9370db;stroke-width:1px}#mermaid-svg-vugV0UrudubbjVhw .node .label{text-align:center;fill:#333}#mermaid-svg-vugV0UrudubbjVhw .node.clickable{cursor:pointer}#mermaid-svg-vugV0UrudubbjVhw .arrowheadPath{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .edgePath .path{stroke:#333;stroke-width:1.5px}#mermaid-svg-vugV0UrudubbjVhw .flowchart-link{stroke:#333;fill:none}#mermaid-svg-vugV0UrudubbjVhw .edgeLabel{background-color:#e8e8e8;text-align:center}#mermaid-svg-vugV0UrudubbjVhw .edgeLabel rect{opacity:0.9}#mermaid-svg-vugV0UrudubbjVhw .edgeLabel span{color:#333}#mermaid-svg-vugV0UrudubbjVhw .cluster rect{fill:#ffffde;stroke:#aa3;stroke-width:1px}#mermaid-svg-vugV0UrudubbjVhw .cluster text{fill:#333}#mermaid-svg-vugV0UrudubbjVhw div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family);font-size:12px;background:#ffffde;border:1px solid #aa3;border-radius:2px;pointer-events:none;z-index:100}#mermaid-svg-vugV0UrudubbjVhw .actor{stroke:#ccf;fill:#ECECFF}#mermaid-svg-vugV0UrudubbjVhw text.actor&gt;tspan{fill:#000;stroke:none}#mermaid-svg-vugV0UrudubbjVhw .actor-line{stroke:grey}#mermaid-svg-vugV0UrudubbjVhw .messageLine0{stroke-width:1.5;stroke-dasharray:none;stroke:#333}#mermaid-svg-vugV0UrudubbjVhw .messageLine1{stroke-width:1.5;stroke-dasharray:2, 2;stroke:#333}#mermaid-svg-vugV0UrudubbjVhw #arrowhead path{fill:#333;stroke:#333}#mermaid-svg-vugV0UrudubbjVhw .sequenceNumber{fill:#fff}#mermaid-svg-vugV0UrudubbjVhw #sequencenumber{fill:#333}#mermaid-svg-vugV0UrudubbjVhw #crosshead path{fill:#333;stroke:#333}#mermaid-svg-vugV0UrudubbjVhw .messageText{fill:#333;stroke:#333}#mermaid-svg-vugV0UrudubbjVhw .labelBox{stroke:#ccf;fill:#ECECFF}#mermaid-svg-vugV0UrudubbjVhw .labelText,#mermaid-svg-vugV0UrudubbjVhw .labelText&gt;tspan{fill:#000;stroke:none}#mermaid-svg-vugV0UrudubbjVhw .loopText,#mermaid-svg-vugV0UrudubbjVhw .loopText&gt;tspan{fill:#000;stroke:none}#mermaid-svg-vugV0UrudubbjVhw .loopLine{stroke-width:2px;stroke-dasharray:2, 2;stroke:#ccf;fill:#ccf}#mermaid-svg-vugV0UrudubbjVhw .note{stroke:#aa3;fill:#fff5ad}#mermaid-svg-vugV0UrudubbjVhw .noteText,#mermaid-svg-vugV0UrudubbjVhw .noteText&gt;tspan{fill:#000;stroke:none}#mermaid-svg-vugV0UrudubbjVhw .activation0{fill:#f4f4f4;stroke:#666}#mermaid-svg-vugV0UrudubbjVhw .activation1{fill:#f4f4f4;stroke:#666}#mermaid-svg-vugV0UrudubbjVhw .activation2{fill:#f4f4f4;stroke:#666}#mermaid-svg-vugV0UrudubbjVhw .mermaid-main-font{font-family:"trebuchet ms", verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .section{stroke:none;opacity:0.2}#mermaid-svg-vugV0UrudubbjVhw .section0{fill:rgba(102,102,255,0.49)}#mermaid-svg-vugV0UrudubbjVhw .section2{fill:#fff400}#mermaid-svg-vugV0UrudubbjVhw .section1,#mermaid-svg-vugV0UrudubbjVhw .section3{fill:#fff;opacity:0.2}#mermaid-svg-vugV0UrudubbjVhw .sectionTitle0{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .sectionTitle1{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .sectionTitle2{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .sectionTitle3{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .sectionTitle{text-anchor:start;font-size:11px;text-height:14px;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .grid .tick{stroke:#d3d3d3;opacity:0.8;shape-rendering:crispEdges}#mermaid-svg-vugV0UrudubbjVhw .grid .tick text{font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .grid path{stroke-width:0}#mermaid-svg-vugV0UrudubbjVhw .today{fill:none;stroke:red;stroke-width:2px}#mermaid-svg-vugV0UrudubbjVhw .task{stroke-width:2}#mermaid-svg-vugV0UrudubbjVhw .taskText{text-anchor:middle;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .taskText:not([font-size]){font-size:11px}#mermaid-svg-vugV0UrudubbjVhw .taskTextOutsideRight{fill:#000;text-anchor:start;font-size:11px;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .taskTextOutsideLeft{fill:#000;text-anchor:end;font-size:11px}#mermaid-svg-vugV0UrudubbjVhw .task.clickable{cursor:pointer}#mermaid-svg-vugV0UrudubbjVhw .taskText.clickable{cursor:pointer;fill:#003163 !important;font-weight:bold}#mermaid-svg-vugV0UrudubbjVhw .taskTextOutsideLeft.clickable{cursor:pointer;fill:#003163 !important;font-weight:bold}#mermaid-svg-vugV0UrudubbjVhw .taskTextOutsideRight.clickable{cursor:pointer;fill:#003163 !important;font-weight:bold}#mermaid-svg-vugV0UrudubbjVhw .taskText0,#mermaid-svg-vugV0UrudubbjVhw .taskText1,#mermaid-svg-vugV0UrudubbjVhw .taskText2,#mermaid-svg-vugV0UrudubbjVhw .taskText3{fill:#fff}#mermaid-svg-vugV0UrudubbjVhw .task0,#mermaid-svg-vugV0UrudubbjVhw .task1,#mermaid-svg-vugV0UrudubbjVhw .task2,#mermaid-svg-vugV0UrudubbjVhw .task3{fill:#8a90dd;stroke:#534fbc}#mermaid-svg-vugV0UrudubbjVhw .taskTextOutside0,#mermaid-svg-vugV0UrudubbjVhw .taskTextOutside2{fill:#000}#mermaid-svg-vugV0UrudubbjVhw .taskTextOutside1,#mermaid-svg-vugV0UrudubbjVhw .taskTextOutside3{fill:#000}#mermaid-svg-vugV0UrudubbjVhw .active0,#mermaid-svg-vugV0UrudubbjVhw .active1,#mermaid-svg-vugV0UrudubbjVhw .active2,#mermaid-svg-vugV0UrudubbjVhw .active3{fill:#bfc7ff;stroke:#534fbc}#mermaid-svg-vugV0UrudubbjVhw .activeText0,#mermaid-svg-vugV0UrudubbjVhw .activeText1,#mermaid-svg-vugV0UrudubbjVhw .activeText2,#mermaid-svg-vugV0UrudubbjVhw .activeText3{fill:#000 !important}#mermaid-svg-vugV0UrudubbjVhw .done0,#mermaid-svg-vugV0UrudubbjVhw .done1,#mermaid-svg-vugV0UrudubbjVhw .done2,#mermaid-svg-vugV0UrudubbjVhw .done3{stroke:grey;fill:#d3d3d3;stroke-width:2}#mermaid-svg-vugV0UrudubbjVhw .doneText0,#mermaid-svg-vugV0UrudubbjVhw .doneText1,#mermaid-svg-vugV0UrudubbjVhw .doneText2,#mermaid-svg-vugV0UrudubbjVhw .doneText3{fill:#000 !important}#mermaid-svg-vugV0UrudubbjVhw .crit0,#mermaid-svg-vugV0UrudubbjVhw .crit1,#mermaid-svg-vugV0UrudubbjVhw .crit2,#mermaid-svg-vugV0UrudubbjVhw .crit3{stroke:#f88;fill:red;stroke-width:2}#mermaid-svg-vugV0UrudubbjVhw .activeCrit0,#mermaid-svg-vugV0UrudubbjVhw .activeCrit1,#mermaid-svg-vugV0UrudubbjVhw .activeCrit2,#mermaid-svg-vugV0UrudubbjVhw .activeCrit3{stroke:#f88;fill:#bfc7ff;stroke-width:2}#mermaid-svg-vugV0UrudubbjVhw .doneCrit0,#mermaid-svg-vugV0UrudubbjVhw .doneCrit1,#mermaid-svg-vugV0UrudubbjVhw .doneCrit2,#mermaid-svg-vugV0UrudubbjVhw .doneCrit3{stroke:#f88;fill:#d3d3d3;stroke-width:2;cursor:pointer;shape-rendering:crispEdges}#mermaid-svg-vugV0UrudubbjVhw .milestone{transform:rotate(45deg) scale(0.8, 0.8)}#mermaid-svg-vugV0UrudubbjVhw .milestoneText{font-style:italic}#mermaid-svg-vugV0UrudubbjVhw .doneCritText0,#mermaid-svg-vugV0UrudubbjVhw .doneCritText1,#mermaid-svg-vugV0UrudubbjVhw .doneCritText2,#mermaid-svg-vugV0UrudubbjVhw .doneCritText3{fill:#000 !important}#mermaid-svg-vugV0UrudubbjVhw .activeCritText0,#mermaid-svg-vugV0UrudubbjVhw .activeCritText1,#mermaid-svg-vugV0UrudubbjVhw .activeCritText2,#mermaid-svg-vugV0UrudubbjVhw .activeCritText3{fill:#000 !important}#mermaid-svg-vugV0UrudubbjVhw .titleText{text-anchor:middle;font-size:18px;fill:#000;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw g.classGroup text{fill:#9370db;stroke:none;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family);font-size:10px}#mermaid-svg-vugV0UrudubbjVhw g.classGroup text .title{font-weight:bolder}#mermaid-svg-vugV0UrudubbjVhw g.clickable{cursor:pointer}#mermaid-svg-vugV0UrudubbjVhw g.classGroup rect{fill:#ECECFF;stroke:#9370db}#mermaid-svg-vugV0UrudubbjVhw g.classGroup line{stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw .classLabel .box{stroke:none;stroke-width:0;fill:#ECECFF;opacity:0.5}#mermaid-svg-vugV0UrudubbjVhw .classLabel .label{fill:#9370db;font-size:10px}#mermaid-svg-vugV0UrudubbjVhw .relation{stroke:#9370db;stroke-width:1;fill:none}#mermaid-svg-vugV0UrudubbjVhw .dashed-line{stroke-dasharray:3}#mermaid-svg-vugV0UrudubbjVhw #compositionStart{fill:#9370db;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw #compositionEnd{fill:#9370db;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw #aggregationStart{fill:#ECECFF;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw #aggregationEnd{fill:#ECECFF;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw #dependencyStart{fill:#9370db;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw #dependencyEnd{fill:#9370db;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw #extensionStart{fill:#9370db;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw #extensionEnd{fill:#9370db;stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw .commit-id,#mermaid-svg-vugV0UrudubbjVhw .commit-msg,#mermaid-svg-vugV0UrudubbjVhw .branch-label{fill:lightgrey;color:lightgrey;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .pieTitleText{text-anchor:middle;font-size:25px;fill:#000;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .slice{font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw g.stateGroup text{fill:#9370db;stroke:none;font-size:10px;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw g.stateGroup text{fill:#9370db;fill:#333;stroke:none;font-size:10px}#mermaid-svg-vugV0UrudubbjVhw g.statediagram-cluster .cluster-label text{fill:#333}#mermaid-svg-vugV0UrudubbjVhw g.stateGroup .state-title{font-weight:bolder;fill:#000}#mermaid-svg-vugV0UrudubbjVhw g.stateGroup rect{fill:#ECECFF;stroke:#9370db}#mermaid-svg-vugV0UrudubbjVhw g.stateGroup line{stroke:#9370db;stroke-width:1}#mermaid-svg-vugV0UrudubbjVhw .transition{stroke:#9370db;stroke-width:1;fill:none}#mermaid-svg-vugV0UrudubbjVhw .stateGroup .composit{fill:white;border-bottom:1px}#mermaid-svg-vugV0UrudubbjVhw .stateGroup .alt-composit{fill:#e0e0e0;border-bottom:1px}#mermaid-svg-vugV0UrudubbjVhw .state-note{stroke:#aa3;fill:#fff5ad}#mermaid-svg-vugV0UrudubbjVhw .state-note text{fill:black;stroke:none;font-size:10px}#mermaid-svg-vugV0UrudubbjVhw .stateLabel .box{stroke:none;stroke-width:0;fill:#ECECFF;opacity:0.7}#mermaid-svg-vugV0UrudubbjVhw .edgeLabel text{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .stateLabel text{fill:#000;font-size:10px;font-weight:bold;font-family:'trebuchet ms', verdana, arial;font-family:var(--mermaid-font-family)}#mermaid-svg-vugV0UrudubbjVhw .node circle.state-start{fill:black;stroke:black}#mermaid-svg-vugV0UrudubbjVhw .node circle.state-end{fill:black;stroke:white;stroke-width:1.5}#mermaid-svg-vugV0UrudubbjVhw #statediagram-barbEnd{fill:#9370db}#mermaid-svg-vugV0UrudubbjVhw .statediagram-cluster rect{fill:#ECECFF;stroke:#9370db;stroke-width:1px}#mermaid-svg-vugV0UrudubbjVhw .statediagram-cluster rect.outer{rx:5px;ry:5px}#mermaid-svg-vugV0UrudubbjVhw .statediagram-state .divider{stroke:#9370db}#mermaid-svg-vugV0UrudubbjVhw .statediagram-state .title-state{rx:5px;ry:5px}#mermaid-svg-vugV0UrudubbjVhw .statediagram-cluster.statediagram-cluster .inner{fill:white}#mermaid-svg-vugV0UrudubbjVhw .statediagram-cluster.statediagram-cluster-alt .inner{fill:#e0e0e0}#mermaid-svg-vugV0UrudubbjVhw .statediagram-cluster .inner{rx:0;ry:0}#mermaid-svg-vugV0UrudubbjVhw .statediagram-state rect.basic{rx:5px;ry:5px}#mermaid-svg-vugV0UrudubbjVhw .statediagram-state rect.divider{stroke-dasharray:10,10;fill:#efefef}#mermaid-svg-vugV0UrudubbjVhw .note-edge{stroke-dasharray:5}#mermaid-svg-vugV0UrudubbjVhw .statediagram-note rect{fill:#fff5ad;stroke:#aa3;stroke-width:1px;rx:0;ry:0}:root{--mermaid-font-family: '"trebuchet ms", verdana, arial';--mermaid-font-family: "Comic Sans MS", "Comic Sans", cursive}#mermaid-svg-vugV0UrudubbjVhw .error-icon{fill:#522}#mermaid-svg-vugV0UrudubbjVhw .error-text{fill:#522;stroke:#522}#mermaid-svg-vugV0UrudubbjVhw .edge-thickness-normal{stroke-width:2px}#mermaid-svg-vugV0UrudubbjVhw .edge-thickness-thick{stroke-width:3.5px}#mermaid-svg-vugV0UrudubbjVhw .edge-pattern-solid{stroke-dasharray:0}#mermaid-svg-vugV0UrudubbjVhw .edge-pattern-dashed{stroke-dasharray:3}#mermaid-svg-vugV0UrudubbjVhw .edge-pattern-dotted{stroke-dasharray:2}#mermaid-svg-vugV0UrudubbjVhw .marker{fill:#333}#mermaid-svg-vugV0UrudubbjVhw .marker.cross{stroke:#333}
+
+:root { --mermaid-font-family: "trebuchet ms", verdana, arial;}</style> 
+  <style>#mermaid-svg-vugV0UrudubbjVhw {
+    color: rgba(0, 0, 0, 0.75);
+    font: ;
+  }</style> 
+  <g> 
+   <g class="output"> 
+    <g class="clusters"></g> 
+    <g class="edgePaths"> 
+     <g class="edgePath LS-A LE-B" id="L-A-B" style="opacity: 1;"> 
+      <path class="path" d="M87.625,54L87.625,92L87.625,130" marker-end="url(#arrowhead38)" style="fill:none"></path> 
+      <defs> 
+       <marker id="arrowhead38" viewbox="0 0 10 10" refx="9" refy="5" markerunits="strokeWidth" markerwidth="8" markerheight="6" orient="auto"> 
+        <path d="M 0 0 L 10 5 L 0 10 z" class="arrowheadPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path> 
+       </marker> 
+      </defs> 
+     </g> 
+     <g class="edgePath LS-B LE-D" style="opacity: 1;" id="L-B-D"> 
+      <path class="path" d="M87.625,176L87.625,201L87.625,226" marker-end="url(#arrowhead39)" style="fill:none"></path> 
+      <defs> 
+       <marker id="arrowhead39" viewbox="0 0 10 10" refx="9" refy="5" markerunits="strokeWidth" markerwidth="8" markerheight="6" orient="auto"> 
+        <path d="M 0 0 L 10 5 L 0 10 z" class="arrowheadPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path> 
+       </marker> 
+      </defs> 
+     </g> 
+     <g class="edgePath LS-D LE-E" style="opacity: 1;" id="L-D-E"> 
+      <path class="path" d="M87.625,272L87.625,297L87.625,322" marker-end="url(#arrowhead40)" style="fill:none"></path> 
+      <defs> 
+       <marker id="arrowhead40" viewbox="0 0 10 10" refx="9" refy="5" markerunits="strokeWidth" markerwidth="8" markerheight="6" orient="auto"> 
+        <path d="M 0 0 L 10 5 L 0 10 z" class="arrowheadPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path> 
+       </marker> 
+      </defs> 
+     </g> 
+    </g> 
+    <g class="edgeLabels"> 
+     <g class="edgeLabel" transform="translate(87.625,92)" style="opacity: 1;"> 
+      <g transform="translate(-79.625,-13)" class="label"> 
+       <rect rx="0" ry="0" width="159.25" height="26" style="fill:#e8e8e8;"></rect> 
+       <foreignobject width="159.25" height="26"> 
+        <div style="display: inline-block; white-space: nowrap;"> 
+         <span id="L-L-A-B" class="edgeLabel L-LS-A' L-LE-B">9999/auth/aouth/token</span> 
+        </div> 
+       </foreignobject> 
+      </g> 
+     </g> 
+     <g class="edgeLabel" style="opacity: 1;" transform=""> 
+      <g transform="translate(0,0)" class="label"> 
+       <rect rx="0" ry="0" width="0" height="0" style="fill:#e8e8e8;"></rect> 
+       <foreignobject width="0" height="0"> 
+        <div style="display: inline-block; white-space: nowrap;"> 
+         <span id="L-L-B-D" class="edgeLabel L-LS-B' L-LE-D"></span> 
+        </div> 
+       </foreignobject> 
+      </g> 
+     </g> 
+     <g class="edgeLabel" style="opacity: 1;" transform=""> 
+      <g transform="translate(0,0)" class="label"> 
+       <rect rx="0" ry="0" width="0" height="0" style="fill:#e8e8e8;"></rect> 
+       <foreignobject width="0" height="0"> 
+        <div style="display: inline-block; white-space: nowrap;"> 
+         <span id="L-L-D-E" class="edgeLabel L-LS-D' L-LE-E"></span> 
+        </div> 
+       </foreignobject> 
+      </g> 
+     </g> 
+    </g> 
+    <g class="nodes"> 
+     <g class="node default" id="A" transform="translate(87.625,31)" style="opacity: 1;"> 
+      <rect rx="0" ry="0" x="-20.6796875" y="-23" width="41.359375" height="46" class="label-container"></rect> 
+      <g class="label" transform="translate(0,0)"> 
+       <g transform="translate(-10.6796875,-13)"> 
+        <foreignobject width="21.359375" height="26"> 
+         <div style="display: inline-block; white-space: nowrap;">
+           api 
+         </div> 
+        </foreignobject> 
+       </g> 
+      </g> 
+     </g> 
+     <g class="node default" style="opacity: 1;" id="B" transform="translate(87.625,153)"> 
+      <rect rx="5" ry="5" x="-55.796875" y="-23" width="111.59375" height="46" class="label-container"></rect> 
+      <g class="label" transform="translate(0,0)"> 
+       <g transform="translate(-45.796875,-13)"> 
+        <foreignobject width="91.59375" height="26"> 
+         <div style="display: inline-block; white-space: nowrap;">
+           gateway服务 
+         </div> 
+        </foreignobject> 
+       </g> 
+      </g> 
+     </g> 
+     <g class="node default" style="opacity: 1;" id="D" transform="translate(87.625,249)"> 
+      <rect rx="5" ry="5" x="-57.5703125" y="-23" width="115.140625" height="46" class="label-container"></rect> 
+      <g class="label" transform="translate(0,0)"> 
+       <g transform="translate(-47.5703125,-13)"> 
+        <foreignobject width="95.140625" height="26"> 
+         <div style="display: inline-block; white-space: nowrap;">
+           auth认证服务 
+         </div> 
+        </foreignobject> 
+       </g> 
+      </g> 
+     </g> 
+     <g class="node default" style="opacity: 1;" id="E" transform="translate(87.625,345)"> 
+      <rect rx="5" ry="5" x="-65.1171875" y="-23" width="130.234375" height="46" class="label-container"></rect> 
+      <g class="label" transform="translate(0,0)"> 
+       <g transform="translate(-55.1171875,-13)"> 
+        <foreignobject width="110.234375" height="26"> 
+         <div style="display: inline-block; white-space: nowrap;">
+           UPMS资源服务 
+         </div> 
+        </foreignobject> 
+       </g> 
+      </g> 
+     </g> 
+    </g> 
+   </g> 
+  </g> 
+ </svg> 
+</div> 
+<p>接下来详细讲解登录流程，因为只有了解清楚了流程和其原理，才能更加方便我们扩展自己的需求。</p> 
+<ol><li> <p>首先使用postman发起一个post请求。<br> <img src="https://images2.imgbox.com/7f/10/wjHKt0kY_o.png" alt="login登录"></p> <p>Q1-为什么请求地址是 http://localhost:9999/auth/oauth/token<br> A1-/auth是因为在gateway服务中,配置了路由如下图，/oauth/token是auth2默认的端点。更多的endpoint可参考官方文档<a href="https://projects.spring.io/spring-security-oauth/docs/oauth2.html" rel="nofollow">传送门</a><br> <img src="https://images2.imgbox.com/1a/46/gNoD3tA3_o.png" alt="gateway配置文件"><br> Q2-请求参数讲解<br> A2-username用户名；password是AES作为对称加密加密后的密码。加解密网站地址：<a href="http://tool.chacuo.net/cryptaes" rel="nofollow">加解密工具网站</a>。红框中的key后端配置在yml中。也就是传的密码参数是加密后的密文。grant_type的值有五种。Oauth2.0定义了4种模式分别是:authorization_code(授权码模式)、password(密码模式)、client_credentials（客户端模式)、implicit(隐式授权模式）。加上一个refresh_token(令牌刷新)模式。scope作用域范围。<br> <img src="https://images2.imgbox.com/19/ed/xrkFI9zU_o.png" alt="加解密操作"><br> Q3- 参数client_id和client_secret<br> A3- 我用的是postman.所以直接把参数写上就会自动生成类似这样的字符串Basic cGlnOnBpZw==。其实就是请求头是一个"Basic"加一个空格加"clientId:clientSecret"base64化的一个Authorization字段。这里的pig和数据库表数据统一既可<br> <img src="https://images2.imgbox.com/9c/fa/O1uvplPA_o.png" alt="在这里插入图片描述"></p> </li><li> <p>请求首先会来到GirlRequestGlobalFilter过滤器(自定义的过滤器)。</p> </li></ol> 
+<p>这个过滤器主要就是2个作用。作用一清洗去除请求头中的的from参数,作用二重写StripPrefix,也就是/auth/oauth/token经过这个过滤器后会变成/oauth/token<br> <img src="https://images2.imgbox.com/7f/cb/fqklBngQ_o.png" alt="GirlRequestGlobalFilter"><br> Q1- 为什么要清洗去除from参数？<br> A1- 因为在整个项目中，把请求按分为了如下情况<br> <img src="https://images2.imgbox.com/e1/8f/SFzx5WlB_o.png" alt="在这里插入图片描述"><br> 为了实现内部的调用。采取了@Inner注解方式实现。仔细想想其实这个实现思想很简单。当我们单个服务引入security的时候。服务里面的接口是不是都被保护起来了。你去请求就得验证了。这个时候，如果说我想不登录就访问服务中的A接口。我得怎么做。我是不是的配置ignoring,把不需要鉴权的url给放行下。那说白了。我内部之前的调用就是这么个道理。我得放行这个url。但是这就有个问题，我如何知道你是内部调用了。万一你是外部调用。我不就GG了。所以pig作者给内部请求头加上了from字段。为了防止外部调用的时候冒充。所以在网关进来第一步就把请求头全部清洗一遍。思想就是这么个思想。具体实现代码可以看源代码。<br> Q2- order为啥是-1000<br> A2- 过滤器的执行顺序是根据order值决定，值越低，执行的优先顺序越高。如下图。可以看见自定义的过滤器顺序<br> <img src="https://images2.imgbox.com/f6/23/1GrOno0W_o.png" alt="过滤器的执行顺序"></p> 
+<ol start="3"><li> <p>在执行PasswordDecoderFilter过滤器（也是自定义过滤器）。主要就是判断请求路径是不是登录请求oauth/token。是得话就进行password字段解密操作。这里解密就是对应前面的AES加密。解密后拿到密码明文继续往下走。<br> <img src="https://images2.imgbox.com/33/35/HF4LX0Ne_o.png" alt="在这里插入图片描述"><br> <strong>注意：这里去除了验证码过滤器，所以不说验证码这part</strong></p> </li><li> <p>经过了gateway之后，服务会被分发到auth认证服务。也就是我们熟悉的Security流程。不熟悉流程的兄弟，请移步<a href="https://blog.csdn.net/u012702547/article/details/89629415">Security工作原理</a>这位作者大大解释的还是很清楚的，有图有真相。这里我就流程的几步关键点进行分析。</p> </li><li> <p>请求先来到LogoutFilter过滤器，执行doFilter()判断当前是不是登出请求。如果是登出路径则到 logoutHandler ，如果登出成功则到 logoutSuccessHandler 登出成功处理，如果登出失败则由 ExceptionTranslationFilter ；如果不是登出路径则直接进入下一个过滤器。<br> <img src="https://images2.imgbox.com/6b/66/DvHBRM3p_o.png" alt="LogoutFilter"></p> </li><li> <p>再会来到BasicAuthenticationFilter过滤器。主要看doFilterInternal()方法。这个过滤器主要检测和处理 http basic 认证。<br> <img src="https://images2.imgbox.com/61/3b/7j43hgXi_o.png" alt="BasicAuthenticationFilter"><br> Q1-代码解析</p> </li></ol> 
+<pre><code class="prism language-java"><span class="token class-name">UsernamePasswordAuthenticationToken</span> authRequest <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>authenticationConverter<span class="token punctuation">.</span><span class="token function">convert</span><span class="token punctuation">(</span>request<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>A1-convert()作用是去请求头获取Authorization，然后解码（想想我们请求的时候不就是把client_id和秘钥进行base64编码的么，这里其实就是获取它啦）。拿到以后并生成了UsernamePasswordAuthenticationToken。UsernamePasswordAuthenticationToken就很好理解了，所有提交给AuthenticationManager的认证请求都会被封装成一个Token的实现。<br> <img src="https://images2.imgbox.com/e5/be/kuokib9n_o.png" alt="convert方法"><br> Q2-代码解析</p> 
+<pre><code class="prism language-java"><span class="token class-name">Authentication</span> authResult <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>authenticationManager<span class="token punctuation">.</span><span class="token function">authenticate</span><span class="token punctuation">(</span>authRequest<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>A2-封装好的UsernamePasswordAuthenticationToken,也就是上面代码中的变量authResult会交个AuthenticationManager，AuthenticationManager是用户认证的管理类，所有的认证请求都会通过提交一个token（也就是封装好的token，比如常见的UsernamePasswordAuthenticationToken）给AuthenticationManager的authenticate()方法来实现。说白了AuthenticationManager是一个接口。默认实现类ProviderManager。当然ProviderManager也不是干活的人。具体校验动作不是它完成，它只是转发。<br> 我们仔细看看providerManager.authenticate(authRequest)的作用。这里的authenticate(authRequest) 我贴下部分重要代码:<br> <img src="https://images2.imgbox.com/7b/fb/Acauj826_o.png" alt="providerManager.authenticate()"><br> 上图代码，我把重要的拿出来唠唠</p> 
+<pre><code class="prism language-java"> <span class="token comment">// 获取当前的authentication对象的类</span>
+ <span class="token comment">// authentication就是传入的UsernamePasswordAuthenticationToken</span>
+ <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span> <span class="token keyword">extends</span> <span class="token class-name">Authentication</span><span class="token punctuation">&gt;</span></span> toTest <span class="token operator">=</span> authentication<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token comment">// Provider认证的具体实现类 迭代器</span>
+ <span class="token class-name">Iterator</span> var9 <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getProviders</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">iterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token comment">// 循环，找到支持当前token的Provider</span>
+ <span class="token keyword">if</span> <span class="token punctuation">(</span>provider<span class="token punctuation">.</span><span class="token function">supports</span><span class="token punctuation">(</span>toTest<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token punctuation">}</span>
+</code></pre> 
+<p>这里就涉及到Security的另外一个概念AuthenticationProvider，认证的具体实现类，一个provider是一种认证方式的实现。前面讲了AuthenticationManager只是一个代理接口，真正的认证就是由AuthenticationProvider来做的。一个AuthenticationManager可以包含多个Provider，每个provider通过实现一个support方法来表示自己支持那种Token的认证。也就是说上面代码，会根据Provider的具体实现类的supports方法，找到匹配的Provider。然后再调用Provider的authenticate（）方法。所以我们接着往下看。</p> 
+<ol start="7"><li>这里调用的Provider是DaoAuthenticationProvider，它继承了AbstractUserDetailsAuthenticationProvider。他的主要2个方法我们来看看。<br> <img src="https://images2.imgbox.com/f3/30/w70cWgne_o.png" alt="DaoAuthenticationProvider的authenticate"></li></ol> 
+<p>Q1-supports方法方法做了什么？</p> 
+<pre><code class="prism language-java">   <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">supports</span><span class="token punctuation">(</span><span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> authentication<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> <span class="token class-name">UsernamePasswordAuthenticationToken</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">isAssignableFrom</span><span class="token punctuation">(</span>authentication<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<p>A1-表示自己支持那种Token的认证。<br> Q2-authenticate方法做了什么？<br> A2-最主要的就是去查数据库或者缓存中查询和校验用户信息.详细解释看看下面的代码注释</p> 
+<pre><code class="prism language-java"><span class="token comment">/**这里的getUserDetailsService是ClientDetailsUserDetailsService类，然后调用他的方法loadUserByUsername(),loadUserByUsername里面会去调用ClientDetailsService的实现类loadClientByClientId方法，已有实现一个是基于内存，一个是基于Jdbc。我们可以自定义*/</span>
+<span class="token comment">// username就是client_id</span>
+<span class="token class-name">UserDetails</span> loadedUser <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getUserDetailsService</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">loadUserByUsername</span><span class="token punctuation">(</span>username<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// 方法最后就是直接生成UsernamePasswordAuthenticationToken返回</span>
+<span class="token comment">// token的authentication为true</span>
+<span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">createSuccessAuthentication</span><span class="token punctuation">(</span>principalToReturn<span class="token punctuation">,</span> authentication<span class="token punctuation">,</span> user<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>截止到这里，花里胡哨走完以后。我们进入到TokenEndPoint</p> 
+<p>8.TokenEndPoint其实说白了就是auth2内置的controller，package：org.springframework.security.oauth2.provider.endpoint。他支持/oauth/token的get和post2种请求方式。氮素，看代码你会发现get方法还是调用的post方法。<br> 先看看TokenEndPoint的post请求代码全貌：<br> <img src="https://images2.imgbox.com/0d/65/p3BW2Fl3_o.png" alt="TokenEndPoint"><br> 针对这个代码，我们掰开了说。看看它做了啥。<br> Q1- 代码解析</p> 
+<pre><code class="prism language-java"> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token punctuation">(</span>principal <span class="token keyword">instanceof</span> <span class="token class-name">Authentication</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">InsufficientAuthenticationException</span><span class="token punctuation">(</span><span class="token string">"There is no client authentication. Try adding an appropriate authentication filter."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+        	省<span class="token operator">*</span><span class="token operator">*</span><span class="token operator">*</span><span class="token operator">*</span><span class="token operator">*</span><span class="token operator">*</span><span class="token operator">*</span><span class="token operator">*</span><span class="token operator">*</span>
+        <span class="token punctuation">}</span>
+</code></pre> 
+<p>A1-principal 作为参数，这里就是传入的UsernamePasswordAuthenticationToken。（不多解释前面的7小part说的很清楚了哈）。<br> UsernamePasswordAuthenticationToken继承抽象类 AbstractAuthenticationToken ，AbstractAuthenticationToken 实现了Authentication。所以程序这里会执行else。<br> Q2- (else分支里面的代码啦)代码解析</p> 
+<pre><code class="prism language-java"><span class="token class-name">String</span> clientId <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getClientId</span><span class="token punctuation">(</span>principal<span class="token punctuation">)</span>
+</code></pre> 
+<p>A2- 看看这方法名字，不用多说了吧。造型然后就是去给看principal的authenticated是不是true。完事给把clientId取出来<img src="https://images2.imgbox.com/ea/e9/sW2D21Ab_o.png" alt="getClientId方法"><br> Q3- 代码继续看</p> 
+<pre><code class="prism language-java"> <span class="token class-name">ClientDetails</span> authenticatedClient <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getClientDetailsService</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">loadClientByClientId</span><span class="token punctuation">(</span>clientId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>A3- 根据clientId（这里传入的值为pig）去获取第三方应用的详细信息封装在ClientDetails里<br> Q4- 代码继续看看</p> 
+<pre><code class="prism language-java"><span class="token class-name">TokenRequest</span> tokenRequest <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getOAuth2RequestFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">createTokenRequest</span><span class="token punctuation">(</span>parameters<span class="token punctuation">,</span> authenticatedClient<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>A4- 这里就是拿请求传递进来的参数和查询出来的第三方应用信息构建TokenRequest。理解下parameters就是我们在请求中写的username,password,scope等，authenticatedClient就是上一步取到的客户端信息咯。看看创建TokenRequest的代码。就是看请求的参数里面有没有client_id，没有这个参数就直接取authenticatedClient的clientId赋值给它。有的话就比较这2个id是不是相等的。完事就创建TokenRequest并返回<br> 我在最开始发请求的时候，并没有带clientId这个参数哈。<br> <img src="https://images2.imgbox.com/ce/56/OI7u3qo3_o.png" alt="createTokenRequest方法"><br> Q5- 代码继续看看</p> 
+<pre><code class="prism language-java">  <span class="token keyword">if</span> <span class="token punctuation">(</span>authenticatedClient <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+  	<span class="token comment">// this.validateScope(tokenRequest.getScope(), client.getScope());</span>
+      <span class="token keyword">this</span><span class="token punctuation">.</span>oAuth2RequestValidator<span class="token punctuation">.</span><span class="token function">validateScope</span><span class="token punctuation">(</span>tokenRequest<span class="token punctuation">,</span> authenticatedClient<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token punctuation">}</span>
+</code></pre> 
+<p>A5- 这就是校验Scope,看你传进来的Scope值是不是和客户端详细信息匹配（这里就是和数据库里scope字段值匹配），scope请求的一些授权内容，所请求的授权必须是第三方应用可以发送的授权集合的子集，否则无法通过校验。<br> Q6- 代码继续看看<br> <img src="https://images2.imgbox.com/03/bf/se21dvg4_o.png" alt="在这里插入图片描述"><br> A6- 这里的一串就是校验，依次是<br> grant_type:必须显式指定按照哪种授权模式获取令牌；<br> 判断传递的授权模式是否是简化模式，如果是简化模式也会抛异常。因为简化模式其实是对授权码模式的一种简化:在用户的第一步的授权行为的时候就直接返回令牌,所以是不会有调用请求令牌服务的机会的；<br> 判断是不是授权码模式,因为授权码模式包含两个步骤，在授权码模式中发出的令牌中拥有的权限不是由发令牌的请求决定的，而是在发令牌之前的授权的请求里就已经决定好了。因此它会对请求过来的scope进行置空操作，然后根据之前发出去的授权码里的权限重新设置你的scope,因此它根本不会使用请求令牌的这个请求中携带的scope参数。<br> 之后判断是不是刷新令牌的请求,应为刷新令牌的请求有自己的scope，所以也会进行重新设置scope的操作。</p> 
+<ol start="9"><li>经过一系列的校验完成后。来执行令牌生成的操作了</li></ol> 
+<pre><code class="prism language-java"><span class="token class-name">OAuth2AccessToken</span> token <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getTokenGranter</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">grant</span><span class="token punctuation">(</span>tokenRequest<span class="token punctuation">.</span><span class="token function">getGrantType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> tokenRequest<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>Q1- OAuth2AccessToken类型是什么？<br> A1- OAuth2Request（实际上是之前的ClientDetails和TokenRequests这两个对象的一个整合）和Authorization（封装的实际上是当前授权用户的一些信息）这两个对象组合起来，会形成一个OAuth2Authorization对象，拿到OAuth2Authorization中所有的信息之后最终会生成一个OAuth2的令牌OAuth2AccessToken。<br> Q2- this.getTokenGranter()是啥？<br> A2- TokenGranter是一个接口，定义了一个方法grant().下图就是他的实现类。我们看看CompositeTokenGranter，Composite合成的意思。<br> <img src="https://images2.imgbox.com/df/d4/GVymH6q2_o.png" alt="在这里插入图片描述"><br> Q3- CompositeTokenGranter做了什么？<br> <img src="https://images2.imgbox.com/79/36/j0EU63RY_o.png" alt="CompositeTokenGranter"><br> A3- 首先他有个属性tokenGranters里面存放了五种令牌模式，也就是我们文章前面说的那五种。<br> 在扯扯他的grant()方法,它会对遍历这五种情况。</p> 
+<pre><code class="prism language-java"> <span class="token class-name">TokenGranter</span> granter <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">TokenGranter</span><span class="token punctuation">)</span>var3<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  grant <span class="token operator">=</span> granter<span class="token punctuation">.</span><span class="token function">grant</span><span class="token punctuation">(</span>grantType<span class="token punctuation">,</span> tokenRequest<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>拿到这5种的具体实现，去调用他们自己的grant()方法，进行比较。比较的方法在AbstractTokenGranter类中。判断当前携带的授权类型和这个类所支持的授权类型是否匹配，如果不匹配就返回空值，如果匹配的话就进行令牌的生成操作。<br> <img src="https://images2.imgbox.com/24/2e/SEzeKp3c_o.png" alt="AbstractTokenGranter"><br> 也可以看出这个抽象类被其他5种模式继承<br> <img src="https://images2.imgbox.com/dc/7e/QALhcrb0_o.png" alt="AbstractTokenGranter的五种子类"></p> 
+<p>Q4- 当上面匹配到合适的模式时候，就得进行生成令牌操作了。也就是执行代码</p> 
+<pre><code class="prism language-java"><span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getAccessToken</span><span class="token punctuation">(</span>client<span class="token punctuation">,</span> tokenRequest<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// 就是调用下面这方法啦</span>
+<span class="token keyword">protected</span> <span class="token class-name">OAuth2AccessToken</span> <span class="token function">getAccessToken</span><span class="token punctuation">(</span><span class="token class-name">ClientDetails</span> client<span class="token punctuation">,</span> <span class="token class-name">TokenRequest</span> tokenRequest<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>tokenServices<span class="token punctuation">.</span><span class="token function">createAccessToken</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getOAuth2Authentication</span><span class="token punctuation">(</span>client<span class="token punctuation">,</span> tokenRequest<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+</code></pre> 
+<p>A4- this.tokenServices就是 AuthorizationServerTokenServices ，createAccessToken()是生成令牌的方法。这个方法需要接收OAuth2Authentication对象作为参数。所以就调用了this.getOAuth2Authentication(client, tokenRequest)</p> 
+<p>那就先唠唠getOAuth2Authentication这个方法。<br> 在Spring Security OAuth核心类图解析中我们已经知道最终产生的Oauth2Authorization包含两部分信息,一部分是请求中的一些信息，另一部分是根据请求获取的授权用户的信息。而在不同的授权模式下获取授权用户的信息的方式是不同的，比如说pig所使用的密码模式就是使用请求中携带的用户名和密码来获取当前授权用户中的授权信息,而在授权码模式的两个步骤中是根据第一步发出授权码的同时会记录相关用户的信息，之后对第二步进行授权的时候根据第三方应用请求过来的授权码再读取该授权码对应的用户信息。所以getOAuth2Authentication对于不同的授权类型有不同的实现。<br> 那就得看看<strong>ResourceOwnerPasswordTokenGranter</strong>的getOAuth2Authentication（）方法。这个方法取用户名密码封装成UsernamePasswordAuthenticationToken对象传给manager.是不是很熟悉，就和之前2part一样，根据token，去找支持的provider验证。DaoAuthenticationProvider在验证的时候去调用UserDetailsServiceImpl实现loadUserByUsername方法。也会匹配密码啥的。具体可以看看DaoAuthenticationProvider的代码即可<br> 验证完成没有问题以后。就生成OAuth2Authentication返回就好啦。<br> <img src="https://images2.imgbox.com/73/4d/QYFuhFit_o.png" alt="ResourceOwnerPasswordTokenGranter"><br> 那就先唠唠createAccessToken这个方法，上面我们已经得到了OAuth2Authentication对象啦。那不就开始干活啦。</p> 
+<ol start="10"><li>createAccessToken创建令牌啦。<br> 首先看看源代码<img src="https://images2.imgbox.com/8a/32/jWm3NSVh_o.png" alt="createAccessToken方法"><br> Q1- 逐句看看代码</li></ol> 
+<pre><code class="prism language-java"><span class="token class-name">OAuth2AccessToken</span> existingAccessToken <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>tokenStore<span class="token punctuation">.</span><span class="token function">getAccessToken</span><span class="token punctuation">(</span>authentication<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>A1- 在tokenStore中获取accessToken，因为同一个用户只要令牌没过期那么再次请求令牌的时候会把之前发送的令牌再次发还。因此一开始就会找当前用户已经存在的令牌。<br> Q2- 当取到了accessToken，我们就看看if分支做什么了？<br> <img src="https://images2.imgbox.com/1c/14/52j6hP2c_o.png" alt="accessToken方法"><br> A2- 首先看令牌过期没，如果令牌过期了，那么就会在tokenStore里把accessToken和refreshToken一起删掉,如果令牌没过期，那么就把这个没过期的令牌重新再存一下。因为可能用户是使用另外的方式来访问令牌的，比如说一开始用授权码模式，后来用密码模式,而这两种模式需要存的信息是不一样的,所以这个令牌要重新store一次。之后直接返回这个不过期的令牌。</p> 
+<p>Q3- 如果accessToken没有取到，为null，就会走下面的逻辑。说明是第一次请求或者是令牌过期了的情况<br> <img src="https://images2.imgbox.com/24/25/cyA5AQMe_o.png" alt="在这里插入图片描述"></p> 
+<p>A3- 首先看看刷新的令牌有没有，如果刷新的令牌没有的话，那么创建一枚刷新的令牌，根据authentication, refreshToken创建accessToken。而这个创建accessToken的方法也非常简单，OAuth2AccessToken其实就是用UUID创建一个accessToken,然后把过期时间，刷新令牌和scope这些OAuth协议规定的必须要存在的参数设置上，设置完了以后它会判断是否存在tokenEnhancer，如果存在tokenEnhancer它就会按照定制的tokenEnhancer增强生成出来的token。<br> 拿到返回的令牌之后，在122行tokenStore会把拿到的令牌存起来,然后拿refreshToken存起来，最后把生成的令牌返回回去。</p> 
+<p>至此我们就可以获取到类似这样的结果啦：<br> <img src="https://images2.imgbox.com/fd/df/Mm1fpVQ9_o.png" alt="在这里插入图片描述"><br> 总结：至此登录的流程大抵就这样了，结合流程考虑考虑下，如何扩展就显得思路清晰很多了。自定义手机号登录，就放到下一篇文章详细聊了。<br> <strong>hey-girl东拼西凑原创文章，若有歧义可留言，若需转载需标明出处</strong></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/fc470ef0b1736ee45443ee3a4e03756c/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">SQL-常用的5个聚合函数</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/fe27a113e86057113a06d0bfa68be806/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">batchsize、iteration、epoch之间的关系</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

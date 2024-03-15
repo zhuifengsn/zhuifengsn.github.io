@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>《深度学习进阶 自然语言处理》第五章：RNN通俗介绍 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="《深度学习进阶 自然语言处理》第五章：RNN通俗介绍" />
+<meta property="og:description" content="文章目录 5.1 概率和语言模型5.1.1 概率视角下的word2vec5.1.2 语言模型5.1.3 将CBOW模型用作语言模型的效果怎么样？ 5.2 RNN5.2.1 循环神经网络5.2.2 展开循环5.2.3 Backpropagation Through Time5.2.4 Truncated BPTT5.2.5 Truncated BPTT的mini-batch学习 5.3 RNN的实现5.4 RNNLM的学习与评价5.4.1 RNNLM的实现5.4.2 语言模型的评价 5.5 小结 之前文章链接：
+开篇介绍：《深度学习进阶 自然语言处理》书籍介绍
+第一章：《深度学习进阶 自然语言处理》第一章：神经网络的复习
+第二章：《深度学习进阶 自然语言处理》第二章：自然语言和单词的分布式表示
+第三章：《深度学习进阶 自然语言处理》第三章：word2vec
+第四章：《深度学习进阶 自然语言处理》第四章：Embedding层和负采样介绍
+我们之前在介绍神经网络的时候，一般以CNN举例。那么CNN和接下来要介绍的RNN(Recurrent Neural Network)有什么区别呢？
+其实CNN是一种典型的前馈型神经网络。前馈 (feedforward）是指网络的传播方向是单向的。具体地说，先将输入信号传给下一层（隐藏层)，接收到信号的层也同样传给下一层，然后再传给下一层⋯⋯像这样，信号仅在一个方向上传播。
+这类型前馈神经网络在处理时间序列数据的时候，效果并不好，其无法充分学习时序数据的性质，但是该问题恰好RNN可以解决。那么，接下来我们一起看一下RNN的结构。
+5.1 概率和语言模型 5.1.1 概率视角下的word2vec 在介绍RNN之前，我们先复习一下上一章的word2vec, 以CBOW为例，该模型所做的事情就是从上下文（wt-1和 wt&#43;1） 预测目标词（wt)。整体结构如下图：
+用数学式来表示“当给定wt-1，和wt&#43;1时目标词是wt的概率”：
+如果把CBOW中的上下文限定为左侧窗口，则如下图：
+在仅将左侧2 个单词作为上下文的情况下，CBOW 模型输出的概率如下：
+现在我们已经通过概率表示了CBOW模型，那么其是否可以在语言模型中发挥作用呢？在讨论这个问题前，我们先一起看一下什么是语言模型。
+5.1.2 语言模型 语言模型 （languege model）给出了单词序列发生的概率。具体来说， 就是使用概率来评估一个单词序列发生的可能性，即在多大程度上是自然的单词序列。比如，对于“you say goodbye”这一单词序列，语言模型给出高概率（比如0.092)；对于 “you say good die“这一单词序列，模型则给出低概率（比如0.000 000 000 003 2)。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2d67142b0d576f637748607006ccf5ac/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-11-17T23:30:14+08:00" />
+<meta property="article:modified_time" content="2022-11-17T23:30:14+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">《深度学习进阶 自然语言处理》第五章：RNN通俗介绍</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><ul><li><ul><li><a href="#51__18" rel="nofollow">5.1 概率和语言模型</a></li><li><ul><li><a href="#511_word2vec_20" rel="nofollow">5.1.1 概率视角下的word2vec</a></li><li><a href="#512__40" rel="nofollow">5.1.2 语言模型</a></li><li><a href="#513_CBOW_50" rel="nofollow">5.1.3 将CBOW模型用作语言模型的效果怎么样？</a></li></ul> 
+    </li><li><a href="#52_RNN_70" rel="nofollow">5.2 RNN</a></li><li><ul><li><a href="#521__72" rel="nofollow">5.2.1 循环神经网络</a></li><li><a href="#522__84" rel="nofollow">5.2.2 展开循环</a></li><li><a href="#523_Backpropagation_Through_Time_100" rel="nofollow">5.2.3 Backpropagation Through Time</a></li><li><a href="#524_Truncated_BPTT_108" rel="nofollow">5.2.4 Truncated BPTT</a></li><li><a href="#525_Truncated_BPTTminibatch_116" rel="nofollow">5.2.5 Truncated BPTT的mini-batch学习</a></li></ul> 
+    </li><li><a href="#53_RNN_126" rel="nofollow">5.3 RNN的实现</a></li><li><a href="#54_RNNLM_224" rel="nofollow">5.4 RNNLM的学习与评价</a></li><li><ul><li><a href="#541_RNNLM_226" rel="nofollow">5.4.1 RNNLM的实现</a></li><li><a href="#542__289" rel="nofollow">5.4.2 语言模型的评价</a></li></ul> 
+    </li><li><a href="#55__321" rel="nofollow">5.5 小结</a></li></ul> 
+  </li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<hr> 
+<p>之前文章链接：</p> 
+<p>开篇介绍：<a href="https://sherwinzhang.blog.csdn.net/article/details/127737699" rel="nofollow">《深度学习进阶 自然语言处理》书籍介绍</a><br> 第一章：<a href="https://blog.csdn.net/weixin_39471848/article/details/127737780">《深度学习进阶 自然语言处理》第一章：神经网络的复习</a><br> 第二章：<a href="https://sherwinzhang.blog.csdn.net/article/details/127756263" rel="nofollow">《深度学习进阶 自然语言处理》第二章：自然语言和单词的分布式表示</a><br> 第三章：<a href="https://blog.csdn.net/weixin_39471848/article/details/127776015">《深度学习进阶 自然语言处理》第三章：word2vec</a><br> 第四章：<a href="https://blog.csdn.net/weixin_39471848/article/details/127892831">《深度学习进阶 自然语言处理》第四章：Embedding层和负采样介绍</a></p> 
+<p>我们之前在介绍神经网络的时候，一般以CNN举例。那么CNN和接下来要介绍的RNN(Recurrent Neural Network)有什么区别呢？</p> 
+<p>其实CNN是一种典型的前馈型神经网络。前馈 (feedforward）是指网络的传播方向是单向的。具体地说，先将输入信号传给下一层（隐藏层)，接收到信号的层也同样传给下一层，然后再传给下一层⋯⋯像这样，信号仅在一个方向上传播。</p> 
+<p>这类型前馈神经网络在处理时间序列数据的时候，效果并不好，其无法充分学习时序数据的性质，但是该问题恰好RNN可以解决。那么，接下来我们一起看一下RNN的结构。</p> 
+<h4><a id="51__18"></a>5.1 概率和语言模型</h4> 
+<h5><a id="511_word2vec_20"></a>5.1.1 概率视角下的word2vec</h5> 
+<p>在介绍RNN之前，我们先复习一下上一章的word2vec, 以CBOW为例，该模型所做的事情就是从上下文（wt-1和 wt+1） 预测目标词（wt)。整体结构如下图：</p> 
+<p><img src="https://images2.imgbox.com/44/42/xnshZAnn_o.jpg" alt="image-20220617150626211"></p> 
+<p>用数学式来表示“当给定wt-1，和wt+1时目标词是wt的概率”：</p> 
+<p><img src="https://images2.imgbox.com/dd/0f/Fd380SGb_o.jpg" alt="image-20220617150807844"></p> 
+<p>如果把CBOW中的上下文限定为左侧窗口，则如下图：</p> 
+<p><img src="https://images2.imgbox.com/eb/4f/fGSu64hU_o.jpg" alt="image-20220617151024156"></p> 
+<p>在仅将左侧2 个单词作为上下文的情况下，CBOW 模型输出的概率如下：</p> 
+<p><img src="https://images2.imgbox.com/e2/e0/TSgn7Ks3_o.jpg" alt="image-20220617151123626"></p> 
+<p>现在我们已经通过概率表示了CBOW模型，那么其是否可以在语言模型中发挥作用呢？在讨论这个问题前，我们先一起看一下什么是语言模型。</p> 
+<h5><a id="512__40"></a>5.1.2 语言模型</h5> 
+<p>语言模型 （languege model）给出了单词序列发生的概率。具体来说， 就是使用概率来评估一个单词序列发生的可能性，即在多大程度上是自然的单词序列。比如，对于“you say goodbye”这一单词序列，语言模型给出高概率（比如0.092)；对于 “you say good die“这一单词序列，模型则给出低概率（比如0.000 000 000 003 2)。</p> 
+<p>那么具体怎么求解这个概率呢，我们先从一个单词入手，求解一个单词的概率可以表示为：</p> 
+<p><img src="https://images2.imgbox.com/bd/a5/ywncHJf1_o.jpg" alt="image-20220617151845238"></p> 
+<p>当知道一个单词的概率之后，我们可以通过联合概率公式，求出一句话的概率：P（<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          w 
+         
+        
+          1 
+         
+        
+       
+         , 
+        
+       
+         … 
+        
+       
+         … 
+        
+       
+         ， 
+        
+        
+        
+          w 
+         
+        
+          m 
+         
+        
+       
+      
+        w_1,……，w_m 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.625em; vertical-align: -0.19444em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: -0.02691em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord cjk_fallback">，</span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.151392em;"><span class="" style="top: -2.55em; margin-left: -0.02691em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>）.</p> 
+<h5><a id="513_CBOW_50"></a>5.1.3 将CBOW模型用作语言模型的效果怎么样？</h5> 
+<p>到此时，我们的推导依旧可行，那么我们一起看一下如果继续按照这种方法推导会有什么问题。</p> 
+<p>以下面图中为例：</p> 
+<p><img src="https://images2.imgbox.com/b2/b6/DpiwAT3z_o.jpg" alt="image-20220617152343981"></p> 
+<p>在上举例中，“Tom 在房间看电视，Mary进了房间”。根据该语境（上下文)，正确答案应该是 Mery 向 Tom（或者 “him”）打招呼。这里要获得正确答案，就必须将“？”前面第 18个单词处的 Tom 记住。如果 CBOW 模型的上下文大小是10，则这个问题将无法被正确回答。</p> 
+<p>那么，是否可以通过增大 CBOW 模型的上下文大小（比如变为20或 30）来解决此问题呢？</p> 
+<p>的确，CBOW 模型的上下文大小可以任意设定，但是CBOW模型还存在忽视了上下文中单词顺序的问题。</p> 
+<blockquote> 
+ <p>CBOW 是 Continuous Bag-Of-Words 的简称.Bag-Of-Words是 '一袋子单词"的意思,这意味着袋子中单词的顺序被忽视了.</p> 
+</blockquote> 
+<p>那么，如何解决这里提出的问题呢？</p> 
+<p>这就轮到 RNN 出场了。RNN 具有一个机制，那就是无论上下文有多长，都能将上下文信息记住。因此，使用RNN 可以处理任意长度的时序数据。下面，我们就来感受一下 RNN 的魅力。</p> 
+<h4><a id="52_RNN_70"></a>5.2 RNN</h4> 
+<h5><a id="521__72"></a>5.2.1 循环神经网络</h5> 
+<p>总算要介绍RNN的结构，无需赘言，直接上图：</p> 
+<p><img src="https://images2.imgbox.com/bc/c5/W2O1srvb_o.jpg" alt="image-20220617152727657"></p> 
+<p>如上左图所示，RNN 层有环路。通过该环路，数据可以在层内循环。时刻t的输入是<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          x 
+         
+        
+          t 
+         
+        
+       
+      
+        x_t 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.58056em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.280556em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>，这暗示着时序数据 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         ( 
+        
+        
+        
+          x 
+         
+        
+          0 
+         
+        
+       
+         ， 
+        
+        
+        
+          x 
+         
+        
+          1 
+         
+        
+       
+         ， 
+        
+       
+         … 
+        
+       
+         … 
+        
+       
+         ， 
+        
+        
+        
+          x 
+         
+        
+          t 
+         
+        
+       
+         ， 
+        
+       
+         … 
+        
+       
+         … 
+        
+       
+         ） 
+        
+       
+      
+        (x_0，x_1，……，x_t，……） 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mord cjk_fallback">，</span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mord cjk_fallback">，</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord cjk_fallback">，</span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.280556em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mord cjk_fallback">，</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord cjk_fallback">）</span></span></span></span></span>会被输入到层中。然后，以与输人对应的形式，输出 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         ( 
+        
+        
+        
+          h 
+         
+        
+          0 
+         
+        
+       
+         ， 
+        
+        
+        
+          h 
+         
+        
+          1 
+         
+        
+       
+         ， 
+        
+       
+         … 
+        
+       
+         … 
+        
+       
+         ， 
+        
+        
+        
+          h 
+         
+        
+          t 
+         
+        
+       
+         ， 
+        
+       
+         … 
+        
+       
+         … 
+        
+       
+         ) 
+        
+       
+      
+        (h_0， h_1，……，h_t，……) 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathdefault">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mord cjk_fallback">，</span><span class="mord"><span class="mord mathdefault">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mord cjk_fallback">，</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="mord cjk_fallback">，</span><span class="mord"><span class="mord mathdefault">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.280556em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span><span class="mord cjk_fallback">，</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right: 0.166667em;"></span><span class="minner">…</span><span class="mclose">)</span></span></span></span></span>。</p> 
+<p>这里假定在各时刻向 RNN 层输入的<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          x 
+         
+        
+          t 
+         
+        
+       
+      
+        x_t 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.58056em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.280556em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>是向量。比如，在处理句子（单词序列）的情况下，将各个单词的分布式表示（单词向量）作为xt输入 RNN层。</p> 
+<p>为了后面更好表达，对上图左侧图形旋转90度得到上图右侧结果，其他均相同。</p> 
+<h5><a id="522__84"></a>5.2.2 展开循环</h5> 
+<p>为了更好理解，把循环结构展开：</p> 
+<p><img src="https://images2.imgbox.com/d4/8d/4WySp7Lq_o.jpg" alt="image-20220617153243358"></p> 
+<p>各个时刻的 RNN 层接收传给该层的输入和前一个 RNN 层的输出，然后据此计算当前时刻的输出，此时进行的计算可以用下式表示：</p> 
+<p><img src="https://images2.imgbox.com/8c/11/dgK7c46K_o.jpg" alt="image-20220617153446060"></p> 
+<blockquote> 
+ <p>首先说明一下上式中的符号。RNN 有两个权重，分别是将输入 x 转化为输出 h 的权重 Wx 和将前一个 RNN 层的输出转化为当前时刻的输出的权重 Wh。此外，还有偏置b。这里，ht-1和xt都是行向量。</p> 
+</blockquote> 
+<p>在上式中，首先执行矩阵的乘积计算，然后使用 tanh 函数（双曲正切函数）变换它们的和，其结果就是时刻t的输出 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          h 
+         
+        
+          t 
+         
+        
+       
+      
+        h_t 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.84444em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.280556em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>。这个 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          h 
+         
+        
+          t 
+         
+        
+       
+      
+        h_t 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.84444em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.280556em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>一方面向上输出到另一个层，另一方面向右输出到下一个 RNN层（自身）。</p> 
+<p>观察该式可以看出，现在的输出 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          h 
+         
+        
+          t 
+         
+        
+       
+      
+        h_t 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.84444em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.280556em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span> 是由前一个输出 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          h 
+         
+         
+         
+           t 
+          
+         
+           − 
+          
+         
+           1 
+          
+         
+        
+       
+      
+        h_{t-1} 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.902771em; vertical-align: -0.208331em;"></span><span class="mord"><span class="mord mathdefault">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.301108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.208331em;"><span class=""></span></span></span></span></span></span></span></span></span></span> 计算出来的。从另一个角度看，这可以解释为，RNN 具有“状态”h，并以该表达式的形式被更新。这就是说RNN层是“具有状态的层”或“具有存储（记忆） 的层”的原因。</p> 
+<h5><a id="523_Backpropagation_Through_Time_100"></a>5.2.3 Backpropagation Through Time</h5> 
+<p>将 RNN 层展开后，就可以视为在水平方向上延伸的神经网络，因此 RNN 的学习可以用与普通神经网络的学习相同的方式进行。</p> 
+<p><img src="https://images2.imgbox.com/f0/d6/41uaHDCk_o.jpg" alt="image-20220617165415007"></p> 
+<p>因为这里的误差反向传播法是“按时间顺序展开的神经网络的误差反向传播法”，所以称为 Backpropegation Through Time(基于时间的反向传播），简称 BPTT。</p> 
+<h5><a id="524_Truncated_BPTT_108"></a>5.2.4 Truncated BPTT</h5> 
+<p>在处理长时序数据时，通常的做法是将网络连接截成适当的长度。具体来说，就是将时间轴方向上过长的网络在合适的位置进行截断，从而创建多个小型网络，然后对截出来的小型网络执行误差反向传播法，这个方法称为 Truncated BPTT（截断的 BPTT)。</p> 
+<p>在 Truncated BPTT 中，网络连接被截断，但严格地讲，只是网络的反向传播的连接被截断，正向传播的连接依然被维持，这一点很重要。也就是说，正向传播的信息没有中断地传播。与此相对，反向传播则被截断为适当的长度，以被截出的网络为单位进行学习。</p> 
+<p><img src="https://images2.imgbox.com/89/5a/Spksq4ww_o.jpg" alt="image-20220617170030342"></p> 
+<h5><a id="525_Truncated_BPTTminibatch_116"></a>5.2.5 Truncated BPTT的mini-batch学习</h5> 
+<p>到目前为止，我们在探讨 Truncated BPTT 时，并没有考虑 mini-batch 学习。换句话说，我们之前的探讨对应于批大小为1的情况。为了执行 mini-batch 学习，需要考虑批数据，让它也能按顺序输入数据。因此，在输入数据的开始位置，需要在各个批次中进行“偏移“。</p> 
+<p>具体偏移方式，我们通过举例说明，假设对长度为 1000的时序数据，以时间长度10为单位进行截断。此时如何将批大小设为2进行学习呢？在这种情况下，作为 RNN 层的输入数据， 第1笔样本数据从头开始按顺序输入，第2笔数据从第 500 个数据开始按顺序输入。也就是说，将开始位置平移500，如下图：</p> 
+<p><img src="https://images2.imgbox.com/4a/43/gW0tPNAm_o.jpg" alt="image-20220617170636317"></p> 
+<blockquote> 
+ <p>上图中，批次的第1个元素是x0，……，x9，批次的第2个元素是x500，……，x509，将这个 mini-batch 作为 RNN 的输入数据进行学习。因为要输入的数据是按顺序的，所以接下来是时序数据的第10~19 个数据和第510~519 个数据，像这样，在进行 mini-batch 学习时，平移各批次输入数据的开始位置，按顺序输入。</p> 
+</blockquote> 
+<h4><a id="53_RNN_126"></a>5.3 RNN的实现</h4> 
+<p>关于RNN的实现，在此不做详述，我们展示了RNN和TimeRNN两个类的实现过程。其中RNN层实现了RNN的单步处理；TimeRNN层由T个RNN层构成，如下图：</p> 
+<p><img src="https://images2.imgbox.com/22/9a/5dmBboNp_o.jpg" alt="image-20220617171447852"></p> 
+<pre><code class="prism language-python"><span class="token comment"># 部分代码，所有代码见书本附件代码</span>
+
+<span class="token keyword">class</span> <span class="token class-name">RNN</span><span class="token punctuation">:</span>
+    <span class="token keyword">def</span> <span class="token function">__init__</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        self<span class="token punctuation">.</span>params <span class="token operator">=</span> <span class="token punctuation">[</span>Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b<span class="token punctuation">]</span>
+        self<span class="token punctuation">.</span>grads <span class="token operator">=</span> <span class="token punctuation">[</span>np<span class="token punctuation">.</span>zeros_like<span class="token punctuation">(</span>Wx<span class="token punctuation">)</span><span class="token punctuation">,</span> np<span class="token punctuation">.</span>zeros_like<span class="token punctuation">(</span>Wh<span class="token punctuation">)</span><span class="token punctuation">,</span> np<span class="token punctuation">.</span>zeros_like<span class="token punctuation">(</span>b<span class="token punctuation">)</span><span class="token punctuation">]</span>
+        self<span class="token punctuation">.</span>cache <span class="token operator">=</span> <span class="token boolean">None</span>
+
+    <span class="token keyword">def</span> <span class="token function">forward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> x<span class="token punctuation">,</span> h_prev<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b <span class="token operator">=</span> self<span class="token punctuation">.</span>params
+        t <span class="token operator">=</span> np<span class="token punctuation">.</span>dot<span class="token punctuation">(</span>h_prev<span class="token punctuation">,</span> Wh<span class="token punctuation">)</span> <span class="token operator">+</span> np<span class="token punctuation">.</span>dot<span class="token punctuation">(</span>x<span class="token punctuation">,</span> Wx<span class="token punctuation">)</span> <span class="token operator">+</span> b
+        h_next <span class="token operator">=</span> np<span class="token punctuation">.</span>tanh<span class="token punctuation">(</span>t<span class="token punctuation">)</span>
+
+        self<span class="token punctuation">.</span>cache <span class="token operator">=</span> <span class="token punctuation">(</span>x<span class="token punctuation">,</span> h_prev<span class="token punctuation">,</span> h_next<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> h_next
+
+    <span class="token keyword">def</span> <span class="token function">backward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> dh_next<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b <span class="token operator">=</span> self<span class="token punctuation">.</span>params
+        x<span class="token punctuation">,</span> h_prev<span class="token punctuation">,</span> h_next <span class="token operator">=</span> self<span class="token punctuation">.</span>cache
+
+        dt <span class="token operator">=</span> dh_next <span class="token operator">*</span> <span class="token punctuation">(</span><span class="token number">1</span> <span class="token operator">-</span> h_next <span class="token operator">**</span> <span class="token number">2</span><span class="token punctuation">)</span>
+        db <span class="token operator">=</span> np<span class="token punctuation">.</span><span class="token builtin">sum</span><span class="token punctuation">(</span>dt<span class="token punctuation">,</span> axis<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">)</span>
+        dWh <span class="token operator">=</span> np<span class="token punctuation">.</span>dot<span class="token punctuation">(</span>h_prev<span class="token punctuation">.</span>T<span class="token punctuation">,</span> dt<span class="token punctuation">)</span>
+        dh_prev <span class="token operator">=</span> np<span class="token punctuation">.</span>dot<span class="token punctuation">(</span>dt<span class="token punctuation">,</span> Wh<span class="token punctuation">.</span>T<span class="token punctuation">)</span>
+        dWx <span class="token operator">=</span> np<span class="token punctuation">.</span>dot<span class="token punctuation">(</span>x<span class="token punctuation">.</span>T<span class="token punctuation">,</span> dt<span class="token punctuation">)</span>
+        dx <span class="token operator">=</span> np<span class="token punctuation">.</span>dot<span class="token punctuation">(</span>dt<span class="token punctuation">,</span> Wx<span class="token punctuation">.</span>T<span class="token punctuation">)</span>
+
+        self<span class="token punctuation">.</span>grads<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">]</span> <span class="token operator">=</span> dWx
+        self<span class="token punctuation">.</span>grads<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">]</span> <span class="token operator">=</span> dWh
+        self<span class="token punctuation">.</span>grads<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">]</span> <span class="token operator">=</span> db
+
+        <span class="token keyword">return</span> dx<span class="token punctuation">,</span> dh_prev
+
+
+<span class="token keyword">class</span> <span class="token class-name">TimeRNN</span><span class="token punctuation">:</span>
+    <span class="token keyword">def</span> <span class="token function">__init__</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b<span class="token punctuation">,</span> stateful<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+        self<span class="token punctuation">.</span>params <span class="token operator">=</span> <span class="token punctuation">[</span>Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b<span class="token punctuation">]</span>
+        self<span class="token punctuation">.</span>grads <span class="token operator">=</span> <span class="token punctuation">[</span>np<span class="token punctuation">.</span>zeros_like<span class="token punctuation">(</span>Wx<span class="token punctuation">)</span><span class="token punctuation">,</span> np<span class="token punctuation">.</span>zeros_like<span class="token punctuation">(</span>Wh<span class="token punctuation">)</span><span class="token punctuation">,</span> np<span class="token punctuation">.</span>zeros_like<span class="token punctuation">(</span>b<span class="token punctuation">)</span><span class="token punctuation">]</span>
+        self<span class="token punctuation">.</span>layers <span class="token operator">=</span> <span class="token boolean">None</span>
+
+        self<span class="token punctuation">.</span>h<span class="token punctuation">,</span> self<span class="token punctuation">.</span>dh <span class="token operator">=</span> <span class="token boolean">None</span><span class="token punctuation">,</span> <span class="token boolean">None</span>
+        self<span class="token punctuation">.</span>stateful <span class="token operator">=</span> stateful
+
+    <span class="token keyword">def</span> <span class="token function">forward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> xs<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b <span class="token operator">=</span> self<span class="token punctuation">.</span>params
+        N<span class="token punctuation">,</span> T<span class="token punctuation">,</span> D <span class="token operator">=</span> xs<span class="token punctuation">.</span>shape
+        D<span class="token punctuation">,</span> H <span class="token operator">=</span> Wx<span class="token punctuation">.</span>shape
+
+        self<span class="token punctuation">.</span>layers <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+        hs <span class="token operator">=</span> np<span class="token punctuation">.</span>empty<span class="token punctuation">(</span><span class="token punctuation">(</span>N<span class="token punctuation">,</span> T<span class="token punctuation">,</span> H<span class="token punctuation">)</span><span class="token punctuation">,</span> dtype<span class="token operator">=</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+
+        <span class="token keyword">if</span> <span class="token keyword">not</span> self<span class="token punctuation">.</span>stateful <span class="token keyword">or</span> self<span class="token punctuation">.</span>h <span class="token keyword">is</span> <span class="token boolean">None</span><span class="token punctuation">:</span>
+            self<span class="token punctuation">.</span>h <span class="token operator">=</span> np<span class="token punctuation">.</span>zeros<span class="token punctuation">(</span><span class="token punctuation">(</span>N<span class="token punctuation">,</span> H<span class="token punctuation">)</span><span class="token punctuation">,</span> dtype<span class="token operator">=</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+
+        <span class="token keyword">for</span> t <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span>T<span class="token punctuation">)</span><span class="token punctuation">:</span>
+            layer <span class="token operator">=</span> RNN<span class="token punctuation">(</span><span class="token operator">*</span>self<span class="token punctuation">.</span>params<span class="token punctuation">)</span>
+            self<span class="token punctuation">.</span>h <span class="token operator">=</span> layer<span class="token punctuation">.</span>forward<span class="token punctuation">(</span>xs<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">,</span> t<span class="token punctuation">,</span> <span class="token punctuation">:</span><span class="token punctuation">]</span><span class="token punctuation">,</span> self<span class="token punctuation">.</span>h<span class="token punctuation">)</span>
+            hs<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">,</span> t<span class="token punctuation">,</span> <span class="token punctuation">:</span><span class="token punctuation">]</span> <span class="token operator">=</span> self<span class="token punctuation">.</span>h
+            self<span class="token punctuation">.</span>layers<span class="token punctuation">.</span>append<span class="token punctuation">(</span>layer<span class="token punctuation">)</span>
+
+        <span class="token keyword">return</span> hs
+
+    <span class="token keyword">def</span> <span class="token function">backward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> dhs<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        Wx<span class="token punctuation">,</span> Wh<span class="token punctuation">,</span> b <span class="token operator">=</span> self<span class="token punctuation">.</span>params
+        N<span class="token punctuation">,</span> T<span class="token punctuation">,</span> H <span class="token operator">=</span> dhs<span class="token punctuation">.</span>shape
+        D<span class="token punctuation">,</span> H <span class="token operator">=</span> Wx<span class="token punctuation">.</span>shape
+
+        dxs <span class="token operator">=</span> np<span class="token punctuation">.</span>empty<span class="token punctuation">(</span><span class="token punctuation">(</span>N<span class="token punctuation">,</span> T<span class="token punctuation">,</span> D<span class="token punctuation">)</span><span class="token punctuation">,</span> dtype<span class="token operator">=</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+        dh <span class="token operator">=</span> <span class="token number">0</span>
+        grads <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">]</span>
+        <span class="token keyword">for</span> t <span class="token keyword">in</span> <span class="token builtin">reversed</span><span class="token punctuation">(</span><span class="token builtin">range</span><span class="token punctuation">(</span>T<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+            layer <span class="token operator">=</span> self<span class="token punctuation">.</span>layers<span class="token punctuation">[</span>t<span class="token punctuation">]</span>
+            dx<span class="token punctuation">,</span> dh <span class="token operator">=</span> layer<span class="token punctuation">.</span>backward<span class="token punctuation">(</span>dhs<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">,</span> t<span class="token punctuation">,</span> <span class="token punctuation">:</span><span class="token punctuation">]</span> <span class="token operator">+</span> dh<span class="token punctuation">)</span>
+            dxs<span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token punctuation">,</span> t<span class="token punctuation">,</span> <span class="token punctuation">:</span><span class="token punctuation">]</span> <span class="token operator">=</span> dx
+
+            <span class="token keyword">for</span> i<span class="token punctuation">,</span> grad <span class="token keyword">in</span> <span class="token builtin">enumerate</span><span class="token punctuation">(</span>layer<span class="token punctuation">.</span>grads<span class="token punctuation">)</span><span class="token punctuation">:</span>
+                grads<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">+=</span> grad
+
+        <span class="token keyword">for</span> i<span class="token punctuation">,</span> grad <span class="token keyword">in</span> <span class="token builtin">enumerate</span><span class="token punctuation">(</span>grads<span class="token punctuation">)</span><span class="token punctuation">:</span>
+            self<span class="token punctuation">.</span>grads<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">]</span> <span class="token operator">=</span> grad
+        self<span class="token punctuation">.</span>dh <span class="token operator">=</span> dh
+
+        <span class="token keyword">return</span> dxs
+
+    <span class="token keyword">def</span> <span class="token function">set_state</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> h<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        self<span class="token punctuation">.</span>h <span class="token operator">=</span> h
+
+    <span class="token keyword">def</span> <span class="token function">reset_state</span><span class="token punctuation">(</span>self<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        self<span class="token punctuation">.</span>h <span class="token operator">=</span> <span class="token boolean">None</span>
+</code></pre> 
+<h4><a id="54_RNNLM_224"></a>5.4 RNNLM的学习与评价</h4> 
+<h5><a id="541_RNNLM_226"></a>5.4.1 RNNLM的实现</h5> 
+<p>在此我们实现一个简单RNN语言模型，其结构图如下：</p> 
+<p><img src="https://images2.imgbox.com/b8/e4/hRDbq5pW_o.jpg" alt="image-20220617172306144"></p> 
+<p>实现代码如下：</p> 
+<pre><code class="prism language-python"><span class="token comment"># 部分代码，所有代码见书本附件代码</span>
+
+<span class="token comment"># coding: utf-8</span>
+<span class="token keyword">import</span> sys
+sys<span class="token punctuation">.</span>path<span class="token punctuation">.</span>append<span class="token punctuation">(</span><span class="token string">'..'</span><span class="token punctuation">)</span>
+<span class="token keyword">import</span> numpy <span class="token keyword">as</span> np
+<span class="token keyword">from</span> common<span class="token punctuation">.</span>time_layers <span class="token keyword">import</span> <span class="token operator">*</span>
+
+
+<span class="token keyword">class</span> <span class="token class-name">SimpleRnnlm</span><span class="token punctuation">:</span>
+    <span class="token keyword">def</span> <span class="token function">__init__</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> vocab_size<span class="token punctuation">,</span> wordvec_size<span class="token punctuation">,</span> hidden_size<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        V<span class="token punctuation">,</span> D<span class="token punctuation">,</span> H <span class="token operator">=</span> vocab_size<span class="token punctuation">,</span> wordvec_size<span class="token punctuation">,</span> hidden_size
+        rn <span class="token operator">=</span> np<span class="token punctuation">.</span>random<span class="token punctuation">.</span>randn
+
+        <span class="token comment"># 初始化权重</span>
+        embed_W <span class="token operator">=</span> <span class="token punctuation">(</span>rn<span class="token punctuation">(</span>V<span class="token punctuation">,</span> D<span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token number">100</span><span class="token punctuation">)</span><span class="token punctuation">.</span>astype<span class="token punctuation">(</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+        rnn_Wx <span class="token operator">=</span> <span class="token punctuation">(</span>rn<span class="token punctuation">(</span>D<span class="token punctuation">,</span> H<span class="token punctuation">)</span> <span class="token operator">/</span> np<span class="token punctuation">.</span>sqrt<span class="token punctuation">(</span>D<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>astype<span class="token punctuation">(</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+        rnn_Wh <span class="token operator">=</span> <span class="token punctuation">(</span>rn<span class="token punctuation">(</span>H<span class="token punctuation">,</span> H<span class="token punctuation">)</span> <span class="token operator">/</span> np<span class="token punctuation">.</span>sqrt<span class="token punctuation">(</span>H<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>astype<span class="token punctuation">(</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+        rnn_b <span class="token operator">=</span> np<span class="token punctuation">.</span>zeros<span class="token punctuation">(</span>H<span class="token punctuation">)</span><span class="token punctuation">.</span>astype<span class="token punctuation">(</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+        affine_W <span class="token operator">=</span> <span class="token punctuation">(</span>rn<span class="token punctuation">(</span>H<span class="token punctuation">,</span> V<span class="token punctuation">)</span> <span class="token operator">/</span> np<span class="token punctuation">.</span>sqrt<span class="token punctuation">(</span>H<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>astype<span class="token punctuation">(</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+        affine_b <span class="token operator">=</span> np<span class="token punctuation">.</span>zeros<span class="token punctuation">(</span>V<span class="token punctuation">)</span><span class="token punctuation">.</span>astype<span class="token punctuation">(</span><span class="token string">'f'</span><span class="token punctuation">)</span>
+
+        <span class="token comment"># 生成层</span>
+        self<span class="token punctuation">.</span>layers <span class="token operator">=</span> <span class="token punctuation">[</span>
+            TimeEmbedding<span class="token punctuation">(</span>embed_W<span class="token punctuation">)</span><span class="token punctuation">,</span>
+            TimeRNN<span class="token punctuation">(</span>rnn_Wx<span class="token punctuation">,</span> rnn_Wh<span class="token punctuation">,</span> rnn_b<span class="token punctuation">,</span> stateful<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            TimeAffine<span class="token punctuation">(</span>affine_W<span class="token punctuation">,</span> affine_b<span class="token punctuation">)</span>
+        <span class="token punctuation">]</span>
+        self<span class="token punctuation">.</span>loss_layer <span class="token operator">=</span> TimeSoftmaxWithLoss<span class="token punctuation">(</span><span class="token punctuation">)</span>
+        self<span class="token punctuation">.</span>rnn_layer <span class="token operator">=</span> self<span class="token punctuation">.</span>layers<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>
+
+        <span class="token comment"># 将所有的权重和梯度整理到列表中</span>
+        self<span class="token punctuation">.</span>params<span class="token punctuation">,</span> self<span class="token punctuation">.</span>grads <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+        <span class="token keyword">for</span> layer <span class="token keyword">in</span> self<span class="token punctuation">.</span>layers<span class="token punctuation">:</span>
+            self<span class="token punctuation">.</span>params <span class="token operator">+=</span> layer<span class="token punctuation">.</span>params
+            self<span class="token punctuation">.</span>grads <span class="token operator">+=</span> layer<span class="token punctuation">.</span>grads
+
+    <span class="token keyword">def</span> <span class="token function">forward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> xs<span class="token punctuation">,</span> ts<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        <span class="token keyword">for</span> layer <span class="token keyword">in</span> self<span class="token punctuation">.</span>layers<span class="token punctuation">:</span>
+            xs <span class="token operator">=</span> layer<span class="token punctuation">.</span>forward<span class="token punctuation">(</span>xs<span class="token punctuation">)</span>
+        loss <span class="token operator">=</span> self<span class="token punctuation">.</span>loss_layer<span class="token punctuation">.</span>forward<span class="token punctuation">(</span>xs<span class="token punctuation">,</span> ts<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> loss
+
+    <span class="token keyword">def</span> <span class="token function">backward</span><span class="token punctuation">(</span>self<span class="token punctuation">,</span> dout<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+        dout <span class="token operator">=</span> self<span class="token punctuation">.</span>loss_layer<span class="token punctuation">.</span>backward<span class="token punctuation">(</span>dout<span class="token punctuation">)</span>
+        <span class="token keyword">for</span> layer <span class="token keyword">in</span> <span class="token builtin">reversed</span><span class="token punctuation">(</span>self<span class="token punctuation">.</span>layers<span class="token punctuation">)</span><span class="token punctuation">:</span>
+            dout <span class="token operator">=</span> layer<span class="token punctuation">.</span>backward<span class="token punctuation">(</span>dout<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> dout
+
+    <span class="token keyword">def</span> <span class="token function">reset_state</span><span class="token punctuation">(</span>self<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        self<span class="token punctuation">.</span>rnn_layer<span class="token punctuation">.</span>reset_state<span class="token punctuation">(</span><span class="token punctuation">)</span>
+
+</code></pre> 
+<h5><a id="542__289"></a>5.4.2 语言模型的评价</h5> 
+<p>语言模型基于给定的己经出现的单词（信息）输出将要出现的单词的概率分布。困惑度（perplexity）常被用作评价语言模型的预测性能的指标。</p> 
+<p>简单地说，困惑度表示“概率的倒数”（这个解释在数据量为1时严格一致)。为了说明概率的倒数，我们仍旧考虑 “you say goodbye and i say hello。” 这一语料库。假设在向语言模型“模型1”传入单词 you 时会输出下图左图所示的概率分布。此时，下一个出现的单词是 say 的概率为0.8，这是一个相当不错的预测。取这个概率的倒数，可以计算出困惑度为1.25。而下图右侧的模型（“模型2”）预测出的正确单词的概率为0.2，这显然是一个很差的预测，此时的困惑度为5。</p> 
+<p>总结一下，“模型1” 能准确地预测，困感度是 1.25；“模型2” 的预测未能命中，困惑度是 5.0。此例表明，困感度越小越好。</p> 
+<p><img src="https://images2.imgbox.com/37/50/jIRkM45E_o.jpg" alt="image-20220617174421030"></p> 
+<p>以上都是输入数据为1个时的困惑度。那么，在输入数据为多个的情况下，结果会怎样呢？</p> 
+<p>我们可以根据下面的公式进行计算。</p> 
+<p><img src="https://images2.imgbox.com/2f/5d/Tjl53Ghv_o.jpg" alt="image-20220617174621275"></p> 
+<blockquote> 
+ <p>上公式解释：</p> 
+ <p>假设数据量为N个。</p> 
+ <p><span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+      
+       
+        
+         
+         
+           t 
+          
+         
+           n 
+          
+         
+        
+       
+         t_n 
+        
+       
+     </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.76508em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.151392em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>是one-hot向量形式的正确解标签,</p> 
+ <p><span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+      
+       
+        
+         
+         
+           t 
+          
+          
+          
+            n 
+           
+          
+            k 
+           
+          
+         
+        
+       
+         t_{nk} 
+        
+       
+     </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.76508em; vertical-align: -0.15em;"></span><span class="mord"><span class="mord mathdefault">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.336108em;"><span class="" style="top: -2.55em; margin-left: 0em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">n</span><span class="mord mathdefault mtight" style="margin-right: 0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>表示第n个数据的第k个值,</p> 
+ <p><span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+      
+       
+        
+         
+         
+           y 
+          
+          
+          
+            n 
+           
+          
+            k 
+           
+          
+         
+        
+       
+         y_{nk} 
+        
+       
+     </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.625em; vertical-align: -0.19444em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 0.336108em;"><span class="" style="top: -2.55em; margin-left: -0.03588em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">n</span><span class="mord mathdefault mtight" style="margin-right: 0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 0.15em;"><span class=""></span></span></span></span></span></span></span></span></span></span>表示概率分布(神经网络中的Softmax的输出)。</p> 
+ <p>由上式计算出的L是神经网络的损失,然后使用这个L计算出指数就是困惑度。</p> 
+</blockquote> 
+<h4><a id="55__321"></a>5.5 小结</h4> 
+<p>本章中主要介绍了RNN相关内容，其主要是通过数据的循环，从过去继承数据并传递到现在和未来。经过这种循环，RNN层的内部获得了记忆隐藏状态的能力。</p> 
+<p>下章我们将会介绍RNN的另两个变体：LSTM和GRU结构。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4f6ab9b687f67890c10b848059619339/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">VIAVI唯亚威FI-10/-11 光纤识别仪</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e84ec487776e6774c3ecfd0daaeba4c8/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Linux开发工具VI/VIM</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

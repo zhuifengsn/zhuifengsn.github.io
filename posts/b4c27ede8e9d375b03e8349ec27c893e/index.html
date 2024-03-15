@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>实时时钟DS1302原理详解和单片机编程 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="实时时钟DS1302原理详解和单片机编程" />
+<meta property="og:description" content="一、DS1302的功能 DS1302是美国DALLAS推出的一款高性能、低功耗的日历时钟芯片。
+DS1302是一种串行接口的实时时钟，芯片内部具有可编程的日历时钟和31个字节的静态RAM，日历时钟可以自动进行闰年补偿，计时准确，接口简单，使用方便，工作电压范围宽（2.5~5.5V），芯片自身还具有对备用电池进行涓流充电功能，可有效延长备用电池的使用寿命。
+DS1302用于数据记录，能实现数据与该数据出现的时间同时记录，因此广泛应用于测量系统中。
+二、DS1302硬件及引脚功能 各引脚功能为：
+1、VCC1：主电源。 VCC2：备用电源。当VCC2大于VCC1&#43;0.2V时由VCC2向DS1302供电否则由VCC1向DS1302供电。
+2、SCLK：串行时钟输入端，控制数据输入与输出；
+3、I/O ：双向输入线；
+4、CE：使能端，CE为高时允许读写DS1302数据，为低时禁止读写。
+三、DS1302寄存器 时钟日历和控制寄存器如图所示：
+如上图所示，时钟日历寄存器包含在7个读/写寄存器内，读/写寄存器中的数据是BCD码。
+秒寄存器（81h、80h）的BIT7定义为时钟暂停标志（CH）。当该位置为1时，时钟振荡器停止，DS1302处于低功耗状态；当该位置为0时，时钟开始运行。
+小时寄存器（85h、84h）的BIT7用于定义DS1302是运行于12小时模式还是24小时模式，当为1时，选择12小时模式，此时BIT5为AM/PM位，在24小时模式时此位为小时数据位。
+控制寄存器（8Fh、8Eh）的BIT7是写保护位（WP），其它7位均为0。在任何对时钟或RAM读写操作之前，WP位必须为0。当WP位为1时，不能对任何时钟日历寄存器或RAM进行写操作。
+31个字节静态RAM寄存器如图所示
+突发模式配置寄存器如图所示
+四、DS1302通信时序 DS1302读写数据时序，图8为读一字节时序，图9为写一字节时序，数据的传输是从最低位开始（BIT0）。数据是以位（BIT）为单位依次写入或读出，读写数据操作中SCLK上升沿时执行写入数据，下降沿时执行读出数据。
+读数据：CE端从低到高的一个上升沿开始允许开始读数据，拉低CE端则禁止读写数据；开始的8个SCLK周期，写命令字节，数据的后8个SCLK 周期读出数据。
+写数据：CE端从低到高的一个上升沿开始允许开始写数据，拉低CE端则禁止读写数据；开始的8个SCLK周期，写命令字节，数据的后8个SCLK 周期写入数据。
+五、BCD码的转换 在DS1302中有关于时钟日历的寄存器数据存储格式为BCD码；
+BCD码介绍：
+我们时钟日历寄存器使用的是8421码型的BCD码，BCD码还有5421码、2421码等，其中8421码型的BCD码最最常用；
+BCD码是用四位二进制数表示一位十进制数的0-9这十个数简称BCD码；
+8421
+8421码型BCD码最小值为0000（二进制），最大值为1001（二进制）；9
+一个字节的8421码型BCD码中的低四位用于表示十进制的个位，高四位用于表示十进制的十位，如10（十进制）的8421码型BCD码=0001 0000；
+BCD码用程序转换实例：
+例：把十进制数45转换为8421型BCD码
+unsigned char data1, data2 = 45; //声明2个无符号char型变量data1和data2并且data2赋初值45
+data1 = data2/10; data2 = data2%10; data2 = data2 &#43; data1*16; //data2最终等于69这个数
+把69这个8421型BCD码换算回十进制数：
+data1 = data2/16; data2 = data2%16; data2 = data2 &#43; data1*10; //data2最终等于45" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/b4c27ede8e9d375b03e8349ec27c893e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-12-14T12:02:12+08:00" />
+<meta property="article:modified_time" content="2023-12-14T12:02:12+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">实时时钟DS1302原理详解和单片机编程</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>一、DS1302的功能</h2> 
+<p style="text-align:left;"><span style="color:#000000;">DS1302</span><span style="color:#000000;">是美国</span><span style="color:#000000;">DALLAS</span><span style="color:#000000;">推出的一款高性能、低功耗的日历时钟芯片。</span></p> 
+<p style="text-align:left;"><span style="color:#000000;">DS1302是一种串行接口的实时时钟，芯片内部具有可编程的日历时钟和</span><span style="color:#000000;">31</span><span style="color:#000000;">个字节的静态</span><span style="color:#000000;">RAM</span><span style="color:#000000;">，日历时钟可以自动进行闰年补偿，计时准确，接口简单，使用方便，工作电压范围宽（</span><span style="color:#000000;">2.5~5.5V</span><span style="color:#000000;">），芯片自身还具有对备用电池进行涓流充电功能，可有效延长备用电池的使用寿命。</span></p> 
+<p style="text-align:left;"><span style="color:#000000;">DS1302</span><span style="color:#000000;">用于数据记录，能实现数据与该数据出现的时间同时记录，因此广泛应用于测量系统中。</span></p> 
+<p> <img alt="" height="150" src="https://images2.imgbox.com/2d/fa/QNiIY3k4_o.png" width="169"><img alt="" height="151" src="https://images2.imgbox.com/76/28/cVUuHiOY_o.png" width="138"><img alt="" height="146" src="https://images2.imgbox.com/b1/e2/jXzIPWPK_o.png" width="148"><img alt="" height="146" src="https://images2.imgbox.com/00/44/wDadQWV9_o.png" width="187"></p> 
+<h2> 二、DS1302硬件及引脚功能</h2> 
+<p><img alt="" height="235" src="https://images2.imgbox.com/7a/44/v4GibCNN_o.png" width="356"><img alt="" height="234" src="https://images2.imgbox.com/bd/57/TiNoOWgs_o.png" width="346"> </p> 
+<p style="text-align:left;"><span style="color:#0d0016;"><strong>各引脚功能为：</strong></span></p> 
+<p style="text-align:left;"><span style="color:#0d0016;">1、VCC1：主电源。 VCC2：备用电源。当VCC2大于VCC1+0.2V时由VCC2向DS1302供电否则由VCC1向DS1302供电。</span></p> 
+<p style="text-align:left;"><span style="color:#0d0016;">2、SCLK：串行时钟输入端，控制数据输入与输出；</span></p> 
+<p style="text-align:left;"><span style="color:#0d0016;">3、I/O ：双向输入线；</span></p> 
+<p style="text-align:left;"><span style="color:#0d0016;">4、CE：使能端，CE为高时允许读写DS1302数据，为低时禁止读写。</span></p> 
+<h2 style="text-align:left;">三、DS1302寄存器</h2> 
+<p style="text-align:left;"><strong><span style="color:#000000;">时钟日历和控制寄存器如图所示：</span></strong></p> 
+<p style="text-align:left;"><img alt="" height="204" src="https://images2.imgbox.com/a6/cb/3POgDP5n_o.png" width="628"></p> 
+<blockquote> 
+ <p style="text-align:left;"><span style="color:#0d0016;">如上图所示，时钟日历寄存器包含在7个读/写寄存器内，读/写寄存器中的数据是BCD码。</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;"><strong>秒寄存器（81h、80h）</strong>的BIT7定义为时钟暂停标志（CH）。当该位置为1时，时钟振荡器停止，DS1302处于低功耗状态；当该位置为0时，时钟开始运行。</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;"><strong>小时寄存器（85h、84h）</strong>的BIT7用于定义DS1302是运行于12小时模式还是24小时模式，当为1时，选择12小时模式，此时BIT5为AM/PM位，在24小时模式时此位为小时数据位。</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;"><strong>控制寄存器（8Fh、8Eh）</strong>的BIT7是写保护位（WP），其它7位均为0。在任何对时钟或RAM读写操作之前，WP位必须为0。当WP位为1时，不能对任何时钟日历寄存器或RAM进行写操作。</span></p> 
+ <p style="text-align:left;"><span style="color:#38d8f0;">    </span></p> 
+</blockquote> 
+<p style="text-align:left;"></p> 
+<p><strong> <span style="color:#000000;">31</span><span style="color:#000000;">个字节静态</span><span style="color:#000000;">RAM</span><span style="color:#000000;">寄存器如图</span><span style="color:#000000;">所示</span></strong></p> 
+<p><span style="color:#0d0016;"> </span><img alt="" height="161" src="https://images2.imgbox.com/42/78/2wgzyvjK_o.png" width="560"></p> 
+<p><strong> <span style="color:#000000;">突发模式配置寄存器如图</span><span style="color:#000000;">所示</span></strong></p> 
+<p><img alt="" height="86" src="https://images2.imgbox.com/fd/45/KDTrIDZc_o.png" width="560"></p> 
+<h2> <span style="color:#0d0016;"> <strong>四、DS1302通信时序</strong></span></h2> 
+<p style="text-align:left;"><span style="color:#000000;">DS1302</span><span style="color:#000000;">读写数据时序，图</span><span style="color:#000000;">8</span><span style="color:#000000;">为读一字节时序，图</span><span style="color:#000000;">9</span><span style="color:#000000;">为写一字节时序</span><span style="color:#fe2c24;">，数据的传输是从最低位开始（BIT0）</span><span style="color:#000000;">。数据是以位（</span><span style="color:#000000;">BIT</span><span style="color:#000000;">）为单位依次写入或读出，读写数据操作中</span><span style="color:#000000;">SCLK</span><span style="color:#000000;">上升沿时执行写入数据，下降沿时执行读出数据。</span></p> 
+<p style="text-align:left;"><img alt="" height="131" src="https://images2.imgbox.com/66/9c/sIVQzNrg_o.png" width="717"></p> 
+<blockquote> 
+ <p><span style="color:#0d0016;"> <strong>读数据：</strong>CE端从低到高的一个上升沿开始允许开始读数据，拉低CE端则禁止读写数据；开始的8个SCLK周期，写命令字节，数据的后8个SCLK 周期读出数据。</span></p> 
+</blockquote> 
+<p> <img alt="" height="134" src="https://images2.imgbox.com/38/71/06yEDJpv_o.png" width="719"></p> 
+<blockquote> 
+ <p><span style="color:#0d0016;"> <strong>写数据：</strong>CE端从低到高的一个上升沿开始允许开始写数据，拉低CE端则禁止读写数据；开始的8个SCLK周期，写命令字节，数据的后8个SCLK 周期写入数据。</span></p> 
+</blockquote> 
+<h2> 五、BCD码的转换</h2> 
+<blockquote> 
+ <p style="text-align:left;"><span style="color:#0d0016;">在DS1302中有关于时钟日历的寄存器数据存储格式为BCD码</span><span style="color:#ffffff;">；</span></p> 
+ <p style="text-align:left;"></p> 
+ <p style="text-align:left;"><span style="color:#ffff00;"><strong>BCD</strong></span><span style="color:#ffff00;"><strong>码介绍：</strong></span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">我们时钟日历寄存器使用的是8421码型的BCD码，BCD码还有5421码、2421码等，其中8421码型的BCD码最最常用；</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">BCD码是用四位二进制数表示一位十进制数的0-9这十个数简称BCD码；</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">      8421</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">8421码型BCD码最小值为0000（二进制），最大值为1001（二进制）；9</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">一个字节的8421码型BCD码中的低四位用于表示十进制的个位，高四位用于表示十进制的十位，如10（十进制）的8421码型BCD码=0001 0000；</span></p> 
+ <p style="text-align:left;"></p> 
+ <p style="text-align:left;"><span style="color:#ffff00;"><strong>BCD</strong></span><span style="color:#ffff00;"><strong>码用程序转换实例：</strong></span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">例：把十进制数45转换为8421型BCD码</span></p> 
+ <p style="text-align:left;"><span style="color:#ff00ff;">unsigned char</span><span style="color:#0d0016;"> data1, data2 = 45;</span><span style="color:#ffffff;">  </span><span style="color:#00cc66;">//</span><span style="color:#00cc66;">声明</span><span style="color:#00cc66;">2</span><span style="color:#00cc66;">个无符号</span><span style="color:#00cc66;">char</span><span style="color:#00cc66;">型变量</span><span style="color:#00cc66;">data1</span><span style="color:#00cc66;">和</span><span style="color:#00cc66;">data2</span><span style="color:#00cc66;">并且</span><span style="color:#00cc66;">data2</span><span style="color:#00cc66;">赋初值</span><span style="color:#00cc66;">45</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">data1 = data2/10;  data2 = data2%10;  data2 = data2 + data1*16; </span><span style="color:#ffffff;"> </span><span style="color:#00cc66;">//data2</span><span style="color:#00cc66;">最终等于</span><span style="color:#00cc66;">69</span><span style="color:#00cc66;">这个数</span></p> 
+ <p style="text-align:left;"></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">把69这个8421型BCD码换算回十进制数：</span></p> 
+ <p style="text-align:left;"><span style="color:#0d0016;">data1 = data2/16;  data2 = data2%16;  data2 = data2 + data1*10;  </span><span style="color:#00cc66;">//data2</span><span style="color:#00cc66;">最终等于</span><span style="color:#00cc66;">45</span></p> 
+</blockquote> 
+<h2> 六、程序设计流程</h2> 
+<blockquote> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>写DS1302一字节数据</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•</span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>读DS1302一字节数据</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>BCD码转换</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>关闭写保护</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>设置DS1302时钟日历寄存器（初始显示时间）</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>设置写保护</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•</span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>关闭写保护</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>读取DS1302时钟日历</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>设置写保护</strong></span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•</span> 
+ </div> 
+ <div style="text-align:left;"> 
+  <span style="color:#0d0016;">•<strong>用数码管显示DS1302  时.分.秒</strong></span> 
+ </div> 
+</blockquote> 
+<p></p> 
+<pre><code>#include &lt;reg52.h&gt;
+#include &lt;intrins.h&gt;
+#define MAIN_Fosc		11059200UL	//宏定义主时钟HZ
+/*====================================
+ 自定义类型名
+====================================*/
+typedef unsigned char INT8U;
+typedef unsigned char uchar;
+
+typedef unsigned int INT16U;
+typedef unsigned int uint;
+
+/*====================================
+ 硬件接口位声明
+====================================*/
+sbit TSCLK = P1^0;//时钟线 接到P10上用杜邦线
+sbit TIO   = P1^1;//数据线，接到P11上
+sbit TRST  = P1^2;//使能端，接到P12上
+sbit DU  = P2^6;   //数码管段选
+sbit WE  = P2^7;   //数码管位选
+/*====================================
+共阴极数码管段选码
+====================================*/
+uchar code table[]={ 
+//0		1	 2     3     4     5     6     7     8
+0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F,
+//9     A     B	   C	 D	   E	 F		-	 .	  关显示
+0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71, 0x40, 0x80, 0x00
+                   };
+
+/*====================================
+数码管位选码
+====================================*/
+				  //第1位	2位	  3位	 4位   5位	6位	  7位	8位
+uchar code T_COM[] = {0xfe, 0xfd, 0xfb, 0xf7, 0xef, 0xdf, 0xbf, 0x7f};//数码管位码
+
+/*====================================
+函数：void Delay_Ms(INT16U ms)
+参数：ms，毫秒延时形参
+描述：12T 51单片机自适应主时钟毫秒级延时函数
+====================================*/
+void Delay_Ms(INT16U ms)
+{
+     INT16U i;
+	 do{
+	      i = MAIN_Fosc / 96000; 
+		  while(--i);   //96T per loop
+     }while(--ms);
+}
+
+void Display(uchar Hour, Min, Sec)
+{		
+//------------------------------
+	DU = 0;							
+	P0 = table[Hour/10];		
+	DU = 1;						
+	DU = 0;							
+
+	WE = 0;						
+	P0 = T_COM[0];				   
+	WE = 1;						
+	WE = 0;						
+	Delay_Ms(3);
+//-------------------------------
+	DU = 0;
+	P0 = table[Hour%10]|0x80; 
+	DU = 1;
+	DU = 0;
+
+	WE = 0;
+	P0 = T_COM[1];			  
+	WE = 1;
+	WE = 0;
+	Delay_Ms(3);
+//------------------------------
+	DU = 0;							
+	P0 = table[Min/10];		
+	DU = 1;						
+	DU = 0;							
+
+	WE = 0;						
+	P0 = T_COM[2];				   
+	WE = 1;						
+	WE = 0;						
+	Delay_Ms(3);
+//-------------------------------
+	DU = 0;
+	P0 = table[Min%10]|0x80; 
+	DU = 1;
+	DU = 0;
+
+	WE = 0;
+	P0 = T_COM[3];			 
+	WE = 1;
+	WE = 0;
+	Delay_Ms(3);
+//------------------------------
+	DU = 0;							
+	P0 = table[Sec/10];		
+	DU = 1;						
+	DU = 0;							
+
+	WE = 0;						
+	P0 = T_COM[4];				   
+	WE = 1;						
+	WE = 0;						
+	Delay_Ms(3);
+//-------------------------------
+	DU = 0;
+	P0 = table[Sec%10]; 
+	DU = 1;
+	DU = 0;
+
+	WE = 0;
+	P0 = T_COM[5];			  
+	WE = 1;
+	WE = 0;
+	Delay_Ms(3);
+
+}
+
+//写DS1302数据
+void Write_DS1302_DAT(uchar cmd, uchar dat)
+{
+	uchar i;
+	TRST = 0; //拉低使能端
+	TSCLK = 0;//拉低数据总线
+	TRST = 1; //拉高使能端，产生上升沿开始写数据
+	for(i = 0; i &lt; 8; i++)//每次写1位，写8次
+	{
+		TSCLK = 0;		  //拉低时钟总线
+		TIO = cmd &amp; 0x01; //写1位数据，从最低位开始写
+		TSCLK = 1;		  //拉高时钟总线，产生上升沿数据被DS1302读走
+		cmd &gt;&gt;=1;		  //右移一位
+	}
+	for(i = 0; i &lt; 8; i++)//每次写1位，写8次
+	{
+		TSCLK = 0;		  //拉低时钟总线
+		TIO = dat &amp; 0x01; //写1位数据，从最低位开始写
+		TSCLK = 1;		  //拉高时钟总线，产生上升沿数据被DS1302读走
+		dat &gt;&gt;= 1;		  //右移一位
+	}
+}
+//读DS1302数据
+uchar Read_DS1302_DAT(uchar cmd)
+{
+	uchar i, dat;
+	TRST = 0;  //拉低使能端
+	TSCLK = 0; //拉低数据总线
+	TRST = 1;  //拉高使能端，产生上升沿开始写数据
+	for(i = 0; i &lt; 8; i++)//每次写1位，写8次
+	{
+		TSCLK = 0;		 //拉低时钟总线
+		TIO = cmd &amp; 0x01;//写1位数据，从最低位开始写
+		TSCLK = 1;		 //拉高时钟总线，产生上升沿数据被DS1302读走
+		cmd &gt;&gt;=1;		 //右移一位
+	}
+	for(i = 0; i &lt; 8; i++)//每次读1位，读8次
+	{
+		TSCLK = 0;		  //拉低时钟总线,产生下降沿，DS1302把数据放到TIO上
+		dat &gt;&gt;= 1;		  //右移一位
+		if(TIO)	dat |= 0x80;//读取数据，从最低位开始
+		TSCLK = 1;			//拉高时钟总线，以备下一次产生下降沿
+	}
+	return dat;	//返回读出数据
+}
+
+//数据转BCD码
+uchar Dat_Chg_BCD(uchar dat)
+{
+	uchar dat1, dat2;
+	dat1 = dat / 10;
+	dat2 = dat % 10;
+	dat2 = dat2 + dat1 * 16;
+	return dat2;
+}
+
+//BCD码转换为数据
+uchar BCD_Chg_Dat(uchar dat)
+{
+	uchar dat1, dat2;
+	dat1 = dat / 16;
+	dat2 = dat % 16;
+	dat2 = dat2 + dat1 * 10;
+	return dat2;
+}
+
+void main()
+{
+	uchar i;
+	uchar Sec, Min, Hour;
+	Write_DS1302_DAT(0x8e, 0);//清除写保护
+	Write_DS1302_DAT(0x80, Dat_Chg_BCD(30));//30秒（并且进行BCD码转换）
+	Write_DS1302_DAT(0x82, Dat_Chg_BCD(15));//15分
+	Write_DS1302_DAT(0x84, Dat_Chg_BCD(19));//19时
+	Write_DS1302_DAT(0x8e, 0x80);//开写保护
+	while(1)
+	{
+		Write_DS1302_DAT(0x8e, 0); //清除写保护
+		Sec = BCD_Chg_Dat(Read_DS1302_DAT(0x81));//读秒寄存器（并且进行BCD码转换）
+		Min	= BCD_Chg_Dat(Read_DS1302_DAT(0x83));//读分寄存器
+		Hour = BCD_Chg_Dat(Read_DS1302_DAT(0x85));//读时寄存器
+		Write_DS1302_DAT(0x8e, 0x80);//开写保护
+		for(i = 0; i &lt; 50; i++)	//循环显示时钟
+			Display(Hour, Min, Sec);
+
+	}
+}</code></pre> 
+<h2>七、结语</h2> 
+<blockquote> 
+ <p><strong>考虑到一些读者需要相关资料和解决一些疑问，因此我新建立了一个学习交流群，我在群文件里上传了一些资料，需要的读者可以入群下载。</strong></p> 
+ <p><strong>群中文件资料我会时常更新，主要资料是51单片机开发、32单片机开发、编程、嵌入式学习、算法控制等。</strong></p> 
+ <p><strong>由于群中文件还在不断更新上传，有些方面的资料还不太完善，希望大家理解。若群中涉及违规行为，欢迎举报！</strong></p> 
+ <p><img alt="" height="475" src="https://images2.imgbox.com/73/1a/Qb5rIpSu_o.png" width="1200"></p> 
+ <p><img alt="" height="1038" src="https://images2.imgbox.com/1c/7a/AU46hW4G_o.png" width="1200"></p> 
+</blockquote>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/1b90bbe1116bf716370912de1babc044/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">1.1.1操作系统的概念、功能</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/d63033517c48e4176831be93c5b6d998/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【WinForm】使用Costura.Fody打包编译成可独立运行的桌面程序</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

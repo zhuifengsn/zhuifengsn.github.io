@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【Java面试题】Spring 为何需要三级缓存解决循环依赖，而不是二级缓存 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【Java面试题】Spring 为何需要三级缓存解决循环依赖，而不是二级缓存" />
+<meta property="og:description" content="前言 在使用 Spring 框架的日常开发中，bean 之间的循环依赖太频繁了，Spring 已经帮我们去解决循环依赖问题，对我们开发者来说是无感知的，下面具体分析一下 Spring 是如何解决 bean 之间循环依赖，为什么要使用到三级缓存，而不是二级缓存。
+bean生命周期 首先大家需要了解一下bean在spring中的生命周期，bean在spring的加载流程，才能够更加清晰知道spring是如何解决循环依赖的。
+我们在spring的BeanFactory工厂列举了很多接口，代表着bean的生命周期，我们主要记住的是我圈红线圈出来的接口, 再结合spring的源码来看这些接口主要是在哪里调用的
+AbstractAutowireCapableBeanFactory类的doCreateBean方法是创建bean的开始，我们可以看到首先需要实例化这个bean，也就是在堆中开辟一块内存空间给这个对象，createBeanInstance方法里面逻辑大概就是采用反射生成实例对象，进行到这里表示对象还并未进行属性的填充，也就是@Autowired注解的属性还未得到注入。
+我们可以看到第二步就是填充bean的成员属性，populateBean方法里面的逻辑大致就是对使用到了注入属性的注解就会进行注入，如果在注入的过程发现注入的对象还没生成，则会跑去生产要注入的对象，第三步就是调用initializeBean方法初始化bean，也就是调用我们上述所提到的接口
+可以看到initializeBean方法中，首先调用的是使用的Aware接口的方法，我们具体看一下invokeAwareMethods方法中会调用Aware接口的那些方法
+我们可以知道如果我们实现了BeanNameAware，BeanClassLoaderAware，BeanFactoryAware三个Aware接口的话，会依次调用setBeanName(), setBeanClassLoader(), setBeanFactory()方法，再看applyBeanPostProcessorsBeforeInitialization源码
+发现会如果有类实现了BeanPostProcessor接口，就会执行postProcessBeforeInitialization方法，这里需要注意的是：如果多个类实现BeanPostProcessor接口，那么多个实现类都会执行postProcessBeforeInitialization方法，可以看到是for循环依次执行的，还有一个注意的点就是如果加载A类到spring容器中，A类也重写了BeanPostProcessor接口的postProcessBeforeInitialization方法，这时要注意A类的postProcessBeforeInitialization方法并不会得到执行，因为A类还未加载完成，还未完全放到spring的singletonObjects一级缓存中。
+再看一个注意的点
+可以看到ApplicationContextAwareProcessor也实现了BeanPostProcessor接口，重写了postProcessBeforeInitialization方法，方法里面并调用了invokeAwareInterfaces方法，而invokeAwareInterfaces方法也写着如果实现了众多的Aware接口，则会依次执行相应的方法，值得注意的是ApplicationContextAware接口的setApplicationContext方法，再看一下invokeInitMethods源码
+发现如果实现了InitializingBean接口，重写了afterPropertiesSet方法，则会调用afterPropertiesSet方法，最后还会调用是否指定了init-method，可以通过&lt;bean init-method&gt;标签，或者@Bean注解的initMethod指定，最后再看一张applyBeanPostProcessorsAfterInitialization源码图
+发现跟之前的postProcessBeforeInitialization方法类似，也是循环遍历实现了BeanPostProcessor的接口实现类，执行postProcessAfterInitialization方法。整个bean的生命执行流程就如上面截图所示，哪个接口的方法在哪里被调用，方法的执行流程
+最后，对bean的生命流程进行一个流程图的总结
+三级缓存解决循环依赖 上一小节对bean的生命周期做了一个整体的流程分析，对spring如何去解决循环依赖的很有帮助。前面我们分析到填充属性时，如果发现属性还未在spring中生成，则会跑去生成属性对象实例
+我们可以看到填充属性的时候，spring会提前将已经实例化的bean通过ObjectFactory半成品暴露出去，为什么称为半成品是因为这时候的bean对象实例化，但是未进行属性填充，是一个不完整的bean实例对象
+spring利用singletonObjects, earlySingletonObjects, singletonFactories三级缓存去解决的，所说的缓存其实也就是三个Map
+可以看到三级缓存各自保存的对象，这里重点关注二级缓存earlySingletonObjects和三级缓存singletonFactory，一级缓存可以进行忽略。前面我们讲过先实例化的bean会通过ObjectFactory半成品提前暴露在三级缓存中
+singletonFactory是传入的一个匿名内部类，调用ObjectFactory.getObject()最终会调用getEarlyBeanReference方法。再来看看循环依赖中是怎么拿其它半成品的实例对象的。
+我们假设现在有这样的场景AService依赖BService，BService依赖AService
+AService首先实例化，实例化通过ObjectFactory半成品暴露在三级缓存中填充属性BService，发现BService还未进行过加载，就会先去加载BService再加载BService的过程中，实例化，也通过ObjectFactory半成品暴露在三级缓存填充属性AService的时候，这时候能够从三级缓存中拿到半成品的ObjectFactory 拿到ObjectFactory对象后，调用ObjectFactory.getObject()方法最终会调用getEarlyBeanReference()方法，getEarlyBeanReference这个方法主要逻辑大概描述下如果bean被AOP切面代理则返回的是beanProxy对象，如果未被代理则返回的是原bean实例，这时我们会发现能够拿到bean实例(属性未填充)，然后从三级缓存移除，放到二级缓存earlySingletonObjects中，而此时B注入的是一个半成品的实例A对象，不过随着B初始化完成后，A会继续进行后续的初始化操作，最终B会注入的是一个完整的A实例，因为在内存中它们是同一个对象。下面是重点，我们发现这个二级缓存好像显得有点多余，好像可以去掉，只需要一级和三级缓存也可以做到解决循环依赖的问题？？？
+只要两个缓存确实可以做到解决循环依赖的问题，但是有一个前提这个bean没被AOP进行切面代理，如果这个bean被AOP进行了切面代理，那么只使用两个缓存是无法解决问题，下面来看一下bean被AOP进行了切面代理的场景
+我们发现AService的testAopProxy被AOP代理了，看看传入的匿名内部类的getEarlyBeanReference返回的是什么对象
+发现singletonFactory.getObject()返回的是一个AService的代理对象，还是被CGLIB代理的。再看一张再执行一遍singletonFactory.getObject()返回的是否是同一个AService的代理对象
+我们会发现再执行一遍singleFactory.getObject()方法又是一个新的代理对象，这就会有问题了，因为AService是单例的，每次执行singleFactory.getObject()方法又会产生新的代理对象，假设这里只有一级和三级缓存的话，我每次从三级缓存中拿到singleFactory对象，执行getObject()方法又会产生新的代理对象，这是不行的，因为AService是单例的，所有这里我们要借助二级缓存来解决这个问题，将执行了singleFactory.getObject()产生的对象放到二级缓存中去，后面去二级缓存中拿，没必要再执行一遍singletonFactory.getObject()方法再产生一个新的代理对象，保证始终只有一个代理对象。还有一个注意的点
+总结 前面先讲到bean的加载流程，了解了bean加载流程对spring如何解决循环依赖的问题很有帮助，后面再分析到spring为什么需要利用到三级缓存解决循环依赖问题，而不是二级缓存。网上可以试试AOP的情形，实践一下就能明白二级缓存为什么解决不了AOP代理的场景了" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/4649fc960d09deed234649fea713c493/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-06-01T17:07:31+08:00" />
+<meta property="article:modified_time" content="2022-06-01T17:07:31+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【Java面试题】Spring 为何需要三级缓存解决循环依赖，而不是二级缓存</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="_0"></a>前言</h3> 
+<p>  在使用 Spring 框架的日常开发中，bean 之间的循环依赖太频繁了，Spring 已经帮我们去解决循环依赖问题，对我们开发者来说是无感知的，下面具体分析一下 Spring 是如何解决 bean 之间循环依赖，为什么要使用到三级缓存，而不是二级缓存。</p> 
+<h3><a id="bean_3"></a>bean生命周期</h3> 
+<p>  首先大家需要了解一下bean在spring中的生命周期，bean在spring的加载流程，才能够更加清晰知道spring是如何解决循环依赖的。<br> <img src="https://images2.imgbox.com/ef/2a/0i2UHkS8_o.png" alt="在这里插入图片描述"><br>   我们在spring的BeanFactory工厂列举了很多接口，代表着bean的生命周期，我们主要记住的是我圈红线圈出来的接口, 再结合spring的源码来看这些接口主要是在哪里调用的<br> <img src="https://images2.imgbox.com/6f/c2/Kyb0IQOB_o.png" alt="在这里插入图片描述"><br>   <code>AbstractAutowireCapableBeanFactory</code>类的<code>doCreateBean</code>方法是创建bean的开始，我们可以看到首先需要实例化这个bean，也就是在堆中开辟一块内存空间给这个对象，<code>createBeanInstance</code>方法里面逻辑大概就是采用反射生成实例对象，进行到这里表示对象还并未进行属性的填充，也就是<code>@Autowired</code>注解的属性还未得到注入。<br> <img src="https://images2.imgbox.com/7d/af/sN5MbdUy_o.png" alt="在这里插入图片描述"><br>   我们可以看到第二步就是<strong>填充bean的成员属性</strong>，<code>populateBean</code>方法里面的逻辑大致就是对使用到了注入属性的注解就会进行注入，如果在注入的过程发现注入的对象还没生成，则会跑去生产要注入的对象，<strong>第三步就是调用<code>initializeBean</code>方法初始化bean</strong>，也就是调用我们上述所提到的接口<br> <img src="https://images2.imgbox.com/29/5a/rarzIDqw_o.png" alt="在这里插入图片描述"><br>   可以看到<code>initializeBean</code>方法中，首先调用的是使用的Aware接口的方法，我们具体看一下<code>invokeAwareMethods</code>方法中会调用<code>Aware</code>接口的那些方法<br> <img src="https://images2.imgbox.com/d2/4d/T63yE5TF_o.png" alt="在这里插入图片描述"><br>   我们可以知道如果我们实现了<code>BeanNameAware</code>，<code>BeanClassLoaderAware</code>，<code>BeanFactoryAware</code>三个Aware接口的话，会依次调用<code>setBeanName()</code>, <code>setBeanClassLoader()</code>, <code>setBeanFactory()</code>方法，再看<code>applyBeanPostProcessorsBeforeInitialization</code>源码<br> <img src="https://images2.imgbox.com/ab/cc/ILsoLFKP_o.png" alt="在这里插入图片描述"><br>   发现会如果有类实现了<code>BeanPostProcessor</code>接口，就会执行<code>postProcessBeforeInitialization</code>方法，这里需要注意的是：如果多个类实现<code>BeanPostProcessor</code>接口，那么多个实现类都会执行<code>postProcessBeforeInitialization</code>方法，可以看到是for循环依次执行的，还有一个注意的点就是如果加载A类到spring容器中，A类也重写了<code>BeanPostProcessor</code>接口的<code>postProcessBeforeInitialization</code>方法，这时要注意A类的<code>postProcessBeforeInitialization</code>方法并不会得到执行，因为A类还未加载完成，还未完全放到spring的<code>singletonObjects</code>一级缓存中。</p> 
+<p>再看一个注意的点</p> 
+<p><img src="https://images2.imgbox.com/55/59/wqmcdtBd_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/0d/42/B2OJUOPa_o.png" alt="在这里插入图片描述"><br>   可以看到<code>ApplicationContextAwareProcessor</code>也实现了<code>BeanPostProcessor</code>接口，重写了<code>postProcessBeforeInitialization</code>方法，方法里面并调用了<code>invokeAwareInterfaces</code>方法，而<code>invokeAwareInterfaces</code>方法也写着如果实现了众多的<code>Aware</code>接口，则会依次执行相应的方法，值得注意的是<code>ApplicationContextAware</code>接口的<code>setApplicationContext</code>方法，再看一下<code>invokeInitMethods</code>源码<br> <img src="https://images2.imgbox.com/94/32/J9HjvlQd_o.png" alt="在这里插入图片描述"><br>   发现如果实现了<code>InitializingBean</code>接口，重写了<code>afterPropertiesSet</code>方法，则会调用<code>afterPropertiesSet</code>方法，最后还会调用是否指定了<code>init-method</code>，可以通过<code>&lt;bean init-method&gt;</code>标签，或者<code>@Bean注解的initMethod</code>指定，最后再看一张<code>applyBeanPostProcessorsAfterInitialization</code>源码图<br> <img src="https://images2.imgbox.com/17/8d/cSZbhcKm_o.png" alt="在这里插入图片描述"><br>   发现跟之前的<code>postProcessBeforeInitialization</code>方法类似，也是循环遍历实现了<code>BeanPostProcessor</code>的接口实现类，执行<code>postProcessAfterInitialization</code>方法。整个bean的生命执行流程就如上面截图所示，哪个接口的方法在哪里被调用，方法的执行流程</p> 
+<p>最后，对bean的生命流程进行一个流程图的总结<br> <img src="https://images2.imgbox.com/85/1d/QuN29gpB_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_30"></a>三级缓存解决循环依赖</h3> 
+<p>  上一小节对bean的生命周期做了一个整体的流程分析，对spring如何去解决循环依赖的很有帮助。前面我们分析到填充属性时，如果发现属性还未在spring中生成，则会跑去生成属性对象实例<br> <img src="https://images2.imgbox.com/c0/ba/iYUVqgxT_o.png" alt="在这里插入图片描述"><br>   我们可以看到填充属性的时候，spring会提前将已经实例化的bean通过<code>ObjectFactory</code>半成品暴露出去，<strong>为什么称为半成品是因为这时候的bean对象实例化，但是未进行属性填充，是一个不完整的bean实例对象</strong><br> <img src="https://images2.imgbox.com/e5/7d/97Fh4kLA_o.png" alt="在这里插入图片描述"><br>   spring利用<code>singletonObjects</code>, <code>earlySingletonObjects</code>, <code>singletonFactories</code>三级缓存去解决的，所说的缓存其实也就是三个Map<br> <img src="https://images2.imgbox.com/27/02/kDWjkCOu_o.png" alt="在这里插入图片描述"><br>   可以看到三级缓存各自保存的对象，这里重点关注二级缓存<code>earlySingletonObjects</code>和三级缓存<code>singletonFactory</code>，一级缓存可以进行忽略。前面我们讲过先实例化的bean会通过<code>ObjectFactory</code>半成品提前暴露在三级缓存中<br> <img src="https://images2.imgbox.com/e7/88/yfXVe3n1_o.png" alt="在这里插入图片描述"><br>   <code>singletonFactory</code>是传入的一个匿名内部类，调用<code>ObjectFactory.getObject()</code>最终会调用<code>getEarlyBeanReference</code>方法。再来看看循环依赖中是怎么拿其它半成品的实例对象的。</p> 
+<p>我们假设现在有这样的场景<code>AService</code>依赖<code>BService</code>，<code>BService</code>依赖<code>AService</code></p> 
+<ol><li><code>AService</code>首先实例化，实例化通过<code>ObjectFactory</code>半成品暴露在三级缓存中</li><li>填充属性<code>BService</code>，发现<code>BService</code>还未进行过加载，就会先去加载<code>BService</code></li><li>再加载<code>BService</code>的过程中，实例化，也通过<code>ObjectFactory</code>半成品暴露在三级缓存</li><li>填充属性<code>AService</code>的时候，这时候能够从三级缓存中拿到半成品的<code>ObjectFactory</code></li></ol> 
+<p><img src="https://images2.imgbox.com/11/e0/va4dimul_o.png" alt="在这里插入图片描述"><br>   拿到<code>ObjectFactory</code>对象后，调用<code>ObjectFactory.getObject()</code>方法最终会调用<code>getEarlyBeanReference()</code>方法，<code>getEarlyBeanReference</code>这个方法主要逻辑大概描述下如果<code>bean</code>被<code>AOP切面</code>代理则返回的是<code>beanProxy对象</code>，如果未被代理则返回的是原bean实例，这时我们会发现能够拿到bean实例(属性未填充)，然后从三级缓存移除，放到二级缓存<code>earlySingletonObjects</code>中，而此时B注入的是一个半成品的实例A对象，不过随着B初始化完成后，A会继续进行后续的初始化操作，最终B会注入的是一个完整的A实例，因为在内存中它们是同一个对象。下面是重点，我们发现这个二级缓存好像显得有点多余，好像可以去掉，只需要一级和三级缓存也可以做到解决循环依赖的问题？？？</p> 
+<p>  只要两个缓存确实可以做到解决循环依赖的问题，但是有一个前提这个bean没被AOP进行切面代理，如果这个bean被AOP进行了切面代理，那么只使用两个缓存是无法解决问题，下面来看一下bean被AOP进行了切面代理的场景<br> <img src="https://images2.imgbox.com/bc/2a/NwcbVaWG_o.png" alt="在这里插入图片描述"><br> 我们发现<code>AService</code>的<code>testAopProxy</code>被AOP代理了，看看传入的匿名内部类的<code>getEarlyBeanReference</code>返回的是什么对象<br> <img src="https://images2.imgbox.com/e4/23/uTRCqluY_o.png" alt="在这里插入图片描述"><br>   发现<code>singletonFactory.getObject()</code>返回的是一个<code>AService</code>的代理对象，还是被<code>CGLIB代理</code>的。再看一张再执行一遍<code>singletonFactory.getObject()</code>返回的是否是同一个AService的代理对象<br> <img src="https://images2.imgbox.com/56/3c/19uTcCbU_o.png" alt="在这里插入图片描述"><br>   我们会发现再执行一遍<code>singleFactory.getObject()</code>方法又是一个新的代理对象，这就会有问题了，因为AService是单例的，每次执行<code>singleFactory.getObject()</code>方法又会产生新的代理对象，假设这里只有一级和三级缓存的话，我每次从三级缓存中拿到<code>singleFactory</code>对象，执行<code>getObject()方法</code>又会产生新的代理对象，这是不行的，因为AService是单例的，所有这里我们要借助二级缓存来解决这个问题，将执行了<code>singleFactory.getObject()</code>产生的对象放到二级缓存中去，后面去二级缓存中拿，没必要再执行一遍<code>singletonFactory.getObject()</code>方法再产生一个新的代理对象，保证始终只有一个代理对象。还有一个注意的点<br> <img src="https://images2.imgbox.com/e1/66/tljGbXF1_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_58"></a>总结</h3> 
+<p>  前面先讲到bean的加载流程，了解了bean加载流程对spring如何解决循环依赖的问题很有帮助，后面再分析到spring为什么需要利用到三级缓存解决循环依赖问题，而不是二级缓存。网上可以试试AOP的情形，实践一下就能明白二级缓存为什么解决不了AOP代理的场景了</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/925792c9eb4e7a8f6f841223f4d4ba60/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Java回调函数</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/3d4959f356de0d0ad54a660f8ad52f1b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C语言 队列--顺序队列</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

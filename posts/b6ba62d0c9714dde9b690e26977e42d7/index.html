@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>PCL点云——滤波算法 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="PCL点云——滤波算法" />
+<meta property="og:description" content="PCL点云——滤波算法 文章目录 PCL点云——滤波算法@[TOC] 0、点云滤波概述0.1 Why0.2 How 一、直通滤波PassThrough1.1 原理1.3 PCL类1.3 例子1.3.1 Z轴1.3.2 Z、X轴（多维度直通滤波） 二、VoxelGrid (降采样)2.1 原理2.2 PCL例程2.2.1 pcl:VoxelGrid 方法2.2.2 pcl:ApproximateVoxelGrid 方法2.2.3 显示点云函数2.2.4 pcl:VoxelGrid完整示例2.2.5 出现的问题及解决办法 三、离群点移除3.1 概述3.1.1 Why3.1.2 How 3.2 实现方式3.2.1 StatisticalOutlierRemoval（统计学离群点移除过滤器）3.2.2 ConditionalRemoval 条件滤波 &amp; RadiusOutlierRemoval 半径离群值滤波3.2.3 双边滤波 点云滤波器继承关系参考文章链接 0、点云滤波概述 0.1 Why 在获取点云数据时，由于设备精度、操作者经验、环境因素等带来的影响，以及电磁波衍射特性、被测物体表面性质变化和数据拼接配准操作过程的影响，点云数据中将不可避免地出现一些噪声点。实际应用中除了这些测量随机误差产生的噪声点之外，由于受到外界干扰如视线遮挡、障碍物等因素的影响，点云数据中往往存在着一些离主体点云较远的离散点，即离群点。不同的获取设备点云噪声结构也有不同。
+点云滤波针对的情形：
+1.下采样，数据量过大，不易于处理
+2.离群点，通常由遮挡引起
+3.点云数据的密度不均匀，需要平滑
+4.噪声数据
+0.2 How 下图显示了一个噪声消除的示例。 由于测量误差，某些数据集会出现大量阴影点。 这使局部点云3D特征的估算变得复杂。通常通过对每个点的邻域进行统计分析，并修剪掉不符合特定条件的那些异常值，进而可以过滤掉某些异常值。
+PCL中实现这些稀疏离群值的消除，需要计算数据集中的点与邻居距离的分布。 即对于每个点，都会计算从它到所有相邻点的平均距离。 通过假设结果分布是具有均值和标准差的高斯分布，可以将那些平均距离在**【由全局距离均值和标准差定义的区间】**之外的所有点视为离群值，并将之从数据集中进行修剪。
+一、直通滤波PassThrough 1.1 原理 过滤掉在指定维度方向上取值不在给定值域内的点。
+首先，指定一个维度以及该维度下的值域，其次，遍历点云中的每个点，判断该点在指定维度上的取值是否在值域内，删除取值不在值域内的点，最后，遍历结束，留下的点即构成滤波后的点云。直通滤波器简单高效，适用于消除背景等操作。
+1.3 PCL类 class pcl: : PassThrough&lt; PointT &gt; 类 PassThrough 实现对用户给定点云某个字段的限定下，对点云进行简单的基本过滤，例如限制过滤掉点云中所有 X 字段不在某个范围内的点，该类的使用比较灵活但完全取决于用户的限定字段和对应条件 。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/b6ba62d0c9714dde9b690e26977e42d7/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-08-14T14:34:07+08:00" />
+<meta property="article:modified_time" content="2023-08-14T14:34:07+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">PCL点云——滤波算法</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="PCL_0"></a>PCL点云——滤波算法</h2> 
+<h3><a id="TOC_2"></a> 
+ <div class="toc"> 
+  <h3>文章目录</h3> 
+  <ul><li><a href="#PCL_0" rel="nofollow">PCL点云——滤波算法</a></li><li><ul><li><a href="#TOC_2" rel="nofollow">@[TOC]</a></li></ul> 
+   </li><li><a href="#0_4" rel="nofollow">0、点云滤波概述</a></li><li><ul><li><a href="#01_Why_5" rel="nofollow">0.1 Why</a></li><li><a href="#02_How_13" rel="nofollow">0.2 How</a></li></ul> 
+   </li><li><a href="#PassThrough_18" rel="nofollow">一、直通滤波PassThrough</a></li><li><ul><li><a href="#11__19" rel="nofollow">1.1 原理</a></li><li><a href="#13_PCL_22" rel="nofollow">1.3 PCL类</a></li><li><a href="#13__46" rel="nofollow">1.3 例子</a></li><li><ul><li><a href="#131_Z_47" rel="nofollow">1.3.1 Z轴</a></li><li><a href="#132_ZX_97" rel="nofollow">1.3.2 Z、X轴（多维度直通滤波）</a></li></ul> 
+   </li></ul> 
+   </li><li><a href="#VoxelGrid__170" rel="nofollow">二、VoxelGrid (降采样)</a></li><li><ul><li><a href="#21__171" rel="nofollow">2.1 原理</a></li><li><a href="#22_PCL_178" rel="nofollow">2.2 PCL例程</a></li><li><ul><li><a href="#221_pclVoxelGrid__179" rel="nofollow">2.2.1 pcl:VoxelGrid 方法</a></li><li><a href="#222_pclApproximateVoxelGrid__201" rel="nofollow">2.2.2 pcl:ApproximateVoxelGrid 方法</a></li><li><a href="#223__223" rel="nofollow">2.2.3 显示点云函数</a></li><li><a href="#224_pclVoxelGrid_247" rel="nofollow">2.2.4 pcl:VoxelGrid完整示例</a></li><li><a href="#225__314" rel="nofollow">2.2.5 出现的问题及解决办法</a></li></ul> 
+   </li></ul> 
+   </li><li><a href="#_425" rel="nofollow">三、离群点移除</a></li><li><ul><li><a href="#31__426" rel="nofollow">3.1 概述</a></li><li><ul><li><a href="#311_Why_427" rel="nofollow">3.1.1 Why</a></li><li><a href="#312_How_429" rel="nofollow">3.1.2 How</a></li></ul> 
+    </li><li><a href="#32__433" rel="nofollow">3.2 实现方式</a></li><li><ul><li><a href="#321_StatisticalOutlierRemoval_434" rel="nofollow">3.2.1 StatisticalOutlierRemoval（统计学离群点移除过滤器）</a></li><li><a href="#322_ConditionalRemoval___RadiusOutlierRemoval__510" rel="nofollow">3.2.2 ConditionalRemoval 条件滤波 &amp; RadiusOutlierRemoval 半径离群值滤波</a></li><li><a href="#323__586" rel="nofollow">3.2.3 双边滤波</a></li></ul> 
+   </li></ul> 
+   </li><li><a href="#_653" rel="nofollow">点云滤波器继承关系</a></li><li><a href="#_655" rel="nofollow">参考文章链接</a></li></ul> 
+ </div></h3> 
+<h2><a id="0_4"></a>0、点云滤波概述</h2> 
+<h3><a id="01_Why_5"></a>0.1 Why</h3> 
+<p>在获取点云数据时，由于设备精度、操作者经验、环境因素等带来的影响，以及电磁波衍射特性、被测物体表面性质变化和数据拼接配准操作过程的影响，点云数据中将不可避免地出现一些<strong>噪声点</strong>。实际应用中除了这些测量随机误差产生的噪声点之外，由于<strong>受到外界干扰如视线遮挡、障碍物等因素的影响，点云数据中往往存在着一些离主体点云较远的离散点，即离群点</strong>。不同的获取设备点云噪声结构也有不同。</p> 
+<blockquote> 
+ <p><strong>点云滤波针对的情形：<br> 1.下采样，数据量过大，不易于处理<br> 2.离群点，通常由遮挡引起<br> 3.点云数据的密度不均匀，需要平滑<br> 4.噪声数据</strong></p> 
+</blockquote> 
+<h3><a id="02_How_13"></a>0.2 How</h3> 
+<p>下图显示了一个噪声消除的示例。 由于测量误差，某些数据集会出现<strong>大量阴影点</strong>。 这使局部点云3D特征的估算变得复杂。通常通过对每个点的邻域进行统计分析，并修剪掉不符合特定条件的那些异常值，进而可以过滤掉某些异常值。<br> <img src="https://images2.imgbox.com/17/0e/kY66QM0i_o.png" alt="在这里插入图片描述"><br> PCL中实现这些稀疏离群值的消除，需要计算数据集中的<strong>点与邻居距离的分布</strong>。 即对于每个点，都会计算从它到所有相邻点的平均距离。 通过假设结果分布是具有均值和标准差的高斯分布，可以将那些平均距离在**【由全局距离均值和标准差定义的区间】**之外的所有点视为离群值，并将之从数据集中进行修剪。</p> 
+<h2><a id="PassThrough_18"></a>一、直通滤波PassThrough</h2> 
+<h3><a id="11__19"></a>1.1 原理</h3> 
+<p>过滤掉在指定维度方向上取值不在给定值域内的点。<br> 首先，指定一个维度以及该维度下的值域，其次，遍历点云中的每个点，判断该点在指定维度上的取值是否在值域内，删除取值不在值域内的点，最后，遍历结束，留下的点即构成滤波后的点云。<strong>直通滤波器简单高效，适用于消除背景等操作</strong>。</p> 
+<h3><a id="13_PCL_22"></a>1.3 PCL类</h3> 
+<pre><code class="prism language-cpp"><span class="token keyword">class</span> <span class="token class-name">pcl</span><span class="token operator">:</span> <span class="token operator">:</span> PassThrough<span class="token operator">&lt;</span> PointT <span class="token operator">&gt;</span>
+</code></pre> 
+<p>类 PassThrough 实现对用户给定点云某个字段的限定下，对点云进行简单的基本过滤，例如限制过滤掉点云中所有 X 字段不在某个范围内的点，该类的使用比较灵活但完全取决于用户的限定字段和对应条件 。</p> 
+<p><strong>关键成员函数</strong>：</p> 
+<pre><code class="prism language-cpp"><span class="token keyword">void</span> <span class="token function">setFilterFieldName</span> <span class="token punctuation">(</span><span class="token keyword">const</span> std <span class="token operator">:</span> <span class="token operator">:</span>string <span class="token operator">&amp;</span>field_name<span class="token punctuation">)</span>
+</code></pre> 
+<blockquote> 
+ <p>设置限定字段的名称字符串 field_name ，例如”z”等。</p> 
+</blockquote> 
+<pre><code class="prism language-cpp">  <span class="token keyword">void</span> <span class="token function">setFilterLimits</span> <span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">double</span> <span class="token operator">&amp;</span>limit_min<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">double</span> <span class="token operator">&amp;</span> limit_max<span class="token punctuation">)</span>
+</code></pre> 
+<blockquote> 
+ <p>设置滤波限制条件，包括最小值 limit_min 和最大值 limit_max。 该函数与 setFilterFieldName( ）一起使用，点云中所有点的setFilterFieldName( ）设置的字段的值未在用户所设定区间范围外的点将被删除。参数 limit_min 为允许的区间范围的最小值，默认为 DBL_ MIN , limit_ max 为允许的区间范围的最大值，默认为DB L_MAX.</p> 
+</blockquote> 
+<pre><code class="prism language-cpp"> <span class="token keyword">void</span> <span class="token function">setFilterLimitsNegative</span> <span class="token punctuation">(</span><span class="token keyword">bool</span> <span class="token operator">&amp;</span><span class="token operator">!</span>imit_negative<span class="token punctuation">)</span><span class="token operator">:</span>
+</code></pre> 
+<blockquote> 
+ <p>设置返回滤波限制条件外的点还是内部点， limit_negative 默认值为 false，输出点云为在设定字段的设定范围内的点集，如果设置为 true 则刚好相反 。 警告：该方法将来将会被移除，用 setNegative( ）函数代替。</p> 
+</blockquote> 
+<h3><a id="13__46"></a>1.3 例子</h3> 
+<h4><a id="131_Z_47"></a>1.3.1 Z轴</h4> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;iostream&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/point_types.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/io/ply_io.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/filters/passthrough.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/visualization/cloud_viewer.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/visualization/pcl_visualizer.h&gt;</span></span>
+
+<span class="token keyword">int</span> user_data<span class="token punctuation">;</span>
+
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+	<span class="token comment">//Create and load the point cloud</span>
+	pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token operator">::</span>Ptr <span class="token function">cloud</span><span class="token punctuation">(</span>new pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token operator">::</span>Ptr <span class="token function">cloudFiltred</span><span class="token punctuation">(</span>new pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token operator">::</span>io<span class="token operator">::</span><span class="token function">loadPLYFile</span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\CloudFilters\\20230712-05-VG.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token comment">//Create the filtering object</span>
+	pcl<span class="token operator">::</span>PassThrough<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span> pass<span class="token punctuation">;</span>
+	pass<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pass<span class="token punctuation">.</span><span class="token function">setFilterFieldName</span><span class="token punctuation">(</span><span class="token string">"z"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pass<span class="token punctuation">.</span><span class="token function">setFilterLimits</span><span class="token punctuation">(</span><span class="token operator">-</span><span class="token number">115</span><span class="token punctuation">,</span> <span class="token number">50</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pass<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>cloudFiltred<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	boost<span class="token operator">::</span>shared_ptr<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>visualization<span class="token operator">::</span>PCLVisualizer<span class="token operator">&gt;</span> <span class="token function">viewer</span><span class="token punctuation">(</span>new pcl<span class="token operator">::</span>visualization<span class="token operator">::</span><span class="token function">PCLVisualizer</span><span class="token punctuation">(</span><span class="token string">"3D viewer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	viewer<span class="token operator">-&gt;</span><span class="token function">initCameraParameters</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> <span class="token function">V1</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token keyword">int</span> <span class="token function">V2</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	viewer<span class="token operator">-&gt;</span><span class="token function">addCoordinateSystem</span><span class="token punctuation">(</span><span class="token number">0.2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span>addPointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">(</span>cloud<span class="token punctuation">,</span> <span class="token string">"cloud"</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span>addPointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">(</span>cloudFiltred<span class="token punctuation">,</span> <span class="token string">"cloudFiltred"</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">spin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	pcl<span class="token operator">::</span>io<span class="token operator">::</span><span class="token function">savePLYFileASCII</span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\CloudFilters\\20230712-05-VG-PH.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>cloudFiltred<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token operator">!</span>viewer<span class="token operator">-&gt;</span><span class="token function">wasStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span> 
+        user_data<span class="token operator">++</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>实现效果：<br> <img src="https://images2.imgbox.com/6f/0b/DDL3bLBW_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="132_ZX_97"></a>1.3.2 Z、X轴（多维度直通滤波）</h4> 
+<p>先规定要卡阈值的对象，例如X，Y，Z，I，R，G，B等，取得或者去掉某一个值范围外的点集；</p> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;iostream&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;ctime&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/point_types.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/filters/passthrough.h&gt;</span></span>
+<span class="token keyword">int</span>
+<span class="token function">testfilters_passthrough</span><span class="token punctuation">(</span><span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span><span class="token operator">*</span><span class="token operator">*</span> argv<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token function">srand</span><span class="token punctuation">(</span><span class="token function">time</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">cloud</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">cloud_filtered</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">cloud_filtered_xz</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">cloud_filtered_xyz</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">//填入点云数据</span>
+    cloud<span class="token operator">-&gt;</span>width <span class="token operator">=</span> <span class="token number">10</span><span class="token punctuation">;</span>
+    cloud<span class="token operator">-&gt;</span>height <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">.</span><span class="token function">resize</span><span class="token punctuation">(</span>cloud<span class="token operator">-&gt;</span>width <span class="token operator">*</span> cloud<span class="token operator">-&gt;</span>height<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>size_t i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token operator">++</span>i<span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>x <span class="token operator">=</span> <span class="token function">rand</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token punctuation">(</span>RAND_MAX <span class="token operator">+</span> <span class="token number">1.0f</span><span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token number">0.5</span><span class="token punctuation">;</span>
+        cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>y <span class="token operator">=</span> <span class="token function">rand</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token punctuation">(</span>RAND_MAX <span class="token operator">+</span> <span class="token number">1.0f</span><span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token number">0.5</span><span class="token punctuation">;</span>
+        cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>z <span class="token operator">=</span> <span class="token function">rand</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token punctuation">(</span>RAND_MAX <span class="token operator">+</span> <span class="token number">1.0f</span><span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token number">0.5</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"Cloud before filtering: "</span> <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>size_t i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token operator">++</span>i<span class="token punctuation">)</span>
+        std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"    "</span> <span class="token operator">&lt;&lt;</span> cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>x <span class="token operator">&lt;&lt;</span> <span class="token string">" "</span>
+        <span class="token operator">&lt;&lt;</span> cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>y <span class="token operator">&lt;&lt;</span> <span class="token string">" "</span>
+        <span class="token operator">&lt;&lt;</span> cloud<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>z <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+    <span class="token comment">// 创建滤波器对象，第一次对Z卡阈值</span>
+    pcl<span class="token double-colon punctuation">::</span>PassThrough<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span> <span class="token function">pass</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pass<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pass<span class="token punctuation">.</span><span class="token function">setFilterFieldName</span><span class="token punctuation">(</span><span class="token string">"z"</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//通过z滤波</span>
+    pass<span class="token punctuation">.</span><span class="token function">setFilterLimits</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pass<span class="token punctuation">.</span><span class="token function">setNegative</span> <span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//设置为true，则输出范围外的点</span>
+    pass<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>cloud_filtered<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+    <span class="token comment">// 第二次对X卡阈值滤波</span>
+    pcl<span class="token double-colon punctuation">::</span>IndicesConstPtr cloud_filtered_other <span class="token operator">=</span> pass<span class="token punctuation">.</span><span class="token function">getRemovedIndices</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//获取上一步剩下的点,即cloud_filtered以外的点</span>
+    pass<span class="token punctuation">.</span><span class="token function">setIndices</span><span class="token punctuation">(</span>cloud_filtered_other<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">//对cloud_filtered_other中的点进行滤波处理</span>
+    pass<span class="token punctuation">.</span><span class="token function">setFilterFieldName</span><span class="token punctuation">(</span><span class="token string">"x"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pass<span class="token punctuation">.</span><span class="token function">setFilterLimits</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pass<span class="token punctuation">.</span><span class="token function">setNegative</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pass<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>cloud_filtered_xz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ 
+    <span class="token comment">//这样滤波也能成功，但是结果不对，所以想多次滤波还是按照上面的方式</span>
+    <span class="token comment">//pass.setInputCloud(cloud_filtered_xz);</span>
+    <span class="token comment">//pass.setFilterFieldName("y");</span>
+    <span class="token comment">//pass.setFilterLimits(-1.0,0.0);</span>
+    <span class="token comment">//pass.filter(*cloud_filtered_xyz);</span>
+ 
+ 
+    std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"Cloud after filtering: "</span> <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>size_t i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> cloud_filtered<span class="token operator">-&gt;</span>points<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token operator">++</span>i<span class="token punctuation">)</span>
+        std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"    "</span> <span class="token operator">&lt;&lt;</span> cloud_filtered<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>x <span class="token operator">&lt;&lt;</span> <span class="token string">" "</span>
+        <span class="token operator">&lt;&lt;</span> cloud_filtered<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>y <span class="token operator">&lt;&lt;</span> <span class="token string">" "</span>
+        <span class="token operator">&lt;&lt;</span> cloud_filtered<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>z <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+    std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"Cloud after filtering2: "</span> <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>size_t i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> cloud_filtered_xz<span class="token operator">-&gt;</span>points<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token operator">++</span>i<span class="token punctuation">)</span>
+        std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"    "</span> <span class="token operator">&lt;&lt;</span> cloud_filtered_xz<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>x <span class="token operator">&lt;&lt;</span> <span class="token string">" "</span>
+        <span class="token operator">&lt;&lt;</span> cloud_filtered_xz<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>y <span class="token operator">&lt;&lt;</span> <span class="token string">" "</span>
+        <span class="token operator">&lt;&lt;</span> cloud_filtered_xz<span class="token operator">-&gt;</span>points<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>z <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+    <span class="token comment">//std::cerr &lt;&lt; "Cloud after filtering3: " &lt;&lt; std::endl;</span>
+    <span class="token comment">//for (size_t i = 0; i &lt; cloud_filtered_xyz-&gt;points.size(); ++i)</span>
+    <span class="token comment">//    std::cerr &lt;&lt; "    " &lt;&lt; cloud_filtered_xyz-&gt;points[i].x &lt;&lt; " "</span>
+    <span class="token comment">//    &lt;&lt; cloud_filtered_xyz-&gt;points[i].y &lt;&lt; " "</span>
+    <span class="token comment">//    &lt;&lt; cloud_filtered_xyz-&gt;points[i].z &lt;&lt; std::endl;</span>
+    <span class="token comment">//return (0);</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h2><a id="VoxelGrid__170"></a>二、VoxelGrid (降采样)</h2> 
+<h3><a id="21__171"></a>2.1 原理</h3> 
+<p><strong>体素滤波重心法(pcl:VoxelGrid)</strong>:pcl中实现体素滤波的方法是通过输入的点云数据创建一个三维体素栅格，用每一个体素内的所有点的重心近似显示体素中的其他点。即<strong>原始点最终用一个重心进行表示</strong>。<br> <strong>体素滤波中心法(pcl:ApproximateVoxelGrid)</strong>:以体素栅格中<strong>心点作为采样后的点</strong>，因此在栅格内没有点存在的情况下依旧可以采样到点，导致采样的点数是多于重心方法采样的点。<br> <strong>pcl::VoxelGrid pcl::ApproximateVoxelGrid</strong>:opc:VoxelGrid方法比pc:ApproximateVoxelGrid慢，但是更好的保留了原始点云的局部形态特征。</p> 
+<p>体素滤波主要用来进行降采样，并且一定程度上保特点云的形态特征。但是实际上，<strong>经过体素滤波过滤的点云出现了与原始点云不一致的情况。因此针对位姿要求比较精确或其他场景，应慎重使用</strong>。</p> 
+<h3><a id="22_PCL_178"></a>2.2 PCL例程</h3> 
+<h4><a id="221_pclVoxelGrid__179"></a>2.2.1 pcl:VoxelGrid 方法</h4> 
+<pre><code class="prism language-cpp"><span class="token comment">// 该函数输入的为pcl::PointXYZ类型的点云，为减少函数的书写，可以将其设置为模板函数</span>
+pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token class-name">PointFilter</span><span class="token double-colon punctuation">::</span><span class="token function">voxelGrid</span><span class="token punctuation">(</span>
+    <span class="token keyword">const</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr<span class="token operator">&amp;</span> pointCloud<span class="token punctuation">,</span> <span class="token keyword">float</span> sampleStep<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>pointCloud<span class="token operator">-&gt;</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token function">qWarning</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">noquote</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&lt;&lt;</span> <span class="token string">"VoxelGrid: The input point cloud is empty."</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> std<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">make_shared</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;&gt;</span></span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">auto</span> filterPointCloud <span class="token operator">=</span> std<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">make_shared</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;&gt;</span></span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pcl<span class="token double-colon punctuation">::</span>VoxelGrid<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span> voxelGrid<span class="token punctuation">;</span> 					<span class="token comment">// 创建滤波器对象</span>
+    voxelGrid<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>pointCloud<span class="token punctuation">)</span><span class="token punctuation">;</span>	 					<span class="token comment">// 设置待滤波点云</span>
+    voxelGrid<span class="token punctuation">.</span><span class="token function">setLeafSize</span><span class="token punctuation">(</span>sampleStep<span class="token punctuation">,</span> sampleStep<span class="token punctuation">,</span> sampleStep<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//设置体素边长</span>
+    voxelGrid<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>filterPointCloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">return</span> filterPointCloud<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<h4><a id="222_pclApproximateVoxelGrid__201"></a>2.2.2 pcl:ApproximateVoxelGrid 方法</h4> 
+<pre><code class="prism language-cpp"><span class="token comment">// 该函数输入的为pcl::PointXYZ类型的点云，为减少函数的书写，可以将其设置为模板函数</span>
+pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token class-name">PointFilter</span><span class="token double-colon punctuation">::</span><span class="token function">approximateGrid</span><span class="token punctuation">(</span>
+    <span class="token keyword">const</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr<span class="token operator">&amp;</span> pointCloud<span class="token punctuation">,</span> <span class="token keyword">float</span> sampleStep<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>pointCloud<span class="token operator">-&gt;</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token function">qWarning</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">noquote</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&lt;&lt;</span> <span class="token string">"ApproximateVoxelGrid: The input point cloud is empty."</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> std<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">make_shared</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;&gt;</span></span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">auto</span> filterPointCloud <span class="token operator">=</span> std<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">make_shared</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;&gt;</span></span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pcl<span class="token double-colon punctuation">::</span>ApproximateVoxelGrid<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span> approximaterGrid<span class="token punctuation">;</span>			<span class="token comment">// 创建滤波器对象</span>
+    approximaterGrid<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>pointCloud<span class="token punctuation">)</span><span class="token punctuation">;</span>							<span class="token comment">// 设置待滤波点云</span>
+    approximaterGrid<span class="token punctuation">.</span><span class="token function">setLeafSize</span><span class="token punctuation">(</span>sampleStep<span class="token punctuation">,</span> sampleStep<span class="token punctuation">,</span> sampleStep<span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">//设置体素边长</span>
+    approximaterGrid<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>filterPointCloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">return</span> filterPointCloud<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<h4><a id="223__223"></a>2.2.3 显示点云函数</h4> 
+<pre><code class="prism language-cpp"><span class="token keyword">template</span> <span class="token operator">&lt;</span><span class="token keyword">typename</span> <span class="token class-name">PointT</span><span class="token operator">&gt;</span>
+<span class="token keyword">void</span> <span class="token function">showMultiplePointCloud</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">typename</span> <span class="token class-name">pcl</span><span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointT<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr<span class="token operator">&amp;</span> srcPointCloud<span class="token punctuation">,</span>
+                            <span class="token keyword">const</span> <span class="token keyword">typename</span> <span class="token class-name">pcl</span><span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointT<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr<span class="token operator">&amp;</span> colorPointCloud<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">auto</span> viewer <span class="token operator">=</span> std<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">make_shared</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span>PCLVisualizer<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"viewer"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span>PointCloudColorHandlerCustom<span class="token operator">&lt;</span>PointT<span class="token operator">&gt;</span> <span class="token function">srcColor</span><span class="token punctuation">(</span>srcPointCloud<span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    viewer<span class="token operator">-&gt;</span><span class="token generic-function"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token operator">&lt;</span>PointT<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span>srcPointCloud<span class="token punctuation">,</span> srcColor<span class="token punctuation">,</span> <span class="token string">"SrcPointCloud"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span>PointCloudColorHandlerCustom<span class="token operator">&lt;</span>PointT<span class="token operator">&gt;</span> <span class="token function">color</span><span class="token punctuation">(</span>srcPointCloud<span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    viewer<span class="token operator">-&gt;</span><span class="token generic-function"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token operator">&lt;</span>PointT<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span>colorPointCloud<span class="token punctuation">,</span> color<span class="token punctuation">,</span> <span class="token string">"ColorPointCloud"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    viewer<span class="token operator">-&gt;</span><span class="token function">setPointCloudRenderingProperties</span><span class="token punctuation">(</span>pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span>PCL_VISUALIZER_POINT_SIZE<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span>
+                                             <span class="token string">"PointCloud"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    viewer<span class="token operator">-&gt;</span><span class="token function">addCoordinateSystem</span><span class="token punctuation">(</span><span class="token number">0.01</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token operator">!</span>viewer<span class="token operator">-&gt;</span><span class="token function">wasStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        viewer<span class="token operator">-&gt;</span><span class="token function">spinOnce</span><span class="token punctuation">(</span><span class="token number">100</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<h4><a id="224_pclVoxelGrid_247"></a>2.2.4 pcl:VoxelGrid完整示例</h4> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;iostream&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/point_types.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/io/ply_io.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/io/pcd_io.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/visualization/cloud_viewer.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/visualization/pcl_visualizer.h&gt;</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/filters/voxel_grid.h&gt;</span></span>
+
+<span class="token keyword">int</span> user_data<span class="token punctuation">;</span>
+
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+	pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token operator">::</span>Ptr <span class="token function">cloud</span><span class="token punctuation">(</span>new pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token operator">::</span>Ptr <span class="token function">cloud_filtered</span><span class="token punctuation">(</span>new pcl<span class="token operator">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">/*pcl::PCLPointCloud2::Ptr cloud(new pcl::PCLPointCloud2());
+	pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2);*/</span>
+
+	<span class="token comment">//Load point cloud</span>
+	pcl<span class="token operator">::</span>PCDReader reader<span class="token punctuation">;</span>
+	reader<span class="token punctuation">.</span><span class="token function">read</span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\VoxelGrid\\bunny.pcd"</span><span class="token punctuation">,</span> <span class="token operator">*</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	std<span class="token operator">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"PointCloud before filtering"</span> <span class="token operator">&lt;&lt;</span> cloud<span class="token operator">-&gt;</span>width <span class="token operator">*</span> cloud<span class="token operator">-&gt;</span>height <span class="token operator">&lt;&lt;</span> <span class="token string">"data points ("</span> <span class="token operator">&lt;&lt;</span> pcl<span class="token operator">::</span><span class="token function">getFieldsList</span><span class="token punctuation">(</span><span class="token operator">*</span>cloud<span class="token punctuation">)</span> <span class="token operator">&lt;&lt;</span> <span class="token string">")."</span> <span class="token operator">&lt;&lt;</span> endl<span class="token punctuation">;</span>
+
+	<span class="token comment">//Create Voxel filter that is 1cm long, 1cm wide and 1cm high</span>
+	<span class="token keyword">float</span> leftSize <span class="token operator">=</span> <span class="token number">0.01f</span><span class="token punctuation">;</span>
+	<span class="token comment">//Creatd the filrering object</span>
+	pcl<span class="token operator">::</span>VoxelGrid<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span> sor<span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setLeafSize</span><span class="token punctuation">(</span>leftSize<span class="token punctuation">,</span> leftSize<span class="token punctuation">,</span> leftSize<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>cloud_filtered<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	std<span class="token operator">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"PointCloud after filtering"</span> <span class="token operator">&lt;&lt;</span> cloud_filtered<span class="token operator">-&gt;</span>width <span class="token operator">*</span> cloud_filtered<span class="token operator">-&gt;</span>height <span class="token operator">&lt;&lt;</span> <span class="token string">"data points ("</span> <span class="token operator">&lt;&lt;</span> pcl<span class="token operator">::</span><span class="token function">getFieldsList</span><span class="token punctuation">(</span><span class="token operator">*</span>cloud_filtered<span class="token punctuation">)</span> <span class="token operator">&lt;&lt;</span> <span class="token string">")."</span><span class="token punctuation">;</span>
+
+	<span class="token comment">//Output the filtered cloud into </span>
+	pcl<span class="token operator">::</span>PLYWriter writer<span class="token punctuation">;</span>
+	writer<span class="token punctuation">.</span><span class="token function">write</span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\VoxelGrid\\bunny_filtered.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>cloud_filtered<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token comment">/*pcl::visualization::CloudViewer viewer("Cloud");
+	viewer.showCloud(cloud);
+	*/</span>
+	boost<span class="token operator">::</span>shared_ptr<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>visualization<span class="token operator">::</span>PCLVisualizer<span class="token operator">&gt;</span> <span class="token function">viewer</span><span class="token punctuation">(</span>new pcl<span class="token operator">::</span>visualization<span class="token operator">::</span><span class="token function">PCLVisualizer</span><span class="token punctuation">(</span><span class="token string">"3D viewer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token operator">::</span>visualization<span class="token operator">::</span>PointCloudColorHandlerCustom<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span> <span class="token function">cloud_color</span><span class="token punctuation">(</span>cloud<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token operator">::</span>visualization<span class="token operator">::</span>PointCloudColorHandlerCustom<span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span> <span class="token function">cloudFiltered_color</span><span class="token punctuation">(</span>cloud_filtered<span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span>addPointCloud <span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">(</span>cloud<span class="token punctuation">,</span> cloud_color<span class="token punctuation">,</span><span class="token string">"cloud"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span>addPointCloud <span class="token operator">&lt;</span>pcl<span class="token operator">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">(</span>cloud_filtered<span class="token punctuation">,</span>cloudFiltered_color<span class="token punctuation">,</span><span class="token string">"cloudFiltered"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">spin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">//Prevent point cloude display from stalling</span>
+
+	<span class="token comment">/*pcl::visualization::CloudViewer viewer("CloudFiltered");
+	viewer.showCloud(cloud); */</span>
+	
+    <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token operator">!</span>viewer<span class="token operator">-&gt;</span><span class="token function">wasStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span> 
+        user_data<span class="token operator">++</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/e4/ca/Nmld1C9Y_o.png" alt="上图绿色的点为精简前的点云，红色点为体素网格精简后的点云数据"><br> 上图绿色的点为精简前的点云，红色点为体素网格精简后的点云数据</p> 
+<p><strong>双屏对比</strong></p> 
+<pre><code class="prism language-cpp">pcl_viewer <span class="token operator">-</span>multiview <span class="token number">1</span> <span class="token punctuation">.</span><span class="token operator">/</span>data<span class="token operator">/</span>table_scene_mug_stereo_textured<span class="token punctuation">.</span>pcd <span class="token punctuation">.</span><span class="token operator">/</span>data<span class="token operator">/</span>table_scene_mug_stereo_textured_downsampled<span class="token punctuation">.</span>pcd
+</code></pre> 
+<h4><a id="225__314"></a>2.2.5 出现的问题及解决办法</h4> 
+<p><strong>问题1</strong>：</p> 
+<blockquote> 
+ <p>[pcl::VoxelGrid::applyFilter] Leaf size is too small for the input dataset. Integer indices would overflow.</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/22/23/tSOmTOLo_o.png" alt="在这里插入图片描述"><br> <strong>原理分析：</strong></p> 
+<blockquote> 
+ <p>点云VoxelGridFilter（体素格下采样/抽稀）是一种能显著减少点云的数据量，并保持其形状特征和空间结构信息与原始点云基本没差别的算法。<br> 其核心是：<strong>将点云分割成一个个微小的立方体，落在立方体内的所有点用一个重心点来最终表示，对所有的小立方体处理后得到最终的点云结果</strong>。<br> ·取重心点比所有点取平均值的算法稍慢，但是其结果更准确下采样设置的**<code>voxelGridFilter.set_leaf_size(rate,rate,rate)</code>值越大，最后保留的点云越少**。</p> 
+</blockquote> 
+<p><strong>报错原因：</strong></p> 
+<blockquote> 
+ <p><strong>划分的立方体格子的个数<code>index</code>是int32位，由于输入的点云的x,y,Z跨度太大，导致划分的立方体个数超出了int32的最大大小</strong>，因此报错。<br> 故需要对原始点云进行一点小小的操作。</p> 
+</blockquote> 
+<p><strong>解决办法：</strong></p> 
+<blockquote> 
+ <p><strong>1. 对精度要求没那么高的话，可以将leaf size大小设置大一些。</strong><br> <strong>2. 将要降采样的点云先分割成几块、在做降采样。</strong><br> <strong>3. 使用 OctreeVoxelGridFilter，参考PCL论坛。</strong></p> 
+</blockquote> 
+<p>方案：VoxelGrid体素滤波器有一个函数<code>sor.setIndices(indices);</code>，其中indices就是大体素点云拆分成一个个小点云团的分区序号数组，这个数组的构建通过OcrTree的近邻搜索加以构建，其中50000是Octree的分辨率，一般较大的点云需要设的大一些，如果设的过小，还是有可能在调用子函数subFilter产生相同的<code>[pcl::VoxelGrid::applyFilter] Leaf size is too small for the input dataset. Integer indices would overflow</code>错误。一个简单的用法如下：</p> 
+<pre><code class="prism language-csharp"><span class="token preprocessor property">#include &lt;iostream&gt;</span>
+<span class="token preprocessor property">#include &lt;vector&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/point_types.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/io/ply_io.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/io/pcd_io.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/visualization/cloud_viewer.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/visualization/pcl_visualizer.h&gt;</span>
+
+<span class="token preprocessor property">#include &lt;pcl/octree/octree.h&gt;</span>
+
+<span class="token preprocessor property">#include &lt;pcl/filters/filter.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/filters/voxel_grid.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/filters/extract_indices.h&gt;</span>
+
+<span class="token class-name"><span class="token keyword">int</span></span> user_data<span class="token punctuation">;</span>
+<span class="token class-name">typedef</span> pcl<span class="token punctuation">::</span><span class="token class-name">PointXYZ</span> PointType<span class="token punctuation">;</span>
+
+pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">subFilter</span><span class="token punctuation">(</span><span class="token named-parameter punctuation">pcl</span><span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token class-name">Ptr</span> pointcloud<span class="token punctuation">,</span> <span class="token named-parameter punctuation">pcl</span><span class="token punctuation">::</span><span class="token class-name">IndicesPtr</span> indices<span class="token punctuation">,</span> <span class="token class-name"><span class="token keyword">float</span></span> cell_x<span class="token punctuation">,</span> <span class="token class-name"><span class="token keyword">float</span></span> cell_y<span class="token punctuation">,</span> <span class="token class-name"><span class="token keyword">float</span></span> cell_z<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">filtered_pointcloud</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token punctuation">::</span><span class="token class-name">VoxelGrid<span class="token punctuation">&lt;</span>PointType<span class="token punctuation">&gt;</span></span> sor<span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>pointcloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setIndices</span><span class="token punctuation">(</span>indices<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setLeafSize</span><span class="token punctuation">(</span>cell_x<span class="token punctuation">,</span> cell_y<span class="token punctuation">,</span> cell_z<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>filtered_pointcloud<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// No problem :)</span>
+	<span class="token keyword">return</span> filtered_pointcloud<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">OctFilter</span><span class="token punctuation">(</span><span class="token named-parameter punctuation">pcl</span><span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token class-name">Ptr</span> cloudIn<span class="token punctuation">,</span> <span class="token class-name"><span class="token keyword">float</span></span> cell_x<span class="token punctuation">,</span> <span class="token class-name"><span class="token keyword">float</span></span> cell_y<span class="token punctuation">,</span> <span class="token class-name"><span class="token keyword">float</span></span> cell_z<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	pcl<span class="token punctuation">::</span>octree<span class="token punctuation">::</span><span class="token return-type class-name">OctreePointCloudSearch<span class="token punctuation">&lt;</span>PointType<span class="token punctuation">&gt;</span></span> <span class="token function">octree</span><span class="token punctuation">(</span><span class="token number">50000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// // Octree resolution - side length of octree voxels</span>
+	octree<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>cloudIn<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	octree<span class="token punctuation">.</span><span class="token function">addPointsFromInputCloud</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">filtered_cloud</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">auto</span> it <span class="token operator">=</span> octree<span class="token punctuation">.</span><span class="token function">leaf_begin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> it <span class="token operator">!=</span> octree<span class="token punctuation">.</span><span class="token function">leaf_end</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token operator">++</span>it<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+
+		pcl<span class="token punctuation">::</span><span class="token return-type class-name">IndicesPtr</span> <span class="token function">indexVector</span><span class="token punctuation">(</span><span class="token keyword">new</span> std<span class="token punctuation">::</span>vector<span class="token operator">&lt;</span><span class="token keyword">int</span><span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		pcl<span class="token punctuation">::</span>octree<span class="token punctuation">::</span>OctreeContainerPointIndices<span class="token operator">&amp;</span> container <span class="token operator">=</span> it<span class="token punctuation">.</span><span class="token function">getLeafContainer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+		container<span class="token punctuation">.</span><span class="token function">getPointIndices</span><span class="token punctuation">(</span><span class="token operator">*</span>indexVector<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token operator">*</span>filtered_cloud <span class="token operator">+=</span> <span class="token operator">*</span><span class="token function">subFilter</span><span class="token punctuation">(</span>cloudIn<span class="token punctuation">,</span> indexVector<span class="token punctuation">,</span> cell_x<span class="token punctuation">,</span> cell_y<span class="token punctuation">,</span> cell_z<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span> filtered_cloud<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token return-type class-name"><span class="token keyword">int</span></span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name"><span class="token keyword">int</span></span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+	
+	<span class="token comment">//Create point cloud class and load the cloud</span>
+	pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">laserCloudIn</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token punctuation">::</span>io<span class="token punctuation">::</span><span class="token generic-method"><span class="token function">loadPLYFile</span><span class="token generic class-name"><span class="token punctuation">&lt;</span>PointType<span class="token punctuation">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\OctreeVoxelGrid\\20230712-05.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>laserCloudIn<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">//Creatd point cloud to save the filtered cloud</span>
+	pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">laserCloudOut</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>PointType<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token operator">*</span>laserCloudOut <span class="token operator">=</span> <span class="token operator">*</span><span class="token function">OctFilter</span><span class="token punctuation">(</span>laserCloudIn<span class="token punctuation">,</span> <span class="token number">1.0f</span><span class="token punctuation">,</span> <span class="token number">1.0f</span><span class="token punctuation">,</span> <span class="token number">1.0f</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// set your voxel size</span>
+
+	std<span class="token punctuation">::</span>cout <span class="token operator">&lt;&lt;</span> <span class="token string">"PointCloud bedore filtering "</span> <span class="token operator">&lt;&lt;</span> laserCloudIn<span class="token operator">-&gt;</span>width <span class="token operator">*</span> laserCloudIn<span class="token operator">-&gt;</span>height <span class="token operator">&lt;&lt;</span> <span class="token string">"data points"</span> <span class="token operator">&lt;&lt;</span> endl<span class="token punctuation">;</span>
+	std<span class="token punctuation">::</span>cout <span class="token operator">&lt;&lt;</span> <span class="token string">"PointCloud after filtering"</span> <span class="token operator">&lt;&lt;</span> laserCloudOut<span class="token operator">-&gt;</span>width <span class="token operator">*</span> laserCloudOut<span class="token operator">-&gt;</span>height <span class="token operator">&lt;&lt;</span> <span class="token string">"data point"</span> <span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+
+	boost<span class="token punctuation">::</span><span class="token return-type class-name">shared_ptr<span class="token punctuation">&lt;</span>pcl<span class="token punctuation">:</span><span class="token punctuation">:</span>visualization<span class="token punctuation">:</span><span class="token punctuation">:</span>PCLVisualizer<span class="token punctuation">&gt;</span></span> <span class="token function">viewer</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>visualization<span class="token punctuation">::</span><span class="token function">PCLVisualizer</span><span class="token punctuation">(</span><span class="token string">"3D viewer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token punctuation">::</span>visualization<span class="token punctuation">::</span><span class="token return-type class-name">PointCloudColorHandlerCustom <span class="token punctuation">&lt;</span>PointType<span class="token punctuation">&gt;</span></span> <span class="token function">cloud_color</span><span class="token punctuation">(</span>laserCloudIn<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token punctuation">::</span>visualization<span class="token punctuation">::</span><span class="token return-type class-name">PointCloudColorHandlerCustom <span class="token punctuation">&lt;</span>PointType<span class="token punctuation">&gt;</span></span> <span class="token function">filtered_color</span><span class="token punctuation">(</span>laserCloudOut<span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span><span class="token function">initCameraParameters</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token return-type class-name"><span class="token keyword">int</span></span> <span class="token function">V1</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token return-type class-name"><span class="token keyword">int</span></span> <span class="token function">V2</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span><span class="token generic-method"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token punctuation">&lt;</span>PointType<span class="token punctuation">&gt;</span></span></span><span class="token punctuation">(</span>laserCloudIn<span class="token punctuation">,</span> cloud_color<span class="token punctuation">,</span> <span class="token string">"cloud"</span><span class="token punctuation">,</span>V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token generic-method"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token punctuation">&lt;</span>PointType<span class="token punctuation">&gt;</span></span></span><span class="token punctuation">(</span>laserCloudOut<span class="token punctuation">,</span> filtered_color<span class="token punctuation">,</span> <span class="token string">"cloudFiltered"</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">spin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	pcl<span class="token punctuation">::</span>io<span class="token punctuation">::</span><span class="token function">savePLYFileASCII</span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\OctreeVoxelGrid\\20230712 - 05.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>laserCloudOut<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token operator">!</span>viewer<span class="token operator">-&gt;</span><span class="token function">wasStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		user_data<span class="token operator">++</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/86/82/IQ5jpcUD_o.png" alt="在这里插入图片描述"><br> 上图所示，原始点云数据为30749887个点（绿色点），降采样后为1144082个点（红色点）。</p> 
+<p><strong>该方法点云数量精简原理如下</strong>：<br> 体素网格尺寸数据：<code>*laserCloudOut = *OctFilter(laserCloudIn, 1.0f, 1.0f, 1.0f);</code><br> 八叉树分辨率（八叉树体素的边长）：<code>pcl::octree::OctreePointCloudSearch&lt;PointType&gt; octree(500000); </code></p> 
+<h2><a id="_425"></a>三、离群点移除</h2> 
+<h3><a id="31__426"></a>3.1 概述</h3> 
+<h4><a id="311_Why_427"></a>3.1.1 Why</h4> 
+<p>激光扫描通常会生成不同点密度*<s>（表面密度？不是投影密度）</s> *的点云数据集。此外，<strong>测量误差会导致稀疏的异常值</strong>，从而进一步破坏结果。这会使<strong>局部点云特征（例如表面法线或曲率变化）的估计复杂化</strong>，从而导致错误的值，进而可能导致点云配准失败。通过对每个点的邻域进行统计分析，并对不符合特定条件的部分进行修整，可以解决其中一些不规则现象。</p> 
+<h4><a id="312_How_429"></a>3.1.2 How</h4> 
+<p><strong>稀疏离群值的消除基于输入数据集中点到邻居距离的分布的计算</strong>。<br> <strong>对于每个点，计算从它到所有相邻点的平均距离。通过假设结果分布是具有均值和标准差的高斯分布，可以将其平均距离在由全局距离均值和标准差定义的区间之外的所有点视为离群值并从数据集中进行修剪</strong>。 下图显示了稀疏离群值分析和删除的效果：原始数据集显示在左侧，结果数据集显示在右侧。<strong>数据集图显示了滤波前后每个点的邻域中平均K最近邻距离</strong>。<br> <img src="https://images2.imgbox.com/16/70/RzCFDlx9_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="32__433"></a>3.2 实现方式</h3> 
+<h4><a id="321_StatisticalOutlierRemoval_434"></a>3.2.1 StatisticalOutlierRemoval（统计学离群点移除过滤器）</h4> 
+<p><strong>实现步骤</strong>：</p> 
+<blockquote> 
+ <p>1、查找每一个点的所有邻域点<br> 2、计算每个点到其邻居的距离dij，其中i=[1,…,m]表示共m个点，j=[1,…,k]每个点有k个邻居<br> 3、根据高斯分布d∼N(μ,σ)模型化距离参数，计算所有点与邻居的μ（距离的均值），σ（距离的标准差），如下：<br> <img src="https://images2.imgbox.com/fc/45/7Klq19YU_o.png" alt="在这里插入图片描述"><br> 4、为每一个点，计算其与邻居的距离均值<br> <img src="https://images2.imgbox.com/e2/2e/SRxFs3zA_o.png" alt="在这里插入图片描述"><br> 5、遍历所有点，如果其距离的均值大于高斯分布的指定置信度，则移除，比如：<br> <img src="https://images2.imgbox.com/c1/5d/PNLWxZhN_o.png" alt="在这里插入图片描述"></p> 
+</blockquote> 
+<p><strong>代码实现</strong>：</p> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;iostream&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/point_types.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/io/ply_io.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/visualization/pcl_visualizer.h&gt;</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/filters/statistical_outlier_removal.h&gt;</span></span>
+
+<span class="token keyword">int</span> user_data<span class="token punctuation">;</span>
+
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+	<span class="token comment">//Create and load the point cloud</span>
+	pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">cloud</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">SORCloud</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">SORCloud_out</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token comment">//Load the point cloud</span>
+	pcl<span class="token double-colon punctuation">::</span>io<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">loadPLYFile</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\StatisticalOutlierRemoval\\20230712-05-VG-PH.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token comment">//Create the filter, analyze 50 neighborhood points of each point,set the multiple of the standard deviation to 1.</span>
+	<span class="token comment">//If a point is more than 1 standard deviaton away form the average distance,the point is marked as outlier, and it is removed and stored.</span>
+	pcl<span class="token double-colon punctuation">::</span>StatisticalOutlierRemoval<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span> sor<span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setMeanK</span><span class="token punctuation">(</span><span class="token number">50</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setStddevMulThresh</span><span class="token punctuation">(</span><span class="token number">1.0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>SORCloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	pcl<span class="token double-colon punctuation">::</span>PLYWriter writer<span class="token punctuation">;</span>
+	writer<span class="token punctuation">.</span><span class="token generic-function"><span class="token function">write</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\StatisticalOutlierRemoval\\20230712-05-VG-PH-SOR.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>SORCloud<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">setNegative</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sor<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>SORCloud_out<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	boost<span class="token double-colon punctuation">::</span>shared_ptr<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span>PCLVisualizer<span class="token operator">&gt;</span> <span class="token function">viewer</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span><span class="token function">PCLVisualizer</span><span class="token punctuation">(</span><span class="token string">"3D viewer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	viewer<span class="token operator">-&gt;</span><span class="token function">initCameraParameters</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> <span class="token function">V1</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token keyword">int</span> <span class="token function">V2</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	viewer<span class="token operator">-&gt;</span><span class="token function">addCoordinateSystem</span><span class="token punctuation">(</span><span class="token number">0.2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span><span class="token generic-function"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span>cloud<span class="token punctuation">,</span> <span class="token string">"cloud"</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token generic-function"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span>SORCloud<span class="token punctuation">,</span> <span class="token string">"cloudFiltred"</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">spin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+    <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token operator">!</span>viewer<span class="token operator">-&gt;</span><span class="token function">wasStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span> 
+        user_data<span class="token operator">++</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/a4/42/8MlwGJi5_o.png" alt="在这里插入图片描述"></p> 
+<p>单图对比：黄色部分为移除的离群点，蓝绿色部分为保留的点</p> 
+<pre><code class="prism language-cpp">pcl_viewer <span class="token punctuation">.</span><span class="token operator">/</span>data<span class="token operator">/</span>table_scene_lms400_inliers<span class="token punctuation">.</span>pcd <span class="token punctuation">.</span><span class="token operator">/</span>data<span class="token operator">/</span>table_scene_lms400_outliers<span class="token punctuation">.</span>pcd
+</code></pre> 
+<p>双图对比：左图为已处理群点后的点云，右图为被移除的点云</p> 
+<pre><code class="prism language-cpp">pcl_viewer <span class="token operator">-</span>multiview <span class="token number">1</span> <span class="token punctuation">.</span><span class="token operator">/</span>data<span class="token operator">/</span>table_scene_lms400_inliers<span class="token punctuation">.</span>pcd <span class="token punctuation">.</span><span class="token operator">/</span>data<span class="token operator">/</span>table_scene_lms400_outliers<span class="token punctuation">.</span>pcd
+</code></pre> 
+<h4><a id="322_ConditionalRemoval___RadiusOutlierRemoval__510"></a>3.2.2 ConditionalRemoval 条件滤波 &amp; RadiusOutlierRemoval 半径离群值滤波</h4> 
+<p><strong>条件滤波</strong>：设置不同维度滤波规则进行滤波<br> <strong>半径离群值滤波</strong>：用户指定邻居的个数，要每个点必须在指定半径内具有指定个邻居才能保留在PointCloud中。例如，如果指定了1个邻居，则只会从PointCloud中删除黄点。如果指定了2个邻居，则黄色和绿色的点都将从PointCloud中删除。<br> <img src="https://images2.imgbox.com/c4/f9/PQmcEGIe_o.png" alt="请添加图片描述"><br> <strong>代码实现</strong>：<br> Step1：定义点云显示函数</p> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;iostream&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;string&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/point_types.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/io/ply_io.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/visualization/pcl_visualizer.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/filters/radius_outlier_removal.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;pcl/filters/conditional_removal.h&gt;</span></span>
+
+<span class="token keyword">int</span> user_data<span class="token punctuation">;</span>
+
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	
+	<span class="token comment">//Create and load the point cloud </span>
+	pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">cloud</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr <span class="token function">cloudFiltered</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	pcl<span class="token double-colon punctuation">::</span>io<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">loadPLYFile</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\ConditionalRemoval\\20230712-05-VG-PH.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">strcmp</span><span class="token punctuation">(</span>argv<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token string">"-r"</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">//RadiusOutlierRemoval</span>
+		pcl<span class="token double-colon punctuation">::</span>RadiusOutlierRemoval<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span> outrem<span class="token punctuation">;</span><span class="token comment">//Create the filter</span>
+
+		outrem<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		outrem<span class="token punctuation">.</span><span class="token function">setRadiusSearch</span><span class="token punctuation">(</span><span class="token number">0.8</span><span class="token punctuation">)</span><span class="token punctuation">;</span>			<span class="token comment">//Set the search radius to 0.8m</span>
+		outrem<span class="token punctuation">.</span><span class="token function">setMinNeighborsInRadius</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>		<span class="token comment">//If there are less than 50 points in the range, so the point is outlier</span>
+		outrem<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>cloudFiltered<span class="token punctuation">)</span><span class="token punctuation">;</span>			<span class="token comment">//Executive filtering </span>
+	<span class="token punctuation">}</span><span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">strcmp</span><span class="token punctuation">(</span>argv<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token string">"-c"</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">//Create conditional removal filter</span>
+		pcl<span class="token double-colon punctuation">::</span>ConditionAnd<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span>Ptr 
+			<span class="token function">range_cond</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">ConditionAnd</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		range_cond<span class="token operator">-&gt;</span><span class="token function">addComparison</span><span class="token punctuation">(</span>pcl<span class="token double-colon punctuation">::</span><span class="token class-name">FieldComparison</span><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span><span class="token function">ConstPtr</span><span class="token punctuation">(</span>
+			<span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">FieldComparison</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"z"</span><span class="token punctuation">,</span> pcl<span class="token double-colon punctuation">::</span>ComparisonOps<span class="token double-colon punctuation">::</span>GT<span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		range_cond<span class="token operator">-&gt;</span><span class="token function">addComparison</span><span class="token punctuation">(</span>pcl<span class="token double-colon punctuation">::</span><span class="token class-name">FieldComparison</span><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span><span class="token double-colon punctuation">::</span><span class="token function">ConstPtr</span><span class="token punctuation">(</span>
+			<span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span><span class="token generic-function"><span class="token function">FieldComparison</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"z"</span><span class="token punctuation">,</span> pcl<span class="token double-colon punctuation">::</span>ComparisonOps<span class="token double-colon punctuation">::</span>LT<span class="token punctuation">,</span> <span class="token number">0.8</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+		<span class="token comment">//build the filter</span>
+		pcl<span class="token double-colon punctuation">::</span>ConditionalRemoval<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span> condrem<span class="token punctuation">;</span>
+		condrem<span class="token punctuation">.</span><span class="token function">setCondition</span><span class="token punctuation">(</span>range_cond<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		condrem<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		condrem<span class="token punctuation">.</span><span class="token function">setKeepOrganized</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token comment">//apply filter</span>
+		condrem<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>cloudFiltered<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"please specify command line arg '-r' or '-c'"</span> <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	std<span class="token double-colon punctuation">::</span>cerr <span class="token operator">&lt;&lt;</span> <span class="token string">"Cloud before filtering: "</span> <span class="token operator">&lt;&lt;</span> std<span class="token double-colon punctuation">::</span>endl<span class="token punctuation">;</span>
+
+	boost<span class="token double-colon punctuation">::</span>shared_ptr<span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span>PCLVisualizer<span class="token operator">&gt;</span> <span class="token function">viewer</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token double-colon punctuation">::</span>visualization<span class="token double-colon punctuation">::</span><span class="token function">PCLVisualizer</span><span class="token punctuation">(</span><span class="token string">"3D viewer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span><span class="token function">initCameraParameters</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> <span class="token function">V1</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> <span class="token function">V2</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">addCoordinateSystem</span><span class="token punctuation">(</span><span class="token number">0.2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span><span class="token generic-function"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span>cloud<span class="token punctuation">,</span> <span class="token string">"cloud"</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token generic-function"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token operator">&lt;</span>pcl<span class="token double-colon punctuation">::</span>PointXYZ<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span>cloudFiltered<span class="token punctuation">,</span> <span class="token string">"cloudFiltred"</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">spin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	   
+	<span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token operator">!</span>viewer<span class="token operator">-&gt;</span><span class="token function">wasStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		user_data<span class="token operator">++</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/f3/27/oj5QzIvV_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="323__586"></a>3.2.3 双边滤波</h4> 
+<p>双边滤波算法，是<strong>通过取邻近采样点的加权平均来修正当前采样点的位置，从而达到滤波效果</strong>。同时也会有<strong>选择地剔除部分与当前采样点“差异”太大的相邻采样点</strong>，从而达到保持原特征的目的。<br> 双边滤波可以帮我们<strong>保留边缘信息</strong>，其实质也是<strong>计算邻居像素的加权平均和，非常类似于高斯卷积</strong>。不同之处在于<strong>双边滤波器在平滑的同时考虑到与邻边像素颜色值的差异，进而保留边缘信息</strong>。双边滤波器的<strong>关键思想是一个像素对另一个像素影响程度，不应该只和位置距离有关，还应该具有相似的像素颜色值</strong>。即相等距离情况下，颜色值接近的像素点权重应当高一些，颜色值差异大的像素点权重应当小一些。因此，双边滤波器是一种<strong>非线性滤波器</strong>。</p> 
+<p>于是，<strong>双边滤波bilateral filter（BF）<strong>的定义如下：<br> <img src="https://images2.imgbox.com/ca/38/1VHdXMwd_o.png" alt="在这里插入图片描述"><br> 这里通过归一化因子<code>Wp</code>保证像素的权重和为1.0：<br> <img src="https://images2.imgbox.com/14/a7/QhKKgNMQ_o.png" alt="在这里插入图片描述"><br> 双边滤波里的两个权重域的概念：<br> <strong>空间域（spatial domain S）和像素范围域（range domain R）</strong>,这个是它跟高斯滤波等方法的最大不同点。<br> 双边滤波的</strong>核函数是空间域核与像素范围域核的综合结果</strong>：在<strong>图像的平坦区域，像素值变化很小，对应的像素范围域权重接近于1，此时空间域权重起主要作用，相当于进行高斯模糊；在图像的边缘区域，像素值变化很大，像素范围域权重变大，从而保持了边缘的信息</strong>。<br> <img src="https://images2.imgbox.com/8a/2e/SwmrSWMC_o.png" alt="在这里插入图片描述"><br> 其中<code>σd</code>和<code>σr</code>是平滑参数，<code>I(i，j)</code>和<code>i (k,l)</code>分别是像素<code>(i,j)</code>和<code>(k,l)</code>的强度。计算出权重后，将其归一化：<br> <img src="https://images2.imgbox.com/79/88/8lJDCJNS_o.png" alt="在这里插入图片描述"><br> 其中<code>ID</code>为像素<code>(i,j)</code>去噪后的强度。</p> 
+<p>代码演示：</p> 
+<pre><code class="prism language-csharp"><span class="token preprocessor property">#include &lt;iostream&gt;</span>
+<span class="token preprocessor property">#include &lt;string&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/point_types.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/io/ply_io.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/visualization/pcl_visualizer.h&gt;</span>
+<span class="token preprocessor property">#include &lt;pcl/filters/impl/bilateral.hpp&gt;</span>
+
+<span class="token class-name"><span class="token keyword">int</span></span> user_data<span class="token punctuation">;</span>
+
+<span class="token return-type class-name"><span class="token keyword">void</span></span> <span class="token function">BilateralFilter</span><span class="token punctuation">(</span><span class="token named-parameter punctuation">pcl</span><span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">::</span>Ptr <span class="token operator">&amp;</span>input<span class="token punctuation">,</span> <span class="token named-parameter punctuation">pcl</span><span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">::</span>Ptr <span class="token operator">&amp;</span>output<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	pcl<span class="token punctuation">::</span>search<span class="token punctuation">::</span>KdTree<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">tree1</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>search<span class="token punctuation">::</span>KdTree<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	pcl<span class="token punctuation">::</span><span class="token class-name">BilateralFilter <span class="token punctuation">&lt;</span> pcl<span class="token punctuation">:</span><span class="token punctuation">:</span>PointXYZI<span class="token punctuation">&gt;</span></span> fbf<span class="token punctuation">;</span>
+	fbf<span class="token punctuation">.</span><span class="token function">setInputCloud</span><span class="token punctuation">(</span>input<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	fbf<span class="token punctuation">.</span><span class="token function">setSearchMethod</span><span class="token punctuation">(</span>tree1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	fbf<span class="token punctuation">.</span><span class="token function">setHalfSize</span><span class="token punctuation">(</span><span class="token number">0.1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	fbf<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token operator">*</span>output<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token return-type class-name"><span class="token keyword">int</span></span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name"><span class="token keyword">int</span></span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+
+	pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">cloud</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">::</span><span class="token return-type class-name">Ptr</span> <span class="token function">cloudFiltered</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>PointCloud<span class="token operator">&lt;</span>pcl<span class="token punctuation">::</span>PointXYZI<span class="token operator">&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	pcl<span class="token punctuation">::</span>io<span class="token punctuation">::</span><span class="token generic-method"><span class="token function">loadPLYFile</span><span class="token generic class-name"><span class="token punctuation">&lt;</span>pcl<span class="token punctuation">:</span><span class="token punctuation">:</span>PointXYZI<span class="token punctuation">&gt;</span></span></span><span class="token punctuation">(</span><span class="token string">"C:\\0APractice\\PclLearning\\BilateralFilter\\20230712-05.ply"</span><span class="token punctuation">,</span> <span class="token operator">*</span>cloud<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">BilateralFilter</span><span class="token punctuation">(</span>cloud<span class="token punctuation">,</span> cloudFiltered<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	boost<span class="token punctuation">::</span><span class="token return-type class-name">shared_ptr<span class="token punctuation">&lt;</span>pcl<span class="token punctuation">:</span><span class="token punctuation">:</span>visualization<span class="token punctuation">:</span><span class="token punctuation">:</span>PCLVisualizer<span class="token punctuation">&gt;</span></span> <span class="token function">viewer</span><span class="token punctuation">(</span><span class="token keyword">new</span> pcl<span class="token punctuation">::</span>visualization<span class="token punctuation">::</span><span class="token function">PCLVisualizer</span><span class="token punctuation">(</span><span class="token string">"3D viewer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span><span class="token function">initCameraParameters</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token return-type class-name"><span class="token keyword">int</span></span> <span class="token function">V1</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token return-type class-name"><span class="token keyword">int</span></span> <span class="token function">V2</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">createViewPort</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> <span class="token number">1.0</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">addCoordinateSystem</span><span class="token punctuation">(</span><span class="token number">0.2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	viewer<span class="token operator">-&gt;</span><span class="token generic-method"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token punctuation">&lt;</span>pcl<span class="token punctuation">:</span><span class="token punctuation">:</span>PointXYZI<span class="token punctuation">&gt;</span></span></span><span class="token punctuation">(</span>cloud<span class="token punctuation">,</span> <span class="token string">"cloud"</span><span class="token punctuation">,</span> V1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token generic-method"><span class="token function">addPointCloud</span><span class="token generic class-name"><span class="token punctuation">&lt;</span>pcl<span class="token punctuation">:</span><span class="token punctuation">:</span>PointXYZI<span class="token punctuation">&gt;</span></span></span><span class="token punctuation">(</span>cloudFiltered<span class="token punctuation">,</span> <span class="token string">"cloudFiltred"</span><span class="token punctuation">,</span> V2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	viewer<span class="token operator">-&gt;</span><span class="token function">spin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	   
+	<span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token operator">!</span>viewer<span class="token operator">-&gt;</span><span class="token function">wasStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		user_data<span class="token operator">++</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h2><a id="_653"></a>点云滤波器继承关系</h2> 
+<h2><a id="_655"></a>参考文章链接</h2> 
+<p>https://blog.csdn.net/weixin_44044411/article/details/128423091</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/091f089e0545a66893be9be4fcaeda98/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">玩转 JS 逆向：RPC 加持，爬虫效率飙升</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/21be3d4984a4bca202f90b7366e1a56b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">nfs挂载根文件系统失败</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

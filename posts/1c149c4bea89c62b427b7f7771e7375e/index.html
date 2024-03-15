@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>spring之我见- spring循环依赖为啥是三级缓存？ - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="spring之我见- spring循环依赖为啥是三级缓存？" />
+<meta property="og:description" content="单例在spring里的获取方式 今天讲一下spring中针对单例bean的循环依赖问题，本着追本溯源的学习理念，我们要先知道单例在spring中怎么管理的。spring获取实例都通过beanfactory的getBean方法获取实例，顺着代码而下，在doGetBean方法(AbstractBeanFactory)中，单例总是通过getSingleton()方法获取缓存实例。
+protected &lt;T&gt; T doGetBean( final String name, final Class&lt;T&gt; requiredType, final Object[] args, boolean typeCheckOnly) throws BeansException { ...... Object sharedInstance = getSingleton(beanName); ...... } 再来看看getSingleton方法，也非常简单，spring给了三个map，网上说是三级缓存
+一级缓存 ： singletonObjects 初始化完后的单例都会存在这个map中，一般ioc容器初始完后，你再用getbean取实例都可以从这里获取到。二级缓存 ：earlySingletonObjects 提前曝光的实例，这时候bean还处于创建中（bean的创建分为 实例化 和 初始化），没有完全创建好。三级缓存 ：singletonFactories 跟二级缓存一样，bean还处于萌芽期，甚至取到的只是一个工厂类，需要通过getObject获取实例。 这段代码的含义就是 先从一级缓存中获取实例，取不到，再去取二级缓存，再没有，那就三级中取。 注意: 当从三级中取到实例时，会删除三级缓存中的值，然后放入二级缓存。
+有人问设计多级缓存的含义在哪？ 这其实是为了 本文的中心思想：spring循环依赖解决方案 服务的。后面再来细讲。
+protected Object getSingleton(String beanName, boolean allowEarlyReference) { Object singletonObject = this.singletonObjects.get(beanName); if (singletonObject == null &amp;&amp; isSingletonCurrentlyInCreation(beanName)) { synchronized (this.singletonObjects) { singletonObject = this." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/1c149c4bea89c62b427b7f7771e7375e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-03-04T11:25:19+08:00" />
+<meta property="article:modified_time" content="2022-03-04T11:25:19+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">spring之我见- spring循环依赖为啥是三级缓存？</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="spring_0"></a>单例在spring里的获取方式</h3> 
+<p>今天讲一下spring中针对单例bean的循环依赖问题，本着追本溯源的学习理念，我们要先知道单例在spring中怎么管理的。spring获取实例都通过beanfactory的getBean方法获取实例，顺着代码而下，在doGetBean方法(AbstractBeanFactory)中，单例总是通过getSingleton()方法获取缓存实例。</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> <span class="token generics function"><span class="token punctuation">&lt;</span>T<span class="token punctuation">&gt;</span></span> T <span class="token function">doGetBean</span><span class="token punctuation">(</span>
+			<span class="token keyword">final</span> String name<span class="token punctuation">,</span> <span class="token keyword">final</span> Class<span class="token generics function"><span class="token punctuation">&lt;</span>T<span class="token punctuation">&gt;</span></span> requiredType<span class="token punctuation">,</span> <span class="token keyword">final</span> Object<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">,</span> <span class="token keyword">boolean</span> typeCheckOnly<span class="token punctuation">)</span>
+			<span class="token keyword">throws</span> BeansException <span class="token punctuation">{<!-- --></span>
+
+<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+		Object sharedInstance <span class="token operator">=</span> <span class="token function">getSingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>再来看看getSingleton方法，也非常简单，spring给了三个map，网上说是三级缓存</p> 
+<ul><li>一级缓存 ： singletonObjects 初始化完后的单例都会存在这个map中，一般ioc容器初始完后，你再用getbean取实例都可以从这里获取到。</li><li>二级缓存 ：earlySingletonObjects 提前曝光的实例，这时候bean还处于创建中（bean的创建分为 实例化 和 初始化），没有完全创建好。</li><li>三级缓存 ：singletonFactories 跟二级缓存一样，bean还处于萌芽期，甚至取到的只是一个工厂类，需要通过getObject获取实例。</li></ul> 
+<p>这段代码的含义就是 先从一级缓存中获取实例，取不到，再去取二级缓存，再没有，那就三级中取。 注意: <code>当从三级中取到实例时，会删除三级缓存中的值，然后放入二级缓存</code>。</p> 
+<p>有人问设计多级缓存的含义在哪？ 这其实是为了 本文的中心思想：spring循环依赖解决方案 服务的。后面再来细讲。</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> Object <span class="token function">getSingleton</span><span class="token punctuation">(</span>String beanName<span class="token punctuation">,</span> <span class="token keyword">boolean</span> allowEarlyReference<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		Object singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>singletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> null <span class="token operator">&amp;&amp;</span> <span class="token function">isSingletonCurrentlyInCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>singletonObjects<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>earlySingletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> null <span class="token operator">&amp;&amp;</span> allowEarlyReference<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					ObjectFactory<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">&gt;</span> singletonFactory <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>singletonFactories<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonFactory <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						singletonObject <span class="token operator">=</span> singletonFactory<span class="token punctuation">.</span><span class="token function">getObject</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token keyword">this</span><span class="token punctuation">.</span>earlySingletonObjects<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> singletonObject<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token keyword">this</span><span class="token punctuation">.</span>singletonFactories<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">!=</span> NULL_OBJECT <span class="token operator">?</span> singletonObject <span class="token operator">:</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+</code></pre> 
+<h3><a id="_45"></a>循环依赖的问题</h3> 
+<p>上一章我们讲了单例如何从三个缓存中去取，可能为什么要设计这个缓存我们听的云里雾里，这里我们就抛出问题：循环依赖。</p> 
+<p>我们知道，当A 有一个 属性 B , B 有一个属性A时，就形成了循环依赖，按照单例bean的创建逻辑，A没创建完，就去拿B，B还没创建完，又去拿A，请问A在哪？A还没创建完呢 ! 所以解决问题的关键在哪？spring给设计了一个多级缓存，当A完成实例化(createBeanInstance)时，这个实例已经有了自己的内存地址，只是对象不够完善，spring先把这种对象放进一个缓存。然后装配属性的时候需要B时 ，B开始自己的创建之旅，途中B需要A了，它就可以从缓存中顺利拿到实例A，即使这时候的A并不完善。 然后B把自己创建完成后，又轮到A继续完善自己，直到 A和B 都创建完毕，这样就没有了循环依赖的问题。</p> 
+<p>下面用图反映spring bean的大致创建流程 与 多级缓存之间的配合：</p> 
+<ul><li>当实例化完一个初始bean时，会先放入三级缓存，记住，这里的A还只是一个 初生的婴儿，没有属性装配，没有经历初始化,是个ObjectFactory，为什么用ObjectFactory，后面再说。</li><li>然后经历装配bean属性的过程。期间属性涉及到 循环依赖的时候，就可以通过第三缓存拿到对象。拿到后删除三级缓存，放入二级缓存。</li><li>实例创建完毕后会删除二，三级缓存，放入一级缓存。一级缓存就是 spring单例对象的完全体，后面程序可以通过beanfactory 随时取用。<br> <img src="https://images2.imgbox.com/bb/6c/62WS3Pzu_o.png" alt="在这里插入图片描述"></li></ul> 
+<h3><a id="_56"></a>为什么要设计三层缓存</h3> 
+<p>在了解了循环依赖的基本原理后，我当时第一个疑问就是：为什么要设计三层缓存？而不是两层，理论上，设计两层就能满足需求。</p> 
+<p>我们来反过来看看最开始根据getSingleton获取单实例的方法，有一个参数allowEarlyReference，这个为true，就说明你可以从 三级缓存 (singletonFactories) 来获取提前曝光的实例，如果为false，你最多只能从一级或二级缓存（earlySingletonObjects）来获取实例。那哪里会用false来调用getSingleton方法呢？</p> 
+<pre><code class="prism language-java">	<span class="token keyword">protected</span> Object <span class="token function">getSingleton</span><span class="token punctuation">(</span>String beanName<span class="token punctuation">,</span> <span class="token keyword">boolean</span> allowEarlyReference<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		Object singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>singletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> null <span class="token operator">&amp;&amp;</span> <span class="token function">isSingletonCurrentlyInCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>singletonObjects<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>earlySingletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> null <span class="token operator">&amp;&amp;</span> allowEarlyReference<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					ObjectFactory<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">&gt;</span> singletonFactory <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>singletonFactories<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonFactory <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						singletonObject <span class="token operator">=</span> singletonFactory<span class="token punctuation">.</span><span class="token function">getObject</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token keyword">this</span><span class="token punctuation">.</span>earlySingletonObjects<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> singletonObject<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token keyword">this</span><span class="token punctuation">.</span>singletonFactories<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">!=</span> NULL_OBJECT <span class="token operator">?</span> singletonObject <span class="token operator">:</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+</code></pre> 
+<p>我们从doCreateBean方法中看到如下示例代码，这段代码在装配完bean（populateBean）后开始执行，会看到其中调用了getSingleton(beanName, false)，这里其实是 <code>循环依赖的一次检查</code>，我们举个例子：</p> 
+<pre><code class="prism language-java">		<span class="token keyword">if</span> <span class="token punctuation">(</span>earlySingletonExposure<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			Object earlySingletonReference <span class="token operator">=</span> <span class="token function">getSingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>earlySingletonReference <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>exposedObject <span class="token operator">==</span> bean<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					exposedObject <span class="token operator">=</span> earlySingletonReference<span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token keyword">this</span><span class="token punctuation">.</span>allowRawInjectionDespiteWrapping <span class="token operator">&amp;&amp;</span> <span class="token function">hasDependentBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					String<span class="token punctuation">[</span><span class="token punctuation">]</span> dependentBeans <span class="token operator">=</span> <span class="token function">getDependentBeans</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					Set<span class="token generics function"><span class="token punctuation">&lt;</span>String<span class="token punctuation">&gt;</span></span> actualDependentBeans <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LinkedHashSet</span><span class="token generics function"><span class="token punctuation">&lt;</span>String<span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span>dependentBeans<span class="token punctuation">.</span>length<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">for</span> <span class="token punctuation">(</span>String dependentBean <span class="token operator">:</span> dependentBeans<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">removeSingletonIfCreatedForTypeCheckOnly</span><span class="token punctuation">(</span>dependentBean<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+							actualDependentBeans<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>dependentBean<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token punctuation">}</span>
+					<span class="token punctuation">}</span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>actualDependentBeans<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCurrentlyInCreationException</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span>
+								<span class="token string">"Bean with name '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"' has been injected into other beans ["</span> <span class="token operator">+</span>
+								StringUtils<span class="token punctuation">.</span><span class="token function">collectionToCommaDelimitedString</span><span class="token punctuation">(</span>actualDependentBeans<span class="token punctuation">)</span> <span class="token operator">+</span>
+								<span class="token string">"] in its raw version as part of a circular reference, but has eventually been "</span> <span class="token operator">+</span>
+								<span class="token string">"wrapped. This means that said other beans do not use the final version of the "</span> <span class="token operator">+</span>
+								<span class="token string">"bean. This is often the result of over-eager type matching - consider using "</span> <span class="token operator">+</span>
+								<span class="token string">"'getBeanNamesOfType' with the 'allowEagerInit' flag turned off, for example."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+</code></pre> 
+<p>A和B相互关联，当A初始化的时候，发现需要B，然后A作为提前曝光的bean放入三级缓存。然后创建B，等B完成实例化和初始化后，这时会对B进行循环依赖检查， 首先先从二级或一级缓存中看能不能拿到B（getSingleton中allowEarlyReference参数为 <code>false</code>），能拿到的话，再进入第二层判断 – <code>B会不会因为被BeanPostProcessors处理过，导致返回了一个完全不一样的对象(exposedObject != bean)</code>，如果真不一样，那么会继续找哪些对象会依赖B（根据beanName查找），最终发现还真不少(actualDependentBeans不为空)，对于循环依赖来说，这是个大问题！单例对象的创建过程中一旦被其它bean依赖注入，是不允许被二次修改，即使是BeanPostProcessors处理过也不能返回内存地址不一样的对象，想想这样也是对的，如果一套spring ioc中有两个内存地址但同名的对象，岂不是乱套了？</p> 
+<p>这段代码只是防止自定义的BeanPostProcessors没有遵循规范，但是我们想想还有什么情况会把一个对象完全替换成另一个对象？ 答案是aop。那么aop是怎么通过这段代码检查的？之所以用三层缓存而不是用两层也是为了处理aop的情况。</p> 
+<h4><a id="AOP_115"></a>AOP情况下的循环依赖解决之道</h4> 
+<p>我们知道上面代码的检查原理就是在初始化前后对比这个对象地址有没有变化，那么aop是在什么地方代理对象的？aop具体的原理可以看我aop的文章 <a href="https://blog.csdn.net/lovejj1994/article/details/116795161">spring之我见 - Spring AOP实现原理(上)</a>, <a href="https://blog.csdn.net/lovejj1994/article/details/117252507">spring之我见 - Spring AOP实现原理(下)<br> </a>. 我这里直接说一下结论，有两个地方： 一个是BeanPostProcessors 的 <code>postProcessAfterInitialization</code> 逻辑里，还有一个就在 <code>getEarlyBeanReference</code> 方法中, 这两个方法同属于 <code>AbstractAutoProxyCreator</code> 抽象类(继承BeanPostProcessor)，在创建bean的过程中会先执行 <code>getEarlyBeanReference</code> ，再执行<code>postProcessAfterInitialization</code>，两个方法都是创建代理对象的方法，但是会通过一个cache map避免重复执行，具体执行哪一个要视具体情况来定，我举一个例子：如果两个对象都有aop逻辑，并且相互依赖，这种情况下创建Bean的过程是什么样的。</p> 
+<p>spring的代码非常绕，我是debug一步步记录下来的，具体代码就在 <code>org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#doCreateBean</code> 里，可以对着代码看流程，会更加清晰。我们看下图也可以总结出：<code>假如只有两级缓存，并且带有aop逻辑的话，就没有地方暂时放提前暴露的对象（实例化完但没初始化完的对象），最后的结果就是 aop和解决循环依赖将不可兼得。</code><br> <img src="https://images2.imgbox.com/2f/23/QFs3NQoM_o.jpg" alt="在这里插入图片描述"></p> 
+<h3><a id="_122"></a>总结</h3> 
+<p>总结来说，一级缓存放的是成品bean; 二级缓存放的是实例化完但没初始化完的对象（假如需要aop的话会经过aop包装）; 三级是实例化完还没初始化也没经过aop处理的对象工厂（假如需要aop的话）。每一级都有自己各自的作用，缺一不可。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/1ecf2fae87b1075790f540b2dda61324/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">js replace的使用</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/abb2db33c5ab2158e994ed84f69c04a7/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">安装macOS Mojave(10.14.6)系统 提示macOS Mojave应用程序副本已损坏</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

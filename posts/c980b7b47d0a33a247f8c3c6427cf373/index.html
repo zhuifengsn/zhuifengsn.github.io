@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>操作系统（六） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="操作系统（六）" />
+<meta property="og:description" content="举一个生活中的例子。仓库中有很多东西，店面却只有那么大，顾客来了要商品C,C在仓库里但没有在店面里，那售货员是回答有还是没有呢？有，得让顾客等一会，售货员干净跑去仓库取出商品C拿到店面，现在商品C是不是有了呢？当然由于点面只有那么大，商品C是拿来放在店里面了，就需要把某些其他商品（如商品B）放回到仓库中，直到有顾客想要商品B的时候再把B那回到店面。
+那这样的换入和换出来实现在一个小的店面里”摆放“仓库中的很多东西。店面就是内存，仓库是磁盘，而仓库里所有东西的清单列表就对应虚拟内存。用户可以访问任何地方的虚拟内存，如果虚拟内存没有和物理内存关联起来，赶紧从磁盘上读进来并建立关联，这称为”换入“。由于物理内存是有限的，不能知识换入，很多时候也要讲物理内存中的部分内容移除到磁盘上，并和虚拟内存去拥抱接触关联，这称为”换出“，这个换入/换出就是本章要讨论的核心故事，而这个换入/换出页就是形成规整虚拟内存的关键所在。
+规整的虚拟内存 虚拟内存的换入换出 虚拟内存就是操作系统给进程提供的一个规整的、总长度位4GB（32位操作系统）的地址空间，用户可以随意访问这个空间中的任何一个地址。但是由于实际物理内存可能比4GB小，所以4GB的虚拟内存不可能全部映射到物理内存上，这就会产生如图所示的换入换出场景
+首先访问左图中阴影部分的那段虚存去拥抱，虚存区域和物理内存建立了关联，现在要访问犹如阴影部分的那段虚存区域，由于当前剩余物理内存空间不足，需要首先讲物理内存中的某些关联释放掉（换出），在物理内存中腾出的地方上和右图中的虚存区域建立关联（换出）
+正是使用这样的换入/换出，用一个小物理内存来制造出一个大而规整的虚拟内存用户示图。实际上，即使物理内存也是4GB，也应该进行这样的换入、换出，因为每个进程都要有一个4GB大小的虚拟内存，在多个进程视图为核心的操作系统中，系统中会有多个进程，就会有多个4GB虚拟内存。比如100个进程，那么总共需要映射的就是400GB虚拟内存，我们示不可能有那么大的内存的。
+请求调页 如图给出了段页式内存管理机制下的地址转换过程：首先要根据段表从逻辑地址0x40算出虚拟地址，由于假定虚拟内存的4GB空间可以随便使用，所以这一步一定可以正常完成，从段表中取出端基址0x4000后和段内拍内衣相加得到虚拟地址0小040.现在开始地址转换的第二步，根据虚拟地址和页表获得物理地址，一页的大小为54KB，0x4040的虚拟号是4，查页表后没有找到该虚拟页对应的物理页，怎么回这样呢？
+因为这一页虚拟内存去拥抱还没有和物理内存建立关联。当然也应该这样，因为虚拟内存的所有页都映射到屋里内存上，虚拟内存呢这个思想就没有存在的必要了。具体实现时，MMU回查看页表项的有效位，如果该页表项的有效位为0，就说明该虚拟页还没映射到物理页框映上。实际上，这正是虚拟内存的故事要开始的时候-没有映射菜肴换入。
+因此内存换入的和兴就是在缺少虚拟页的时候请求调用页，操作系统首先换入就是实现请求调页，
+请求调页的整个过程从MMU发现虚拟页面在页表项中的有效位为0时开始，这个时候MMU会向CPU发出缺页中断，操作系统的内存换入就从这个缺页中断开始，在这个中断处理中操作系统会从磁盘（仓库）上找到这个虚拟页（商品），并讲这个虚拟也从磁盘读进来。当然在读竟来之前先找到一个空闲的物理内存边框，再讲那个虚拟页督导空闲页框以后，虚拟页面就和物理页框建立关联了，再根性页表来记下这个映射关系。
+中断处理返回以后，会重新执行那日奥被中断的指令，因为刚才执行指令的中途发生中断，所以执行指令时，再去查段表，页表，显然都会时有效的，可以顺利得到物理地址，指令顺利执行，换入过程全部完成，整个调用过程如图所示。
+页面调入的具体实现 页面调入具体实现的代码从却也中断处理程序开始，具体是从缺页中断处理程序的设备卡死hi，这一设置再系统启动时完成，代码如下：
+void trap_init(void) { set_page_track(14,&amp;page_fault); } 其中14号中断就时缺页中断，数字14由计算机硬件电路决定的。page_fault时一段汇编代码，该diamagnetic首先去除导致页面错误的类型，判断页面时没有映射内还是越权读写，这个错误类型会被压入内核栈中，命令xchg1 %eax，(%esp)会将这个错误类型取出来赋给EAX寄存器，将来要根据寄存器EAX的决定到底如何处理这个中断。CR2寄存器中存放着另一个非常重要的信息-出现内存读写错误的虚拟地址，如果是缺页，CR2中存放的就是发生缺页是的虚拟地址，进而直到到底缺了那个虚拟页
+page_fault: xchg1 %eax,(%esp) mov1 %cr2,%edx push1 %edx PUsh1 %eax test $1,eax jne 1f call do_no_page jmp 2f 1:call do_wp_page 2:... iret 在这段代码中，push1 %edx和pushl %eax做了什么呢？想一想后面的call do_no_page就应该明白了。这是汇编语言调用c语言函数实要给c语言函数传递的参数，这样的作法已经在操作系统中出现很多次了。接下来的内容就很简单了，根据EAX中存放的错误类型决定是调用do_no_page（no对应缺页）还是do_wp_page(wp对应保护，即写一个制度页)
+void do_noPpage(unsigned long ,error_code,unsigned long address) { address &amp;= 0xfffff000 page = get_free_page() bread_page(page, currrent-&gt;executable-&gt;i_dev,nr); opu_page(page,address) } 页面换出 我们不可以能一直换入页面。从磁盘换入虚拟页面时，需要在物理内存中找到一块空闲页框，但这个空闲页框不一定总能找到。所以更加符合实际的做法是，如果能找到空闲物理内存页框就直接读入虚拟页，否则就要从以映射的物理页框中换出一夜，在腾出空闲也以后再进行下面的Bread_page和Put_page操作。
+基本的页面换出算法 页面换出要解决的基本问题就是选择哪个页面进行淘汰，是选择最先调入的哪个页面患处吗？和CPU调度算法一样，首先要定义一个指标来评价页面换出算法的优劣。先然应该以缺页次数作为评价指标，因为页面换出是调用页的一个基本环节，尽量少的页面换入会提高调页的性能
+再确定算法指标以后，接下来需要设计算法。现在以一个虚拟页面访问序列ABCABDADBCB 为例，来看先入先出页面置换算法的工作过程、效果以及存在问题，表给出了这个换页过程，其中1，2，3是分配给进程的物理边框，即该进程只能使用这三个页框" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/c980b7b47d0a33a247f8c3c6427cf373/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-07-17T15:23:08+08:00" />
+<meta property="article:modified_time" content="2021-07-17T15:23:08+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">操作系统（六）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>举一个生活中的例子。仓库中有很多东西，店面却只有那么大，顾客来了要商品C,C在仓库里但没有在店面里，那售货员是回答有还是没有呢？有，得让顾客等一会，售货员干净跑去仓库取出商品C拿到店面，现在商品C是不是有了呢？当然由于点面只有那么大，商品C是拿来放在店里面了，就需要把某些其他商品（如商品B）放回到仓库中，直到有顾客想要商品B的时候再把B那回到店面。<br> 那这样的换入和换出来实现在一个小的店面里”摆放“仓库中的很多东西。店面就是内存，仓库是磁盘，而仓库里所有东西的清单列表就对应虚拟内存。用户可以访问任何地方的虚拟内存，如果虚拟内存没有和物理内存关联起来，赶紧从磁盘上读进来并建立关联，这称为”换入“。由于物理内存是有限的，不能知识换入，很多时候也要讲物理内存中的部分内容移除到磁盘上，并和虚拟内存去拥抱接触关联，这称为”换出“，这个换入/换出就是本章要讨论的核心故事，而这个换入/换出页就是形成规整虚拟内存的关键所在。</p> 
+<h3><a id="_2"></a>规整的虚拟内存</h3> 
+<h4><a id="_3"></a>虚拟内存的换入换出</h4> 
+<p>虚拟内存就是操作系统给进程提供的一个规整的、总长度位4GB（32位操作系统）的地址空间，用户可以随意访问这个空间中的任何一个地址。但是由于实际物理内存可能比4GB小，所以4GB的虚拟内存不可能全部映射到物理内存上，这就会产生如图所示的换入换出场景<br> <img src="https://images2.imgbox.com/f1/4c/XyNdtNOn_o.png" alt="在这里插入图片描述"><br> 首先访问左图中阴影部分的那段虚存去拥抱，虚存区域和物理内存建立了关联，现在要访问犹如阴影部分的那段虚存区域，由于当前剩余物理内存空间不足，需要首先讲物理内存中的某些关联释放掉（换出），在物理内存中腾出的地方上和右图中的虚存区域建立关联（换出）<br> 正是使用这样的换入/换出，用一个小物理内存来制造出一个大而规整的虚拟内存用户示图。实际上，即使物理内存也是4GB，也应该进行这样的换入、换出，因为每个进程都要有一个4GB大小的虚拟内存，在多个进程视图为核心的操作系统中，系统中会有多个进程，就会有多个4GB虚拟内存。比如100个进程，那么总共需要映射的就是400GB虚拟内存，我们示不可能有那么大的内存的。</p> 
+<h4><a id="_8"></a>请求调页</h4> 
+<p><img src="https://images2.imgbox.com/53/88/XKN0Tihu_o.png" alt="在这里插入图片描述"><br> 如图给出了段页式内存管理机制下的地址转换过程：首先要根据段表从逻辑地址0x40算出虚拟地址，由于假定虚拟内存的4GB空间可以随便使用，所以这一步一定可以正常完成，从段表中取出端基址0x4000后和段内拍内衣相加得到虚拟地址0小040.现在开始地址转换的第二步，根据虚拟地址和页表获得物理地址，一页的大小为54KB，0x4040的虚拟号是4，查页表后没有找到该虚拟页对应的物理页，怎么回这样呢？<br> 因为这一页虚拟内存去拥抱还没有和物理内存建立关联。当然也应该这样，因为虚拟内存的所有页都映射到屋里内存上，虚拟内存呢这个思想就没有存在的必要了。具体实现时，MMU回查看页表项的有效位，如果该页表项的有效位为0，就说明该虚拟页还没映射到物理页框映上。实际上，这正是虚拟内存的故事要开始的时候-没有映射菜肴换入。<br> 因此内存换入的和兴就是在缺少虚拟页的时候请求调用页，操作系统首先换入就是实现请求调页，<br> 请求调页的整个过程从MMU发现虚拟页面在页表项中的有效位为0时开始，这个时候MMU会向CPU发出缺页中断，操作系统的内存换入就从这个缺页中断开始，在这个中断处理中操作系统会从磁盘（仓库）上找到这个虚拟页（商品），并讲这个虚拟也从磁盘读进来。当然在读竟来之前先找到一个空闲的物理内存边框，再讲那个虚拟页督导空闲页框以后，虚拟页面就和物理页框建立关联了，再根性页表来记下这个映射关系。<br> 中断处理返回以后，会重新执行那日奥被中断的指令，因为刚才执行指令的中途发生中断，所以执行指令时，再去查段表，页表，显然都会时有效的，可以顺利得到物理地址，指令顺利执行，换入过程全部完成，整个调用过程如图所示。<br> <img src="https://images2.imgbox.com/6a/82/MNNBF9JA_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_16"></a>页面调入的具体实现</h4> 
+<p>页面调入具体实现的代码从却也中断处理程序开始，具体是从缺页中断处理程序的设备卡死hi，这一设置再系统启动时完成，代码如下：</p> 
+<pre><code class="prism language-c"><span class="token keyword">void</span> <span class="token function">trap_init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">set_page_track</span><span class="token punctuation">(</span><span class="token number">14</span><span class="token punctuation">,</span><span class="token operator">&amp;</span>page_fault<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>其中14号中断就时缺页中断，数字14由计算机硬件电路决定的。page_fault时一段汇编代码，该diamagnetic首先去除导致页面错误的类型，判断页面时没有映射内还是越权读写，这个错误类型会被压入内核栈中，命令xchg1 %eax，(%esp)会将这个错误类型取出来赋给EAX寄存器，将来要根据寄存器EAX的决定到底如何处理这个中断。CR2寄存器中存放着另一个非常重要的信息-出现内存读写错误的虚拟地址，如果是缺页，CR2中存放的就是发生缺页是的虚拟地址，进而直到到底缺了那个虚拟页</p> 
+<pre><code class="prism language-c">page_fault<span class="token operator">:</span>
+	xchg1 <span class="token operator">%</span>eax<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token operator">%</span>esp<span class="token punctuation">)</span>
+	mov1 <span class="token operator">%</span>cr2<span class="token punctuation">,</span><span class="token operator">%</span>edx
+	push1 <span class="token operator">%</span>edx
+	PUsh1 <span class="token operator">%</span>eax
+	test $<span class="token number">1</span><span class="token punctuation">,</span>eax
+	jne <span class="token number">1f</span>
+	call do_no_page
+	jmp <span class="token number">2f</span>
+	<span class="token number">1</span><span class="token operator">:</span>call do_wp_page
+	<span class="token number">2</span><span class="token operator">:</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+	iret
+</code></pre> 
+<p>在这段代码中，push1 %edx和pushl %eax做了什么呢？想一想后面的call do_no_page就应该明白了。这是汇编语言调用c语言函数实要给c语言函数传递的参数，这样的作法已经在操作系统中出现很多次了。接下来的内容就很简单了，根据EAX中存放的错误类型决定是调用do_no_page（no对应缺页）还是do_wp_page(wp对应保护，即写一个制度页)</p> 
+<pre><code class="prism language-c"><span class="token keyword">void</span> <span class="token function">do_noPpage</span><span class="token punctuation">(</span><span class="token keyword">unsigned</span> <span class="token keyword">long</span> <span class="token punctuation">,</span>error_code<span class="token punctuation">,</span><span class="token keyword">unsigned</span> <span class="token keyword">long</span> address<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	address <span class="token operator">&amp;=</span> <span class="token number">0xfffff000</span>
+	page <span class="token operator">=</span> <span class="token function">get_free_page</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token function">bread_page</span><span class="token punctuation">(</span>page<span class="token punctuation">,</span> currrent<span class="token operator">-&gt;</span>executable<span class="token operator">-&gt;</span>i_dev<span class="token punctuation">,</span>nr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">opu_page</span><span class="token punctuation">(</span>page<span class="token punctuation">,</span>address<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h4><a id="_52"></a>页面换出</h4> 
+<p>我们不可以能一直换入页面。从磁盘换入虚拟页面时，需要在物理内存中找到一块空闲页框，但这个空闲页框不一定总能找到。所以更加符合实际的做法是，如果能找到空闲物理内存页框就直接读入虚拟页，否则就要从以映射的物理页框中换出一夜，在腾出空闲也以后再进行下面的Bread_page和Put_page操作。</p> 
+<h4><a id="_54"></a>基本的页面换出算法</h4> 
+<p>页面换出要解决的基本问题就是选择哪个页面进行淘汰，是选择最先调入的哪个页面患处吗？和CPU调度算法一样，首先要定义一个指标来评价页面换出算法的优劣。先然应该以缺页次数作为评价指标，因为页面换出是调用页的一个基本环节，尽量少的页面换入会提高调页的性能<br> 再确定算法指标以后，接下来需要设计算法。现在以一个虚拟页面访问序列ABCABDADBCB 为例，来看先入先出页面置换算法的工作过程、效果以及存在问题，表给出了这个换页过程，其中1，2，3是分配给进程的物理边框，即该进程只能使用这三个页框</p> 
+<p><img src="https://images2.imgbox.com/d6/ac/98hRnm6p_o.png" alt="在这里插入图片描述"></p> 
+<p>最初就有三次换页，因为物理内存页框中没有页，接下来在访问D的时候产生缺页，因为此时物理页框中的虚拟页是A,B,C，没有D，现在就要执行页面置换/淘汰算换了，FIFO策略是选择最想进入的页面仅从淘汰，AB,C中A是最先进入的，所以淘汰的是页面A，页面D被放到1号物理页框中。接下来访问虚拟页面A时，却发现又缺页了，因为此时物理内存中的虚拟页面时D,B,C根据FIFO策略，淘汰的是B，所以A会被放进2号页框中。。。。。FIFO页面置换算法共产生7次缺页，有没有办法减少缺页次数呢。<br> 仔细观察表中给出的页面淘汰过程，不难发现，在产生缺页D的那次访问时，不应该选择页面A淘汰，因为A马上要访问；那么B呢，不久以后也会用到。只能选择C，因为相比较于A和B，C是最远才使用的，选择淘汰C显然比淘汰A和B都合适。这就是最优置换算法，即OPT算法，因为选择未来最远使用的页面进行淘汰是最明智的选择。针对同样的页面访问序列。<br> <img src="https://images2.imgbox.com/17/34/aBKLomhj_o.png" alt="在这里插入图片描述"><br> 如图的执行结果，缺页次数减少到了5次，说明OPT算法比较FIFO算法效果较好。<br> 虽然OPT算法是最好的页面置换算法，因为其缺页次数发生得最少，但是OPT算法却有一个很大的缺陷：OPT算法需要直到未来页面访问情况，通常，我们是不知道未来要访问哪个虚拟地址的<br> 人们无法看到未来的时候，通常都会用理是情况来预测未来要发生的事。虽然，不可能直到D后面的页面访问序列时ADBCB，但可以根据D之前的页面访问序列ABCAB来推测未来的情况。基于程序访问地址时所具有的局部性，如果一个页面接下来很快被访问，那么这个页面在不久之前页很可能被访问过。<br> 因此对“选择未来最远访问的页面淘汰”的近似表达就是“选择历史上最近很长时间没被访问的页面太太”，这就是祝明的最近最少使用（Least recently used,LRU）页面置换算法。<br> <img src="https://images2.imgbox.com/30/d1/9YTxIcjw_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="LRU_68"></a>LRU算法的准确实现</h4> 
+<p>对于页面置换算法，LRU工作效率已经很好了，而且LRU看起来又是那样简单，但LRU仍然存在不足。表面上看起来LRU算法简单、只管而且效果也很好，但操作系统中的所有算法最终都要在操作系统里实现的，只有在操作系统里分析才能真正评价LRU的工作效果。<br> 首先分析LRU的准确实现，既然要实现最近最少使用，很容易想到的方法就是记录页面访问时间，根据时间的比较来找到最近最少使用的页面。仍然以上面给出的访问序列ABCABDABBCB为例。<br> <img src="https://images2.imgbox.com/48/51/kkNim8oK_o.png" alt="在这里插入图片描述"><br> 在这个基于时间戳的LRU实现中，时间戳的更新和围殴及代价太大了。首先需要分析这个时间戳在系统中实现。根据图所示，ABCD每个虚拟页都要关联一个时间戳，所以时间戳应该是每个虚拟页都应又得一个信息。由前面讨论得分页机制不难看出，和虚拟页对应得信息，如虚拟页对应得物理页框号、虚拟页读写权限等，通常都要放在该虚拟页对应的页表项上，所以这个时间戳信息也应该存放在页表项中。<br> 这就要出大问题了，时间戳的值可能很大，一台机器通常运行是连续运行很久的，时间戳数值变大会导致存储位数增加，造成页表长度增大；另外，即使页表项设置得再大，也可能出现时间戳溢出得情况。时间戳以出时又应该又该怎么判断那一夜最近更少使用呢？实际上还有一个更为严重得问题，那就是每次淘汰页面时都要比较页表项中得时间结构，如用堆来帮助系统尽快找到时间戳最小得页面，但这样得数据维护代价太大，且每次页面访问时都需要维护。<br> 有没有不用时间戳得LRU实现方法呢？也有，比如用页面栈来实现LRU。想法很简单，每次访问某个虚拟页面时，就将这个页面浮动到栈顶。这样栈中得页面就具有这样得特点：靠近栈顶得页面就是最近经常访问的，而被压在栈底的页面就是最近很少使用的。显然，采用页面栈以后，每次虚拟页面访问都要调整页面再栈中的位置；如果出现了缺页，就选择位于栈低的哪个页面进行淘汰。<br> <img src="https://images2.imgbox.com/f6/39/A6DZOuW5_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="clock_76"></a>clock算法</h4> 
+<p>通过上面的分析可以看出，精确实现LRU的代价太大，不可能用于实际操作系统。还要对LRU算法仅从简化和近似，clock算法就是对LRU算法的一个典型近似，经过这种近似以后的页面置换算法终于可以在实际操作系统中工作了。<br> 分析总结上面给出的两种LRU算法的精确实现-时间戳算法和页面栈算法，可以得出这样一些结论：（1）要实现LRU必须用信息来记录页面使用情况，这样才能找到最近最小使用页面进行淘汰，相应地需要在每次地址访问时进行信息维护。（2）如果用软件方式来维护这个页面信息，造成每次地址访问又会额外增加增加多次地址地址访问的情况，严重降低内存使用效率。最好能用硬件实现维护这一信息，这和采用MMU进行地址转换的想法是一致的。（3）在页表项中存放一个简单的数来实现对“最近最少使用”的近似表示，并且用硬件在访问页面时自动更新这个数，<br> clock算法有很多变形，但所有clock算法的基础都是页表项中一个近似时间戳的信息-访问位：用一个二进制0，1来近似表示时间戳，如果页面被访问了，就将这一位设置为1，所以这一位通常被称为访问位（R位）。基于R位可以构造出最基础的clock算法，如图所示。<br> <img src="https://images2.imgbox.com/5f/bf/5Z3ykGSB_o.png" alt="在这里插入图片描述"><br> 首先将分配给进程的所有页框组织成环形线性表，产生缺页时，就从当前的线性指针（一直停在上一次缺页处理以后的位置）出开始环形扫描，如果扫描得到虚拟页面其R位为1，则将其R位修改为0，指针向后移动；由于访问过的页要从1修改为0后才会换出，即种子很对访问过的页多给了依次不被换出的机会，所以该算法也称为第二次机会算法<br> 第二次机会置换算法时对LRU算法的一种近似实现，具体来说，SCR算法换出的时那些最近被未访问过的页面。因为R位只能表示0和1，即只能表示是否访问过，不仅具备表达最近最小访问中的“最少”概念，所以SRC只能近似地实现LRU<br> SCR用R位实现了对最近访问中“最少”的近似，那么“最近“如何近似的呢？缺页扫描时会将某页的R位清0，再给该页一次机会，如果下次缺页扫描时这个页的R位仍为0，这个页就有可能淘汰出去。显然SCR中的”最近“指的是”上次缺页以来的这段时间。对于clock算法，如果对”最近“做得不够好，也会导致clock算法的效果变差。实际上，SCR算法对“最近”的近似就做得不太好，这才导致以SCR为基础产生了一些列clock算法的变形。<br> 在实际系统中，相比页面访问，发生缺页的概率并不大。这个论断可以用反证的思想来思考。由于缺页处理时要读写磁盘，相比CPU运算和内存读写而言，磁盘读写实在是慢太多了，如果缺页经常发生的话，计算机的运行速度将无法忍受。入宫缺页很少发生，那么从上次缺页以来那段时间就会很长，也就是说SCR算法中的“最近”这一段时间很长，导致所有页面在“最近“这段时间都被访问过，所有的页面的R位都为1，此时会出现什么效果呢。<br> 如果所有页的R位都为1，缺页处理时扫描指针都会从当前位置扫描以便，并将所有页的R都秩为0，然后淘汰掉当前扫描指针出的哪个页面，扫描指针后移，当再出出现缺页时，由于时间间隔很长没所有页面都被访问过，所有页的R又被置为1。此时clock算法会进行同样的扫描，换出的又是扫描指针指向的哪个页面，扫描指针继续后移。实际上是典型FIFP页面置换算法，因此吐过”最近“时间过长的化，clock算法就退化为FIFO算法。<br> 这就需要对”最近“又一个合适的估计，我们呢可以再引入一个扫描指针，该指针钉起扫描所有页面，并将所有页面中的R为都清为0.当缺页发生时，用换出指针扫描页面，如果页面的R为仍然为0,就进行淘汰，此时换出指针只负责换出，不会对页面的R位清0.这样变形以后的clock算法如图所示<br> <img src="https://images2.imgbox.com/31/8b/h5YFmHYU_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/5753dcd122b4d279a4c257a94430860f/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">TOMCAT安装及配置教程</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/56bc4bb42ad4bf57ece03337c372d748/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">深度｜SHEIN：长期主义的胜利</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

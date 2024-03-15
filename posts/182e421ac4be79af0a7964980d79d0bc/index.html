@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Centos 环境下 NFS 服务安装及配置使用 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Centos 环境下 NFS 服务安装及配置使用" />
+<meta property="og:description" content="文章目录 1、NFS 介绍2、环境、软件准备3、NFS 服务安装4、NFS 配置及使用5、NFS 测试 1、NFS 介绍 NFS 是 Network FileSystem 的缩写，顾名思义就是网络文件存储系统，它最早是由 Sun 公司发展出来的，也是 FreeBSD 支持的文件系统中的一个，它允许网络中的计算机之间通过 TCP/IP 网络共享资源。通过 NFS，我们本地 NFS 的客户端应用可以透明地读写位于服务端 NFS 服务器上的文件，就像访问本地文件一样方便。简单的理解，NFS 就是可以透过网络，让不同的主机、不同的操作系统可以共享存储的服务。
+NFS 在文件传送或信息传送过程中依赖于 RPC（Remote Procedure Call） 协议，即远程过程调用， NFS 的各项功能都必须要向 RPC 来注册，如此一来 RPC 才能了解 NFS 这个服务的各项功能 Port、PID、NFS 在服务器所监听的 IP 等，而客户端才能够透过 RPC 的询问找到正确对应的端口，所以，NFS 必须要有 RPC 存在时才能成功的提供服务，简单的理解二者关系：NFS是 一个文件存储系统，而 RPC 是负责信息的传输。
+2、环境、软件准备 本次演示环境，我是在虚拟机上安装 Linux 系统来执行操作，以下是安装的软件及版本：
+Oracle VirtualBox: 5.1.20 r114628 (Qt5.6.2)System: CentOS Linux release 7.3.1611 (Core)rpcbind: 0.2.0-38.el7.x86_64nfs-utils: 1.3.0-0.54.el7.x86_64 3、NFS 服务安装 通过上边简要的介绍，我们知道 NFS 服务需要依赖 RPC 服务，所以这里 NFS 服务端需要安装 rpcbind和 nfs-utils，客户端只需要安装 nfs-utils 即可，由于我选用的为 CentOS 系统，所以可以使用 yum 快速的安装。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/182e421ac4be79af0a7964980d79d0bc/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-07-28T10:52:36+08:00" />
+<meta property="article:modified_time" content="2021-07-28T10:52:36+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Centos 环境下 NFS 服务安装及配置使用</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#1NFS__1" rel="nofollow">1、NFS 介绍</a></li><li><a href="#2_5" rel="nofollow">2、环境、软件准备</a></li><li><a href="#3NFS__12" rel="nofollow">3、NFS 服务安装</a></li><li><a href="#4NFS__42" rel="nofollow">4、NFS 配置及使用</a></li><li><a href="#5NFS__125" rel="nofollow">5、NFS 测试</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="1NFS__1"></a>1、NFS 介绍</h2> 
+<blockquote> 
+ <p>NFS 是 Network FileSystem 的缩写，顾名思义就是网络文件存储系统，它最早是由 Sun 公司发展出来的，也是 FreeBSD 支持的文件系统中的一个，它允许网络中的计算机之间通过 TCP/IP 网络共享资源。通过 NFS，我们本地 NFS 的客户端应用可以透明地读写位于服务端 NFS 服务器上的文件，就像访问本地文件一样方便。简单的理解，NFS 就是可以透过网络，让不同的主机、不同的操作系统可以共享存储的服务。</p> 
+</blockquote> 
+<blockquote> 
+ <p>NFS 在文件传送或信息传送过程中依赖于 RPC（Remote Procedure Call） 协议，即远程过程调用， NFS 的各项功能都必须要向 RPC 来注册，如此一来 RPC 才能了解 NFS 这个服务的各项功能 Port、PID、NFS 在服务器所监听的 IP 等，而客户端才能够透过 RPC 的询问找到正确对应的端口，所以，NFS 必须要有 RPC 存在时才能成功的提供服务，简单的理解二者关系：NFS是 一个文件存储系统，而 RPC 是负责信息的传输。</p> 
+</blockquote> 
+<h2><a id="2_5"></a>2、环境、软件准备</h2> 
+<p>本次演示环境，我是在虚拟机上安装 Linux 系统来执行操作，以下是安装的软件及版本：</p> 
+<ul><li>Oracle VirtualBox: 5.1.20 r114628 (Qt5.6.2)</li><li>System: CentOS Linux release 7.3.1611 (Core)</li><li>rpcbind: 0.2.0-38.el7.x86_64</li><li>nfs-utils: 1.3.0-0.54.el7.x86_64</li></ul> 
+<h2><a id="3NFS__12"></a>3、NFS 服务安装</h2> 
+<p>通过上边简要的介绍，我们知道 NFS 服务需要依赖 RPC 服务，所以这里 NFS 服务端需要安装 <code>rpcbind</code>和 <code>nfs-utils</code>，客户端只需要安装 <code>nfs-utils</code> 即可，由于我选用的为 CentOS 系统，所以可以使用 yum 快速的安装。</p> 
+<p>首先，确认下服务端系统是否已安装 NFS。</p> 
+<pre><code class="prism language-c">$ rpm <span class="token operator">-</span>qa nfs<span class="token operator">-</span>utils rpcbind
+nfs<span class="token operator">-</span>utils<span class="token operator">-</span><span class="token number">1.3</span><span class="token number">.0</span><span class="token operator">-</span><span class="token number">0.54</span><span class="token punctuation">.</span>el7<span class="token punctuation">.</span>x86_64
+rpcbind<span class="token operator">-</span><span class="token number">0.2</span><span class="token number">.0</span><span class="token operator">-</span><span class="token number">38.</span>el7<span class="token punctuation">.</span>x86_64
+</code></pre> 
+<p>注意：这里我已经安装完毕，若为空，则说明未安装。</p> 
+<p>然后，安装 NFS 服务</p> 
+<pre><code class="prism language-c"># 服务端
+$ yum install <span class="token operator">-</span>y nfs<span class="token operator">-</span>utils rpcbind
+# 客户端
+$ yum install <span class="token operator">-</span>y nfs<span class="token operator">-</span>utils
+</code></pre> 
+<p>另：Ubuntu 16.04 安装命令为：</p> 
+<pre><code class="prism language-c"># 服务端
+apt install nfs<span class="token operator">-</span>kernel<span class="token operator">-</span>server
+# 客户端
+apt install nfs<span class="token operator">-</span>common
+</code></pre> 
+<h2><a id="4NFS__42"></a>4、NFS 配置及使用</h2> 
+<p>我们在服务端创建一个共享目录 <code>/data/share</code> ，作为客户端挂载的远端入口，然后设置权限。</p> 
+<pre><code class="prism language-c">$ mkdir <span class="token operator">-</span>p <span class="token operator">/</span>data<span class="token operator">/</span>share
+$ chmod <span class="token number">666</span> <span class="token operator">/</span>data<span class="token operator">/</span>share
+</code></pre> 
+<p>然后，修改 NFS 配置文件 <code>/etc/exports</code></p> 
+<pre><code class="prism language-c">$ vim <span class="token operator">/</span>etc<span class="token operator">/</span>exports
+<span class="token operator">/</span>data<span class="token operator">/</span>share <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.0</span><span class="token operator">/</span><span class="token number">24</span><span class="token punctuation">(</span>rw<span class="token punctuation">,</span>sync<span class="token punctuation">,</span>insecure<span class="token punctuation">,</span>no_subtree_check<span class="token punctuation">,</span>no_root_squash<span class="token punctuation">)</span>
+</code></pre> 
+<p>说明一下，这里配置后边有很多参数，每个参数有不同的含义，具体可以参考下边。此处，我配置了将 <code>/data/share</code> 文件目录设置为允许 IP 为该<code>10.222.77.0/24</code> 区间的客户端挂载，当然，如果客户端 IP 不在该区间也想要挂载的话，可以设置 IP 区间更大或者设置为 * 即允许所有客户端挂载，例如：/home *<code>(ro,sync,insecure,no_root_squash)</code>设置 <code>/home</code>目录允许所有客户端只读挂载。<br> <img src="https://images2.imgbox.com/05/38/6Y1viZmC_o.png" alt="在这里插入图片描述"></p> 
+<p>接下来，我们先启动 RPC 服务。</p> 
+<pre><code class="prism language-c">$ service rpcbind start
+# 或者使用如下命令亦可
+$ <span class="token operator">/</span>bin<span class="token operator">/</span>systemctl start rpcbind<span class="token punctuation">.</span>service
+
+# 查看 NFS 服务项 rpc 服务器注册的端口列表
+$ rpcinfo <span class="token operator">-</span>p localhost 
+   program vers proto   port  service
+    <span class="token number">100000</span>    <span class="token number">4</span>   tcp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">3</span>   tcp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">2</span>   tcp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">4</span>   udp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">3</span>   udp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">2</span>   udp    <span class="token number">111</span>  portmapper
+</code></pre> 
+<p>注意：此时我们还没有启动 NFS 服务，只监听了 111 端口，接着我们来启动 NFS 服务，再来看下注册的端口列表。</p> 
+<pre><code class="prism language-c"># 启动 NFS 服务
+$ service nfs start
+# 或者使用如下命令亦可
+<span class="token operator">/</span>bin<span class="token operator">/</span>systemctl start nfs<span class="token punctuation">.</span>service
+
+# 启动 NFS 服务后 rpc 服务已经启用了对 NFS 的端口映射列表
+<span class="token macro property"><span class="token directive-hash">#</span> <span class="token directive keyword">rpcinfo</span> <span class="token expression"><span class="token operator">-</span>p localhost</span></span>
+   program vers proto   port  service
+    <span class="token number">100000</span>    <span class="token number">4</span>   tcp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">3</span>   tcp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">2</span>   tcp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">4</span>   udp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">3</span>   udp    <span class="token number">111</span>  portmapper
+    <span class="token number">100000</span>    <span class="token number">2</span>   udp    <span class="token number">111</span>  portmapper
+    <span class="token number">100024</span>    <span class="token number">1</span>   udp  <span class="token number">33745</span>  status
+    <span class="token number">100024</span>    <span class="token number">1</span>   tcp  <span class="token number">36980</span>  status
+    <span class="token number">100005</span>    <span class="token number">1</span>   udp  <span class="token number">20048</span>  mountd
+    <span class="token number">100005</span>    <span class="token number">1</span>   tcp  <span class="token number">20048</span>  mountd
+    <span class="token number">100005</span>    <span class="token number">2</span>   udp  <span class="token number">20048</span>  mountd
+    <span class="token number">100005</span>    <span class="token number">2</span>   tcp  <span class="token number">20048</span>  mountd
+    <span class="token number">100005</span>    <span class="token number">3</span>   udp  <span class="token number">20048</span>  mountd
+    <span class="token number">100005</span>    <span class="token number">3</span>   tcp  <span class="token number">20048</span>  mountd
+    <span class="token number">100003</span>    <span class="token number">3</span>   tcp   <span class="token number">2049</span>  nfs
+    <span class="token number">100003</span>    <span class="token number">4</span>   tcp   <span class="token number">2049</span>  nfs
+    <span class="token number">100227</span>    <span class="token number">3</span>   tcp   <span class="token number">2049</span>  nfs_acl
+    <span class="token number">100003</span>    <span class="token number">3</span>   udp   <span class="token number">2049</span>  nfs
+    <span class="token number">100003</span>    <span class="token number">4</span>   udp   <span class="token number">2049</span>  nfs
+    <span class="token number">100227</span>    <span class="token number">3</span>   udp   <span class="token number">2049</span>  nfs_acl
+    <span class="token number">100021</span>    <span class="token number">1</span>   udp  <span class="token number">38960</span>  nlockmgr
+    <span class="token number">100021</span>    <span class="token number">3</span>   udp  <span class="token number">38960</span>  nlockmgr
+    <span class="token number">100021</span>    <span class="token number">4</span>   udp  <span class="token number">38960</span>  nlockmgr
+    <span class="token number">100021</span>    <span class="token number">1</span>   tcp  <span class="token number">38362</span>  nlockmgr
+    <span class="token number">100021</span>    <span class="token number">3</span>   tcp  <span class="token number">38362</span>  nlockmgr
+    <span class="token number">100021</span>    <span class="token number">4</span>   tcp  <span class="token number">38362</span>  nlockmgr
+</code></pre> 
+<p>我们发现，启动了 NFS 服务后，rpc 注册的端口列表明显增多。OK 现在服务端都启动起来了，在服务端看下是否正确加载了设置的 /etc/exports 配置。</p> 
+<pre><code class="prism language-c">$ showmount <span class="token operator">-</span>e localhost
+Export list <span class="token keyword">for</span> localhost<span class="token operator">:</span>
+<span class="token operator">/</span>data<span class="token operator">/</span>share <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.0</span><span class="token operator">/</span><span class="token number">24</span>
+</code></pre> 
+<h2><a id="5NFS__125"></a>5、NFS 测试</h2> 
+<p>最后，在另一台 Linux 虚拟机上测试一下，是否能够正确挂载吧。首先，我们可以在客户端查看下 NFS 服务端 (上边服务端 IP 为：10.222.77.86) 设置可共享的目录信息。</p> 
+<pre><code class="prism language-c"><span class="token macro property"><span class="token directive-hash">#</span> <span class="token directive keyword">showmount</span> <span class="token expression"><span class="token operator">-</span>e <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.86</span></span></span>
+Export list <span class="token keyword">for</span> <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.86</span><span class="token operator">:</span>
+<span class="token operator">/</span>data<span class="token operator">/</span>share <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.0</span><span class="token operator">/</span><span class="token number">24</span>
+</code></pre> 
+<p>然后，在客户端创建挂在目录 /share</p> 
+<pre><code class="prism language-c">$ mkdir <span class="token operator">-</span>p <span class="token operator">/</span>share
+</code></pre> 
+<p>最后，挂载远端目录到本地 /share 目录。</p> 
+<pre><code class="prism language-c">$ mount <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.86</span><span class="token operator">:</span><span class="token operator">/</span>data<span class="token operator">/</span>share <span class="token operator">/</span>share
+$ df <span class="token operator">-</span>h <span class="token operator">|</span> grep <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.86</span>
+Filesystem                 Size  Used  Avail Use<span class="token operator">%</span> Mounted on
+<span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.86</span><span class="token operator">:</span><span class="token operator">/</span>data<span class="token operator">/</span>share   <span class="token number">27</span>G   <span class="token number">11</span>G   <span class="token number">17</span>G   <span class="token number">40</span><span class="token operator">%</span>  <span class="token operator">/</span>share
+</code></pre> 
+<p>可以看到，可以正确将远端 NFS 目录挂载到本地。注意：挂载点 /share 目录必须已经存在，而且目录中没有文件或子目录。</p> 
+<p>最后，我们在 NFS 服务端 /data/share 目录下创建一个文件，看下客户端是否能够正确读取并修改。</p> 
+<pre><code class="prism language-c"># 服务端写入
+$ echo <span class="token string">"This is NFS server."</span> <span class="token operator">&gt;</span> <span class="token operator">/</span>data<span class="token operator">/</span>share<span class="token operator">/</span>nfs<span class="token punctuation">.</span>txt
+<span class="token macro property"><span class="token directive-hash">#</span> <span class="token directive keyword">ll</span> <span class="token expression"><span class="token operator">/</span>data<span class="token operator">/</span>share<span class="token operator">/</span></span></span>
+total <span class="token number">4</span>
+<span class="token operator">-</span>rw<span class="token operator">-</span>r<span class="token operator">--</span>r<span class="token operator">--</span> <span class="token number">1</span> root root <span class="token number">20</span> Nov  <span class="token number">5</span> <span class="token number">16</span><span class="token operator">:</span><span class="token number">49</span> nfs<span class="token punctuation">.</span>txt
+
+# 客户端读取
+$ ll <span class="token operator">/</span>share<span class="token operator">/</span>
+total <span class="token number">4</span>
+<span class="token operator">-</span>rw<span class="token operator">-</span>r<span class="token operator">--</span>r<span class="token operator">--</span> <span class="token number">1</span> root root <span class="token number">20</span> Nov  <span class="token number">5</span> <span class="token number">16</span><span class="token operator">:</span><span class="token number">49</span> nfs<span class="token punctuation">.</span>txt
+$ cat <span class="token operator">/</span>share<span class="token operator">/</span>nfs<span class="token punctuation">.</span>txt
+This is NFS server<span class="token punctuation">.</span>
+
+# 客户端写入
+$ echo <span class="token string">"This is NFS client."</span> <span class="token operator">&gt;&gt;</span> <span class="token operator">/</span>share<span class="token operator">/</span>nfs<span class="token punctuation">.</span>txt
+
+# 服务端读取
+$ cat <span class="token operator">/</span>data<span class="token operator">/</span>share<span class="token operator">/</span>nfs<span class="token punctuation">.</span>txt
+This is NFS server<span class="token punctuation">.</span>
+This is NFS client<span class="token punctuation">.</span>
+</code></pre> 
+<p>都是木有问题的，这是因为上边设置了 NFS 远端目录权限为 rw 拥有读写权限，如果设置为 ro，那么客户端只能读取，不能写入，根据实际应用场景合理配置，这里就不在演示了。这里提一下，NFS 默认使用用 UDP 协议来进行挂载，为了提高 NFS 的稳定性，可以使用 TCP 协议挂载，那么客户端挂载命令可使用如下命令：</p> 
+<pre><code class="prism language-c">$ mount <span class="token number">10.222</span><span class="token number">.77</span><span class="token number">.86</span><span class="token operator">:</span><span class="token operator">/</span>data<span class="token operator">/</span>share <span class="token operator">/</span>share <span class="token operator">-</span>o proto<span class="token operator">=</span>tcp <span class="token operator">-</span>o nolock
+</code></pre> 
+<p>最后，如果客户端要卸载 NFS 挂载的话，使用如下命令即可。</p> 
+<pre><code class="prism language-c">$ umount <span class="token operator">/</span>share
+</code></pre> 
+<p>好了，上边简单介绍了 NFS 安装及配置使用，使用它我们可以很方便的透过网络，让不同的主机、操作系统实现共享存储。下一篇，我们继续研究 Kubernetes 集群中各种方式挂载 NFS，来实现挂载网络文件存储系统。</p> 
+<p><strong>扩展：</strong></p> 
+<p>使用exportfs命令来重新加载/etc/exports文件</p> 
+<p>当修改/etc/exports文件后，文件是不会立即生效的。<br> 需要使用如下命令来重新加载exports文件：</p> 
+<pre><code class="prism language-c"><span class="token punctuation">[</span>root@localhost huage<span class="token punctuation">]</span># exportfs <span class="token operator">-</span>a
+<span class="token punctuation">[</span>root@localhost huage<span class="token punctuation">]</span># vi <span class="token operator">/</span>etc<span class="token operator">/</span>exports
+<span class="token punctuation">[</span>root@localhost huage<span class="token punctuation">]</span># showmount <span class="token operator">-</span>e
+Export list <span class="token keyword">for</span> localhost<span class="token punctuation">.</span>localdomain<span class="token operator">:</span>
+<span class="token operator">/</span>home<span class="token operator">/</span>huage <span class="token operator">*</span>
+<span class="token punctuation">[</span>root@localhost huage<span class="token punctuation">]</span># exportfs <span class="token operator">-</span>a
+<span class="token punctuation">[</span>root@localhost huage<span class="token punctuation">]</span># showmount <span class="token operator">-</span>e
+Export list <span class="token keyword">for</span> localhost<span class="token punctuation">.</span>localdomain<span class="token operator">:</span>
+<span class="token operator">/</span>opt            <span class="token operator">*</span>
+<span class="token operator">/</span>home<span class="token operator">/</span>huage <span class="token operator">*</span>
+
+<span class="token punctuation">[</span>root@localhost huage<span class="token punctuation">]</span># man exportfs
+<span class="token punctuation">[</span>root@localhost huage<span class="token punctuation">]</span># cat <span class="token operator">/</span>var<span class="token operator">/</span>lib<span class="token operator">/</span>nfs<span class="token operator">/</span>etab
+<span class="token operator">/</span>opt <span class="token operator">*</span><span class="token punctuation">(</span>ro<span class="token punctuation">,</span>sync<span class="token punctuation">,</span>wdelay<span class="token punctuation">,</span>hide<span class="token punctuation">,</span>nocrossmnt<span class="token punctuation">,</span>secure<span class="token punctuation">,</span>root_squash<span class="token punctuation">,</span>no_all_squash<span class="token punctuation">,</span>no_subtree_check<span class="token punctuation">,</span>secure_locks<span class="token punctuation">,</span>acl<span class="token punctuation">,</span>anonuid<span class="token operator">=</span><span class="token number">65534</span><span class="token punctuation">,</span>anongid<span class="token operator">=</span><span class="token number">65534</span><span class="token punctuation">)</span>
+<span class="token operator">/</span>home<span class="token operator">/</span>huage <span class="token operator">*</span><span class="token punctuation">(</span>rw<span class="token punctuation">,</span>sync<span class="token punctuation">,</span>wdelay<span class="token punctuation">,</span>hide<span class="token punctuation">,</span>nocrossmnt<span class="token punctuation">,</span>secure<span class="token punctuation">,</span>root_squash<span class="token punctuation">,</span>no_all_squash<span class="token punctuation">,</span>no_subtree_check<span class="token punctuation">,</span>secure_locks<span class="token punctuation">,</span>acl<span class="token punctuation">,</span>anonuid<span class="token operator">=</span><span class="token number">65534</span><span class="token punctuation">,</span>anongid<span class="token operator">=</span><span class="token number">65534</span><span class="token punctuation">)</span>
+</code></pre> 
+<p><strong>或</strong></p> 
+<p>修改/etc/exports生效命令</p> 
+<pre><code class="prism language-c">exportfs <span class="token operator">-</span>rf
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/11d16550a3d7aaf129823eb70ec64d25/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">如何更改计算机文档作者,如何更改word文档的作者</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/643bee647b1a2653d13e615e10260521/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">word文档更改所有者和计算机信息,批量更改100份Word文件名称，这招你一定要会！-批量修改文件名...</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

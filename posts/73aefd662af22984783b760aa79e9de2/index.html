@@ -1,0 +1,1895 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>SpringBoot&#43;Shiro框架整合实现前后端分离的权限管理基础Demo - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="SpringBoot&#43;Shiro框架整合实现前后端分离的权限管理基础Demo" />
+<meta property="og:description" content="记录一下使用SpringBoot集成Shiro框架实现前后端分离Web项目的过程，后端使用SpringBoot整合Shiro，前端使用vue&#43;elementUI，达到前后端使用token来进行交互的应用，这种方式通常叫做无状态，后端只需要使用Shiro框架根据前端传来的token信息授权访问相应资源。
+案例源码：SpringBoot&#43;Shiro框架整合实现前后端分离的权限管理基础Demo
+首先新建SpringBoot项目，导入Springboot整合shiro所需要的依赖包
+&lt;!-- SpringBoot整合shiro所需相关依赖--&gt; &lt;dependency&gt; &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt; &lt;artifactId&gt;shiro-core&lt;/artifactId&gt; &lt;version&gt;1.10.0&lt;/version&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt; &lt;artifactId&gt;shiro-spring&lt;/artifactId&gt; &lt;version&gt;1.10.0&lt;/version&gt; &lt;/dependency&gt; &lt;!--web模块的启动器 --&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt; &lt;/dependency&gt; 使用的SpringBoot版本
+&lt;parent&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt; &lt;version&gt;2.0.5.RELEASE&lt;/version&gt; &lt;relativePath/&gt; &lt;!-- lookup parent from repository --&gt; &lt;/parent&gt; 使用SpringBoot集合Shiro之前，需要建立相应的类和从数据库获取的用户数据(这里新建一个java静态类来模拟解决)
+用户登录的类UserValidate.java
+package boot.example.shiro.domain; /** * 蚂蚁舞 */ public class UserValidate { String username; String password; // get set } 用户类SysUsers.java
+package boot.example.shiro.domain; /** * 蚂蚁舞 */ public class SysUsers { private Integer user_id; private String username; private String password; private int user_type; // 用户类型 -1表示超级账号 1表示普通账号 private Integer role_id; // 用户角色 拿权限需要的 private Integer locked; // 用户状态 1-正常 2=锁定 public SysUsers() { } public SysUsers(Integer user_id, String username, String password, int user_type, Integer role_id, Integer locked) { this." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/73aefd662af22984783b760aa79e9de2/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-29T00:00:00+08:00" />
+<meta property="article:modified_time" content="2023-03-29T00:00:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">SpringBoot&#43;Shiro框架整合实现前后端分离的权限管理基础Demo</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div class="kdocs-document"> 
+ <p style="">记录一下使用SpringBoot集成Shiro框架实现前后端分离Web项目的过程，后端使用SpringBoot整合Shiro，前端使用vue+elementUI，达到前后端使用token来进行交互的应用，这种方式通常叫做无状态，后端只需要使用Shiro框架根据前端传来的token信息授权访问相应资源。</p> 
+ <p style=""></p> 
+ <p style="">案例源码：<a class="kdocs-link" style="color:#0A6CFF;" href="https://download.csdn.net/download/myyhtw/87527654" target="_blank" rel="noopener noreferrer">SpringBoot+Shiro框架整合实现前后端分离的权限管理基础Demo</a></p> 
+ <p style=""></p> 
+ <p style="">首先新建SpringBoot项目，导入Springboot整合shiro所需要的依赖包</p> 
+ <pre class="kdocs-bash"><code class="language-bash">&lt;!-- SpringBoot整合shiro所需相关依赖--&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+    &lt;artifactId&gt;shiro-core&lt;/artifactId&gt;
+    &lt;version&gt;1.10.0&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.shiro&lt;/groupId&gt;
+    &lt;artifactId&gt;shiro-spring&lt;/artifactId&gt;
+    &lt;version&gt;1.10.0&lt;/version&gt;
+&lt;/dependency&gt;
+
+&lt;!--web模块的启动器 --&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre> 
+ <p style="">使用的SpringBoot版本</p> 
+ <pre class="kdocs-bash"><code class="language-bash">&lt;parent&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+    &lt;version&gt;2.0.5.RELEASE&lt;/version&gt;
+    &lt;relativePath/&gt; &lt;!-- lookup parent from repository --&gt;
+&lt;/parent&gt;</code></pre> 
+ <p style="">使用SpringBoot集合Shiro之前，需要建立相应的类和从数据库获取的用户数据(这里新建一个java静态类来模拟解决)</p> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">用户登录的类</span><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">UserValidate.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.domain;
+
+/**
+ *  蚂蚁舞
+ */
+public class UserValidate {
+
+    String username;
+
+    String password;
+
+    // get  set
+}
+</code></pre> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">用户类SysUsers.java</span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.domain;
+
+/**
+ *  蚂蚁舞
+ */
+public class SysUsers {
+
+    private Integer user_id;
+
+    private String username;
+
+    private String password;
+
+    private int user_type; // 用户类型  -1表示超级账号  1表示普通账号
+
+    private Integer role_id; // 用户角色  拿权限需要的
+
+    private Integer locked;  // 用户状态  1-正常  2=锁定
+
+    public SysUsers() {
+    }
+
+    public SysUsers(Integer user_id, String username, String password, int user_type, Integer role_id, Integer locked) {
+        this.user_id = user_id;
+        this.username = username;
+        this.password = password;
+        this.user_type = user_type;
+        this.role_id = role_id;
+        this.locked = locked;
+    }
+
+    // get set
+}
+</code></pre> 
+ <p style="">模拟三个用户shiro_admin, myw_admin, app_admin以及相关的方法和静态mock数据</p> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">模拟数据库的类</span><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">ShiroDataMapper.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+import boot.example.shiro.domain.SysUsers;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ *  蚂蚁舞
+ */
+public class ShiroDataMapper {
+
+    private static final String shiro_admin = "shiro_admin";
+
+    private static final String myw_admin = "myw_admin";
+
+    private static final String app_admin = "app_admin";
+
+    private static final SysUsers sysUsers_shiro_admin = new SysUsers(1, shiro_admin, "123", -1, 1, 1);
+
+    private static final SysUsers sysUsers_myw_admin = new SysUsers(2, myw_admin, "1234", 1, 2, 1);
+
+    private static final SysUsers sysUsers_app_admin = new SysUsers(3, app_admin, "12345",3, 3, 1);
+
+    public static SysUsers getSysUsersByUserName(String username){
+        if(username.equalsIgnoreCase(shiro_admin)){
+            return sysUsers_shiro_admin;
+        }
+        if(username.equalsIgnoreCase(myw_admin)){
+            return sysUsers_myw_admin;
+        }
+        if(username.equalsIgnoreCase(app_admin)){
+            return sysUsers_app_admin;
+        }
+        return null;
+    }
+
+    public static List&lt;String&gt; listSysRolesPermissions(Integer roleId){
+        if(roleId == 2){
+            List&lt;String&gt; list = new ArrayList&lt;&gt;();
+            list.add("sys:user:list");
+            list.add("sys:user:update");
+            list.add("sys:user:add");
+            list.add("sys:user:delete");
+            return list;
+        }
+        if(roleId == 3){
+            List&lt;String&gt; list = new ArrayList&lt;&gt;();
+            list.add("sys:user:list");
+            return list;
+        }
+        return null;
+    }
+
+
+}
+</code></pre> 
+ <p style="">getSysUsersByUserName方法是用来模拟从数据库获取用户对象数据的，listSysRolesPermissions是根据用户的角色来获取对应的权限列表的。</p> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">Shiro框架的ShiroRealm.java</span></span></p> 
+ <p style="">shiro的realm主要用来实现认证(<span class="kdocs-fontSize" style="font-size:13pt;">AuthenticationInfo</span>)和授权(<span class="kdocs-fontSize" style="font-size:13pt;">AuthorizationInfo</span>)</p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+import org.apache.shiro.authc.*;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+
+public class ShiroRealm extends AuthorizingRealm {
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        // to do
+    }
+
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+        // to do
+    }
+}
+
+</code></pre> 
+ <p style="">认证的实现,当用户通过接口登录后就会触发这里的认证登录</p> 
+ <pre class="kdocs-bash"><code class="language-bash">@Override
+protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+    //  获取登录username
+    String username = (String)token.getPrincipal();
+    //  从数据库获取用户对象 (这里模拟的)
+    SysUsers sysUsers = ShiroDataMapper.getSysUsersByUserName(username);
+    // 在数据库里没找到用户，异常用户，抛出异常(交给异常处理)
+    if(sysUsers == null) {
+        throw new UnknownAccountException();    //没找到帐号
+    }
+    // 一般用户允不允许登录也是有一个锁定状态的 从用户对象里拿到锁定状态，判断是否锁定
+    if(2 == sysUsers.getLocked()) {
+        throw new LockedAccountException();     //帐号锁定
+    }
+    //  交给SimpleAuthenticationInfo去验证密码
+    return new SimpleAuthenticationInfo(sysUsers, sysUsers.getPassword(), this.getClass().getName());
+}</code></pre> 
+ <p style="">授权实现，给超级管理所有权限，给具体的普通用户对应的权限</p> 
+ <pre class="kdocs-bash"><code class="language-bash">@Override
+protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+    // 获取用户对象
+    SysUsers user = (SysUsers)principals.getPrimaryPrincipal();
+    // 对象为null 抛出异常
+    if(user == null){
+        throw new UnknownAccountException();
+    }
+    SimpleAuthorizationInfo authorizationInfo = new SimpleAuthorizationInfo();
+    SysUsers sysUsers = ShiroDataMapper.getSysUsersByUserName(user.getUsername());
+    if(sysUsers == null){
+        throw new UnknownAccountException();
+    }
+    // // 用户类型  -1表示超级账号  1表示普通账号
+    if(sysUsers.getUser_type() &lt; 0){
+        authorizationInfo.addRole("*");  // roles的权限 所有
+        authorizationInfo.addStringPermission("*:*:*"); // perms的权限 所有
+    } else {
+        // 用角色id从数据库获取权限列表，这里是模拟的
+        List&lt;String&gt; mapList = ShiroDataMapper.listSysRolesPermissions(sysUsers.getRole_id());
+        authorizationInfo.addRole("key");
+        if (!mapList.isEmpty()) {
+            Set&lt;String&gt; permsSet = new HashSet&lt;&gt;();
+            for (String perm : mapList) {
+                permsSet.addAll(Arrays.asList(perm.trim().split(",")));
+            }
+            authorizationInfo.setStringPermissions(permsSet);
+        }
+    }
+    return authorizationInfo;
+}</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">ShiroRealm.java完整代码</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+
+import boot.example.shiro.domain.SysUsers;
+import org.apache.shiro.authc.*;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.springframework.stereotype.Service;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * 蚂蚁舞
+ */
+public class ShiroRealm extends AuthorizingRealm {
+
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
+        // 获取用户对象
+        SysUsers user = (SysUsers)principals.getPrimaryPrincipal();
+        // 对象为null 抛出异常
+        if(user == null){
+            throw new UnknownAccountException();
+        }
+        SimpleAuthorizationInfo authorizationInfo = new SimpleAuthorizationInfo();
+        SysUsers sysUsers = ShiroDataMapper.getSysUsersByUserName(user.getUsername());
+        if(sysUsers == null){
+            throw new UnknownAccountException();
+        }
+        // // 用户类型  -1表示超级账号  1表示普通账号
+        if(sysUsers.getUser_type() &lt; 0){
+            authorizationInfo.addRole("*");  // roles的权限 所有
+            authorizationInfo.addStringPermission("*:*:*"); // perms的权限 所有
+        } else {
+            // 用角色id从数据库获取权限列表，这里是模拟的
+            List&lt;String&gt; mapList = ShiroDataMapper.listSysRolesPermissions(sysUsers.getRole_id());
+            authorizationInfo.addRole("key");
+            if (!mapList.isEmpty()) {
+                Set&lt;String&gt; permsSet = new HashSet&lt;&gt;();
+                for (String perm : mapList) {
+                    permsSet.addAll(Arrays.asList(perm.trim().split(",")));
+                }
+                authorizationInfo.setStringPermissions(permsSet);
+            }
+        }
+        return authorizationInfo;
+    }
+
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+        //  获取登录username
+        String username = (String)token.getPrincipal();
+        //  从数据库获取用户对象 (这里模拟的)
+        SysUsers sysUsers = ShiroDataMapper.getSysUsersByUserName(username);
+        // 在数据库里没找到用户，异常用户，抛出异常(交给异常处理)
+        if(sysUsers == null) {
+            throw new UnknownAccountException();    //没找到帐号
+        }
+        // 一般用户允不允许登录也是有一个锁定状态的 从用户对象里拿到锁定状态，判断是否锁定
+        if(2 == sysUsers.getLocked()) {
+            throw new LockedAccountException();     //帐号锁定
+        }
+        //  交给SimpleAuthenticationInfo去验证密码
+        return new SimpleAuthenticationInfo(sysUsers, sysUsers.getPassword(), this.getClass().getName());
+    }
+
+
+
+}
+
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">Shiro框架的ShiroConfig.java</span></span></p> 
+ <p style="">SpringBoot集成Shiro有一个最主要的配置类，这个类里有Shiro框架的会话管理(<span class="kdocs-fontSize" style="font-size:13pt;">SessionManager</span>)和安全管理(<span class="kdocs-fontSize" style="font-size:13pt;">SecurityManager</span>)和<span class="kdocs-fontSize" style="font-size:13pt;">访问过滤器(ShiroFilterFactoryBean)和SpringBoot注解支持和生命周期相关的Bean配置</span></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">@Configuration必须加上的！</span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">@Configuration
+public class ShiroConfig {
+
+}</code></pre> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">ShiroConfig里首先来配置密码校验的bean</span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">// 密码校验bean
+@Bean("credentialMatcher")
+public ShiroCredentialMatcher credentialMatcher() {
+    return new ShiroCredentialMatcher();
+}</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">密码校验继承类ShiroCredentialMatcher.java</span></span></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">这里继承了SimpleCredentialsMatcher 实现方式是将登录的密码和数据库查询出来的密码进行一个equals对比，使用这种方式，密码可以是明码进行对比，也可以MD5后的密码，<span class="kdocs-bold" style="font-weight:bold;">同样的登录密码和数据库内的密码也可以在这里分别经过各自某种加密解密后在对比(安全系数瞬间增强，即使从数据库拿到了密码也没法简单确认出登录密码)</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.authc.credential.SimpleCredentialsMatcher;
+
+/**
+ *  蚂蚁舞
+ */
+public class ShiroCredentialMatcher extends SimpleCredentialsMatcher {
+
+    @Override
+    public boolean doCredentialsMatch(AuthenticationToken token, AuthenticationInfo info) {
+        UsernamePasswordToken usernamePasswordToken = (UsernamePasswordToken) token;
+        String password = new String(usernamePasswordToken.getPassword());
+        String dbPassword = (String) info.getCredentials();
+        System.out.println("usernamePasswordToken--"+usernamePasswordToken.getUsername()+"--"+password);
+        System.out.println("info.getCredentials()-"+info.getCredentials()+"---info.getPrincipals()-"+info.getPrincipals());
+        // 密码比对
+        return this.equals(password, dbPassword);
+    }
+}
+</code></pre> 
+ <p style="">SimpleCredentialsMatcher的源码</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1206px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:66.666664%;height:0;"> 
+    <img src="https://images2.imgbox.com/be/0d/vor4bh5A_o.png" style="margin-left:;display:block;width:1206px;margin-top:-66.666664%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">身份认证和权限校验Realm的bean</span></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">ShiroRealm就是授权和认证的类，设置的缓存管理使用的是内存，setCredentialsMatcher就是密码校验，MemoryConstrainedCacheManager缓存在内存中(方便快捷)</span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">// 身份认证和权限校验Realm
+@Bean("shiroRealm")
+public ShiroRealm shiroRealm(@Qualifier("credentialMatcher") ShiroCredentialMatcher matcher){
+    ShiroRealm shiroRealm = new ShiroRealm();
+    shiroRealm.setCacheManager(new MemoryConstrainedCacheManager());
+    shiroRealm.setCredentialsMatcher(matcher);
+    return shiroRealm;
+}</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">SessionManager会话管理</span></p> 
+ <p style="">shiro的会话管理SessionManager是用来管理应用中所有 Subject 的会话的创建、维护、删除、失效、验证，有三个默认的实现类</p> 
+ <p style="">DefaultSessionManager</p> 
+ <p style="">DefaultWebSessionManager：用于web环境的实现</p> 
+ <p style="">ServletContainerSessionManager</p> 
+ <p style=""></p> 
+ <p style="">shiro默认的会话管理是依赖于浏览器的cookie来维持的，也就是说前端代码嵌入到了SpringBoot整合Shiro的环境中，Shiro的会话管理将sesionId 放到 cookie中，现在大多数项目都是前后端分离的，去拿cookie还不如用token机制，一种无状态的机制，在登录的时候获取的token实际上就是shiro的sessionId，如此的话，那么可以继承实现DefaultWebSessionManager类，修改一些需要改变的方法</p> 
+ <pre class="kdocs-bash"><code class="language-bash">//  会话管理, 管理用户登录后的会话
+@Bean("sessionManager")
+public ShiroSessionManager sessionManager(){
+    //将继承后重写的ShiroSessionManager加入bean
+    return new ShiroSessionManager();
+}</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">token的静态类ShiroConstant.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+/**
+ * 蚂蚁舞
+ */
+public class ShiroConstant {
+    //  定义的请求头中使用的标记key，用来传递 token
+    public static final String authorization_token = "token";
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">重写会话管理类ShiroSessionManager.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+import org.apache.shiro.web.servlet.ShiroHttpServletRequest;
+import org.apache.shiro.web.session.mgt.DefaultWebSessionManager;
+import org.apache.shiro.web.util.WebUtils;
+import org.springframework.util.StringUtils;
+
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import java.io.Serializable;
+
+/**
+ * 蚂蚁舞
+ */
+public class ShiroSessionManager extends DefaultWebSessionManager {
+
+    public ShiroSessionManager() {
+        super();
+        //在这里设置ShiroSession失效时间
+        setGlobalSessionTimeout(MILLIS_PER_MINUTE * 15);
+    }
+
+    @Override
+    protected Serializable getSessionId(ServletRequest request, ServletResponse response) {
+        //获取请求头中的token值，如果请求头中有token值，则取巧认为其值为会话的sessionId(那么用户在登陆的时候需要给前端传送这个sessionId)
+        String sessionId = WebUtils.toHttp(request).getHeader(ShiroConstant.authorization_token);
+        System.out.println("sessionId--" + sessionId);
+        if (StringUtils.isEmpty(sessionId)){
+            /**
+             * 注意: 在这里有一种特殊情况，那就是不经过shiroFilter过滤器的访问，例如authc认证用户
+             * 既然不经过shiroFilter 那么当后端重启清空了会话，可前端依旧把sessionId传给了后端，
+             * 出现这种情况，shiro会按照shiroFilterFactoryBean.setLoginUrl("/shiro-redirect/index");设置跳转到登录页面，重新登陆
+             * 格式是http://127.0.0.1:20400/shiro-redirect/index;JSESSIONID=04d5ed45-85c1-420b-b7bd-fa622385309f
+             * 如果是没有分离的项目，那么直接跳转到了登录页，如果是分离的项目，那就会给前端报出400的错误(这里是整合需要注意的关键点)
+             */
+
+            //如果没有携带sessionId的参数,直接按照父类的方式在cookie进行获取sessionId
+            return super.getSessionId(request, response);
+        } else {
+            //请求头中如果有token, 则其值为sessionId(登陆的时候就传送这个sessionId)
+            request.setAttribute(ShiroHttpServletRequest.REFERENCED_SESSION_ID_SOURCE, "request cookie");
+            request.setAttribute(ShiroHttpServletRequest.REFERENCED_SESSION_ID, sessionId); // 这里加上sessionId
+            request.setAttribute(ShiroHttpServletRequest.REFERENCED_SESSION_ID_IS_VALID, Boolean.TRUE);
+            return sessionId;
+        }
+    }
+
+}
+
+</code></pre> 
+ <p style="">看看<span class="kdocs-fontSize" style="font-size:13pt;">DefaultWebSessionManager父类getSessionId的源码</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1170px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:12.136753%;height:0;"> 
+    <img src="https://images2.imgbox.com/0b/d8/6whe1gVd_o.png" style="margin-left:;display:block;width:1170px;margin-top:-12.136753%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">调用了私有<span class="kdocs-fontSize" style="font-size:13pt;">getReferencedSessionId方法</span></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">先调用this.getSessionIdCookieValue(request, response)获取sessionId 如果sessionid不存在，则去判断JSESSIONID的参数是不是带有(这个在前后端分离的项目有个大坑，不经过shiroFilter里的访问，接口会报出400错误，ShiroSessionManager的demo代码里有说明)，暂时不去分析那么多，前后端分离一般也不会用到类似authc认证用户访问的，一般都是接口访问，有shiroFilter过滤器。</span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">
+private Serializable getReferencedSessionId(ServletRequest request, ServletResponse response) {
+    String id = this.getSessionIdCookieValue(request, response);
+    if (id != null) {
+        request.setAttribute(ShiroHttpServletRequest.REFERENCED_SESSION_ID_SOURCE, "cookie");
+    } else {
+        id = this.getUriPathSegmentParamValue(request, "JSESSIONID");
+        if (id == null &amp;&amp; request instanceof HttpServletRequest) {
+            String name = this.getSessionIdName();
+            HttpServletRequest httpServletRequest = WebUtils.toHttp(request);
+            String queryString = httpServletRequest.getQueryString();
+            if (queryString != null &amp;&amp; queryString.contains(name)) {
+                id = request.getParameter(name);
+            }
+
+            if (id == null &amp;&amp; queryString != null &amp;&amp; queryString.contains(name.toLowerCase())) {
+                id = request.getParameter(name.toLowerCase());
+            }
+        }
+
+        if (id != null) {
+            request.setAttribute(ShiroHttpServletRequest.REFERENCED_SESSION_ID_SOURCE, "url");
+        }
+    }
+
+    if (id != null) {
+        request.setAttribute(ShiroHttpServletRequest.REFERENCED_SESSION_ID, id);
+        request.setAttribute(ShiroHttpServletRequest.REFERENCED_SESSION_ID_IS_VALID, Boolean.TRUE);
+    }
+
+    request.setAttribute(ShiroHttpServletRequest.SESSION_ID_URL_REWRITING_ENABLED, this.isSessionIdUrlRewritingEnabled());
+    return id;
+}
+</code></pre> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">SecurityManager安全管理器 Shiro框架的核心组件</span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">//  安全管理器
+@Bean("securityManager")
+public SecurityManager securityManager(@Qualifier("shiroRealm") ShiroRealm shiroRealm) {
+    // web的安全管理器
+    DefaultWebSecurityManager manager = new DefaultWebSecurityManager();
+    // 设置授权和认证
+    manager.setRealm(shiroRealm);
+    // 设置会话管理
+    manager.setSessionManager(sessionManager());
+    return manager;
+}</code></pre> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">ShiroFilterFactoryBean</span>访问过滤器（经常说成是拦截器，实际上是拦截的功能）</p> 
+ <pre class="kdocs-bash"><code class="language-bash">//  访问shiro的过滤器
+@Bean("shiroFilter")
+public ShiroFilterFactoryBean shiroFilter(@Qualifier("securityManager") SecurityManager securityManager) {
+
+    ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+    shiroFilterFactoryBean.setSecurityManager(securityManager);
+
+    Map&lt;String, Filter&gt; filterMap = new HashMap&lt;&gt;();
+    filterMap.put("shiroFilter", new ShiroFilter());
+    shiroFilterFactoryBean.setFilters(filterMap);
+    // 跳转到登录页，实际跳转后访问的是接口，接口返回请登录的信息
+    shiroFilterFactoryBean.setLoginUrl("/shiro-redirect/index");
+    //bean.setSuccessUrl("/shiro-redirect/index");
+    //  实际跳转到未认证页面，请重新登陆
+    shiroFilterFactoryBean.setUnauthorizedUrl("/shiro-redirect/unauthorized");
+
+    LinkedHashMap&lt;String, String&gt; filterChainDefinitionMap = new LinkedHashMap&lt;&gt;();
+
+    //  静态路径放开  anon：匿名用户可访问
+    filterChainDefinitionMap.put("/public/**", "anon");
+    filterChainDefinitionMap.put("/static/**", "anon");
+
+    //  调试工具全部放开    anon：匿名用户可访问
+    filterChainDefinitionMap.put("/swagger-resources", "anon");
+    filterChainDefinitionMap.put("/swagger-resources/**", "anon");
+    filterChainDefinitionMap.put("/v2/api-docs", "anon");
+    filterChainDefinitionMap.put("/webjars/**", "anon");
+    filterChainDefinitionMap.put("/doc.html", "anon");
+
+    // 登录相关全部放开 anon：匿名用户可访问
+    filterChainDefinitionMap.put("/shiro-login/**", "anon");
+    filterChainDefinitionMap.put("/shiro-redirect/**", "anon");
+
+    // 匿名用户可访问  anon：匿名用户可访问
+    filterChainDefinitionMap.put("/shiro-anon/**", "anon");
+
+    //  认证用户可访问 authc：认证用户可访问
+    filterChainDefinitionMap.put("/shiro-authc/*", "authc");
+
+    // 自定义过滤器过滤的内容
+    filterChainDefinitionMap.put("/**", "shiroFilter");
+    shiroFilterFactoryBean.setFilterChainDefinitionMap(filterChainDefinitionMap);
+
+    return shiroFilterFactoryBean;
+}</code></pre> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">自定义过滤的类ShiroFilter.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.session.Session;
+import org.apache.shiro.subject.Subject;
+import org.apache.shiro.web.filter.authc.BasicHttpAuthenticationFilter;
+import org.apache.shiro.web.util.WebUtils;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.RequestMethod;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+/**
+ *  蚂蚁舞
+ */
+public class ShiroFilter extends BasicHttpAuthenticationFilter {
+
+    //  sendChallenge重写的目的是避免前端在没有登录的情况下访问@RequiresPermissions()等未授权接口返回401错误，
+    //  给前端调用接口一个数据，让前端去重新登陆
+    //  如果使用浏览器访问，浏览器会弹出一个输入账号密码的弹框，重写后浏览器访问出现接口数据
+    protected boolean sendChallenge(ServletRequest request, ServletResponse response) {
+        System.out.println("Authentication required: sending 401 Authentication challenge response.");
+        HttpServletResponse httpResponse = WebUtils.toHttp(response);
+        responseSkip(httpResponse, ResponseCode.noLoginSkipResponse());
+        return false;
+    }
+
+    @Override
+    protected boolean preHandle(ServletRequest request, ServletResponse response) throws Exception {
+        HttpServletRequest httpServletRequest = (HttpServletRequest) request;
+        HttpServletResponse httpServletResponse = (HttpServletResponse) response;
+        httpServletResponse.setHeader("Access-control-Allow-Origin", httpServletRequest.getHeader("Origin"));
+        httpServletResponse.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PUT,DELETE");
+        httpServletResponse.setHeader("Access-Control-Allow-Headers", httpServletRequest.getHeader("Access-Control-Request-Headers"));
+        // 跨域时会首先发送一个option请求，这里我们给option请求直接返回正常状态
+        if (httpServletRequest.getMethod().equals(RequestMethod.OPTIONS.name())) {
+            httpServletResponse.setStatus(HttpStatus.OK.value());
+            return false;
+        }
+        //  在配置的ShiroFilterFactoryBean拦截过滤器里，必须使用无状态的token 这里如果没有token 直接告诉前端需要重新登陆
+        HttpServletRequest req = (HttpServletRequest) request;
+        String authorization = req.getHeader(ShiroConstant.authorization_token);
+        if(authorization == null || authorization.length() == 0){
+            //  未携带token  不需要提示前端自动跳转重新登陆
+            responseSkip(httpServletResponse, ResponseCode.noAuthHeaderTokenResponse("未携带token，请求无效"));
+            return false;
+        }
+
+        //  验证token的正确性
+        Subject subject = SecurityUtils.getSubject();
+        if(!subject.isAuthenticated()){
+            //   token失效 提示前端需要自动跳转重新登陆
+            responseSkip(httpServletResponse, ResponseCode.invalidHeaderTokenSkipResponse());
+            return false;
+        }
+
+        return super.preHandle(request, response);
+    }
+
+    private void responseSkip(HttpServletResponse response, Response customizeResponse){
+        try {
+            response.setCharacterEncoding("UTF-8");
+            response.setContentType("application/json; charset=utf-8");
+            ObjectMapper objectMapper = new ObjectMapper();
+            String str = objectMapper.writeValueAsString(customizeResponse);
+            response.getWriter().println(str);
+        } catch (IOException e1) {
+            throw new RuntimeException(e1);
+        }
+    }
+
+
+}</code></pre> 
+ <p style=""></p> 
+ <p style="">注解支持的bean配置</p> 
+ <p style="">支持在SpringBoot在Controller使用@RequiresPermission()等标签注解以及配置shiro的生命周期</p> 
+ <pre class="kdocs-bash"><code class="language-bash">//  支持在SpringBoot的Controller使用@RequiresPermission()等标签注解 以及
+@Bean("authorizationAttributeSourceAdvisor")
+public AuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor(@Qualifier("securityManager") SecurityManager securityManager) {
+    AuthorizationAttributeSourceAdvisor advisor = new AuthorizationAttributeSourceAdvisor();
+    advisor.setSecurityManager(securityManager);
+    return advisor;
+}
+
+@Bean
+@DependsOn("lifecycleBeanPostProcessor")
+public DefaultAdvisorAutoProxyCreator defaultAdvisorAutoProxyCreator() {
+    DefaultAdvisorAutoProxyCreator defaultAdvisorAutoProxyCreator = new DefaultAdvisorAutoProxyCreator();
+    // 强制使用cglib，防止重复代理和可能引起代理出错的问题 (没明白)
+    defaultAdvisorAutoProxyCreator.setProxyTargetClass(true);
+    return defaultAdvisorAutoProxyCreator;
+}
+
+//  配置shiro的生命周期处理
+@Bean(name = "lifecycleBeanPostProcessor")
+public LifecycleBeanPostProcessor lifecycleBeanPostProcessor() {
+    return new LifecycleBeanPostProcessor();
+}</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">ShiroConfig.java完整类</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+
+import org.apache.shiro.cache.MemoryConstrainedCacheManager;
+import org.apache.shiro.mgt.SecurityManager;
+import org.apache.shiro.spring.LifecycleBeanPostProcessor;
+import org.apache.shiro.spring.security.interceptor.AuthorizationAttributeSourceAdvisor;
+import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
+import javax.servlet.Filter;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * 蚂蚁舞
+ */
+@Configuration
+public class ShiroConfig {
+
+    // 密码校验bean
+    @Bean("credentialMatcher")
+    public ShiroCredentialMatcher credentialMatcher() {
+        return new ShiroCredentialMatcher();
+    }
+
+    // 身份认证和权限校验Realm
+    @Bean("shiroRealm")
+    public ShiroRealm shiroRealm(@Qualifier("credentialMatcher") ShiroCredentialMatcher matcher){
+        ShiroRealm shiroRealm = new ShiroRealm();
+        shiroRealm.setCacheManager(new MemoryConstrainedCacheManager());
+        shiroRealm.setCredentialsMatcher(matcher);
+        return shiroRealm;
+    }
+
+    //  会话管理, 管理用户登录后的会话
+    @Bean("sessionManager")
+    public ShiroSessionManager sessionManager(){
+        //将继承后重写的ShiroSessionManager加入bean
+        return new ShiroSessionManager();
+    }
+
+    //  安全管理器
+    @Bean("securityManager")
+    public SecurityManager securityManager(@Qualifier("shiroRealm") ShiroRealm shiroRealm) {
+        // web的安全管理器
+        DefaultWebSecurityManager manager = new DefaultWebSecurityManager();
+        // 设置授权和认证
+        manager.setRealm(shiroRealm);
+        // 设置会话管理
+        manager.setSessionManager(sessionManager());
+        return manager;
+    }
+
+    //  访问shiro的过滤器
+    @Bean("shiroFilter")
+    public ShiroFilterFactoryBean shiroFilter(@Qualifier("securityManager") SecurityManager securityManager) {
+
+        ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
+        shiroFilterFactoryBean.setSecurityManager(securityManager);
+
+        Map&lt;String, Filter&gt; filterMap = new HashMap&lt;&gt;();
+        filterMap.put("shiroFilter", new ShiroFilter());
+        shiroFilterFactoryBean.setFilters(filterMap);
+        // 跳转到登录页，实际跳转后访问的是接口，接口返回请登录的信息
+        shiroFilterFactoryBean.setLoginUrl("/shiro-redirect/index");
+        //bean.setSuccessUrl("/shiro-redirect/index");
+        //  实际跳转到未认证页面，请重新登陆
+        shiroFilterFactoryBean.setUnauthorizedUrl("/shiro-redirect/unauthorized");
+
+        LinkedHashMap&lt;String, String&gt; filterChainDefinitionMap = new LinkedHashMap&lt;&gt;();
+
+        //  静态路径放开  anon：匿名用户可访问
+        filterChainDefinitionMap.put("/public/**", "anon");
+        filterChainDefinitionMap.put("/static/**", "anon");
+
+        //  调试工具全部放开    anon：匿名用户可访问
+        filterChainDefinitionMap.put("/swagger-resources", "anon");
+        filterChainDefinitionMap.put("/swagger-resources/**", "anon");
+        filterChainDefinitionMap.put("/v2/api-docs", "anon");
+        filterChainDefinitionMap.put("/webjars/**", "anon");
+        filterChainDefinitionMap.put("/doc.html", "anon");
+
+        // 登录相关全部放开 anon：匿名用户可访问
+        filterChainDefinitionMap.put("/shiro-login/**", "anon");
+        filterChainDefinitionMap.put("/shiro-redirect/**", "anon");
+
+        // 匿名用户可访问  anon：匿名用户可访问
+        filterChainDefinitionMap.put("/shiro-anon/**", "anon");
+
+        //  认证用户可访问 authc：认证用户可访问
+        filterChainDefinitionMap.put("/shiro-authc/*", "authc");
+
+        // 自定义过滤器过滤的内容
+        filterChainDefinitionMap.put("/**", "shiroFilter");
+        shiroFilterFactoryBean.setFilterChainDefinitionMap(filterChainDefinitionMap);
+
+        return shiroFilterFactoryBean;
+    }
+
+
+
+    //  支持在SpringBoot的Controller使用@RequiresPermission()等标签注解 以及
+    @Bean("authorizationAttributeSourceAdvisor")
+    public AuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor(@Qualifier("securityManager") SecurityManager securityManager) {
+        AuthorizationAttributeSourceAdvisor advisor = new AuthorizationAttributeSourceAdvisor();
+        advisor.setSecurityManager(securityManager);
+        return advisor;
+    }
+
+    @Bean
+    @DependsOn("lifecycleBeanPostProcessor")
+    public DefaultAdvisorAutoProxyCreator defaultAdvisorAutoProxyCreator() {
+        DefaultAdvisorAutoProxyCreator defaultAdvisorAutoProxyCreator = new DefaultAdvisorAutoProxyCreator();
+        // 强制使用cglib，防止重复代理和可能引起代理出错的问题 (没明白)
+        defaultAdvisorAutoProxyCreator.setProxyTargetClass(true);
+        return defaultAdvisorAutoProxyCreator;
+    }
+
+    //  配置shiro的生命周期处理
+    @Bean(name = "lifecycleBeanPostProcessor")
+    public LifecycleBeanPostProcessor lifecycleBeanPostProcessor() {
+        return new LifecycleBeanPostProcessor();
+    }
+
+}
+</code></pre> 
+ <p style="">SpringBoot整合Shiro的web应用需要Controller层来调用测试功能的</p> 
+ <p style="">首先是ShiroConfig里设置的重定向类</p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">BootShiroIndexRedirectController.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.controller;
+
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+/**
+ *  蚂蚁舞
+ */
+@Controller
+@RequestMapping("/shiro-redirect")
+public class BootShiroIndexRedirectController {
+
+    public Logger log = LoggerFactory.getLogger(this.getClass());
+
+    @RequestMapping("/index")
+    @ResponseBody
+    public Response index() {
+        log.warn("redirect index");
+        return ResponseCode.noLoginResponse();
+    }
+
+    @RequestMapping("/unauthorized")
+    @ResponseBody
+    public Response unauthorized() {
+        log.warn("redirect unauthorized");
+        return ResponseCode.unauthorizedPermissionResponse();
+    }
+
+
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">匿名游客访问类BootShiroTestAnonController.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.controller;
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 蚂蚁舞
+ */
+@RestController
+@RequestMapping(value="/shiro-anon")
+public class BootShiroTestAnonController {
+
+    @GetMapping(value="/hello")
+    public Response anonHello() {
+        return ResponseCode.successResponse("匿名游客用户可访问");
+    }
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">已经认证也就是登录的用户访问类BootShiroTestAuthcController.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.controller;
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping(value="/shiro-authc")
+public class BootShiroTestAuthcController {
+
+    @GetMapping(value="/hello")
+    public Response authCHello() {
+        return ResponseCode.successResponse("你是认证用户，可访问此接口");
+    }
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">使用权限注解的类BootShiroTestSysUserController.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.controller;
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ *  蚂蚁舞
+ */
+@RestController
+@RequestMapping(value="/sysUser")
+public class BootShiroTestSysUserController {
+
+    @GetMapping(value="/hello")
+    public Response shiroFilterHello() {
+        return ResponseCode.successResponse("你正在访问登录后shiroFilter过滤器里的，无注解的接口");
+    }
+
+    @RequiresPermissions("sys:user:list")
+    @GetMapping(value="/list")
+    @ResponseBody
+    public Response userList() {
+        return ResponseCode.successResponse("你已经成功访问到查询用户接口");
+    }
+
+    @RequiresPermissions("sys:user:add")
+    @GetMapping(value="/insert")
+    @ResponseBody
+    public Response userAdd() {
+        return ResponseCode.successResponse("你已经成功访问到新增用户接口");
+    }
+
+    @RequiresPermissions("sys:user:update")
+    @GetMapping(value="/update")
+    @ResponseBody
+    public Response userUpdate() {
+        return ResponseCode.successResponse("你已经成功访问到更新用户接口");
+    }
+
+    @RequiresPermissions("sys:user:delete")
+    @GetMapping(value="/delete")
+    @ResponseBody
+    public Response userDelete() {
+        return ResponseCode.successResponse("你已经成功访问到删除用户接口");
+    }
+
+
+}
+
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">登出类BootShiroLogoutController.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.controller;
+
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.subject.Subject;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+/**
+ *  蚂蚁舞
+ */
+@Controller
+@RequestMapping("/shiro-logout")
+public class BootShiroLogoutController {
+
+    @GetMapping(value="/logout")
+    @ResponseBody
+    public Response logoutGet() {
+        Subject subject = SecurityUtils.getSubject();
+        if(subject != null){
+            subject.logout();
+            return ResponseCode.successResponse("登出成功");
+        }
+        return ResponseCode.failResponse("登出失败");
+    }
+
+    @PostMapping(value="/logout")
+    @ResponseBody
+    public Response logoutPost() {
+        Subject subject = SecurityUtils.getSubject();
+        if(subject != null){
+            subject.logout();
+            return ResponseCode.successResponse("登出成功");
+        }
+        return ResponseCode.failResponse("登出失败");
+    }
+
+
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">登录使用的类BootShiroLoginController.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.controller;
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import boot.example.shiro.domain.SysUsers;
+import boot.example.shiro.domain.UserValidate;
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.LockedAccountException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.Subject;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+import javax.servlet.http.HttpSession;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ *  蚂蚁舞
+ */
+@Controller
+@RequestMapping("/shiro-login")
+public class BootShiroLoginController {
+
+    @GetMapping(value="/auth")
+    @ResponseBody
+    public Response authGet(@RequestParam(value = "username", required = true, defaultValue="shiro_admin") String username, @RequestParam(value = "password", required = true, defaultValue="123") String password) {
+        UserValidate userValidate = new UserValidate();
+        userValidate.setPassword(password);
+        userValidate.setUsername(username);
+        UsernamePasswordToken token = new UsernamePasswordToken(userValidate.getUsername(), userValidate.getPassword());
+        Subject subject = SecurityUtils.getSubject();
+
+        try {
+            subject.login(token);
+            SysUsers sysUsers = (SysUsers) subject.getPrincipal();
+            Map&lt;String, Object&gt; map = new HashMap&lt;&gt;();
+            map.put("token", subject.getSession().getId().toString());
+            map.put("session", subject.getSession());
+            map.put("sysUsers", sysUsers);
+            return ResponseCode.successResponse(map);
+        } catch ( UnknownAccountException uae ) {
+            return ResponseCode.failResponse("error username");
+        } catch ( IncorrectCredentialsException ice ) {
+            return ResponseCode.failResponse("error password");
+        } catch ( LockedAccountException lae ) {
+            return ResponseCode.failResponse("locked user");
+        }
+    }
+
+    @PostMapping(value="/auth")
+    @ResponseBody
+    public Response authPost(@RequestBody UserValidate userValidate, HttpSession session) {
+        System.out.println(userValidate.toString());
+        UsernamePasswordToken token = new UsernamePasswordToken(userValidate.getUsername(), userValidate.getPassword());
+        Subject subject = SecurityUtils.getSubject();
+        try {
+            subject.login(token);
+            SysUsers sysUsers = (SysUsers) subject.getPrincipal();
+            Map&lt;String, Object&gt; map = new HashMap&lt;&gt;();
+            map.put("token", subject.getSession().getId().toString());
+            map.put("session", subject.getSession());
+            map.put("sysUsers", sysUsers);
+            return ResponseCode.successResponse(map);
+        } catch ( UnknownAccountException uae ) {
+            return ResponseCode.failResponse("error username");
+        } catch ( IncorrectCredentialsException ice ) {
+            return ResponseCode.failResponse("error password");
+        } catch ( LockedAccountException lae ) {
+            return ResponseCode.failResponse("locked user");
+        }
+    }
+}
+</code></pre> 
+ <p style="">SpringBoot整合Shiro的代码里有抛出异常的情况，主要的异常在登录的时候会在try catch里处理，返回给前端，但还是有些异常是捕获不到的，因此需要加上异常处理</p> 
+ <blockquote class="kdocs-blockquote" style=""> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">import org.apache.shiro.authz.AuthorizationException;</span> 
+  <br> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">import org.apache.shiro.authz.UnauthenticatedException;</span> 
+  <br> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">import org.apache.shiro.authz.UnauthorizedException;</span> 
+ </blockquote> 
+ <pre class="kdocs-bash"><code class="language-bash">
+// shiro 未授权异常
+@ExceptionHandler(UnauthorizedException.class)
+@ResponseBody
+public Response UnauthorizedExceptionHandler(HttpServletRequest request, UnauthorizedException e) {
+    log.error(request.getRequestURI()+"----"+e.toString());
+    return ResponseCode.unauthorizedPermissionResponse("未授权，您的操作权限不够，可联系管理员获取操作权限");
+}
+
+//  shiro 授权异常
+@ExceptionHandler(AuthorizationException.class)
+@ResponseBody
+public Response AuthorizationException(HttpServletRequest request, AuthorizationException e) {
+    log.error(request.getRequestURI()+"----"+e.toString());
+    return ResponseCode.failResponse( "授权用户不存在或已经过期，请重新登录");
+}
+
+//  shiro 未经身份验证或身份验证异常
+@ExceptionHandler(UnauthenticatedException.class)
+@ResponseBody
+public Response UnauthenticatedException(HttpServletRequest request, UnauthenticatedException e) {
+    log.error(request.getRequestURI()+"----"+e.toString());
+    return ResponseCode.failResponse("未经身份验证，身份验证异常，请重新登录");
+}
+
+//  shiro 账号锁定异常
+@ExceptionHandler(LockedAccountException.class)
+@ResponseBody
+public Response LockedAccountException(HttpServletRequest request, LockedAccountException e) {
+    log.error(request.getRequestURI()+"----"+e.toString());
+    return ResponseCode.failResponse("你的账号已锁定，请联系管理员解锁");
+}
+
+//  shiro 未找到用户异常
+@ExceptionHandler(UnknownAccountException.class)
+@ResponseBody
+public Response UnknownAccountException(HttpServletRequest request, UnknownAccountException e) {
+    log.error(request.getRequestURI()+"----"+e.toString());
+    return ResponseCode.failResponse("你的账号不存在");
+}
+
+//  shiro 登录用户密码校验异常
+@ExceptionHandler(IncorrectCredentialsException.class)
+@ResponseBody
+public Response IncorrectCredentialsException(HttpServletRequest request, IncorrectCredentialsException e) {
+    log.error(request.getRequestURI()+"----"+e.toString());
+    return ResponseCode.failResponse("你输入的密码错误");
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">完整的异常处理类GlobalExceptionHandler.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+
+import boot.example.shiro.domain.Response;
+import boot.example.shiro.domain.ResponseCode;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.LockedAccountException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authz.AuthorizationException;
+import org.apache.shiro.authz.UnauthenticatedException;
+import org.apache.shiro.authz.UnauthorizedException;
+import org.apache.shiro.authz.permission.InvalidPermissionStringException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.bind.BindException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.ServletRequestBindingException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseBody;
+import javax.servlet.http.HttpServletRequest;
+
+
+/**
+ * 蚂蚁舞
+ */
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    public Logger log = LoggerFactory.getLogger(this.getClass());
+
+    //  全局异常：默认异常
+    @ExceptionHandler(Exception.class)
+    @ResponseBody
+    public Response defaultExceptionHandler(HttpServletRequest request, Exception e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.exceptionResponse(request.getRequestURI()+e.toString());
+    }
+
+    @ExceptionHandler(BindException.class)
+    @ResponseBody
+    public Response bindExceptionHandler(HttpServletRequest request, BindException e) {
+        return ResponseCode.exceptionResponse(e.toString());
+    }
+
+
+    //  全局异常：请求header缺少HeaderToken
+    @ExceptionHandler(ServletRequestBindingException.class)
+    @ResponseBody
+    public Response ServletRequestBindingExceptionHandler(HttpServletRequest request, ServletRequestBindingException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.noAuthHeaderTokenResponse();
+    }
+
+    //  全局异常：请求内容类型异常
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    @ResponseBody
+    public Response HttpMediaTypeNotSupportedExceptionHandler(HttpServletRequest request, HttpMediaTypeNotSupportedException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.exceptionResponse(e.toString());
+    }
+
+    //  全局异常：请求方法异常
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    @ResponseBody
+    public Response HttpRequestMethodNotSupportedExceptionHandler(HttpServletRequest request, HttpRequestMethodNotSupportedException e) {
+        log.error(request.getRequestURI() +"----"+e.toString());
+        return ResponseCode.exceptionResponse(e.toString());
+    }
+
+    //  全局异常：请求参数格式或者参数类型不正确异常
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseBody
+    public Response HttpMessageNotReadableExceptionHandler(HttpServletRequest request, HttpMessageNotReadableException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.exceptionResponse(e.toString());
+    }
+
+    //  shiro 权限不可用
+    @ExceptionHandler(InvalidPermissionStringException.class)
+    @ResponseBody
+    public Response InvalidPermissionStringException(HttpServletRequest request, IncorrectCredentialsException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.notPermissionResponse("你的权限不可用");
+    }
+
+    // shiro 未授权异常
+    @ExceptionHandler(UnauthorizedException.class)
+    @ResponseBody
+    public Response UnauthorizedExceptionHandler(HttpServletRequest request, UnauthorizedException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.unauthorizedPermissionResponse("未授权，您的操作权限不够，可联系管理员获取操作权限");
+    }
+
+    //  shiro 授权异常
+    @ExceptionHandler(AuthorizationException.class)
+    @ResponseBody
+    public Response AuthorizationException(HttpServletRequest request, AuthorizationException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.failResponse( "授权用户不存在或已经过期，请重新登录");
+    }
+
+    //  shiro 未经身份验证或身份验证异常
+    @ExceptionHandler(UnauthenticatedException.class)
+    @ResponseBody
+    public Response UnauthenticatedException(HttpServletRequest request, UnauthenticatedException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.failResponse("未经身份验证，身份验证异常，请重新登录");
+    }
+
+    //  shiro 账号锁定异常
+    @ExceptionHandler(LockedAccountException.class)
+    @ResponseBody
+    public Response LockedAccountException(HttpServletRequest request, LockedAccountException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.failResponse("你的账号已锁定，请联系管理员解锁");
+    }
+
+    //  shiro 未找到用户异常
+    @ExceptionHandler(UnknownAccountException.class)
+    @ResponseBody
+    public Response UnknownAccountException(HttpServletRequest request, UnknownAccountException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.failResponse("你的账号不存在");
+    }
+
+    //  shiro 登录用户密码校验异常
+    @ExceptionHandler(IncorrectCredentialsException.class)
+    @ResponseBody
+    public Response IncorrectCredentialsException(HttpServletRequest request, IncorrectCredentialsException e) {
+        log.error(request.getRequestURI()+"----"+e.toString());
+        return ResponseCode.failResponse("你输入的密码错误");
+    }
+
+
+
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">跨域支持的BeanConfig.java</span></span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">package boot.example.shiro.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
+
+/**
+ *  蚂蚁舞
+ */
+@Configuration
+public class BeanConfig {
+    @Bean
+    public CorsFilter corsFilter(){
+        UrlBasedCorsConfigurationSource urlBasedCorsConfigurationSource = new UrlBasedCorsConfigurationSource();
+        CorsConfiguration corsConfiguration = new CorsConfiguration();
+        corsConfiguration.setAllowCredentials(true);
+        corsConfiguration.addAllowedOrigin("*");
+        corsConfiguration.addAllowedHeader("*");
+        corsConfiguration.addAllowedMethod("PUT");
+        corsConfiguration.addAllowedMethod("GET");
+        corsConfiguration.addAllowedMethod("POST");
+        corsConfiguration.addAllowedMethod("PATCH");
+        corsConfiguration.addAllowedMethod("OPTIONS");
+        corsConfiguration.addAllowedMethod("DELETE");
+        corsConfiguration.setMaxAge(1728000L);
+        urlBasedCorsConfigurationSource.registerCorsConfiguration("/**", corsConfiguration);
+        return new CorsFilter(urlBasedCorsConfigurationSource);
+    }
+
+
+}
+</code></pre> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;">Response和静态类ResponseCode是统一封装的result结果集</span></p> 
+ <pre class="kdocs-bash"><code class="language-bash">public class Response {
+
+    private boolean state;
+
+    private int code;
+
+    private String msg;
+
+    private Object data;
+
+    private long timestamp;
+
+    // get set
+}</code></pre> 
+ <p style="">完整的SpringBoot整合Shiro的代码结构</p> 
+ <pre class="kdocs-bash"><code class="language-bash">└─boot-example-shiro-separate-2.0.5
+│ pom.xml
+│
+├─doc
+│ boot-example-shiro-separate-2.0.5-back.zip
+│
+└─src
+├─main
+│ ├─java
+│ │ └─boot
+│ │ └─example
+│ │ └─shiro
+│ │ │ ShiroApp.java
+│ │ │
+│ │ ├─config
+│ │ │ BeanConfig.java
+│ │ │ GlobalExceptionHandler.java
+│ │ │ ShiroConfig.java
+│ │ │ ShiroConstant.java
+│ │ │ ShiroCredentialMatcher.java
+│ │ │ ShiroDataMapper.java
+│ │ │ ShiroFilter.java
+│ │ │ ShiroRealm.java
+│ │ │ ShiroSessionManager.java
+│ │ │ SwaggerConfig.java
+│ │ │
+│ │ ├─controller
+│ │ │ BootShiroIndexRedirectController.java
+│ │ │ BootShiroLoginController.java
+│ │ │ BootShiroLogoutController.java
+│ │ │ BootShiroTestAnonController.java
+│ │ │ BootShiroTestAuthcController.java
+│ │ │ BootShiroTestSysUserController.java
+│ │ │
+│ │ └─domain
+│ │ Response.java
+│ │ ResponseCode.java
+│ │ SysUsers.java
+│ │ UserValidate.java
+│ │
+│ └─resources
+│ application.properties
+│ logback-spring.xml
+│
+└─test
+└─java
+└─boot
+└─example
+└─shiro
+ShiroAppTest.java</code></pre> 
+ <p style="">启动SpringBoot项目，访问swagger-ui(实际前后端分离的情况，这种方式也适合将前端代码嵌入到SpringBoot项目中)</p> 
+ <blockquote class="kdocs-blockquote" style=""> 
+  <a class="kdocs-link" style="color:#0A6CFF;" href="http://localhost:20400/doc.html" rel="nofollow noopener noreferrer" target="_blank">http://localhost:20400/doc.html</a> 
+ </blockquote> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:15pt;"><span class="kdocs-bold" style="font-weight:bold;">浏览器和SwaggerUi测试</span></span></p> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">1.先不登录，访问匿名游客（anon）</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1487px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:50.77337%;height:0;"> 
+    <img src="https://images2.imgbox.com/0f/5b/GizDsEeN_o.png" style="margin-left:;display:block;width:1487px;margin-top:-50.77337%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">2.先不登录，访问认证用户可访问（authc）这里有重定向</span></p> 
+ <p style="">在浏览器直接访问/shiro-authc/hello 因为没有授权重定向到了 /shiro-redirect/index，但在接口上就看不到重定向操作了，直接得到数据未登录的结果</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1477px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:44.34665%;height:0;"> 
+    <img src="https://images2.imgbox.com/63/bb/sqte9GGJ_o.png" style="margin-left:;display:block;width:1477px;margin-top:-44.34665%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">3.登录，使用预定的账号访问带注解的接口</span></p> 
+ <blockquote class="kdocs-blockquote" style=""> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">app_admin 12345</span> 
+  <br> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">这个账号登录访问的接口权限只有sys:user:list</span> 
+  <br> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">也就是只能访问@RequiresPermissions("sys:user:list")</span> 
+ </blockquote> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1478px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:58.93099%;height:0;"> 
+    <img src="https://images2.imgbox.com/91/ce/BHaF9VM6_o.png" style="margin-left:;display:block;width:1478px;margin-top:-58.93099%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">登录信息里除了用户信息还返回了token和session相关的信息，这个token就是前后端交互的</p> 
+ <p style="">将token复制输入到token框里面，能够访问@RequiresPermissions("sys:user:list")</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1481px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:42.60635%;height:0;"> 
+    <img src="https://images2.imgbox.com/f2/6b/St4VNlg8_o.png" style="margin-left:;display:block;width:1481px;margin-top:-42.60635%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">将token复制输入到token框里面，访问@RequiresPermissions("sys:user:add")权限不够</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1496px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:42.51337%;height:0;"> 
+    <img src="https://images2.imgbox.com/d1/14/H6CSrnPh_o.png" style="margin-left:;display:block;width:1496px;margin-top:-42.51337%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">直接使用浏览器访问@RequiresPermissions("sys:user:list")注解的接口，发现需要token，那是因为前后端交互用的就是token机制，无状态的</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1403px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:21.2402%;height:0;"> 
+    <img src="https://images2.imgbox.com/4f/a7/MqAeIcdV_o.png" style="margin-left:;display:block;width:1403px;margin-top:-21.2402%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">4.当浏览器或swagger-ui上登录后，后端SpringBoot项目重启，访问</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1556px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:51.02828%;height:0;"> 
+    <img src="https://images2.imgbox.com/c4/56/vDZNdRvY_o.png" style="margin-left:;display:block;width:1556px;margin-top:-51.02828%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">可以看到登录后使用浏览器直接输入会跳转，得到的确实是接口类型的数据，而不是显示的某个页面，但是在swagger-ui里，得到了JSESSIONID后面携带了token（sessionId）感觉像是没有实现前后端分离，这里之前在ShiroSessionManager类提到了的，尽量将所有接口都放在shiroFilter过滤器里，就是不使用authc这些</p> 
+ <blockquote class="kdocs-blockquote" style=""> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">将这个注释掉</span> 
+  <br> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">// 认证用户可访问 authc：认证用户可访问</span> 
+  <br> 
+  <span class="kdocs-fontSize" style="font-size:13pt;">filterChainDefinitionMap.put("/shiro-authc/*", "authc");</span> 
+ </blockquote> 
+ <p style="">其他使用浏览器和SwaggerUI测试的就不截图了（能避免的坑几乎都避免了，比如shiro的弹窗登录）</p> 
+ <p style="">前后端交互要正真测试出能不能用，关键还是要使用独立的前端代码，这样才能测试真正的效果，SpringBoot整合Shiro和Vue实现前后端分离web项目最常见,这里使用vue+elementui搭建的测试程序进行测试</p> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:15pt;"><span class="kdocs-bold" style="font-weight:bold;">使用Vue前后端分离的前端测试Demo</span></span></p> 
+ <p style="">使用vue和elementui来简单测试建立一个.vue文件就可以，核心代码首先定义request.js</p> 
+ <pre class="kdocs-bash"><code class="language-bash">import axios from 'axios'
+import { getToken} from '@/utils/cookies'
+import { Notification } from 'element-ui'
+
+const service = axios.create({
+    baseURL: "http://127.0.0.1:20400",
+    timeout: 60000,
+    headers: {'Content-Type': 'application/json;charset=UTF-8'}
+})
+
+// 统一请求拦截器
+service.interceptors.request.use(
+    config =&gt; {
+        if("/shiro-login/auth" === config.url){
+            return config
+        }
+
+        // 把token给后端
+        config.headers['token'] = getToken()
+        if(getToken()){
+            config.headers['token'] = getToken()
+        } else {
+            Notification({title: '消息',message: 'token失效，请重新登陆',type: 'warning',offset: 40})
+            return
+        }
+        return config
+    },
+    error =&gt; {
+        // 请求出错
+        console.log(error)
+        return Promise.reject(error)
+    }
+)
+
+// 统一响应拦截器
+service.interceptors.response.use (
+    response =&gt; {
+        let res
+        // IE9时response.data是undefined，因此需要使用response.request.responseText(Stringify后的字符串)
+        if (response.data == undefined) {
+            res = JSON.parse(response.request.responseText)
+        } else {
+            res = response.data
+        }
+        //console.log(res);
+
+        //响应的逻辑判断
+        if(res){
+            return res
+        }
+        return Promise.reject(new Error("请求错误" || 'Error'))
+    },
+    error =&gt; {
+        //响应出错
+        console.log('err' + error)
+        return Promise.reject(error)
+    }
+)
+
+export default service
+</code></pre> 
+ <p style="">定义api接口shiroVue.js</p> 
+ <pre class="kdocs-bash"><code class="language-bash">import request from '@/axios/request'
+
+// 登录
+export const login = (data) =&gt; {
+    return request({
+        url: '/shiro-login/auth',
+        method: 'post',
+        data
+    })
+}
+
+// 登出
+export const logout = () =&gt; {
+    return request({
+        url: '/shiro-logout/logout',
+        method: 'post'
+    })
+}
+
+// 匿名游客
+export function anonHello() {
+    return request({
+        url: '/shiro-anon/hello',
+        method: 'get'
+    })
+}
+
+// 认证用户
+export function authcHello() {
+    return request({
+        url: '/shiro-authc/hello',
+        method: 'get'
+    })
+}
+
+// 查询用户
+export function userList() {
+    return request({
+        url: '/sysUser/list',
+        method: 'get'
+    })
+}
+
+// 新增用户
+export function userInsert() {
+    return request({
+        url: '/sysUser/insert',
+        method: 'get'
+    })
+}
+
+// 更新用户
+export function userUpdate() {
+    return request({
+        url: '/sysUser/update',
+        method: 'get'
+    })
+}
+
+// 删除用户
+export function userDelete() {
+    return request({
+        url: '/sysUser/delete',
+        method: 'get'
+    })
+}</code></pre> 
+ <p style="">需要用到cookie cookies.js</p> 
+ <pre class="kdocs-bash"><code class="language-bash">/**
+ *  token认证
+ * 
+ */
+import Cookies from 'js-cookie'
+
+const mywTokenKey = 'mywToken'
+
+export function getToken() {
+    return Cookies.get(mywTokenKey)
+}
+export function setToken(token) {
+    return Cookies.set(mywTokenKey, token)
+}
+export function removeToken() {
+    return Cookies.remove(mywTokenKey)
+}
+</code></pre> 
+ <p style="">主要的测试代码Home.vue</p> 
+ <pre class="kdocs-bash"><code class="language-bash">&lt;template&gt;
+
+&lt;div style="border-radius:4px;padding:4px;"&gt;
+    &lt;el-row style="padding-top:40px;"&gt;   
+        &lt;el-col :span="24"&gt;
+            &lt;div&gt;SpringBoot+Shiro框架整合实现前后端分离的权限管理基础Demo&lt;/div&gt;
+        &lt;/el-col&gt;             
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-input placeholder="用户账号" style="width:200px;margin-right:8px;" v-model="username" clearable&gt;&lt;/el-input&gt;
+            &lt;el-input placeholder="用户密码" style="width:200px;margin-right:8px;" v-model="password" clearable&gt;&lt;/el-input&gt;
+        &lt;/el-col&gt;
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-button type="info" @click="handleLogin()"&gt;登录系统&lt;/el-button&gt;
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultLogin }}&lt;/div&gt;            
+        &lt;/el-col&gt;
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-button @click="handleLoGout()"&gt;登出系统&lt;/el-button&gt;
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultLogout }}&lt;/div&gt;
+        &lt;/el-col&gt;
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-button @click="handleanonHello()"&gt;匿名游客&lt;/el-button&gt;
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultAnonHello }}&lt;/div&gt;
+        &lt;/el-col&gt;
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-button type="info" @click="handleuserList()"&gt;查询用户&lt;/el-button&gt;
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultuserList }}&lt;/div&gt;
+        &lt;/el-col&gt;
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-button type="warning" @click="handleuserInsert()"&gt;新增用户&lt;/el-button&gt;  
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultuserInsert }}&lt;/div&gt;
+        &lt;/el-col&gt;
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-button @click="handleuserUpdate()" type="success"&gt;编辑用户&lt;/el-button&gt;
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultuserUpdate }}&lt;/div&gt;
+        &lt;/el-col&gt;
+        &lt;el-col :span="24" style="margin-top: 20px;"&gt;
+            &lt;el-button @click="handleuserDelete()"&gt;删除用户&lt;/el-button&gt;
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultuserDelete }}&lt;/div&gt;
+        &lt;/el-col&gt;
+        
+        &lt;el-col :span="24" style="margin-top: 30px;"&gt;
+            &lt;el-button type="info" @click="handleauthcHello()"&gt;认证访问(特殊)&lt;/el-button&gt;
+            &lt;div style="height:4px;"&gt;{<!-- -->{ resultAuthcHello }}&lt;/div&gt;
+        &lt;/el-col&gt;        
+    &lt;/el-row&gt;    
+&lt;/div&gt;
+&lt;/template&gt;
+
+&lt;script&gt;
+import { login, logout, anonHello, authcHello, userList, userInsert, userUpdate, userDelete} from '@/api/modules/shiroVue'
+import {setToken, removeToken } from '../utils/cookies'
+export default {
+    name: 'Home',
+    data() {
+        return {
+            username: "shiro_admin",
+            password: "123",
+            resultLogin: "",
+            resultLogout: "",
+            resultAnonHello: "",
+            resultAuthcHello: "",
+            resultuserList: "",
+            resultuserInsert: "",
+            resultuserUpdate: "",
+            resultuserDelete: ""
+        }
+    },
+    created() {
+    },
+    methods: {
+        init() {
+        },
+        handleLogin(){
+            if(this.username &amp;&amp; this.password){
+                var data = {username: this.username, password: this.password}
+                login(data).then((response) =&gt; {
+                    console.log(response)
+                    if(response.state){
+                        setToken(response.data.token)
+                        this.resultLogin = "msg:"+response.msg+" token:"+ response.data.token
+                    } else {
+                        this.resultLogin = "msg:"+ response.msg
+                    }
+                }).catch(response =&gt; {
+                    console.log(response);
+                });
+            }
+        },
+        handleLoGout(){
+            logout().then((response) =&gt; {
+                console.log(response)
+                removeToken()
+                this.resultLogout = "msg:"+ response.msg
+            }).catch(response =&gt; {
+                console.log(response);
+            });
+        },   
+        handleanonHello(){
+            anonHello().then((response) =&gt; {
+                console.log(response)
+                this.resultAnonHello = "msg:"+ response.msg
+            }).catch(response =&gt; {
+                console.log(response);
+            });
+        },
+        handleauthcHello(){
+            authcHello().then((response) =&gt; {
+                console.log(response)
+                this.resultAuthcHello = "msg:"+ response.msg
+            }).catch(response =&gt; {
+                console.log(response);
+            });
+        },
+        handleuserList(){
+            userList().then((response) =&gt; {
+                console.log(response)
+                this.resultuserList = "msg:"+ response.msg
+            }).catch(response =&gt; {
+                console.log(response);
+            });
+        },
+        handleuserInsert(){
+            userInsert().then((response) =&gt; {
+                console.log(response)
+                this.resultuserInsert = "msg:"+ response.msg
+            }).catch(response =&gt; {
+                console.log(response);
+            });
+        },
+        handleuserUpdate(){
+            userUpdate().then((response) =&gt; {
+                console.log(response)
+                this.resultuserUpdate = "msg:"+ response.msg
+            }).catch(response =&gt; {
+                console.log(response);
+            });
+        },
+        handleuserDelete(){
+            userDelete().then((response) =&gt; {
+                console.log(response)
+                this.resultuserDelete = "msg:"+ response.msg
+            }).catch(response =&gt; {
+                console.log(response);
+            });
+        }                                                               
+    },
+    mounted() {
+        this.$nextTick(function () {
+            this.init()
+        })
+    },
+    watch: {
+    }
+
+}
+&lt;/script&gt;
+</code></pre> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:15pt;"><span class="kdocs-bold" style="font-weight:bold;">首先将前端请求的token先注释掉</span></span></p> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">1.不登录的情况下访问接口</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1559px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:43.810135%;height:0;"> 
+    <img src="https://images2.imgbox.com/59/90/6xsOHEdE_o.png" style="margin-left:;display:block;width:1559px;margin-top:-43.810135%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1351px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:50.629166%;height:0;"> 
+    <img src="https://images2.imgbox.com/48/50/kU46d7Vy_o.png" style="margin-left:;display:block;width:1351px;margin-top:-50.629166%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">在未登录，也没有前端携带token的情况下，可以看到匿名游客可以访问，使用注解<span class="kdocs-fontSize" style="font-size:13pt;">@RequiresPermissions("*:*:*")提示没有token，因为在shiroFilter过滤器里过滤了的，认证用户访问的接口提示未登录</span></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:13pt;"><span class="kdocs-bold" style="font-weight:bold;">2.登录的情况下访问接口(前端不携带token)</span></span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1358px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:49.852722%;height:0;"> 
+    <img src="https://images2.imgbox.com/92/17/LHc191E0_o.png" style="margin-left:;display:block;width:1358px;margin-top:-49.852722%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">可以看到登录后，想要登出都不可能，因为登出也是需要token认证的，加了注解的四个接口也是没有token，只有特殊的认证访问显示的是未登录，因为这种情况是这个接口是不经过shiroFilter过滤器的，但是进了自定义的session会话ShiroSessionManager，在这里他从http请求的header里没拿到token，因此ssesionId是null，即使调用了父类方法，也是没有的，于是重定向了接口，在这里重定向到了<span class="kdocs-fontSize" style="font-size:13pt;">/shiro-redirect/index 如果后端重启，在这里也是同样的状态，因此不测试了。</span></p> 
+ <p style=""></p> 
+ <p style=""><span class="kdocs-fontSize" style="font-size:15pt;"><span class="kdocs-bold" style="font-weight:bold;">将前端请求的token注释取消，就是前端请求后端接口携带token</span></span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1504px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:37.965424%;height:0;"> 
+    <img src="https://images2.imgbox.com/23/91/eqRC9r7N_o.png" style="margin-left:;display:block;width:1504px;margin-top:-37.965424%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">1.不登录的情况下访问接口（这是正式环境不会出现的情况）</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1357px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:43.404568%;height:0;"> 
+    <img src="https://images2.imgbox.com/6f/06/JypyFHCh_o.png" style="margin-left:;display:block;width:1357px;margin-top:-43.404568%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">可以看到前端报错了，那是因为在前端缓存里token不存在，直接return了，不是return config,所以不请求后端数据。</p> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">2.登录的情况下访问接口(前端携带token，正常情况)</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1370px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:49.854015%;height:0;"> 
+    <img src="https://images2.imgbox.com/6c/2d/dFgQSmJ4_o.png" style="margin-left:;display:block;width:1370px;margin-top:-49.854015%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">这种整套操作流程，登录和登出都没问题</p> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">3.前端登录后，后端程序重启后访问认证页面(因为后端使用的内存，内存里没了shiro相关的会话)</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1364px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:49.56012%;height:0;"> 
+    <img src="https://images2.imgbox.com/7e/8b/It9aXIS3_o.png" style="margin-left:;display:block;width:1364px;margin-top:-49.56012%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">可以看到报了400错误，那个shiro处理跳转了登录页面，分离的前端无法处理的，一般我们碰不到这个错误的</p> 
+ <p style=""><span class="kdocs-bold" style="font-weight:bold;">4.使用只有部分权限的账号登录</span></p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1368px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:50.584793%;height:0;"> 
+    <img src="https://images2.imgbox.com/84/7a/mOWwMxwl_o.png" style="margin-left:;display:block;width:1368px;margin-top:-50.584793%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">可以看到加了注解的接口只有查询用户可以访问，其他的访问权限不够。</p> 
+ <p style="">这里的SpringBoot+Shiro和Vue实现前后端分离的Demo实际上使用到了Session的sessionId作为token来操作，如果要对这个token要求严格，那么可以使用对sessionId二次加密，例如jwt方式，这样在session重写的会话管理里先对token解密后在放入会话里。</p> 
+ <p style=""></p> 
+ <p style=""></p> 
+ <p style=""></p> 
+ <p style=""></p> 
+ <p style=""></p> 
+ <p style=""></p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/80cdd22d2541a7582c1e5cf4a72d74d1/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">批量查找并替换 txt 记事本文件中的一些关键字内容</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/0c09986d6f85c67510370790dfaabb11/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">springcloud理解及使用</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>树莓派连接温度传感器实时监控，并上报服务器 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="树莓派连接温度传感器实时监控，并上报服务器" />
+<meta property="og:description" content="文章目录 一、项目介绍二、软件架构客户端服务器端 三、代码服务器端代码 四、安装说明五、使用说明六、本项目gitee仓库 一、项目介绍 该项目由客户端和服务器两端程序组成，以树莓派为客户端，远程服务器为服务器端，利用socket通信，将树莓派上采集的ds18b20的温度传感数据发送到服务器端。如果断开连接，客户端将采集的数据存于sqlite3数据库中，同样服务器端也会把每次接收到的数据存于sqlite3数据库中。
+二、软件架构 客户端 1.树莓派上运行socket客户端程序， 每隔30秒以字符串“设备号/日期时间/温度”形式上报采样温度，设备号便于服务器端区分是哪个树莓派客户端，如“RPI200/2022.4.4-12:01/28.00”；
+2.通过命令行参数指定服务器端IP地址和端口以及间隔采样时间；
+3.程序放到后台运行，并通过syslog记录程序的运行出错、调试日志；
+4.程序可以捕捉kill信号正常退出；
+5.当服务器断开时，将采集的数据存放至本地数据库中，等再次连接上服务器时，将已保存在数据库中的数据重新发送给服务器。
+客户端程序流程图如下：
+服务器端 1.服务器程序运行啊在Linux服务器上；
+2.通过命令行指定监听的端口；
+3.程序能够捕捉kill信号正常退出；
+4.服务器支持多个客户端并发访问，选择epoll实现多路复用；
+5.服务器收到每个客户端的数据都解析后保存到数据库中，接收到的格式为：“设备号/日期时间/温度”，如“RPI200/2022.4.4-12:01/28.00”；
+服务器端程序流程图如下：
+三、代码 客户端代码：
+/********************************************************************************* * Copyright: (C) 2022 Zhang Changxing&lt;ZhangChangxingVIP@163.com&gt; * All rights reserved. * * Filename: client.c * Description: This file Collect the temperature data on the ds18b20 sensor and send it to the server. If the sending fails, it will be stored in the database temperature.db. * * Version: 1." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ee815b74759decaa572266f79dd96ed6/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-04-04T14:49:43+08:00" />
+<meta property="article:modified_time" content="2022-04-04T14:49:43+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">树莓派连接温度传感器实时监控，并上报服务器</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#_1" rel="nofollow">一、项目介绍</a></li><li><a href="#_3" rel="nofollow">二、软件架构</a></li><li><ul><li><a href="#_4" rel="nofollow">客户端</a></li><li><a href="#_18" rel="nofollow">服务器端</a></li></ul> 
+  </li><li><a href="#_32" rel="nofollow">三、代码</a></li><li><ul><li><a href="#_681" rel="nofollow">服务器端代码</a></li></ul> 
+  </li><li><a href="#_1093" rel="nofollow">四、安装说明</a></li><li><a href="#_1112" rel="nofollow">五、使用说明</a></li><li><a href="#gitee_1123" rel="nofollow">六、本项目gitee仓库</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_1"></a>一、项目介绍</h2> 
+<p>该项目由客户端和服务器两端程序组成，以树莓派为客户端，远程服务器为服务器端，利用socket通信，将树莓派上采集的ds18b20的温度传感数据发送到服务器端。如果断开连接，客户端将采集的数据存于sqlite3数据库中，同样服务器端也会把每次接收到的数据存于sqlite3数据库中。</p> 
+<h2><a id="_3"></a>二、软件架构</h2> 
+<h3><a id="_4"></a>客户端</h3> 
+<p>1.树莓派上运行socket客户端程序， 每隔30秒以字符串“设备号/日期时间/温度”形式上报采样温度，设备号便于服务器端区分是哪个树莓派客户端，如“RPI200/2022.4.4-12:01/28.00”；</p> 
+<p>2.通过命令行参数指定服务器端IP地址和端口以及间隔采样时间；</p> 
+<p>3.程序放到后台运行，并通过syslog记录程序的运行出错、调试日志；</p> 
+<p>4.程序可以捕捉kill信号正常退出；</p> 
+<p>5.当服务器断开时，将采集的数据存放至本地数据库中，等再次连接上服务器时，将已保存在数据库中的数据重新发送给服务器。</p> 
+<p>客户端程序流程图如下：<br> <img src="https://images2.imgbox.com/c8/5a/t3cSWhBC_o.jpg" alt="在这里插入图片描述"></p> 
+<h3><a id="_18"></a>服务器端</h3> 
+<p>1.服务器程序运行啊在Linux服务器上；</p> 
+<p>2.通过命令行指定监听的端口；</p> 
+<p>3.程序能够捕捉kill信号正常退出；</p> 
+<p>4.服务器支持多个客户端并发访问，选择epoll实现多路复用；</p> 
+<p>5.服务器收到每个客户端的数据都解析后保存到数据库中，接收到的格式为：“设备号/日期时间/温度”，如“RPI200/2022.4.4-12:01/28.00”；</p> 
+<p>服务器端程序流程图如下：<br> <img src="https://images2.imgbox.com/d0/cf/9lTY2chk_o.jpg" alt="在这里插入图片描述"></p> 
+<h2><a id="_32"></a>三、代码</h2> 
+<p>客户端代码：</p> 
+<pre><code class="prism language-c"><span class="token comment">/*********************************************************************************
+ *      Copyright:  (C) 2022 Zhang Changxing&lt;ZhangChangxingVIP@163.com&gt;
+ *                  All rights reserved.
+ *
+ *       Filename:  client.c
+ *    Description:  This file Collect the temperature data on the ds18b20 sensor and send it to the server. If the sending fails, it will be stored in the database temperature.db.
+ *                 
+ *        Version:  1.0.0(04/04/2022)
+ *         Author:  Zhang Changxing &lt;ZhangChangxingVIP@163.com&gt;
+ *      ChangeLog:  1, Release initial version on "04/04/2022 05:44:50 AM"
+ *                 
+ ********************************************************************************/</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;stdio.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;dirent.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;string.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/types.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/stat.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;fcntl.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;unistd.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;stdlib.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;errno.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/time.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/types.h&gt;</span>          </span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/socket.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;unistd.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;arpa/inet.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;string.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;getopt.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;time.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sqlite3.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;signal.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;syslog.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;libgen.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;linux/tcp.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;netinet/in.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;netinet/ip.h&gt;</span></span>
+
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">TABLE_NAME</span>  <span class="token string">"RPI1"</span></span>
+
+
+<span class="token keyword">struct</span> 				<span class="token class-name">timeval</span> tv<span class="token punctuation">;</span>
+<span class="token keyword">struct</span> 				<span class="token class-name">tm</span><span class="token operator">*</span> st<span class="token punctuation">;</span>
+<span class="token keyword">char</span> 				datime<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">double</span> 		current_time <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">double</span> 		last_time <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">char</span> 				<span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token keyword">struct</span> <span class="token class-name">sockaddr_in</span> 	servaddr<span class="token punctuation">;</span>
+<span class="token keyword">int</span> 				sockfd <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span>					port <span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">char</span>				<span class="token operator">*</span>ip_addr <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span>					connfd <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> 			count <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span>					rc <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+sqlite3 			<span class="token operator">*</span>db<span class="token punctuation">;</span>
+<span class="token keyword">char</span> 				<span class="token operator">*</span>zErrMsg <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span>					iTableExist <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">char</span>				write_buffer2<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span>					g_sigstop <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">struct</span> <span class="token class-name">tcp_info</span> 	info<span class="token punctuation">;</span>
+
+
+<span class="token keyword">int</span> <span class="token function">temperature</span> <span class="token punctuation">(</span><span class="token keyword">float</span> <span class="token operator">*</span>temp<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">inline</span>  <span class="token keyword">void</span> <span class="token function">print_usage</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>programe<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span>  <span class="token function">sqlite_init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>NotUsed<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">sqlite_create_table</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">sqlite_inset</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">sqlite_delete</span><span class="token punctuation">(</span><span class="token keyword">int</span> id<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">double</span> <span class="token function">getime</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>datime<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">client_socket_init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">sendata</span><span class="token punctuation">(</span><span class="token keyword">int</span> sockfd<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">sqlite_table_exist</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">table_exist_callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>data<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span>  <span class="token function">table_row_count</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">callback_row_count</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>NotUsed<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">sendata2</span><span class="token punctuation">(</span><span class="token keyword">int</span> sockfd<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">,</span> <span class="token keyword">int</span> count<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">sendata2_callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>data<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">signal_stop</span><span class="token punctuation">(</span><span class="token keyword">int</span> signum<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">SocketConnected</span><span class="token punctuation">(</span><span class="token keyword">int</span> sockfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+
+<span class="token keyword">int</span> <span class="token function">main</span> <span class="token punctuation">(</span><span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">float</span> 	temp <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> 	rv <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>		ch<span class="token punctuation">;</span>
+	<span class="token keyword">int</span>		daemon_run <span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> 	con_status <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> 	count_buffer<span class="token punctuation">[</span><span class="token number">20</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">struct</span>	<span class="token class-name">sigaction</span> sigact<span class="token punctuation">;</span>
+	<span class="token keyword">struct</span> 	<span class="token class-name">sigaction</span> sigign<span class="token punctuation">;</span>
+	<span class="token keyword">char</span>	<span class="token operator">*</span>programe_name<span class="token punctuation">;</span>
+	<span class="token keyword">char</span>	temp_buffer<span class="token punctuation">[</span><span class="token number">10</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+	<span class="token keyword">struct</span> <span class="token class-name">option</span> opts<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token punctuation">{<!-- --></span><span class="token string">"ip_addr"</span><span class="token punctuation">,</span> required_argument<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token char">'i'</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{<!-- --></span><span class="token string">"port"</span><span class="token punctuation">,</span> required_argument<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token char">'p'</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{<!-- --></span><span class="token string">"daemon"</span><span class="token punctuation">,</span> no_argument<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token char">'b'</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{<!-- --></span><span class="token string">"help"</span><span class="token punctuation">,</span> no_argument<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token char">'h'</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">}</span>
+	<span class="token punctuation">}</span><span class="token punctuation">;</span> 
+
+	<span class="token keyword">while</span><span class="token punctuation">(</span><span class="token punctuation">(</span>ch <span class="token operator">=</span> <span class="token function">getopt_long</span><span class="token punctuation">(</span>argc<span class="token punctuation">,</span> argv<span class="token punctuation">,</span> <span class="token string">"i:p:bh"</span><span class="token punctuation">,</span> opts<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">switch</span><span class="token punctuation">(</span>ch<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">case</span> <span class="token char">'i'</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					ip_addr <span class="token operator">=</span> optarg<span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token keyword">case</span> <span class="token char">'p'</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					port <span class="token operator">=</span> <span class="token function">atoi</span><span class="token punctuation">(</span>optarg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token keyword">case</span> <span class="token char">'b'</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					daemon_run <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token keyword">case</span> <span class="token char">'h'</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">print_usage</span><span class="token punctuation">(</span>argv<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token keyword">default</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Invalid argument\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token keyword">if</span><span class="token punctuation">(</span>port <span class="token operator">==</span> <span class="token number">0</span> <span class="token operator">||</span> ip_addr <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Invalid port or IP address is NULL!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">2</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span>daemon_run<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">daemon</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Running daemon failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Running daemon successfully!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	programe_name <span class="token operator">=</span> <span class="token function">basename</span><span class="token punctuation">(</span>argv<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">openlog</span><span class="token punctuation">(</span>programe_name<span class="token punctuation">,</span> LOG_CONS<span class="token operator">|</span>LOG_PID<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token function">sigemptyset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>sigign<span class="token punctuation">.</span>sa_mask<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sigign<span class="token punctuation">.</span>sa_flags <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	sigign<span class="token punctuation">.</span>sa_handler <span class="token operator">=</span> SIG_IGN<span class="token punctuation">;</span>
+	 	
+	<span class="token function">sigemptyset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>sigact<span class="token punctuation">.</span>sa_mask<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	sigact<span class="token punctuation">.</span>sa_flags <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	sigact<span class="token punctuation">.</span>sa_handler <span class="token operator">=</span> signal_stop<span class="token punctuation">;</span>
+
+	<span class="token comment">//sigaction(SIGINT, &amp;sigign, 0);</span>
+	<span class="token function">sigaction</span><span class="token punctuation">(</span>SIGUSR1<span class="token punctuation">,</span> <span class="token operator">&amp;</span>sigact<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">sigaction</span><span class="token punctuation">(</span>SIGUSR2<span class="token punctuation">,</span> <span class="token operator">&amp;</span>sigact<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+
+	connfd <span class="token operator">=</span> <span class="token function">client_socket_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>connfd <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Client connect server failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		con_status <span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token function">sqlite_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sqlite_table_exist</span><span class="token punctuation">(</span>TABLE_NAME<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">sqlite_create_table</span><span class="token punctuation">(</span>TABLE_NAME<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token comment">//sqlite_delete(0, TABLE_NAME);</span>
+	count <span class="token operator">=</span> <span class="token function">table_row_count</span><span class="token punctuation">(</span>TABLE_NAME<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">gettimeofday</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tv<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	current_time <span class="token operator">=</span> tv<span class="token punctuation">.</span>tv_sec<span class="token punctuation">;</span>
+	
+	<span class="token keyword">while</span><span class="token punctuation">(</span><span class="token operator">!</span>g_sigstop<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">gettimeofday</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tv<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		last_time <span class="token operator">=</span> tv<span class="token punctuation">.</span>tv_sec<span class="token punctuation">;</span>
+		<span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"\n\n\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	
+		<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">SocketConnected</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			con_status <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		
+		<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>last_time <span class="token operator">-</span> current_time<span class="token punctuation">)</span> <span class="token operator">&gt;=</span> <span class="token number">30</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>rv <span class="token operator">=</span> <span class="token function">temperature</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>temp<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Execute temperature failure!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">3</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			
+			last_time <span class="token operator">=</span> <span class="token function">getime</span><span class="token punctuation">(</span>datime<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			current_time <span class="token operator">=</span> last_time<span class="token punctuation">;</span>
+			<span class="token function">memset</span><span class="token punctuation">(</span>count_buffer<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>count_buffer<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token function">sprintf</span><span class="token punctuation">(</span>count_buffer<span class="token punctuation">,</span> <span class="token string">"%d"</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>count<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token function">memset</span><span class="token punctuation">(</span>temp_buffer<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>temp_buffer<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token function">sprintf</span><span class="token punctuation">(</span>temp_buffer<span class="token punctuation">,</span> <span class="token string">"%f"</span><span class="token punctuation">,</span> temp<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">=</span> count_buffer<span class="token punctuation">;</span>
+			buftok<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token string">"RPI1"</span><span class="token punctuation">;</span>
+			buftok<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span> <span class="token operator">=</span> datime<span class="token punctuation">;</span>
+			buftok<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">=</span>	temp_buffer<span class="token punctuation">;</span>
+			
+
+			<span class="token keyword">if</span><span class="token punctuation">(</span>con_status<span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sendata</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span> buftok<span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">sqlite_inset</span><span class="token punctuation">(</span>buftok<span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					count<span class="token operator">++</span><span class="token punctuation">;</span>
+					con_status <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+					<span class="token function">close</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token comment">//connfd = connect(sockfd, (struct sockaddr *)&amp;servaddr, sizeof(servaddr));</span>
+				connfd <span class="token operator">=</span> <span class="token function">client_socket_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span><span class="token punctuation">(</span>connfd <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Client connect server failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					con_status <span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+					<span class="token function">sqlite_inset</span><span class="token punctuation">(</span>buftok<span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					count<span class="token operator">++</span><span class="token punctuation">;</span>
+					<span class="token function">close</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">else</span>
+				<span class="token punctuation">{<!-- --></span>
+					con_status <span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">;</span>
+					<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sendata</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span> buftok<span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+					<span class="token punctuation">{<!-- --></span>
+						<span class="token function">sqlite_inset</span><span class="token punctuation">(</span>buftok<span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						count<span class="token operator">++</span><span class="token punctuation">;</span>
+						<span class="token function">close</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>count <span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			
+			<span class="token keyword">if</span><span class="token punctuation">(</span>con_status<span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sendata2</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span>TABLE_NAME<span class="token punctuation">,</span> count<span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					con_status <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+					<span class="token function">close</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">else</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sqlite_delete</span><span class="token punctuation">(</span>count<span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+					<span class="token punctuation">{<!-- --></span>
+						count<span class="token operator">--</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token comment">//connfd = connect(sockfd, (struct sockaddr *)&amp;servaddr, sizeof(servaddr));</span>
+				connfd <span class="token operator">=</span> <span class="token function">client_socket_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span><span class="token punctuation">(</span>connfd <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Client connect server failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					con_status <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+					<span class="token function">close</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">else</span>
+				<span class="token punctuation">{<!-- --></span>
+					con_status <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+					<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sendata2</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">,</span> count<span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+					<span class="token punctuation">{<!-- --></span>
+						con_status <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+						<span class="token function">close</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+					<span class="token keyword">else</span>
+					<span class="token punctuation">{<!-- --></span>
+						<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sqlite_delete</span><span class="token punctuation">(</span>count<span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+						<span class="token punctuation">{<!-- --></span>
+							count<span class="token operator">--</span><span class="token punctuation">;</span>
+						<span class="token punctuation">}</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">sendata2_callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>data<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">memset</span><span class="token punctuation">(</span>write_buffer2<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>write_buffer2<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>write_buffer2<span class="token punctuation">,</span> <span class="token string">"%s/%s/%s"</span><span class="token punctuation">,</span>  argv<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> argv<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> argv<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"write_buffer2:%s\n"</span><span class="token punctuation">,</span> write_buffer2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">int</span> <span class="token function">sendata2</span><span class="token punctuation">(</span><span class="token keyword">int</span> sockfd<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">,</span> <span class="token keyword">int</span> count<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">int</span> write_rv2 <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> sendata_buffer2<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	
+	<span class="token function">memset</span><span class="token punctuation">(</span>sendata_buffer2<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>sendata_buffer2<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>sendata_buffer2<span class="token punctuation">,</span> <span class="token string">"select * from %s limit 1 offset %d"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">,</span> <span class="token punctuation">(</span>count<span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> sendata_buffer2<span class="token punctuation">,</span> sendata2_callback<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	write_rv2 <span class="token operator">=</span> <span class="token function">write</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span> write_buffer2<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>write_buffer2<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>write_rv2 <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Send data to sever failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"Send data to sever successfully!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">int</span> <span class="token function">sendata</span><span class="token punctuation">(</span><span class="token keyword">int</span> sockfd<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">int</span> write_rv1 <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> sendata_buffer1<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+	<span class="token function">memset</span><span class="token punctuation">(</span>sendata_buffer1<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>sendata_buffer1<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>sendata_buffer1<span class="token punctuation">,</span> <span class="token string">"%s/%s/%s"</span><span class="token punctuation">,</span>  buftok<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"sendata sendata_buffer1:%s\n"</span><span class="token punctuation">,</span> sendata_buffer1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	write_rv1 <span class="token operator">=</span> <span class="token function">write</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span> sendata_buffer1<span class="token punctuation">,</span> <span class="token function">strlen</span><span class="token punctuation">(</span>sendata_buffer1<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>write_rv1 <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Send data to sever failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Send data to sever successfully!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">int</span> <span class="token function">sqlite_table_exist</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> table_exist<span class="token punctuation">[</span><span class="token number">512</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>table_exist<span class="token punctuation">,</span> <span class="token string">"SELECT COUNT(*) FROM sqlite_master where type ='table' and name ='%s';"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> table_exist<span class="token punctuation">,</span> table_exist_callback<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>rc <span class="token operator">!=</span> SQLITE_OK<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"sqlite_table_exist:%s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token keyword">if</span><span class="token punctuation">(</span>iTableExist<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"%s is exist!\n"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> iTableExist<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> iTableExist<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">table_exist_callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>data<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span> <span class="token number">1</span> <span class="token operator">==</span> argc<span class="token punctuation">)</span>
+  	<span class="token punctuation">{<!-- --></span>
+		iTableExist <span class="token operator">=</span> <span class="token function">atoi</span><span class="token punctuation">(</span><span class="token operator">*</span><span class="token punctuation">(</span>argv<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  	<span class="token punctuation">}</span>
+  	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span> 
+<span class="token punctuation">}</span>
+
+
+
+<span class="token keyword">int</span> <span class="token function">client_socket_init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	sockfd <span class="token operator">=</span> <span class="token function">socket</span><span class="token punctuation">(</span>AF_INET<span class="token punctuation">,</span> SOCK_STREAM<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>sockfd <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Create socket failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token function">memset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>servaddr<span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">,</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>servaddr<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	servaddr<span class="token punctuation">.</span>sin_family <span class="token operator">=</span> AF_INET<span class="token punctuation">;</span>
+	servaddr<span class="token punctuation">.</span>sin_port <span class="token operator">=</span> <span class="token function">htons</span><span class="token punctuation">(</span>port<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	servaddr<span class="token punctuation">.</span>sin_addr<span class="token punctuation">.</span>s_addr <span class="token operator">=</span> <span class="token function">inet_addr</span><span class="token punctuation">(</span>ip_addr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token comment">//printf("port:%d, ip_addr:%s, sockfd:%d\n", port, ip_addr, sockfd);</span>
+	connfd <span class="token operator">=</span> <span class="token function">connect</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">sockaddr</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>servaddr<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>servaddr<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token keyword">return</span> connfd<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">double</span> <span class="token function">getime</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>datime<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">gettimeofday</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tv<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	last_time <span class="token operator">=</span> tv<span class="token punctuation">.</span>tv_sec<span class="token punctuation">;</span>
+	st <span class="token operator">=</span> <span class="token function">localtime</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>tv<span class="token punctuation">.</span>tv_sec<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token function">memset</span><span class="token punctuation">(</span>datime<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>datime<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>datime<span class="token punctuation">,</span> <span class="token string">"%05d:%02d:%02d--%02d:%02d:%02d"</span><span class="token punctuation">,</span> st<span class="token operator">-&gt;</span>tm_year<span class="token punctuation">,</span> st<span class="token operator">-&gt;</span>tm_mon<span class="token punctuation">,</span> st<span class="token operator">-&gt;</span>tm_mday<span class="token punctuation">,</span> st<span class="token operator">-&gt;</span>tm_hour<span class="token punctuation">,</span> st<span class="token operator">-&gt;</span>tm_min<span class="token punctuation">,</span> st<span class="token operator">-&gt;</span>tm_sec<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token keyword">return</span> last_time<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">callback_row_count</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>NotUsed<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	count <span class="token operator">=</span> <span class="token function">atoi</span><span class="token punctuation">(</span>argv<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">int</span>  <span class="token function">table_row_count</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> row_count<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>row_count<span class="token punctuation">,</span> <span class="token string">"SELECT COUNT(*) from %s"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> row_count<span class="token punctuation">,</span> callback_row_count<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token keyword">if</span><span class="token punctuation">(</span> rc <span class="token operator">!=</span> SQLITE_OK <span class="token punctuation">)</span>
+   	<span class="token punctuation">{<!-- --></span>
+      	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"table_row_count: %s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+     	<span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  	<span class="token punctuation">}</span>
+  	<span class="token keyword">else</span>
+   	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> count<span class="token punctuation">;</span>
+   	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">int</span> <span class="token function">sqlite_delete</span><span class="token punctuation">(</span><span class="token keyword">int</span> id<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> sql_delete<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>sql_delete<span class="token punctuation">,</span> <span class="token string">"DELETE from %s where ID=%d;SELECT * from %s;"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">,</span> count<span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">//sql = "DELETE from COMPANY where ID=2; " \
+      //   "SELECT * from COMPANY";</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> sql_delete<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token keyword">if</span><span class="token punctuation">(</span> rc <span class="token operator">!=</span> SQLITE_OK <span class="token punctuation">)</span>
+   	<span class="token punctuation">{<!-- --></span>
+      	<span class="token function">fprintf</span><span class="token punctuation">(</span><span class="token constant">stderr</span><span class="token punctuation">,</span> <span class="token string">"Sqlite_delete error: %s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+     	 <span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		 <span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+  	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">sqlite_inset</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> sql_buffer<span class="token punctuation">[</span><span class="token number">512</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> <span class="token operator">*</span>ID1 <span class="token operator">=</span> buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> <span class="token operator">*</span>SN1 <span class="token operator">=</span> buftok<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> <span class="token operator">*</span>DATIME1 <span class="token operator">=</span> buftok<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> <span class="token operator">*</span>TEMPERATURE1 <span class="token operator">=</span> buftok<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Inset data to TABLE %s: "</span><span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"ID1:%s  "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"SN1:%s  "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"DATIME1:%s  "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"TEMPERATURE1:%s \n "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression"><span class="token number">0</span></span></span>
+	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"Inset data to TABLE %s: "</span><span class="token punctuation">,</span> TABLE_NAME<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"ID1:%s  "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"SN1:%s  "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"DATIME1:%s  "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"TEMPERATURE1:%s \n "</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>sql_buffer<span class="token punctuation">,</span> <span class="token string">"INSERT INTO %s VALUES ('%s', '%s', '%s', '%s');"</span> <span class="token punctuation">,</span>table_name<span class="token punctuation">,</span> ID1<span class="token punctuation">,</span>  SN1<span class="token punctuation">,</span> DATIME1<span class="token punctuation">,</span> TEMPERATURE1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> sql_buffer<span class="token punctuation">,</span> callback<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token keyword">if</span><span class="token punctuation">(</span> rc <span class="token operator">!=</span> SQLITE_OK <span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+      	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Sqlite_inset: %s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      	<span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+      	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"Last data inset table successfully\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">sqlite_create_table</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> create_table<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>create_table<span class="token punctuation">,</span> <span class="token string">"CREATE TABLE %s(ID INT PRIMARY KEY, SN CHAR(10),DATIME CHAR(50),TEMPERATURE CHAR(10));"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> create_table<span class="token punctuation">,</span> callback<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>rc <span class="token operator">!=</span> SQLITE_OK<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Sqlite_create_table:%s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"Table created successfully!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>NotUsed<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+   <span class="token keyword">int</span> i<span class="token punctuation">;</span>
+   <span class="token keyword">for</span><span class="token punctuation">(</span>i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span> i<span class="token operator">&lt;</span>argc<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+   <span class="token punctuation">{<!-- --></span>
+      <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"%s = %s\n"</span><span class="token punctuation">,</span> azColName<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span> argv<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">?</span> argv<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">:</span> <span class="token string">"NULL"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token punctuation">}</span>
+   <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span>  <span class="token function">sqlite_init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_open</span><span class="token punctuation">(</span><span class="token string">"temperature.db"</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>db<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>rc<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Can't open database:%s\n"</span><span class="token punctuation">,</span> <span class="token function">sqlite3_errmsg</span><span class="token punctuation">(</span>db<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"Opened database successfully\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">static</span> <span class="token keyword">inline</span>  <span class="token keyword">void</span> <span class="token function">print_usage</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>programe<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Usage:%s[OPTION]....\n"</span><span class="token punctuation">,</span> programe<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"-p[port]:Socket sever port address\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"-b[daemon]:Start daemon!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"-h[help]:Display this help information\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"\nExample:%s -b -p 6667\n"</span><span class="token punctuation">,</span> programe<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">void</span> <span class="token function">signal_stop</span><span class="token punctuation">(</span><span class="token keyword">int</span> signum<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>SIGUSR1 <span class="token operator">==</span> signum<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"signum SIGUSR1 detected!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>SIGUSR2 <span class="token operator">==</span> signum<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"signum SIGUSR2 detected!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	g_sigstop <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">int</span> <span class="token function">SocketConnected</span><span class="token punctuation">(</span><span class="token keyword">int</span> sockfd<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>sockfd <span class="token operator">&lt;=</span> <span class="token number">0</span><span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token comment">//struct tcp_info info;</span>
+    <span class="token keyword">int</span> len <span class="token operator">=</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>info<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token function">getsockopt</span><span class="token punctuation">(</span>sockfd<span class="token punctuation">,</span> IPPROTO_TCP<span class="token punctuation">,</span> TCP_INFO<span class="token punctuation">,</span> <span class="token operator">&amp;</span>info<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">socklen_t</span> <span class="token operator">*</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span> len<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>info<span class="token punctuation">.</span>tcpi_state <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"socket connected\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"socket disconnected\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">int</span> <span class="token function">temperature</span> <span class="token punctuation">(</span><span class="token keyword">float</span> <span class="token operator">*</span>temp<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    DIR             <span class="token operator">*</span>dir <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+    <span class="token keyword">struct</span>  <span class="token class-name">dirent</span>  <span class="token operator">*</span>drt <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+    <span class="token keyword">char</span>            <span class="token operator">*</span>string <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> 			fd <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span>			buf<span class="token punctuation">[</span><span class="token number">512</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> 			<span class="token operator">*</span>str<span class="token punctuation">;</span>
+	<span class="token keyword">char</span> 			directory<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token string">"/sys/bus/w1/devices/"</span><span class="token punctuation">;</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>dir <span class="token operator">=</span> <span class="token function">opendir</span><span class="token punctuation">(</span>directory<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"open directory %s failure:%s\n"</span><span class="token punctuation">,</span> directory<span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">while</span><span class="token punctuation">(</span><span class="token punctuation">(</span>drt <span class="token operator">=</span> <span class="token function">readdir</span><span class="token punctuation">(</span>dir<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">strstr</span><span class="token punctuation">(</span>drt<span class="token operator">-&gt;</span>d_name<span class="token punctuation">,</span> <span class="token string">"28-"</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			string <span class="token operator">=</span> drt<span class="token operator">-&gt;</span>d_name<span class="token punctuation">;</span>
+			<span class="token keyword">break</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span>string <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"read directory name failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">2</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	string <span class="token operator">=</span> <span class="token function">strcat</span><span class="token punctuation">(</span>directory<span class="token punctuation">,</span> string<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	string <span class="token operator">=</span> <span class="token function">strcat</span><span class="token punctuation">(</span>directory<span class="token punctuation">,</span> <span class="token string">"/w1_slave"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	fd <span class="token operator">=</span> <span class="token function">open</span><span class="token punctuation">(</span>string<span class="token punctuation">,</span> O_RDONLY<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>fd <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"open %s\n failure:%s\n"</span><span class="token punctuation">,</span> string<span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">3</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token function">memset</span><span class="token punctuation">(</span>buf<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">read</span><span class="token punctuation">(</span>fd<span class="token punctuation">,</span> buf<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"read data from w1_slave failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">close</span><span class="token punctuation">(</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>	
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">4</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span>str <span class="token operator">=</span> <span class="token function">strstr</span><span class="token punctuation">(</span>buf<span class="token punctuation">,</span> <span class="token string">"t="</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"temperature not found:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">close</span><span class="token punctuation">(</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>	
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">5</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	str <span class="token operator">=</span> str <span class="token operator">+</span><span class="token number">2</span><span class="token punctuation">;</span>
+	<span class="token operator">*</span>temp <span class="token operator">=</span> <span class="token function">atof</span><span class="token punctuation">(</span>str<span class="token punctuation">)</span><span class="token operator">/</span><span class="token number">1000</span><span class="token punctuation">;</span>
+	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"the temperature is %f\n"</span><span class="token punctuation">,</span> <span class="token operator">*</span>temp<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">close</span><span class="token punctuation">(</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>	
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h3><a id="_681"></a>服务器端代码</h3> 
+<pre><code class="prism language-c"><span class="token comment">/*********************************************************************************
+ *      Copyright:  (C) 2022 Zhang Changxing&lt;ZhangChangxingVIP@163.com&gt;
+ *                  All rights reserved.
+ *
+ *       Filename:  server.c
+ *    Description:  This file used to receive data sent by the device,and stored in the database. 
+ *                 
+ *        Version:  1.0.0(4/2/2022)
+ *         Author:  Zhang Changxing &lt;ZhangChangxingVIP@163.com&gt;
+ *      ChangeLog:  1, Release initial version on "04/2/2022 15:45:31 PM"
+ *                 
+ ********************************************************************************/</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;stdio.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;arpa/inet.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;ctype.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;unistd.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;getopt.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;string.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;errno.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;stdlib.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/epoll.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/time.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/resource.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;errno.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/types.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sys/socket.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;sqlite3.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;syslog.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;libgen.h&gt;</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">MAX_EVENTS</span> <span class="token expression"><span class="token number">512</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">TABLE_NAME</span> <span class="token string">"COMPANY29"</span></span>
+
+sqlite3 	<span class="token operator">*</span>db<span class="token punctuation">;</span>
+<span class="token keyword">char</span> 		<span class="token operator">*</span>zErrMsg <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span>  		rc<span class="token punctuation">;</span>
+<span class="token keyword">char</span> 		<span class="token operator">*</span>sql<span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> 	k <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> 		<span class="token operator">*</span>ptr <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> 		iTableExist <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> 		connfd <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+
+<span class="token keyword">static</span> <span class="token keyword">inline</span>  <span class="token keyword">void</span> <span class="token function">print_usage</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>programe<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">socket_server_init</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>listen_ip<span class="token punctuation">,</span> <span class="token keyword">int</span> port<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">set_socket_rimit</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>NotUsed<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span>  <span class="token function">sqlite_init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">sqlite_create_table</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">void</span> <span class="token function">sqlite_inset</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">sqlite_table_exist</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">table_exist_callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>data<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">int</span> <span class="token function">main</span> <span class="token punctuation">(</span><span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">struct</span> <span class="token class-name">epoll_event</span> 	event<span class="token punctuation">;</span>
+	<span class="token keyword">struct</span> <span class="token class-name">epoll_event</span> 	event_array<span class="token punctuation">[</span>MAX_EVENTS<span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					listenfd<span class="token punctuation">;</span>
+	<span class="token keyword">char</span>				buf<span class="token punctuation">[</span><span class="token number">1024</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					ch<span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					port <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					epollfd <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					events <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					daemon_run <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span> 				i<span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					rev<span class="token punctuation">;</span>
+	<span class="token keyword">char</span>				<span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					j<span class="token punctuation">;</span>
+	<span class="token keyword">char</span> 				<span class="token operator">*</span>p <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> 				<span class="token operator">*</span>programe_name<span class="token punctuation">;</span>
+
+	programe_name <span class="token operator">=</span> <span class="token function">basename</span><span class="token punctuation">(</span>argv<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token keyword">struct</span> <span class="token class-name">option</span> opts<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token punctuation">{<!-- --></span><span class="token string">"port"</span><span class="token punctuation">,</span> required_argument<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token char">'p'</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{<!-- --></span><span class="token string">"help"</span><span class="token punctuation">,</span> no_argument<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token char">'b'</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">}</span>
+	<span class="token punctuation">}</span><span class="token punctuation">;</span>
+	
+	<span class="token keyword">while</span><span class="token punctuation">(</span><span class="token punctuation">(</span>ch <span class="token operator">=</span> <span class="token function">getopt_long</span><span class="token punctuation">(</span>argc<span class="token punctuation">,</span> argv<span class="token punctuation">,</span> <span class="token string">"p:h"</span><span class="token punctuation">,</span> opts<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">switch</span><span class="token punctuation">(</span>ch<span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">case</span> <span class="token char">'b'</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					daemon_run <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token keyword">case</span> <span class="token char">'p'</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					port <span class="token operator">=</span> <span class="token function">atoi</span><span class="token punctuation">(</span>optarg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token keyword">case</span> <span class="token char">'h'</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">print_usage</span><span class="token punctuation">(</span>argv<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">break</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token keyword">default</span><span class="token operator">:</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Invalid argument!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token operator">!</span>port<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span> 
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"The port is NULL!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">2</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span>daemon_run<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">daemon</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Runing daemon failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">3</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Runing daemon successfully!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token function">openlog</span><span class="token punctuation">(</span>programe_name<span class="token punctuation">,</span> LOG_CONS<span class="token operator">|</span>LOG_PID<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token function">set_socket_rimit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	listenfd <span class="token operator">=</span> <span class="token function">socket_server_init</span><span class="token punctuation">(</span><span class="token constant">NULL</span><span class="token punctuation">,</span> port<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	epollfd <span class="token operator">=</span> <span class="token function">epoll_create</span><span class="token punctuation">(</span>MAX_EVENTS<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>epollfd <span class="token operator">&lt;</span> <span class="token number">0</span> <span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_EMERG<span class="token punctuation">,</span> <span class="token string">"Create epoll failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">4</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	event<span class="token punctuation">.</span>events <span class="token operator">=</span> EPOLLIN<span class="token punctuation">;</span>
+	event<span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd <span class="token operator">=</span> listenfd<span class="token punctuation">;</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token function">epoll_ctl</span><span class="token punctuation">(</span>epollfd<span class="token punctuation">,</span> EPOLL_CTL_ADD<span class="token punctuation">,</span>listenfd<span class="token punctuation">,</span> <span class="token operator">&amp;</span>event<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_EMERG<span class="token punctuation">,</span> <span class="token string">"Execute epoll_ctl failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">5</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token function">sqlite_init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">//	if(sqlite_table_exist(TABLE_NAME) == 0)</span>
+<span class="token comment">//	{<!-- --></span>
+<span class="token comment">//		sqlite_create_table(TABLE_NAME);</span>
+<span class="token comment">//	}</span>
+
+	<span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		events <span class="token operator">=</span> <span class="token function">epoll_wait</span><span class="token punctuation">(</span>epollfd<span class="token punctuation">,</span> event_array<span class="token punctuation">,</span> MAX_EVENTS<span class="token punctuation">,</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">for</span><span class="token punctuation">(</span>i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> events<span class="token operator">--</span><span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span><span class="token punctuation">(</span>event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>events <span class="token operator">==</span> EPOLLERR <span class="token operator">||</span> event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>events <span class="token operator">==</span> EPOLLHUP<span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"Epoll wait eorr or hup!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token function">epoll_ctl</span><span class="token punctuation">(</span>epollfd<span class="token punctuation">,</span> EPOLL_CTL_DEL<span class="token punctuation">,</span> event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token function">close</span><span class="token punctuation">(</span>event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+
+			<span class="token keyword">if</span><span class="token punctuation">(</span>event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd <span class="token operator">==</span> listenfd<span class="token punctuation">)</span>
+			<span class="token punctuation">{<!-- --></span>
+				connfd <span class="token operator">=</span> <span class="token function">accept</span><span class="token punctuation">(</span>listenfd<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span><span class="token punctuation">(</span>connfd <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"Server connect new client failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token function">close</span><span class="token punctuation">(</span>connfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">continue</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+
+				<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Server connect new client[%d] successfully!\n"</span><span class="token punctuation">,</span> connfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				event<span class="token punctuation">.</span>events <span class="token operator">=</span> EPOLLIN<span class="token punctuation">;</span>
+				event<span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd <span class="token operator">=</span> connfd<span class="token punctuation">;</span>
+
+				<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token function">epoll_ctl</span><span class="token punctuation">(</span>epollfd<span class="token punctuation">,</span> EPOLL_CTL_ADD<span class="token punctuation">,</span> connfd<span class="token punctuation">,</span> <span class="token operator">&amp;</span>event<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"Add connfd to epollfd list failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token function">close</span><span class="token punctuation">(</span>event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">continue</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span>
+			<span class="token punctuation">{<!-- --></span>
+				<span class="token function">memset</span><span class="token punctuation">(</span>buf<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+				rev <span class="token operator">=</span>  <span class="token function">read</span><span class="token punctuation">(</span>connfd<span class="token punctuation">,</span> buf<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span><span class="token punctuation">(</span>rev <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"Read data from client[%d] failure:%s\n"</span><span class="token punctuation">,</span> connfd<span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">epoll_ctl</span><span class="token punctuation">(</span>epollfd<span class="token punctuation">,</span> EPOLL_CTL_DEL<span class="token punctuation">,</span> event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd<span class="token punctuation">,</span> <span class="token constant">NULL</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span> <span class="token punctuation">)</span>
+					<span class="token punctuation">{<!-- --></span>
+						<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"Delete connfd to epollfd list failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+					
+					<span class="token function">close</span><span class="token punctuation">(</span>event_array<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">.</span>data<span class="token punctuation">.</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">continue</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>rev <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"Client[%d] disconnect!\n"</span><span class="token punctuation">,</span> connfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">continue</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+
+				p <span class="token operator">=</span> <span class="token function">strtok</span><span class="token punctuation">(</span>buf<span class="token punctuation">,</span> <span class="token string">"/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">while</span><span class="token punctuation">(</span>p<span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					buftok<span class="token punctuation">[</span>j<span class="token punctuation">]</span> <span class="token operator">=</span> p<span class="token punctuation">;</span>
+					<span class="token operator">++</span>j<span class="token punctuation">;</span>
+					p <span class="token operator">=</span> <span class="token function">strtok</span><span class="token punctuation">(</span><span class="token constant">NULL</span><span class="token punctuation">,</span> <span class="token string">"/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+
+				<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">sqlite_table_exist</span><span class="token punctuation">(</span>buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">sqlite_inset</span><span class="token punctuation">(</span>buftok<span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">else</span>
+				<span class="token punctuation">{<!-- --></span>
+					<span class="token function">sqlite_create_table</span><span class="token punctuation">(</span>buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token function">sqlite_inset</span><span class="token punctuation">(</span>buftok<span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> 
+
+<span class="token keyword">void</span> <span class="token function">sqlite_inset</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>buftok<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> sql_buffer<span class="token punctuation">[</span><span class="token number">512</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> <span class="token operator">*</span>SN1 <span class="token operator">=</span> buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> <span class="token operator">*</span>DATIME1 <span class="token operator">=</span> buftok<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">char</span> <span class="token operator">*</span>TEMPERATURE1 <span class="token operator">=</span> buftok<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Accept client[%d] data successfully!\n"</span><span class="token punctuation">,</span> connfd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"SN1:%s\n"</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"DATIME1:%s\n"</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"TEMPERATURE1:%s\n"</span><span class="token punctuation">,</span> buftok<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>sql_buffer<span class="token punctuation">,</span> <span class="token string">"INSERT INTO %s VALUES ('%s', '%s', '%s');"</span> <span class="token punctuation">,</span>table_name<span class="token punctuation">,</span> SN1<span class="token punctuation">,</span> DATIME1<span class="token punctuation">,</span> TEMPERATURE1<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> sql_buffer<span class="token punctuation">,</span> callback<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token keyword">if</span><span class="token punctuation">(</span> rc <span class="token operator">!=</span> SQLITE_OK <span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+      	<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"sqlite_inset: %s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      	<span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+      	<span class="token function">fprintf</span><span class="token punctuation">(</span><span class="token constant">stdout</span><span class="token punctuation">,</span> <span class="token string">"Records created successfully\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">int</span> <span class="token function">sqlite_table_exist</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> table_exist<span class="token punctuation">[</span><span class="token number">512</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>table_exist<span class="token punctuation">,</span> <span class="token string">"SELECT COUNT(*) FROM sqlite_master where type ='table' and name ='%s';"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> table_exist<span class="token punctuation">,</span> table_exist_callback<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>rc <span class="token operator">!=</span> SQLITE_OK<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"sqlite_table_exist:%s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+	<span class="token keyword">if</span><span class="token punctuation">(</span>iTableExist<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"%s is exist!\n"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> iTableExist<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> iTableExist<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">table_exist_callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>data<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span> <span class="token number">1</span> <span class="token operator">==</span> argc<span class="token punctuation">)</span>
+  	<span class="token punctuation">{<!-- --></span>
+		iTableExist <span class="token operator">=</span> <span class="token function">atoi</span><span class="token punctuation">(</span><span class="token operator">*</span><span class="token punctuation">(</span>argv<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  	<span class="token punctuation">}</span>
+  	<span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span> 
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">sqlite_create_table</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>table_name<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">char</span> create_table<span class="token punctuation">[</span><span class="token number">100</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+	<span class="token function">sprintf</span><span class="token punctuation">(</span>create_table<span class="token punctuation">,</span> <span class="token string">"CREATE TABLE %s(SN CHAR(10),DATIME CHAR(50),TEMPERATURE CHAR(10));"</span><span class="token punctuation">,</span> table_name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_exec</span><span class="token punctuation">(</span>db<span class="token punctuation">,</span> create_table<span class="token punctuation">,</span> callback<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>rc <span class="token operator">!=</span> SQLITE_OK<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_WARNING<span class="token punctuation">,</span> <span class="token string">"sqlite_create_table:%s\n"</span><span class="token punctuation">,</span> zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">sqlite3_free</span><span class="token punctuation">(</span>zErrMsg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Table created successfully!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">callback</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>NotUsed<span class="token punctuation">,</span> <span class="token keyword">int</span> argc<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>argv<span class="token punctuation">,</span> <span class="token keyword">char</span> <span class="token operator">*</span><span class="token operator">*</span>azColName<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+   <span class="token keyword">int</span> i<span class="token punctuation">;</span>
+   <span class="token keyword">for</span><span class="token punctuation">(</span>i<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span> i<span class="token operator">&lt;</span>argc<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span>
+   <span class="token punctuation">{<!-- --></span>
+      <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"%s = %s\n"</span><span class="token punctuation">,</span> azColName<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span> argv<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">?</span> argv<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">:</span> <span class="token string">"NULL"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token punctuation">}</span>
+   <span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span>  <span class="token function">sqlite_init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	rc <span class="token operator">=</span> <span class="token function">sqlite3_open</span><span class="token punctuation">(</span><span class="token string">"temperature.db"</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span>db<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>rc<span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_NOTICE<span class="token punctuation">,</span> <span class="token string">"Can't open database:%s\n"</span><span class="token punctuation">,</span> <span class="token function">sqlite3_errmsg</span><span class="token punctuation">(</span>db<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">fprintf</span><span class="token punctuation">(</span><span class="token constant">stderr</span><span class="token punctuation">,</span> <span class="token string">"Opened database successfully\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">static</span> <span class="token keyword">inline</span>  <span class="token keyword">void</span> <span class="token function">print_usage</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>programe<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Usage:%s[OPTION]....\n"</span><span class="token punctuation">,</span> programe<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"-p[port]:Socket sever port address\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"-b[daemon]:Runing programe in background!\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"-h[help]:Display this help information\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"\nExample:%s -b -p 6667\n"</span><span class="token punctuation">,</span> programe<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">int</span> <span class="token function">socket_server_init</span><span class="token punctuation">(</span><span class="token keyword">char</span> <span class="token operator">*</span>listen_ip<span class="token punctuation">,</span> <span class="token keyword">int</span> port<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">struct</span> <span class="token class-name">sockaddr_in</span> 	servaddr<span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					rv <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					on <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+	<span class="token keyword">int</span>					listenfd <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+
+	listenfd <span class="token operator">=</span> <span class="token function">socket</span><span class="token punctuation">(</span>AF_INET<span class="token punctuation">,</span> SOCK_STREAM<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>listenfd <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_EMERG<span class="token punctuation">,</span> <span class="token string">"Create socket failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		rv <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+		<span class="token keyword">goto</span> CleanUp<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token function">setsockopt</span><span class="token punctuation">(</span>listenfd<span class="token punctuation">,</span> SOL_SOCKET<span class="token punctuation">,</span> SO_REUSEADDR<span class="token punctuation">,</span> <span class="token operator">&amp;</span>on <span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>on<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">memset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>servaddr<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>servaddr<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	servaddr<span class="token punctuation">.</span>sin_family <span class="token operator">=</span> AF_INET<span class="token punctuation">;</span>
+	servaddr<span class="token punctuation">.</span>sin_port <span class="token operator">=</span> <span class="token function">htons</span><span class="token punctuation">(</span>port<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span>listen_ip <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		servaddr<span class="token punctuation">.</span>sin_addr<span class="token punctuation">.</span>s_addr <span class="token operator">=</span> <span class="token function">htonl</span><span class="token punctuation">(</span>INADDR_ANY<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token function">inet_pton</span><span class="token punctuation">(</span>AF_INET<span class="token punctuation">,</span> listen_ip<span class="token punctuation">,</span> <span class="token operator">&amp;</span>servaddr<span class="token punctuation">.</span>sin_addr<span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token punctuation">{<!-- --></span>
+			<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_EMERG<span class="token punctuation">,</span> <span class="token string">"Execute inet_pton failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			rv <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">2</span><span class="token punctuation">;</span>
+			<span class="token keyword">goto</span> CleanUp<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token function">bind</span><span class="token punctuation">(</span>listenfd<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">sockaddr</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>servaddr<span class="token punctuation">,</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>servaddr<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+	<span class="token punctuation">{<!-- --></span>
+		<span class="token function">syslog</span><span class="token punctuation">(</span>LOG_EMERG<span class="token punctuation">,</span> <span class="token string">"Bind the IP and port failure:%s\n"</span><span class="token punctuation">,</span> <span class="token function">strerror</span><span class="token punctuation">(</span>errno<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		rv <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">3</span><span class="token punctuation">;</span>
+		<span class="token keyword">goto</span> CleanUp<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token function">listen</span><span class="token punctuation">(</span>listenfd<span class="token punctuation">,</span> <span class="token number">50</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	rv <span class="token operator">=</span> listenfd<span class="token punctuation">;</span>
+	<span class="token keyword">goto</span> CleanUp<span class="token punctuation">;</span>
+
+CleanUp<span class="token operator">:</span>
+	<span class="token keyword">if</span><span class="token punctuation">(</span>rv <span class="token operator">&gt;</span> <span class="token number">0</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span> listenfd<span class="token punctuation">;</span>
+	<span class="token keyword">else</span>
+		<span class="token keyword">return</span> rv<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">set_socket_rimit</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">struct</span> <span class="token class-name">rlimit</span> 	limit<span class="token punctuation">;</span>
+	
+	<span class="token function">getrlimit</span><span class="token punctuation">(</span>RLIMIT_NOFILE<span class="token punctuation">,</span> <span class="token operator">&amp;</span>limit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	limit<span class="token punctuation">.</span>rlim_cur <span class="token operator">=</span> limit<span class="token punctuation">.</span>rlim_max<span class="token punctuation">;</span>
+	<span class="token function">setrlimit</span><span class="token punctuation">(</span>RLIMIT_NOFILE<span class="token punctuation">,</span> <span class="token operator">&amp;</span>limit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token keyword">return</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h2><a id="_1093"></a>四、安装说明</h2> 
+<p>1.客户端和服务器端安装数据库<br> sqlite3下载网址：http://www.sqlite.org/download.html</p> 
+<p>$ tar xvzf sqlite-autoconf-3071502.tar.gz</p> 
+<p>$ cd sqlite-autoconf-3071502</p> 
+<p>$ ./configure --prefix=/usr/local</p> 
+<p>$ make</p> 
+<p>$ make install</p> 
+<p>2.在树莓派上安装客户端<br> $ wget https://gitee.com/moqain/socket_ds18b20/tree/master/socket_client</p> 
+<p>3.在服务器上安装服务器端<br> $ wget https://gitee.com/moqain/socket_ds18b20/tree/master/socket_server</p> 
+<h2><a id="_1112"></a>五、使用说明</h2> 
+<p>1.编译运行服务器端<br> $ gcc server.c -o server -lsqlite3</p> 
+<p>$ ./server -p 端口号</p> 
+<p>2.编译运行客户端<br> $ gcc client.c -o client -lsqlite3</p> 
+<p>$ ./client -p 端口号 -i IP地址</p> 
+<h2><a id="gitee_1123"></a>六、本项目gitee仓库</h2> 
+<p>https://gitee.com/moqain/socket_ds18b20/tree/master</p> 
+<p>整个项目需要用到的知识点比较，包括：Linux环境编程（socket通信、文件IO操作、多路复用、信号安装、系统日志等）、数据库操作，关于树莓派和传感器的硬件知识等。<br> 其中需要注意的地方也比较多：<br> 1.服务器端异常断开后，客户端的数据怎么办？<br> 2.如何实时监测服务器是否断开？<br> 3.在延时间隔时间，是否可以进行其他操作？<br> 4.数据库或者表是否已经存在？<br> 5.有多个客户端连接怎么办？<br> 6.如何判断本次发送的数据是新采集的数据，还是存在数据库里面的数据？<br> 7.服务器端是否需要为每个客户端创建一个表？</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d01b975b3fbab396deca67cbb223d6bf/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">C语言：输入一串字符串，统计字符串中有多少个数字</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/0852c8880252078f5582653214aef1a6/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">设计模式，看这一篇就够了</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

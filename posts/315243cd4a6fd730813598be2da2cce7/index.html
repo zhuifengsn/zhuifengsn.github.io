@@ -1,0 +1,1946 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【汇编语言】状态标志符(CF/OF/SF/ZF)在运算(ADD/SUB/ADC/SBB)过程中的响应变化 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【汇编语言】状态标志符(CF/OF/SF/ZF)在运算(ADD/SUB/ADC/SBB)过程中的响应变化" />
+<meta property="og:description" content="目录 各类运算时状态标志的响应变化标志符在各种`ADD`运算下的响应情况标志符在各种`SUB`运算下的响应情况 借助标志符实现多位数之间运算`ADC`(add with carry)带进位加法指令`SBB`(subtract with borrow)带借位减法指令 各类运算时状态标志的响应变化 标志符具体含义CF（Carry Flag）进位标志CF主要用来反映运算是否产生进位或借位。如果运算结果的最高位产生了一个进位或借位，那么，其值为1，否则其值为0。OF（Overflow Flag）溢出标志OF用于反映有符号数加减运算所得结果是否溢出。如果运算结果超过当前运算位数所能表示的范围，则称为溢出，OF的值为1，否则，OF的值为0SF（Sign Flag）符号标志SF用来反映运算结果的符号位，它与运算结果的最高位相同。在微机系统中，有符号数采用补码表示法，所以，SF也就反映运算结果的正负号。运算结果为正数时，SF的值为0，否则其值为1ZF（Zero Flag）零标志ZF用来反映运算结果是否为0。如果运算结果为0，则其值为1，否则其值为0。在判断运算结果是否为0时，可使用此标志位 在做操作数的运算时，计算机并不知道操作数是无符号数还是有符号数。因此计算机将两种情况都考虑到了，其中CF标志符用于反映无符号数的进位与借位情况，而OF则反映有符号数的溢出情况
+无符号数：其值总是非负的，二进制中没有符号位，全用于表示值的大小。例如，8位的无符号数可表示的范围为 0(0000 0000) ~ 255(1111 1111)
+有符号数：其值有正负之分，二进制中的最高位为符号位（0表示正，1表示负），其余位则用于表示值的大小。计算机阅读某个数将其视为有符号数时，总是将其看作是补码（非负数补码为其本身，负数补码为其源码取反再加1）的形式，例如，0000 0011 &#43; 1111 1111 加法运算看作有符号数时，即为 (&#43;3)&#43;(-1)=(&#43;2)，8位的有符号数表示的范围为 -128(1000 0000(补码)) ~ &#43;127(0111 1111)
+标志符在各种ADD运算下的响应情况 无符号数和有符号数都正常
+0000 0011 &#43; 0000 0100 0000 0111 \begin{array}{r} 0000\ 0011 \\ &#43;0000\ 0100 \\ \hline 0000\ 0111 \end{array} 0000 0011&#43;0000 01000000 0111​​
+无符号数： 3 &#43; 4 = 7 3&#43;4=7 3&#43;4=7，这里显然未产生进位，因此CF = 0
+有符号数： ( &#43; 3 ) &#43; ( &#43; 4 ) = ( &#43; 7 ) (&#43;3)&#43;(&#43;4)=(&#43;7) (&#43;3)&#43;(&#43;4)=(&#43;7)，这里两个正数相加，结果也为正数，未产生溢出OF = 0" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/315243cd4a6fd730813598be2da2cce7/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-11-03T23:01:48+08:00" />
+<meta property="article:modified_time" content="2021-11-03T23:01:48+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【汇编语言】状态标志符(CF/OF/SF/ZF)在运算(ADD/SUB/ADC/SBB)过程中的响应变化</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>目录</h4> 
+ <ul><li><ul><li><ul><li><a href="#_1" rel="nofollow">各类运算时状态标志的响应变化</a></li><li><ul><li><a href="#ADD_17" rel="nofollow">标志符在各种`ADD`运算下的响应情况</a></li><li><a href="#SUB_60" rel="nofollow">标志符在各种`SUB`运算下的响应情况</a></li></ul> 
+    </li><li><a href="#_100" rel="nofollow">借助标志符实现多位数之间运算</a></li><li><ul><li><a href="#ADCadd_with_carry_102" rel="nofollow">`ADC`(add with carry)带进位加法指令</a></li><li><a href="#SBBsubtract_with_borrow_138" rel="nofollow">`SBB`(subtract with borrow)带借位减法指令</a></li></ul> 
+   </li></ul> 
+  </li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h4><a id="_1"></a>各类运算时状态标志的响应变化</h4> 
+<table><thead><tr><th>标志符</th><th>具体含义</th></tr></thead><tbody><tr><td><strong>CF</strong>（Carry Flag）</td><td>进位标志CF主要用来反映运算是否产生进位或借位。如果运算结果的最高位产生了一个进位或借位，那么，其值为1，否则其值为0。</td></tr><tr><td><strong>OF</strong>（Overflow Flag）</td><td>溢出标志OF用于反映有符号数加减运算所得结果是否溢出。如果运算结果超过当前运算位数所能表示的范围，则称为溢出，OF的值为1，否则，OF的值为0</td></tr><tr><td><strong>SF</strong>（Sign Flag）</td><td>符号标志SF用来反映运算结果的符号位，它与运算结果的最高位相同。在微机系统中，有符号数采用补码表示法，所以，SF也就反映运算结果的正负号。运算结果为正数时，SF的值为0，否则其值为1</td></tr><tr><td><strong>ZF</strong>（Zero Flag）</td><td>零标志ZF用来反映运算结果是否为0。如果运算结果为0，则其值为1，否则其值为0。在判断运算结果是否为0时，可使用此标志位</td></tr><tr><td></td><td></td></tr></tbody></table> 
+<blockquote> 
+ <p>在做操作数的运算时，<strong>计算机并不知道操作数是无符号数还是有符号数</strong>。因此计算机将两种情况都考虑到了，其中CF标志符用于反映无符号数的进位与借位情况，而OF则反映有符号数的溢出情况</p> 
+</blockquote> 
+<p><strong>无符号数</strong>：其值总是非负的，二进制中没有符号位，全用于表示值的大小。例如，8位的无符号数可表示的范围为 0(0000 0000) ~ 255(1111 1111)</p> 
+<p><strong>有符号数</strong>：其值有正负之分，二进制中的最高位为符号位（0表示正，1表示负），其余位则用于表示值的大小。计算机阅读某个数将其视为有符号数时，总是将其看作是<strong>补码</strong>（非负数补码为其本身，负数补码为其源码取反再加1）的形式，例如，0000 0011 + 1111 1111 加法运算看作有符号数时，即为 (+3)+(-1)=(+2)，8位的有符号数表示的范围为 -128(1000 0000(补码)) ~ +127(0111 1111)</p> 
+<h5><a id="ADD_17"></a>标志符在各种<code>ADD</code>运算下的响应情况</h5> 
+<ul><li> <p>无符号数和有符号数都正常<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               0000 
+              
+             
+                 
+              
+             
+               0011 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               + 
+              
+             
+               0000 
+              
+             
+                 
+              
+             
+               0100 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               0000 
+              
+             
+                 
+              
+             
+               0111 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} 0000\ 0011 \\ +0000\ 0100 \\ \hline 0000\ 0111 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">+</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           3 
+          
+         
+           + 
+          
+         
+           4 
+          
+         
+           = 
+          
+         
+           7 
+          
+         
+        
+          3+4=7 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">3</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">4</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">7</span></span></span></span></span>，这里显然未产生进位，因此<strong>CF = 0</strong><br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           + 
+          
+         
+           3 
+          
+         
+           ) 
+          
+         
+           + 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           4 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           7 
+          
+         
+           ) 
+          
+         
+        
+          (+3)+(+4)=(+7) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">3</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">7</span><span class="mclose">)</span></span></span></span></span>，这里两个正数相加，结果也为正数，未产生溢出<strong>OF = 0</strong></p> </li><li> <p>无符号数有溢出<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               0000 
+              
+             
+                 
+              
+             
+               0011 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               + 
+              
+             
+               1111 
+              
+             
+                 
+              
+             
+               1111 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+              
+              
+                1 
+               
+              
+             
+                 
+              
+             
+               0000 
+              
+             
+                 
+              
+             
+               0010 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} 0000\ 0011 \\ +1111\ 1111 \\ \hline {\color{Red} 1} \ 0000\ 0010 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">+</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           3 
+          
+         
+           + 
+          
+         
+           255 
+          
+         
+           = 
+          
+         
+           2 
+          
+         
+           ( 
+          
+         
+           258 
+          
+         
+           ) 
+          
+         
+        
+          3+255=2(258) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">3</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">2</span><span class="mord">5</span><span class="mord">5</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord">2</span><span class="mopen">(</span><span class="mord">2</span><span class="mord">5</span><span class="mord">8</span><span class="mclose">)</span></span></span></span></span>，这里结果为2是因为8位数的运算结果也只保留8位，显然产生了进位即为结果最高位红色的1，因此<strong>CF = 1</strong><br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           + 
+          
+         
+           3 
+          
+         
+           ) 
+          
+         
+           + 
+          
+         
+           ( 
+          
+         
+           − 
+          
+         
+           1 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           2 
+          
+         
+           ) 
+          
+         
+        
+          (+3)+(-1)=(+2) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">3</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">2</span><span class="mclose">)</span></span></span></span></span>，这里第二个数表示为<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           − 
+          
+         
+           1 
+          
+         
+           ) 
+          
+         
+        
+          (-1) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span>是因为上面提到的“计算机总是将有符号数看作补码”，而<strong>两个异号（符号位相异）的有符号数相加的结果总是在可表示范围内</strong>（同样只看8位结果，不将进位作为结果的一部分，而一个正数加一个负数，其结果若为正，必然不会大于该正数；结果为负，必然不会小于该负数），因此<strong>OF = 0</strong></p> 
+  <blockquote> 
+   <p>异号两数相加，OF总为0</p> 
+  </blockquote> </li><li> <p>有符号数有溢出<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               0000 
+              
+             
+                 
+              
+             
+               0011 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               + 
+              
+             
+               0111 
+              
+             
+                 
+              
+             
+               1110 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               1000 
+              
+             
+                 
+              
+             
+               0001 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} 0000\ 0011 \\ +0111\ 1110 \\ \hline 1000\ 0001 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">+</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           3 
+          
+         
+           + 
+          
+         
+           126 
+          
+         
+           = 
+          
+         
+           129 
+          
+         
+        
+          3+126=129 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">3</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord">6</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord">9</span></span></span></span></span>，未产生进位，<strong>CF = 0</strong><br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           + 
+          
+         
+           3 
+          
+         
+           ) 
+          
+         
+           + 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           126 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           − 
+          
+         
+           127 
+          
+         
+           ) 
+          
+         
+        
+          (+3)+(+126)=(-127) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">3</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1</span><span class="mord">2</span><span class="mord">6</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mord">2</span><span class="mord">7</span><span class="mclose">)</span></span></span></span></span>，两个正数相加后结果却为负数（<strong>加数的符号位与结果的符号位相异</strong>），显然出现了溢出，溢出<strong>OF = 1</strong></p> </li><li> <p>无符号数和有符号数都溢出<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               1000 
+              
+             
+                 
+              
+             
+               0001 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               + 
+              
+             
+               1000 
+              
+             
+                 
+              
+             
+               0010 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+              
+              
+                1 
+               
+              
+             
+                 
+              
+             
+               0000 
+              
+             
+                 
+              
+             
+               0011 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} 1000\ 0001 \\ +1000\ 0010 \\ \hline {\color{Red} 1} \ 0000\ 0011 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">+</span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           129 
+          
+         
+           + 
+          
+         
+           130 
+          
+         
+           = 
+          
+         
+           3 
+          
+         
+           ( 
+          
+         
+           259 
+          
+         
+           ) 
+          
+         
+        
+          129+130=3(259) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord">9</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">3</span><span class="mord">0</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mord">3</span><span class="mopen">(</span><span class="mord">2</span><span class="mord">5</span><span class="mord">9</span><span class="mclose">)</span></span></span></span></span>，同第二个情况产生了进位，<strong>CF = 1</strong><br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           − 
+          
+         
+           127 
+          
+         
+           ) 
+          
+         
+           + 
+          
+         
+           ( 
+          
+         
+           − 
+          
+         
+           126 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           3 
+          
+         
+           ) 
+          
+         
+        
+          (-127)+(-126)=(+3) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mord">2</span><span class="mord">7</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mord">2</span><span class="mord">6</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">3</span><span class="mclose">)</span></span></span></span></span>，同第三个情况结果与加数的符号相异，故发生溢出，<strong>OF = 1</strong></p> </li></ul> 
+<blockquote> 
+ <p><strong>SF</strong>标志位即为结果最高位的值，用来反映有符号数运算结果的正负性，四个情况依次为：0 0 1 0<br> <strong>ZF</strong>标志反映结果是否为0，四个情况结果均不为0， 故ZF均为0</p> 
+</blockquote> 
+<h5><a id="SUB_60"></a>标志符在各种<code>SUB</code>运算下的响应情况</h5> 
+<ul><li> <p>无符号数和有符号数都溢出<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+              
+              
+                1 
+               
+              
+             
+                 
+              
+             
+               0111 
+              
+             
+                 
+              
+             
+               0010 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               − 
+              
+             
+               1001 
+              
+             
+                 
+              
+             
+               0011 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               1101 
+              
+             
+                 
+              
+             
+               1111 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} {\color{Red} 1} \ 0111\ 0010\\ -1001\ 0011\\ \hline 1101\ 1111 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">−</span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           114 
+          
+         
+           − 
+          
+         
+           147 
+          
+         
+           = 
+          
+         
+           223 
+          
+         
+        
+          114-147=223 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">1</span><span class="mord">1</span><span class="mord">4</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">4</span><span class="mord">7</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">2</span><span class="mord">2</span><span class="mord">3</span></span></span></span></span>，由于被减数小于减数，不够减，这时计算机允许被减数向高位借位，因为不存在实际的高位，就体现在<strong>CF标志位</strong>，当减法运算中需要解位时，将CF标志位置1，故<strong>CF = 1</strong>，此时说明无符号数运算的溢出<br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           + 
+          
+         
+           114 
+          
+         
+           ) 
+          
+         
+           − 
+          
+         
+           ( 
+          
+         
+           − 
+          
+         
+           109 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           − 
+          
+         
+           33 
+          
+         
+           ) 
+          
+         
+        
+          (+114)-(-109)=(-33) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1</span><span class="mord">1</span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mord">0</span><span class="mord">9</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">3</span><span class="mord">3</span><span class="mclose">)</span></span></span></span></span>，被减数是正数，减数是负数，正数减负数结果应该为正数，而运算结果却为负数，说明发生了溢出，<strong>OF = 1</strong></p> </li><li> <p>无符号数有溢出<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+              
+              
+                1 
+               
+              
+             
+                 
+              
+             
+               0110 
+              
+             
+                 
+              
+             
+               0011 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               − 
+              
+             
+               0111 
+              
+             
+                 
+              
+             
+               1101 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               1110 
+              
+             
+                 
+              
+             
+               0110 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} {\color{Red} 1} \ 0110\ 0011\\ -0111\ 1101\\ \hline 1110\ 0110 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">−</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span><span class="mord">1</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           99 
+          
+         
+           − 
+          
+         
+           125 
+          
+         
+           = 
+          
+         
+           230 
+          
+         
+        
+          99-125=230 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">9</span><span class="mord">9</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord">5</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">2</span><span class="mord">3</span><span class="mord">0</span></span></span></span></span>，同第一个情况，需要借位，故<strong>CF = 1</strong><br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           + 
+          
+         
+           99 
+          
+         
+           ) 
+          
+         
+           − 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           125 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           − 
+          
+         
+           26 
+          
+         
+           ) 
+          
+         
+        
+          (+99)-(+125)=(-26) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">9</span><span class="mord">9</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1</span><span class="mord">2</span><span class="mord">5</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">2</span><span class="mord">6</span><span class="mclose">)</span></span></span></span></span>，<strong>两个同号数相减，无论结果是正数或负数，都不会发生溢出</strong>（与加法相反，因为两同号数相减可看作为两异号数相加），故<strong>OF = 0</strong></p> 
+  <blockquote> 
+   <p>同号两数相减，OF总为0</p> 
+  </blockquote> </li><li> <p>有符号数有溢出<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               1010 
+              
+             
+                 
+              
+             
+               0110 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               − 
+              
+             
+               0011 
+              
+             
+                 
+              
+             
+               0110 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               0111 
+              
+             
+                 
+              
+             
+               0000 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} 1010\ 0110\\ -0011\ 0110\\ \hline 0111\ 0000 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">−</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           166 
+          
+         
+           − 
+          
+         
+           54 
+          
+         
+           = 
+          
+         
+           112 
+          
+         
+        
+          166-54=112 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">1</span><span class="mord">6</span><span class="mord">6</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">5</span><span class="mord">4</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">1</span><span class="mord">2</span></span></span></span></span>，被减数大于减数，无需借位，故<strong>CF = 0</strong><br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           − 
+          
+         
+           90 
+          
+         
+           ) 
+          
+         
+           − 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           54 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           112 
+          
+         
+           ) 
+          
+         
+        
+          (-90)-(+54)=(+112) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">9</span><span class="mord">0</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">5</span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1</span><span class="mord">1</span><span class="mord">2</span><span class="mclose">)</span></span></span></span></span>，负数减正数结果应该为负数，而结果却为正数，发生了溢出，<strong>OF = 1</strong></p> </li><li> <p>无符号数和有符号数都正常<br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               0010 
+              
+             
+                 
+              
+             
+               0110 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               − 
+              
+             
+               0001 
+              
+             
+                 
+              
+             
+               0010 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               0001 
+              
+             
+                 
+              
+             
+               0100 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} 0010\ 0110\\ -0001\ 0010\\ \hline 0001\ 0100 \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">1</span><span class="mord">0</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">−</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">0</span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 无符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           38 
+          
+         
+           − 
+          
+         
+           18 
+          
+         
+           = 
+          
+         
+           20 
+          
+         
+        
+          38-18=20 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.72777em; vertical-align: -0.08333em;"></span><span class="mord">3</span><span class="mord">8</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">8</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.64444em; vertical-align: 0em;"></span><span class="mord">2</span><span class="mord">0</span></span></span></span></span>，被减数大于减数，无需借位，故<strong>CF = 0</strong><br> 有符号数：<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           ( 
+          
+         
+           + 
+          
+         
+           38 
+          
+         
+           ) 
+          
+         
+           − 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           18 
+          
+         
+           ) 
+          
+         
+           = 
+          
+         
+           ( 
+          
+         
+           + 
+          
+         
+           20 
+          
+         
+           ) 
+          
+         
+        
+          (+38)-(+18)=(+20) 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">3</span><span class="mord">8</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1</span><span class="mord">8</span><span class="mclose">)</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 1em; vertical-align: -0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">2</span><span class="mord">0</span><span class="mclose">)</span></span></span></span></span>，同号数相减，故<strong>OF = 0</strong></p> </li></ul> 
+<h4><a id="_100"></a>借助标志符实现多位数之间运算</h4> 
+<h5><a id="ADCadd_with_carry_102"></a><code>ADC</code>(add with carry)带进位加法指令</h5> 
+<p><s>不是attack damage carry</s></p> 
+<p>格式：ADC DST, SRC<br> 操作：(DST) ← (DST)+(SRC)+(CF)<br> 其中上式中的CF为运算前CF标志位的值</p> 
+<p>用16位指令实现32位的双精度数的加法运算。设数A存放在目的操作数寄存器DX和AX，其中DX存放高位字；数B存放在寄存器BX和CX，其中BX存放高位字</p> 
+<pre><code class="prism language-assembly">;DX=2000H, AX=8000H, A=2000 8000H
+;BX=4000H, CX=9000H, B=4000 9000H
+ADD AX, CX ;低位字加法
+ADC DX, BX ;高位字加法
+</code></pre> 
+<ol><li> <p><code>ADD AX, CX</code></p> <p><span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               A 
+              
+             
+               X 
+              
+             
+               : 
+              
+             
+                 
+              
+             
+               8000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               + 
+              
+             
+                 
+              
+             
+               C 
+              
+             
+               X 
+              
+             
+               : 
+              
+             
+                 
+              
+             
+               9000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               A 
+              
+             
+               X 
+              
+             
+               = 
+              
+              
+              
+                1 
+               
+              
+             
+                 
+              
+             
+               1000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} AX:\ 8000H \\ +\ CX:\ 9000H\\ \hline AX={\color{Red} 1} \ 1000H \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace"> </span><span class="mord">8</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">+</span><span class="mspace"> </span><span class="mord mathdefault" style="margin-right: 0.07153em;">C</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace"> </span><span class="mord">9</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mspace"> </span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> AX寄存器值为<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           1000 
+          
+         
+           H 
+          
+         
+        
+          1000H 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span></span>，产生进位<strong>CF = 1</strong></p> </li><li> <p><code>ADC DX, BX</code><br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               D 
+              
+             
+               X 
+              
+             
+               : 
+              
+             
+                 
+              
+             
+               2000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               + 
+              
+             
+                 
+              
+             
+               B 
+              
+             
+               X 
+              
+             
+               : 
+              
+             
+                 
+              
+             
+               4000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               + 
+              
+             
+                 
+              
+             
+               C 
+              
+             
+               F 
+              
+             
+               : 
+              
+              
+              
+              
+                1 
+               
+              
+             
+               B 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               D 
+              
+             
+               X 
+              
+             
+               = 
+              
+             
+               6001 
+              
+             
+               H 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} DX:\ 2000H\\ +\ BX:\ 4000H\\ +\ CF:\qquad {\color{Red} 1} B\\ \hline DX=6001H \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 4.8em; vertical-align: -2.15em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.65em;"><span class="" style="top: -4.65em;"><span class="pstrut" style="height: 4.65em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.65em;"><span class="" style="top: -4.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02778em;">D</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace"> </span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -3.61em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">+</span><span class="mspace"> </span><span class="mord mathdefault" style="margin-right: 0.05017em;">B</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace"> </span><span class="mord">4</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -2.41em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">+</span><span class="mspace"> </span><span class="mord mathdefault" style="margin-right: 0.07153em;">C</span><span class="mord mathdefault" style="margin-right: 0.13889em;">F</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace" style="margin-right: 2em;"></span><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mord mathdefault" style="margin-right: 0.05017em;">B</span></span></span><span class="" style="top: -1.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02778em;">D</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mord">6</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 2.15em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.65em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 2.15em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 将<strong>CF</strong>值额外加上，即相当于加上了低位产生的进位，保证了结果的正确性，DX寄存器值为<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           6001 
+          
+         
+           H 
+          
+         
+        
+          6001H 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord">6</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span></span><br> 即<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           2000 
+          
+         
+             
+          
+         
+           8000 
+          
+         
+           H 
+          
+         
+           + 
+          
+         
+           4000 
+          
+         
+             
+          
+         
+           9000 
+          
+         
+           H 
+          
+         
+           = 
+          
+         
+           6001 
+          
+         
+             
+          
+         
+           1000 
+          
+         
+           H 
+          
+         
+        
+          2000\ 8000H+4000\ 9000H=6001\ 1000H 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.76666em; vertical-align: -0.08333em;"></span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">8</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord">4</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">9</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord">6</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span></span></p> </li></ol> 
+<h5><a id="SBBsubtract_with_borrow_138"></a><code>SBB</code>(subtract with borrow)带借位减法指令</h5> 
+<p>格式：SBB DST, SRC<br> 操作：(DST) ← (DST)-(SRC)-(CF)<br> 其中上式中的CF为运算前CF标志位的值</p> 
+<p>用16位指令实现32位的双精度数的减法运算。设数A存放在目的操作数寄存器DX和AX，其中DX存放高位字；数B存放在寄存器BX和CX，其中BX存放高位字</p> 
+<pre><code class="prism language-assembly">;DX=2001H, AX=8000H, A=2001 8000H
+;BX=2000H, CX=9000H, B=2000 9000H
+SUB AX, CX ;低位字减法
+SBB DX, BX ;高位字减法
+</code></pre> 
+<ol><li> <p><code>SUB AX, CX</code><br> <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               A 
+              
+             
+               X 
+              
+             
+               : 
+              
+             
+                 
+              
+              
+              
+                1 
+               
+              
+             
+                 
+              
+             
+               8000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               − 
+              
+             
+                 
+              
+             
+               C 
+              
+             
+               X 
+              
+             
+               : 
+              
+              
+             
+               9000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               A 
+              
+             
+               X 
+              
+             
+               = 
+              
+             
+               F 
+              
+             
+               000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} AX:\ {\color{Red} 1} \ 8000H \\ -\ CX:\quad 9000H\\ \hline AX=F000H \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 3.6em; vertical-align: -1.55em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.05em;"><span class="pstrut" style="height: 4.05em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.05em;"><span class="" style="top: -4.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace"> </span><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mspace"> </span><span class="mord">8</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -3.01em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">−</span><span class="mspace"> </span><span class="mord mathdefault" style="margin-right: 0.07153em;">C</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace" style="margin-right: 1em;"></span><span class="mord">9</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -1.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mord mathdefault" style="margin-right: 0.13889em;">F</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.05em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 1.55em;"><span class=""></span></span></span></span></span></span></span></span></span><br> AX寄存器值为<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           F 
+          
+         
+           000 
+          
+         
+           H 
+          
+         
+        
+          F000H 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord mathdefault" style="margin-right: 0.13889em;">F</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span></span>，产生借位<strong>CF = 1</strong></p> </li><li> <p><code>SBB DX, BX</code></p> <p><span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+          
+           
+            
+             
+             
+               D 
+              
+             
+               X 
+              
+             
+               : 
+              
+             
+                 
+              
+             
+               2001 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               − 
+              
+             
+                 
+              
+             
+               B 
+              
+             
+               X 
+              
+             
+               : 
+              
+             
+                 
+              
+             
+               2000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               − 
+              
+             
+                 
+              
+             
+               C 
+              
+             
+               F 
+              
+             
+               : 
+              
+              
+              
+              
+                1 
+               
+              
+             
+               B 
+              
+             
+            
+           
+          
+          
+           
+            
+             
+             
+               D 
+              
+             
+               X 
+              
+             
+               = 
+              
+             
+               0000 
+              
+             
+               H 
+              
+             
+            
+           
+          
+         
+        
+          \begin{array}{r} DX:\ 2001H\\ -\ BX:\ 2000H\\ -\ CF:\qquad {\color{Red} 1} B\\ \hline DX=0000H \end{array} 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 4.8em; vertical-align: -2.15em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.65em;"><span class="" style="top: -4.65em;"><span class="pstrut" style="height: 4.65em;"></span><span class="mtable"><span class="arraycolsep" style="width: 0.5em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height: 2.65em;"><span class="" style="top: -4.81em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02778em;">D</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace"> </span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -3.61em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">−</span><span class="mspace"> </span><span class="mord mathdefault" style="margin-right: 0.05017em;">B</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace"> </span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span><span class="" style="top: -2.41em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord">−</span><span class="mspace"> </span><span class="mord mathdefault" style="margin-right: 0.07153em;">C</span><span class="mord mathdefault" style="margin-right: 0.13889em;">F</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mspace" style="margin-right: 2em;"></span><span class="mord"><span class="mord" style="color: red;">1</span></span><span class="mord mathdefault" style="margin-right: 0.05017em;">B</span></span></span><span class="" style="top: -1.21em;"><span class="pstrut" style="height: 3em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right: 0.02778em;">D</span><span class="mord mathdefault" style="margin-right: 0.07847em;">X</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 2.15em;"><span class=""></span></span></span></span></span><span class="arraycolsep" style="width: 0.5em;"></span></span></span><span class="" style="top: -3.7em;"><span class="pstrut" style="height: 4.65em;"></span><span class="hline" style="border-bottom-width: 0.05em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height: 2.15em;"><span class=""></span></span></span></span></span></span></span></span></span><br> 将<strong>CF</strong>值额外减去，即相当于减去了低位向高位借走的1，保证了结果的正确性，DX寄存器值为<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           0000 
+          
+         
+           H 
+          
+         
+        
+          0000H 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span></span><br> 即<span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+       
+        
+         
+         
+           2001 
+          
+         
+             
+          
+         
+           8000 
+          
+         
+           H 
+          
+         
+           − 
+          
+         
+           2000 
+          
+         
+             
+          
+         
+           9000 
+          
+         
+           H 
+          
+         
+           = 
+          
+         
+           0000 
+          
+         
+             
+          
+         
+           F 
+          
+         
+           000 
+          
+         
+           H 
+          
+         
+        
+          2001\ 8000H-2000\ 9000H=0000\ F000H 
+         
+        
+      </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.76666em; vertical-align: -0.08333em;"></span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mord">1</span><span class="mspace"> </span><span class="mord">8</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span><span class="mspace" style="margin-right: 0.222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right: 0.222222em;"></span></span><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord">9</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span><span class="mspace" style="margin-right: 0.277778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right: 0.277778em;"></span></span><span class="base"><span class="strut" style="height: 0.68333em; vertical-align: 0em;"></span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace"> </span><span class="mord mathdefault" style="margin-right: 0.13889em;">F</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathdefault" style="margin-right: 0.08125em;">H</span></span></span></span></span></p> </li></ol> 
+<blockquote> 
+ <p>才疏学浅，盼君指点</p> 
+</blockquote>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/ce9f27a1180edc138e8d090ff66fad4f/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">HbuliderX 历史版本下载</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f4c4da078576e9ee21700904f33bf969/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">PICT 生成正交测试用例教程</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

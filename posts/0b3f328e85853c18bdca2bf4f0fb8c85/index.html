@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>如何使用FME开发自动化分析报告功能 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="如何使用FME开发自动化分析报告功能" />
+<meta property="og:description" content="目录
+前言
+一、使用的技术栈
+二、技术难点解析
+1.专题图
+2.WORD文档实现
+2.1 动态标题
+2.3动态表格和文本
+2.3专题图插入
+三、完成NewGIS部署
+四、模板总览图
+总结
+前言 一个标准项目分析报告需要需要包括3个方面：
+文本叙述，主要体现在对某项专项数据的分布情况，总体情况，分类情况进行描述，需要使用真实数据，能够直观的反馈数据的存在情况。表格展示，使用表格数据展示，能够更加直观的反馈数据的数量，分布，分类情况。专题图展示，一个标准的专题图，需要包括图例、图样、行政区界限等要素，让数据的分布情况一目了然。 按照常规的生产模式，一个分析报告往往涉及多个图层、多种数据、多种维度的数据分析。以城镇国土空间监测项目为例，完成一个分析报告往往需要好几天时间。通过城镇国土空间监测分析报告自动处理方案，能够实现在3分钟以内，完成分析报告的自动化编制，并且能实现无任何逻辑错误，文档和数据库的一致性。
+一、使用的技术栈 整套方案整体流程通过FME开发，数据分析通过FME和pandas分析库辅助实现，专题图通过FME和python的opencv库实现，word文档和表格部分通过python-docx库实现。
+二、技术难点解析 1.专题图 众所周知，大部分的专题图都是由专业软件Arcgis或者Qgis等制作，需要手动配置图例，样式，文本，颜色，指北针等信息。优点是自定义化程度高，能实现各式各样的专题图制作，缺点也很明显，很难实现自动化图，样式，图例随动的出图，同时也不能和WORD联动，实现自动插图。
+FME虽然在出图方面没有arcgis优秀，但其优秀的数据处理和整合能力是无可比拟的。它能让你的逻辑图形化，让你的思维能更加清晰。
+以城镇国土空间监测项目为例，我们先做一个config配置表格，通过该文件实现对图层名称，颜色的配置。
+行政区裁剪和环绕文本制作，先上成果图
+首先我们先说一下如何实现文字环绕的逻辑，其实非常简单，就是将行政区buff后，裁剪当前区域，获得环绕行政区
+再通过一系列的数学算法，让文本均匀分布在图形内部，同时保证字的顺序的方向性一致。
+然后是就是需要注意字体大小和图形面积是有比例关系的，因为很多样本的图形大小差距很大，将字体大小固定下来的话就很难有适配性，那么就应该通过总面积大小求得一个比例参数，并将该参数发布为全局变量。
+文本的固定使用TextStroker转换器实现，该转换器可以将label的点文字注记转换为文本的几何。
+考虑到部分要素面积小，要素个数较少，很难在图形上看到分布，则设置一个阈值将文字标记展示出来。
+但是这样也会存在一个问题，就是文字注记的压盖，这里我们使用了一个算法，来调整几个文本box的空间位置，让其能较好的分布。整体的逻辑就是使用递归，不断的调整相互重叠字体的位置，来达到比较正常分布。
+import fme import fmeobjects import copy def adjust_boxes(boxes): moved_boxes = copy.deepcopy(boxes) # 创建一个副本用于移动 overlap = True # 初始化重叠标志为True while overlap: overlap = False for i in range(len(boxes)): for j in range(i&#43;1, len(boxes)): if check_overlap(moved_boxes[i], moved_boxes[j]): overlap = True move_box(moved_boxes, i, j) return moved_boxes def check_overlap(box1, box2): # 检查两个box是否重叠 return not (box1[1] &lt; box2[0] or box1[0] &gt; box2[1] or box1[3] &lt; box2[2] or box1[2] &gt; box2[3]) def move_box(boxes, index1, index2): # 移动box2以保证与box1不重叠 box1 = boxes[index1] box2 = boxes[index2] x_overlap = min(box1[1], box2[1]) - max(box1[0], box2[0]) y_overlap = min(box1[3], box2[3]) - max(box1[2], box2[2]) x_offset = max(box1[1], box2[1]) - min(box1[0], box2[0]) &#43; 1 - x_overlap y_offset = max(box1[3], box2[3]) - min(box1[2], box2[2]) &#43; 1 - y_overlap if x_offset &lt; y_offset: # 选择较小的偏移方向 if box1[1] &lt; box2[0]: # box2在box1的右侧 offset = x_offset else: # box2在box1的左侧 offset = -x_offset boxes[index2][0] &#43;= offset boxes[index2][1] &#43;= offset else: if box1[3] &lt; box2[2]: # box2在box1的上方 offset = y_offset else: # box2在box1的下方 offset = -y_offset boxes[index2][2] &#43;= offset boxes[index2][3] &#43;= offset class FeatureProcessor(object): &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/0b3f328e85853c18bdca2bf4f0fb8c85/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-10-13T14:56:05+08:00" />
+<meta property="article:modified_time" content="2023-10-13T14:56:05+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">如何使用FME开发自动化分析报告功能</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <blockquote> 
+ <p id="main-toc"><strong>目录</strong></p> 
+ <p id="%E5%89%8D%E8%A8%80-toc" style="margin-left:0px;"><a href="#%E5%89%8D%E8%A8%80" rel="nofollow">前言</a></p> 
+ <p id="%E4%B8%80%E3%80%81%E4%BD%BF%E7%94%A8%E7%9A%84%E6%8A%80%E6%9C%AF%E6%A0%88-toc" style="margin-left:0px;"><a href="#%E4%B8%80%E3%80%81%E4%BD%BF%E7%94%A8%E7%9A%84%E6%8A%80%E6%9C%AF%E6%A0%88" rel="nofollow">一、使用的技术栈</a></p> 
+ <p id="%E4%BA%8C%E3%80%81%E6%8A%80%E6%9C%AF%E9%9A%BE%E7%82%B9%E8%A7%A3%E6%9E%90-toc" style="margin-left:0px;"><a href="#%E4%BA%8C%E3%80%81%E6%8A%80%E6%9C%AF%E9%9A%BE%E7%82%B9%E8%A7%A3%E6%9E%90" rel="nofollow">二、技术难点解析</a></p> 
+ <p id="1.%E4%B8%93%E9%A2%98%E5%9B%BE-toc" style="margin-left:40px;"><a href="#1.%E4%B8%93%E9%A2%98%E5%9B%BE" rel="nofollow">1.专题图</a></p> 
+ <p id="2.WORD%E6%96%87%E6%A1%A3%E5%AE%9E%E7%8E%B0-toc" style="margin-left:40px;"><a href="#2.WORD%E6%96%87%E6%A1%A3%E5%AE%9E%E7%8E%B0" rel="nofollow">2.WORD文档实现</a></p> 
+ <p id="%C2%A02.1%20%E5%8A%A8%E6%80%81%E6%A0%87%E9%A2%98-toc" style="margin-left:80px;"><a href="#%C2%A02.1%20%E5%8A%A8%E6%80%81%E6%A0%87%E9%A2%98" rel="nofollow"> 2.1 动态标题</a></p> 
+ <p id="2.3%E5%8A%A8%E6%80%81%E8%A1%A8%E6%A0%BC%E5%92%8C%E6%96%87%E6%9C%AC-toc" style="margin-left:80px;"><a href="#2.3%E5%8A%A8%E6%80%81%E8%A1%A8%E6%A0%BC%E5%92%8C%E6%96%87%E6%9C%AC" rel="nofollow">2.3动态表格和文本</a></p> 
+ <p id="2.3%E4%B8%93%E9%A2%98%E5%9B%BE%E6%8F%92%E5%85%A5-toc" style="margin-left:80px;"><a href="#2.3%E4%B8%93%E9%A2%98%E5%9B%BE%E6%8F%92%E5%85%A5" rel="nofollow">2.3专题图插入</a></p> 
+ <p id="%E4%B8%89%E3%80%81%E5%AE%8C%E6%88%90NewGIS%E9%83%A8%E7%BD%B2-toc" style="margin-left:0px;"><a href="#%E4%B8%89%E3%80%81%E5%AE%8C%E6%88%90NewGIS%E9%83%A8%E7%BD%B2" rel="nofollow">三、完成NewGIS部署</a></p> 
+ <p id="%E5%9B%9B%E3%80%81%E6%A8%A1%E6%9D%BF%E6%80%BB%E8%A7%88%E5%9B%BE-toc" style="margin-left:0px;"><a href="#%E5%9B%9B%E3%80%81%E6%A8%A1%E6%9D%BF%E6%80%BB%E8%A7%88%E5%9B%BE" rel="nofollow">四、模板总览图</a></p> 
+ <p id="%E6%80%BB%E7%BB%93-toc" style="margin-left:0px;"><a href="#%E6%80%BB%E7%BB%93" rel="nofollow">总结</a></p> 
+</blockquote> 
+<hr> 
+<h2 id="%E5%89%8D%E8%A8%80"><a id="_7"></a>前言</h2> 
+<p style="margin-left:.0001pt;text-align:justify;">一个标准项目分析报告需要需要包括3个方面：</p> 
+<ol><li style="text-align:justify;">文本叙述，主要体现在对某项专项数据的分布情况，总体情况，分类情况进行描述，需要使用真实数据，能够直观的反馈数据的存在情况。</li><li style="text-align:justify;">表格展示，使用表格数据展示，能够更加直观的反馈数据的数量，分布，分类情况。</li><li style="text-align:justify;">专题图展示，一个标准的专题图，需要包括图例、图样、行政区界限等要素，让数据的分布情况一目了然。</li></ol> 
+<p style="margin-left:.0001pt;text-align:justify;">        按照常规的生产模式，一个分析报告往往涉及多个图层、多种数据、多种维度的数据分析。以城镇国土空间监测项目为例，完成一个分析报告往往需要好几天时间。通过城镇国土空间监测分析报告自动处理方案，能够实现在3分钟以内，完成分析报告的自动化编制，并且能实现无任何逻辑错误，文档和数据库的一致性。</p> 
+<hr> 
+<h2 id="%E4%B8%80%E3%80%81%E4%BD%BF%E7%94%A8%E7%9A%84%E6%8A%80%E6%9C%AF%E6%A0%88"><strong>一、使用的技术栈</strong></h2> 
+<p>        整套方案整体流程通过FME开发，数据分析通过FME和pandas分析库辅助实现，专题图通过FME和python的opencv库实现，word文档和表格部分通过python-docx库实现。</p> 
+<h2 id="%E4%BA%8C%E3%80%81%E6%8A%80%E6%9C%AF%E9%9A%BE%E7%82%B9%E8%A7%A3%E6%9E%90"><a id="_19"></a>二、技术难点解析</h2> 
+<h3 id="1.%E4%B8%93%E9%A2%98%E5%9B%BE"><a id="1_20"></a>1.专题图</h3> 
+<p>        众所周知，大部分的专题图都是由专业软件Arcgis或者Qgis等制作，需要手动配置图例，样式，文本，颜色，指北针等信息。优点是自定义化程度高，能实现各式各样的专题图制作，缺点也很明显，很难实现自动化图，样式，图例随动的出图，同时也不能和WORD联动，实现自动插图。</p> 
+<p>        FME虽然在出图方面没有arcgis优秀，但其优秀的数据处理和整合能力是无可比拟的。它能让你的逻辑图形化，让你的思维能更加清晰。</p> 
+<p>        以城镇国土空间监测项目为例，我们先做一个config配置表格，通过该文件实现对图层名称，颜色的配置。<img alt="" height="571" src="https://images2.imgbox.com/71/53/dqjnUkhq_o.png" width="723"></p> 
+<p>        行政区裁剪和环绕文本制作，先上成果图</p> 
+<p><img alt="" height="616" src="https://images2.imgbox.com/e1/76/u1mr1RN2_o.png" width="702"></p> 
+<p>首先我们先说一下如何实现文字环绕的逻辑，其实非常简单，就是将行政区buff后，裁剪当前区域，获得环绕行政区</p> 
+<p><img alt="" height="578" src="https://images2.imgbox.com/3f/e3/mOB1BT4V_o.png" width="883"></p> 
+<p>再通过一系列的数学算法，让文本均匀分布在图形内部，同时保证字的顺序的方向性一致。</p> 
+<p><img alt="" height="174" src="https://images2.imgbox.com/a9/7f/3a3viay6_o.png" width="568"></p> 
+<p><img alt="" height="578" src="https://images2.imgbox.com/15/9a/juiEatnF_o.png" width="927"></p> 
+<p>        然后是就是需要注意字体大小和图形面积是有比例关系的，因为很多样本的图形大小差距很大，将字体大小固定下来的话就很难有适配性，那么就应该通过总面积大小求得一个比例参数，并将该参数发布为全局变量。</p> 
+<p><img alt="" height="126" src="https://images2.imgbox.com/3e/17/dEUgKw80_o.png" width="786"></p> 
+<p>文本的固定使用TextStroker转换器实现，该转换器可以将label的点文字注记转换为文本的几何。</p> 
+<p><img alt="" height="96" src="https://images2.imgbox.com/2a/f1/zsyBRk2Z_o.png" width="323"></p> 
+<p>考虑到部分要素面积小，要素个数较少，很难在图形上看到分布，则设置一个阈值将文字标记展示出来。</p> 
+<p><img alt="" height="374" src="https://images2.imgbox.com/52/f1/iQ5vesz2_o.png" width="447"></p> 
+<p>但是这样也会存在一个问题，就是文字注记的压盖，这里我们使用了一个算法，来调整几个文本box的空间位置，让其能较好的分布。整体的逻辑就是使用递归，不断的调整相互重叠字体的位置，来达到比较正常分布。</p> 
+<pre><code>import fme
+import fmeobjects
+
+import copy
+
+
+
+def adjust_boxes(boxes):
+    moved_boxes = copy.deepcopy(boxes)  # 创建一个副本用于移动
+    overlap = True  # 初始化重叠标志为True
+    while overlap:
+        overlap = False
+        for i in range(len(boxes)):
+            for j in range(i+1, len(boxes)):
+                if check_overlap(moved_boxes[i], moved_boxes[j]):
+                    overlap = True
+                    move_box(moved_boxes, i, j)
+    return moved_boxes
+
+def check_overlap(box1, box2):
+    # 检查两个box是否重叠
+    return not (box1[1] &lt; box2[0] or box1[0] &gt; box2[1] or box1[3] &lt; box2[2] or box1[2] &gt; box2[3])
+
+def move_box(boxes, index1, index2):
+    # 移动box2以保证与box1不重叠
+    box1 = boxes[index1]
+    box2 = boxes[index2]
+
+    x_overlap = min(box1[1], box2[1]) - max(box1[0], box2[0])
+    y_overlap = min(box1[3], box2[3]) - max(box1[2], box2[2])
+
+    x_offset = max(box1[1], box2[1]) - min(box1[0], box2[0]) + 1 - x_overlap
+    y_offset = max(box1[3], box2[3]) - min(box1[2], box2[2]) + 1 - y_overlap
+
+    if x_offset &lt; y_offset:  # 选择较小的偏移方向
+        if box1[1] &lt; box2[0]:  # box2在box1的右侧
+            offset = x_offset
+        else:  # box2在box1的左侧
+            offset = -x_offset
+        boxes[index2][0] += offset
+        boxes[index2][1] += offset
+    else:
+        if box1[3] &lt; box2[2]:  # box2在box1的上方
+            offset = y_offset
+        else:  # box2在box1的下方
+            offset = -y_offset
+        boxes[index2][2] += offset
+        boxes[index2][3] += offset
+class FeatureProcessor(object):
+    """Template Class Interface:
+    When using this class, make sure its name is set as the value of the 'Class
+    to Process Features' transformer parameter.
+    """
+
+    def __init__(self):
+        self.features = []
+        """Base constructor for class members."""
+        pass
+
+    def input(self, feature):
+        self.features.append(feature)
+        """This method is called for each FME Feature entering the 
+        PythonCaller. If knowledge of all input Features is not required for 
+        processing, then the processed Feature can be emitted from this method 
+        through self.pyoutput(). Otherwise, the input FME Feature should be 
+        cached to a list class member and processed in process_group() when 
+        'Group by' attributes(s) are specified, or the close() method.
+
+        :param fmeobjects.FMEFeature feature: FME Feature entering the 
+            transformer.
+        """
+        
+
+    def close(self):
+        """This method is called once all the FME Features have been processed
+        from input().
+        """
+        pass
+
+    def process_group(self):
+        
+        boxes = []
+        for feature in self.features:
+            box = [feature.getAttribute('_xmin'), feature.getAttribute('_xmax'), feature.getAttribute('_ymin'), feature.getAttribute('_ymax')]
+            boxes.append(box)
+        
+        new_boxes = adjust_boxes(boxes)
+        
+        for i,item in enumerate(new_boxes):
+            cent_x = (item[0]+item[1])/2
+            cent_y = (item[2]+item[3])/2
+            self.features[i].setAttribute('cent_x',cent_x)
+            self.features[i].setAttribute('cent_y',cent_y)
+        for feature in self.features:
+            self.pyoutput(feature)
+        
+        self.features = []</code></pre> 
+<p>最后设置好每类要素的透明度，宽度等样式信息，并写入属性中。最终将几何信息和样式信息输出到Matplotlib中，导出png专题图。</p> 
+<p><img alt="" height="435" src="https://images2.imgbox.com/cc/d6/hCPOzNhT_o.png" width="1200"></p> 
+<p>用同样的方式制作图例</p> 
+<p><img alt="" height="157" src="https://images2.imgbox.com/04/ef/MUVlVlkG_o.png" width="473"></p> 
+<p><img alt="" height="453" src="https://images2.imgbox.com/50/85/dYWCYQQd_o.png" width="1200"></p> 
+<p>最后将预设的指北针图标，图例与图形结合，使用PIL库的镶嵌实现，最终构成完整的专题图。</p> 
+<p><img alt="" height="417" src="https://images2.imgbox.com/30/a8/1h7iJ3oF_o.png" width="1200"></p> 
+<h3 id="2.WORD%E6%96%87%E6%A1%A3%E5%AE%9E%E7%8E%B0"><a id="2_34"></a>2.WORD文档实现</h3> 
+<p>        分析报告和一般的有固定模板的wrod文档批量出具有很大的不同，主要在于其没有固定模板，不能像邮件合并一样在固定位置插入数据。其所有的标题，二级标题，以及表格的样式，行列数都是无法固定的。</p> 
+<h4 id="%C2%A02.1%20%E5%8A%A8%E6%80%81%E6%A0%87%E9%A2%98"> 2.1 动态标题</h4> 
+<p>        标题的添加通过python-docx的add_heading函数实现，通过提前分析计算各图层的标题等级和标题顺序号来完成添加</p> 
+<p><img alt="" height="200" src="https://images2.imgbox.com/cd/81/IcXjW4uE_o.png" width="1200"></p> 
+<p><img alt="" height="46" src="https://images2.imgbox.com/72/17/clXvxgOr_o.png" width="800"></p> 
+<p>        形成标题成果</p> 
+<p>        <img alt="" height="753" src="https://images2.imgbox.com/0d/2f/16BPgvaj_o.png" width="421"></p> 
+<h4 id="2.3%E5%8A%A8%E6%80%81%E8%A1%A8%E6%A0%BC%E5%92%8C%E6%96%87%E6%9C%AC">2.3动态表格和文本</h4> 
+<p>这里我通过python-docx二次封装了几个函数</p> 
+<p>1、add_paragraph_to_word(location,text,size,align = None,font_name = None,args = [])函数，能直接添加段落到文档的指定位置，并能设置字体大小，对齐，字体名，args里面可以设置下划线、艺术字、加粗等样式信息。</p> 
+<p>2、add_df_to_word(word, df)函数，该函数能够直接实现pandas的dataframe对象直接插入到wrod文档中，并自动将标题加粗，文本居中。比如如下代码</p> 
+<pre><code>            if feature.getAttribute('几何类型') == "线":
+                data = {'类型': TYPE, '长度（千米）': LEN ,"要素数量":count}
+            else:
+                data = {'类型': TYPE, '面积（亩）': LEN ,"要素数量":count}
+            
+            df = pd.DataFrame(data)
+            name = feature.getAttribute('CCN')
+            add_paragraph_to_word(word,"表4-{} {}统计表".format(i_table,name),14,"center","仿宋")
+            
+            add_df_to_word(word,df)</code></pre> 
+<p>df打印如下所示</p> 
+<p><img alt="" height="132" src="https://images2.imgbox.com/f3/94/8L01U1hW_o.png" width="290"></p> 
+<p>插入wrod如下所示</p> 
+<p><img alt="" height="625" src="https://images2.imgbox.com/73/b5/0PYoxyYf_o.png" width="588"></p> 
+<h4 id="2.3%E4%B8%93%E9%A2%98%E5%9B%BE%E6%8F%92%E5%85%A5">2.3专题图插入</h4> 
+<p>使用python-docx自带的add_picture函数实现</p> 
+<p><img alt="" height="659" src="https://images2.imgbox.com/7d/78/inKIBTui_o.png" width="673"></p> 
+<h2 id="%E4%B8%89%E3%80%81%E5%AE%8C%E6%88%90NewGIS%E9%83%A8%E7%BD%B2">三、完成NewGIS部署</h2> 
+<p>在自研平台NewGIS Integration平台完成方案的部署（该平台由我团队自主研发，前端VUE，后端 GoLang，能够实现对FME模板自动化部署，并且支持高并发运行）</p> 
+<p><img alt="" height="786" src="https://images2.imgbox.com/9b/11/tRzQC9g1_o.png" width="1200"></p> 
+<p><img alt="" height="148" src="https://images2.imgbox.com/5d/95/A2gKt3Zr_o.png" width="1200"></p> 
+<p>导入行政区界限，和成果GDB数据并提交</p> 
+<p><img alt="" height="647" src="https://images2.imgbox.com/93/85/nxFYgKj7_o.png" width="1200"></p> 
+<p>在成果预览中下载分析报告</p> 
+<p><img alt="" height="655" src="https://images2.imgbox.com/02/32/zBsjdR0l_o.png" width="1200"></p> 
+<p>点击下载，解压压缩包</p> 
+<p><img alt="" height="610" src="https://images2.imgbox.com/22/15/Hz9yFgu8_o.png" width="1200"></p> 
+<p>完成分析报告的自动化出具</p> 
+<p><img alt="" height="854" src="https://images2.imgbox.com/53/1f/WneGpZhK_o.png" width="1200"></p> 
+<h2 id="%E5%9B%9B%E3%80%81%E6%A8%A1%E6%9D%BF%E6%80%BB%E8%A7%88%E5%9B%BE">四、模板总览图</h2> 
+<p>总计340个转换器</p> 
+<p><img alt="" height="217" src="https://images2.imgbox.com/b1/70/qiddn5Ei_o.png" width="554"></p> 
+<hr> 
+<h2 id="%E6%80%BB%E7%BB%93"><a id="_45"></a>总结</h2> 
+<p style="margin-left:.0001pt;text-align:justify;">        该方案不单单能应用于城镇国土空间监测项目，能定制开发所有项目的分析报告，包括规划的合规分析，可行性分析，调查监测的变更调查数据库分析报告等等。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/c36b82deb92509fd785c230b5e621753/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">上位机与stm32的串口通信（适合萌新）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/da020dff8c6bd651357d648c687a0d48/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【原创】解决Windows/macOS 双系统时间不一致问题</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>基于Redis的 Jwt Token续期 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="基于Redis的 Jwt Token续期" />
+<meta property="og:description" content="后端拦截器代码
+/** * @author crlion */ @Component public class AuthInterceptor implements HandlerInterceptor { @Resource private RedisOperator redisOperator; @Override public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws IOException { //判断请求方式，通过所有OPTION请求 if (&#34;OPTIONS&#34;.equals(request.getMethod().toUpperCase())) { return true; } System.err.println(&#34;==================进入拦截器了==================&#34;); String url = request.getRequestURL().toString(); String token = request.getHeader(&#34;Authorization&#34;); System.err.println(&#34;url:&#34; &#43; url &#43; &#34; token:&#34; &#43; token); if (JwtUtils.checkToken(request)) { System.err.println(&#34;无效Token!&#34;); response.setContentType(&#34;application/json&#34;); response.setCharacterEncoding(&#34;UTF-8&#34;); ResultList result = new ResultList(new Meta(Code.Auth_ERR, &#34;无效Token!&#34;), null); response.getWriter().println(JSON.toJSONString(result)); response.getWriter().flush(); return false; } else if (redisOperator." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/935f5fd6d1659f8e0da37a89b04f6285/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-11-12T22:53:36+08:00" />
+<meta property="article:modified_time" content="2022-11-12T22:53:36+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">基于Redis的 Jwt Token续期</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>后端拦截器代码</strong></p> 
+<pre><code class="language-java">/**
+ * @author crlion
+ */
+@Component
+public class AuthInterceptor implements HandlerInterceptor {
+
+    @Resource
+    private RedisOperator redisOperator;
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws IOException {
+        //判断请求方式，通过所有OPTION请求
+        if ("OPTIONS".equals(request.getMethod().toUpperCase())) {
+            return true;
+        }
+        System.err.println("==================进入拦截器了==================");
+        String url = request.getRequestURL().toString();
+        String token = request.getHeader("Authorization");
+        System.err.println("url:" + url + "    token:" + token);
+        if (JwtUtils.checkToken(request)) {
+            System.err.println("无效Token!");
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            ResultList result = new ResultList(new Meta(Code.Auth_ERR, "无效Token!"), null);
+            response.getWriter().println(JSON.toJSONString(result));
+            response.getWriter().flush();
+            return false;
+        } else
+        if (redisOperator.get(token) == null) {
+            System.err.println("Token过期!");
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            ResultList result = new ResultList(new Meta(Code.Auth_ERR, "Token过期!"), null);
+            response.getWriter().println(JSON.toJSONString(result));
+            response.getWriter().flush();
+            return false;
+        }else
+        if (redisOperator.ttl(token)&lt;RedisConst.CHECK_TIME) {
+            System.err.println("Token续期!");
+            System.err.println("续期前："+redisOperator.ttl(token));
+            redisOperator.set(token,token, RedisConst.AUTH_TIME);
+            System.err.println("续期后："+redisOperator.ttl(token));
+            return true;
+        }else {
+            System.err.println("Token正常!");
+            System.err.println("Token剩余时间：" + redisOperator.ttl(token));
+            return true;
+        }
+    }
+}
+
+</code></pre> 
+<p><strong>前端拦截器代码</strong></p> 
+<pre><code class="language-javascript">const myInterceptor = axios.interceptors.response.use(response =&gt; {
+    if(response.data.meta !==undefined &amp;&amp; response.data.meta.code === 40011){
+        axios.interceptors.request.eject(myInterceptor);
+        window.sessionStorage.clear();
+        alert(response.data.meta.msg);
+        window.location.reload();
+    }
+    return response;
+}, error  =&gt; {
+    alert('error');
+    console.log(error);
+    console.dir(error);
+    return Promise.reject(error);
+});</code></pre> 
+<p></p> 
+<p><strong>后端运行结果</strong></p> 
+<pre><code class="language-javascript">==================进入拦截器了==================
+url:http://localhost:8080/getPostList    token:ey...省略
+Token续期!
+续期前：8
+续期后：10</code></pre> 
+<pre><code class="language-javascript">==================进入拦截器了==================
+url:http://localhost:8080/searchDictType    token:eyJ0...省略
+Token过期!</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4ff4fb21693e5a3e5192a26e7246383a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Pandas基础入门知识点总结</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ba98ccae53eb6c55728b0b500ba3b77b/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">第六章 聚合函数</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>在 MacOS 上虚拟化 x86Linux 的最佳方法(通过 Rosetta) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="在 MacOS 上虚拟化 x86Linux 的最佳方法(通过 Rosetta)" />
+<meta property="og:description" content="categories: [VM]
+tags: MacOS VM 写在前面 买了 ARM 的 mac, 就注定了要折腾一下虚拟机了…
+之前写过一篇文章是通过 utm 虚拟化archlinux, 其实本质上还是调用了 qemu-system-x86_64, 所以速度并不快, 后来想着能不能借用 Rosetta 的优势即原生转译, 来虚拟化 Intel 的 Linux.
+看了一些文章, 提到过用lima 管理虚拟机, 然后配置, 应该是最便捷的方法了, 不过这里先以 utm 的最新版设置为例讲讲, 之后再说 lima.
+环境支持:
+MacOS13&#43; (为了使用 apple 的虚拟化, 这个虚拟化支持在ARM 架构的 Linux 上使用 Rosetta跑 Intel 架构的程序)
+m系列芯片
+一些看过的博客 算是一个引子, 可以看看 Apple 官方的消息
+苹果M系列处理器上的Linux虚拟机内Rosetta转译初体验 - wvbCommunity;(感觉写的比较详细的博客, 还附了图就很棒)Running Intel Binaries in Linux VMs with Rosetta | Apple Developer Documentation;Rosetta | UTM Documentation; 这篇算是 utm 支持, 其实很多内容在 Apple 官方的文档有写了 开始折腾…" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/14573ac0afefc7b9048065330ee71d60/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-05T20:21:43+08:00" />
+<meta property="article:modified_time" content="2024-02-05T20:21:43+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">在 MacOS 上虚拟化 x86Linux 的最佳方法(通过 Rosetta)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-tomorrow-night">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <hr> 
+<h3><a id="categories_VM%0Atags_MacOS_VM_1"></a>categories: [VM]<br> tags: MacOS VM</h3> 
+<h3><a id="_5"></a>写在前面</h3> 
+<blockquote> 
+ <p>买了 ARM 的 mac, 就注定了要折腾一下虚拟机了…</p> 
+</blockquote> 
+<p>之前写过一篇文章是通过 utm 虚拟化archlinux, 其实本质上还是调用了 qemu-system-x86_64, 所以速度并不快, 后来想着能不能借用 Rosetta 的优势即原生转译, 来虚拟化 Intel 的 Linux.</p> 
+<p>看了一些文章, 提到过用lima 管理虚拟机, 然后配置, 应该是最便捷的方法了, 不过这里先以 utm 的最新版设置为例讲讲, 之后再说 lima.</p> 
+<blockquote> 
+ <p>环境支持:</p> 
+ <p>MacOS13+ (为了使用 apple 的虚拟化, 这个虚拟化支持在ARM 架构的 Linux 上使用 Rosetta跑 Intel 架构的程序)</p> 
+ <p>m系列芯片</p> 
+</blockquote> 
+<h3><a id="_19"></a>一些看过的博客</h3> 
+<p>算是一个引子, 可以看看 Apple 官方的消息</p> 
+<ol><li><a href="https://community.wvbtech.com/d/3137" rel="nofollow">苹果M系列处理器上的Linux虚拟机内Rosetta转译初体验 - wvbCommunity</a>;(感觉写的比较详细的博客, 还附了图就很棒)</li><li><a href="https://developer.apple.com/documentation/virtualization/running_intel_binaries_in_linux_vms_with_rosetta" rel="nofollow">Running Intel Binaries in Linux VMs with Rosetta | Apple Developer Documentation</a>;</li><li><a href="https://docs.getutm.app/advanced/rosetta/" rel="nofollow">Rosetta | UTM Documentation</a>; 这篇算是 utm 支持, 其实很多内容在 Apple 官方的文档有写了</li></ol> 
+<p>开始折腾…</p> 
+<h3><a id="UTM___UI_33"></a>UTM 方案: 支持桌面 UI</h3> 
+<h4><a id="_35"></a>搞个镜像</h4> 
+<pre><code class="prism language-bash"><span class="token function">wget</span> https://cdimage.ubuntu.com/releases/22.04/release/ubuntu-22.04.3-live-server-arm64.iso
+</code></pre> 
+<p>注意一定要下载 arm 的 Linux 镜像, 然后在这里面安装 Rosetta, 通过 Linux 内的 Rosetta 来转译运行 Intel 的程序.</p> 
+<blockquote> 
+ <p>这里就用比较广泛使用的 Ubuntu 了, 注意如果用 rpm 系列的 Linux 发行版的话安装后面要用到的包就比较麻烦了, 先能用再说.</p> 
+</blockquote> 
+<h4><a id="_utm_45"></a>打开 utm</h4> 
+<p>勾选虚拟化, 勾选 Apple 虚拟化, 和启用 Rosetta.</p> 
+<p>此外就是选上上面下载好的 ISO 镜像</p> 
+<p>开启之后按照安装步骤一点一点来走安装, 如果 utm 显示不好的话可以用 iterm 连接ssh, help 界面给出了秘钥.</p> 
+<p>安装之后 poweroff, 然后清除掉 iso, 进入系统.</p> 
+<h4><a id="Rosetta_55"></a>配置Rosetta</h4> 
+<p>Debian 系列直接安装:</p> 
+<pre><code class="prism language-bash"><span class="token function">sudo</span> <span class="token function">apt</span> <span class="token function">install</span> binfmt-support
+<span class="token function">sudo</span> <span class="token function">apt</span> <span class="token function">install</span> spice-vdagent <span class="token comment">#剪贴板共享</span>
+</code></pre> 
+<p>然后挂载</p> 
+<pre><code class="prism language-bash"><span class="token function">sudo</span> <span class="token function">mkdir</span> /media/rosetta
+<span class="token function">sudo</span> <span class="token function">mount</span> <span class="token parameter variable">-t</span> virtiofs rosetta /media/rosetta
+</code></pre> 
+<p>写入<code>/etc/fstab</code>:</p> 
+<pre><code class="prism language-bash">rosetta	/media/rosetta	virtiofs	ro,nofail	<span class="token number">0</span>	<span class="token number">0</span>
+</code></pre> 
+<p>安装</p> 
+<pre><code class="prism language-bash"><span class="token function">sudo</span> /usr/sbin/update-binfmts <span class="token parameter variable">--install</span> rosetta /media/rosetta/rosetta <span class="token punctuation">\</span>
+     <span class="token parameter variable">--magic</span> <span class="token string">"<span class="token entity" title="\x7f">\x7f</span>ELF<span class="token entity" title="\x02">\x02</span><span class="token entity" title="\x01">\x01</span><span class="token entity" title="\x01">\x01</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x02">\x02</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\x3e">\x3e</span><span class="token entity" title="\x00">\x00</span>"</span> <span class="token punctuation">\</span>
+     <span class="token parameter variable">--mask</span> <span class="token string">"<span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xfe">\xfe</span><span class="token entity" title="\xfe">\xfe</span><span class="token entity" title="\x00">\x00</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xfe">\xfe</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span><span class="token entity" title="\xff">\xff</span>"</span> <span class="token punctuation">\</span>
+     <span class="token parameter variable">--credentials</span> <span class="token function">yes</span> <span class="token parameter variable">--preserve</span> no --fix-binary <span class="token function">yes</span>
+</code></pre> 
+<p>看看情况:</p> 
+<pre><code class="prism language-bash">$ <span class="token function">cat</span> /proc/sys/fs/binfmt_misc/rosetta
+enabled
+interpreter /mnt/lima-rosetta/rosetta
+flags: OCF
+offset <span class="token number">0</span>
+magic 7f454c4602010100000000000000000002003e00
+mask fffffffffffefe00fffffffffffffffffeffffff
+</code></pre> 
+<h4><a id="_100"></a>换源</h4> 
+<pre><code class="prism language-bash"><span class="token comment"># 默认注释了源码镜像以提高 apt update 速度，如有需要可自行取消注释</span>
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy main restricted universe multiverse
+<span class="token comment"># deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy main restricted universe multiverse</span>
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy-updates main restricted universe multiverse
+<span class="token comment"># deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy-updates main restricted universe multiverse</span>
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy-backports main restricted universe multiverse
+<span class="token comment"># deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy-backports main restricted universe multiverse</span>
+
+deb http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse
+<span class="token comment"># deb-src http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse</span>
+
+<span class="token comment"># 预发布软件源，不建议启用</span>
+<span class="token comment"># deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy-proposed main restricted universe multiverse</span>
+<span class="token comment"># # deb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ jammy-proposed main restricted universe multiverse</span>
+</code></pre> 
+<h4><a id="_121"></a>跑代码</h4> 
+<p>首先安装一下 multilib 版的 gcc, 即:</p> 
+<pre><code class="prism language-bash"><span class="token function">sudo</span> <span class="token function">apt</span> <span class="token function">install</span> gcc-multilib-x86-64-linux-gnu g++-multilib-x86-64-linux-gnu
+</code></pre> 
+<p>这样只是搞定了交叉编译的工具链, 对于一个 Intel 的程序, 还需要 Intel 的 ld-linux so 库支持, 从阿里云服务器里面 cp 一个, 之后又提示 libc 找不到, 接着 cp, 这样的示例程序就跑起来了.</p> 
+<pre><code class="prism language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;iostream&gt;</span></span>
+
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    std<span class="token double-colon punctuation">::</span>cout <span class="token operator">&lt;&lt;</span> <span class="token string">"hello rosetta\n"</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>如果要 Rosetta 执行就这样来:</p> 
+<pre><code class="prism language-bash">x86_64-gnu-linux-g++ a.cpp <span class="token comment">#交叉编译工具链, 通过apt 安装 gcc-multilib</span>
+/media/rosetta/rosetta ./a.out
+</code></pre> 
+<blockquote> 
+ <p>缺啥动态库就补上</p> 
+</blockquote> 
+<h3><a id="lima___Linux_151"></a>lima 方案: 快速配置最小化 Linux</h3> 
+<p>这里参考了下面的文章.</p> 
+<blockquote> 
+ <p><a href="https://jia.je/software/2023/11/23/apple-silicon-linux-rosetta/#%E5%88%9B%E5%BB%BA-linux-%E8%99%9A%E6%8B%9F%E6%9C%BA" rel="nofollow">在 Apple Silicon macOS 上跑 Linux 虚拟机 + Rosetta - 杰哥的{运维，编程，调板子}小笔记</a>;</p> 
+</blockquote> 
+<p>前面通过 UTM 的方法配置了虚拟化, 并且得到了不错的效果, 下面看看更快速的方法</p> 
+<p>主要通过 lima 来做, lima 之前安装 docker 时候大家应该不陌生, 因为 docker 的 daemon 用到了colima , 本质上就是一个 Ubuntu 的 arm 版, 但是用 docker 还是有点不舒服, 为什么直接来一个完美的 Intel Linux 呢?</p> 
+<h4><a id="_lima_161"></a>安装配置 lima</h4> 
+<pre><code class="prism language-bash">brew <span class="token function">install</span> lima
+limactl start template://debian <span class="token parameter variable">--rosetta</span> --vm-type<span class="token operator">=</span>vz
+limactl shell debian <span class="token comment"># 进入 Debian arm</span>
+</code></pre> 
+<p>查看 Rosetta 支持情况:</p> 
+<pre><code class="prism language-bash">$ <span class="token function">cat</span> /proc/sys/fs/binfmt_misc/rosetta
+</code></pre> 
+<h4><a id="_limedebian__Intel_centos7_175"></a>在 lime-debian 中安装 Intel centos7</h4> 
+<p>其实 nerdctl 跟 docker 差不多, 熟悉一下命令行的操作就好了.</p> 
+<p>运行</p> 
+<pre><code class="prism language-bash">nerdctl run <span class="token parameter variable">-it</span> <span class="token parameter variable">--platform</span> amd64 centos:centos7
+</code></pre> 
+<p>退出之后就关闭了, 需要 start一下再进去</p> 
+<pre><code class="prism language-bash">nerdctl start centos-f32d1
+nerdctl <span class="token builtin class-name">exec</span> <span class="token parameter variable">-it</span> centos-f32d1 /bin/bash
+</code></pre> 
+<p>不用了就关闭</p> 
+<pre><code class="prism language-bash">nerdctl stop centos-f32d1
+</code></pre> 
+<p>查看容器情况</p> 
+<pre><code class="prism language-bash">$ nerdctl <span class="token function">ps</span> <span class="token parameter variable">-a</span>
+CONTAINER ID    IMAGE                               COMMAND        CREATED         STATUS     PORTS    NAMES
+f32d106b5240    docker.io/library/centos:centos7    <span class="token string">"/bin/bash"</span>    <span class="token number">21</span> hours ago    Created             centos-f32d1
+</code></pre> 
+<p>安装其他软件</p> 
+<pre><code class="prism language-bash">yum <span class="token parameter variable">-y</span> <span class="token function">install</span> epel-release
+yum repolist
+<span class="token function">curl</span> <span class="token parameter variable">-o</span> /etc/yum.repos.d/konimex-neofetch-epel-7.repo https://copr.fedorainfracloud.org/coprs/konimex/neofetch/repo/epel-7/konimex-neofetch-epel-7.repo
+yum <span class="token function">install</span> neofetch
+</code></pre> 
+<blockquote> 
+ <p><a href="https://github.com/dylanaraps/neofetch/wiki/Installation#fedora--rhel--centos--mageia--openmandriva">Installation · dylanaraps/neofetch Wiki</a>;</p> 
+</blockquote> 
+<p>neofetch<br> <img src="https://images2.imgbox.com/44/47/ZeDodlgc_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="benchmark_221"></a>benchmark</h4> 
+<blockquote> 
+ <pre><code class="prism language-bash">yum <span class="token function">install</span> sysbench
+</code></pre> 
+</blockquote> 
+<p>可喜可贺! M3Pro 加持, 终于跑过阿里云服务器了</p> 
+<p>先来看看 阿里云的 Server, 两核拉满</p> 
+<pre><code class="prism language-bash">$ sysbench cpu --cpu-max-prime<span class="token operator">=</span><span class="token number">20000000</span> <span class="token parameter variable">--threads</span><span class="token operator">=</span><span class="token number">2</span> run
+sysbench <span class="token number">1.0</span>.20 <span class="token punctuation">(</span>using system LuaJIT <span class="token number">2.1</span>.0-beta3<span class="token punctuation">)</span>
+
+Running the <span class="token builtin class-name">test</span> with following options:
+Number of threads: <span class="token number">2</span>
+Initializing random number generator from current <span class="token function">time</span>
+
+
+Prime numbers limit: <span class="token number">20000000</span>
+
+Initializing worker threads<span class="token punctuation">..</span>.
+
+Threads started<span class="token operator">!</span>
+
+CPU speed:
+    events per second:     <span class="token number">0.05</span>
+
+General statistics:
+    total time:                          <span class="token number">38</span>.8369s
+    total number of events:              <span class="token number">2</span>
+
+Latency <span class="token punctuation">(</span>ms<span class="token punctuation">)</span>:
+         min:                                <span class="token number">37191.83</span>
+         avg:                                <span class="token number">38014.32</span>
+         max:                                <span class="token number">38836.81</span>
+         95th percentile:                    <span class="token number">38506.38</span>
+         sum:                                <span class="token number">76028.64</span>
+
+Threads fairness:
+    events <span class="token punctuation">(</span>avg/stddev<span class="token punctuation">)</span>:           <span class="token number">1.0000</span>/0.00
+    execution <span class="token function">time</span> <span class="token punctuation">(</span>avg/stddev<span class="token punctuation">)</span>:   <span class="token number">38.0143</span>/0.82
+</code></pre> 
+<p>再来看 lima 的 Debian(arm64) 虚拟机下的 centos7 (x86_64)的情况如何</p> 
+<pre><code class="prism language-bash"><span class="token comment"># sysbench cpu --cpu-max-prime=20000000 --threads=2 run</span>
+sysbench <span class="token number">1.0</span>.17 <span class="token punctuation">(</span>using system LuaJIT <span class="token number">2.0</span>.4<span class="token punctuation">)</span>
+
+Running the <span class="token builtin class-name">test</span> with following options:
+Number of threads: <span class="token number">2</span>
+Initializing random number generator from current <span class="token function">time</span>
+
+
+Prime numbers limit: <span class="token number">20000000</span>
+
+Initializing worker threads<span class="token punctuation">..</span>.
+
+Threads started<span class="token operator">!</span>
+
+CPU speed:
+    events per second:     <span class="token number">0.39</span>
+
+General statistics:
+    total time:                          <span class="token number">10</span>.1988s
+    total number of events:              <span class="token number">4</span>
+
+Latency <span class="token punctuation">(</span>ms<span class="token punctuation">)</span>:
+         min:                                 <span class="token number">4981.69</span>
+         avg:                                 <span class="token number">5097.66</span>
+         max:                                 <span class="token number">5216.57</span>
+         95th percentile:                     <span class="token number">5217.92</span>
+         sum:                                <span class="token number">20390.63</span>
+
+Threads fairness:
+    events <span class="token punctuation">(</span>avg/stddev<span class="token punctuation">)</span>:           <span class="token number">2.0000</span>/0.00
+    execution <span class="token function">time</span> <span class="token punctuation">(</span>avg/stddev<span class="token punctuation">)</span>:   <span class="token number">10.1953</span>/0.00
+</code></pre> 
+<p>虽然层层嵌套, 但是得益于 Apple 的虚拟化以及 Rosetta 的转译执行, 其效率还是很高的!!!</p> 
+<blockquote> 
+ <p>回头看 qemu 模拟出的 x86_64, 实在是不忍直视.</p> 
+</blockquote>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/40eaaf5e4dce4862a186ddc2678f662d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">MongoDB从入门到实战之Docker快速安装MongoDB</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/31062e0bdb754b32f7ca0a3554b93dfd/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">比较两次从接口获取的数据，并找出变动的字段</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

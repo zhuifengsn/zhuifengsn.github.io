@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>多GPU训练机制 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="多GPU训练机制" />
+<meta property="og:description" content="引言 通常情况下，在深度学习中使用梯度下降算法进行训练时，往往需要较大的batch-size才能获得良好的性能。而当我们选择比较大型的网络时(如DenseNet121)，由于GPU资源有限，我们往往要减小batch-size。但是batch-size太小的话会影响性能，这时候如果硬件条件允许的情况下可以使用多GPU进行训练。
+多GPU又分为单机多卡和多机多卡。这篇博客仅介绍单机多卡。
+单机单卡(单GPU) 单机单卡，前向传播和反向传播都在一个GPU上进行，模型参数更新时只涉及一个GPU。训练是一个batch一个batch的计算，如果想要训练4个batch的话，这些计算是顺序计算的，这样的速度比较慢。
+单机多卡(多GPU) 多GPU分为模型并行和数据并行。模型并行指模型的不同部分在不同GPU上运行。数据并行指不同GPU上训练数据不同，但模型是同一个（相当于是同一个模型的副本）。一般情况下我们常用的是数据并行。
+下面是训练过程模型图。
+单机多GPU-数据并行的训练机制：
+如果单机多GPU-数据并行训练4个batch的话，CPU会将4个batch数据分到4个GPU中，在每个 GPU 上放一个模型副本，然后每个GPU处理一个batch的计算，最后4个GPU计算得到的梯度传回给CPU，CPU计算平均梯度，然后更新参数。然后循环整个过程至模型收敛。
+不同的 GPU设备有同一模型的多个副本，将数据分片并分配到每个GPU上，然后将所有GPU的计算结果按照某种方式合并，进而可以增加训练数据的batch-size。主要可以解决单卡训练时只能将batch-size设置成1的情况。或者可以通过增大batch-size进而提高训练速度。
+参考：
+https://www.tensorflow.org/tutorials/images/deep_cnn
+https://www.jianshu.com/p/fdb93e44a8cc
+作者：GL3_24
+来源：CSDN
+著作权归作者所有。转载请联系作者获得授权。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ed60174bc81ea71deab378d987282b33/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-07-17T18:24:24+08:00" />
+<meta property="article:modified_time" content="2019-07-17T18:24:24+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">多GPU训练机制</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="_0"></a>引言</h3> 
+<p>通常情况下，在深度学习中使用梯度下降算法进行训练时，往往需要较大的batch-size才能获得良好的性能。而当我们选择比较大型的网络时(如DenseNet121)，由于GPU资源有限，我们往往要减小batch-size。但是batch-size太小的话会影响性能，这时候如果硬件条件允许的情况下可以使用多GPU进行训练。<br> <strong>多GPU又分为单机多卡和多机多卡。这篇博客仅介绍单机多卡。</strong></p> 
+<h3><a id="GPU_4"></a>单机单卡(单GPU)</h3> 
+<p>单机单卡，前向传播和反向传播都在一个GPU上进行，模型参数更新时只涉及一个GPU。训练是一个batch一个batch的计算，如果想要训练4个batch的话，这些计算是顺序计算的，这样的速度比较慢。</p> 
+<h3><a id="GPU_7"></a>单机多卡(多GPU)</h3> 
+<p>多GPU分为模型并行和数据并行。模型并行指模型的不同部分在不同GPU上运行。数据并行指不同GPU上训练数据不同，但模型是同一个（相当于是同一个模型的副本）。一般情况下我们常用的是数据并行。<br> 下面是训练过程模型图。</p> 
+<p><img src="https://images2.imgbox.com/6a/3c/uaDiDtCM_o.png" alt="在这里插入图片描述"></p> 
+<p><strong>单机多GPU-数据并行的训练机制：</strong><br> 如果单机多GPU-数据并行训练4个batch的话，CPU会将4个batch数据分到4个GPU中，在每个 GPU 上放一个模型副本，然后每个GPU处理一个batch的计算，最后4个GPU计算得到的梯度传回给CPU，CPU计算平均梯度，然后更新参数。然后循环整个过程至模型收敛。</p> 
+<p>不同的 GPU设备有同一模型的多个副本，将数据分片并分配到每个GPU上，然后将所有GPU的计算结果按照某种方式合并，进而可以增加训练数据的batch-size。主要可以解决单卡训练时只能将batch-size设置成1的情况。或者可以通过增大batch-size进而提高训练速度。</p> 
+<p>参考：<br> <a href="https://www.tensorflow.org/tutorials/images/deep_cnn" rel="nofollow">https://www.tensorflow.org/tutorials/images/deep_cnn</a><br> <a href="https://www.jianshu.com/p/fdb93e44a8cc" rel="nofollow">https://www.jianshu.com/p/fdb93e44a8cc</a></p> 
+<p>作者：GL3_24<br> 来源：CSDN<br> 著作权归作者所有。转载请联系作者获得授权。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4846c6112d22dfdb84579f74aa798c61/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">数据结构—哈夫曼编码</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/945c5cd05ac4ed2fd4203fcf331c46e3/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C&#43;&#43;深度解析(2)—C/C&#43;&#43;中的const分析</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux驱动开发 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux驱动开发" />
+<meta property="og:description" content="一、驱动分类 Linux中包含三大类驱动：字符设备驱动、块设备驱动和网络设备驱动。其中字符设备驱动是最大的一类驱动，因为字符设备最多，从led到I2C、SPI、音频等都属于字符设备驱动。块设备驱动和网络设备驱动都要比字符设备驱动复杂。因为其比较复杂，所以半导体厂商都已经帮我们写好了，大部分情况下都是可以直接使用的。所谓的块设备驱动就是存储器设备的驱动，比如EMMC、NAND、SD卡和U盘等存储设备
+二、字符设备驱动开发 字符设备驱动是Linux驱动中最基本的一类设备驱动，字符设备就是一个一个字节，按照字节流进行读写操作的设备，读写数据是分先后顺序的。我们先来了解Linux下的应用程序是如何调用驱动程序的，如下图：
+应用程序运行在用户空间，而Linux驱动属于内核的一部分，因此驱动运行于内核空间。open、close、write和read等这些函数是由C库提供的，在LInux系统中，系统调用作为C库的一部分。
+三、Linux设备号 1、设备好的组成 为了方便管理，Linux中每个设备都有一个设备号，设备号由主设备号和次设备号两部分组成，主设备号表示某一个具体的驱动，次设备号表示使用这个驱动的各个设备。Linux提供了一个名为dev_t的数据类型表示设备号，dev_t定义在include/linux/types.h里面。dev_t其实是unsigned int类型，是一个32位的数据类型。其中高12位是主设备号，低20位是次设备号，因此Linux系统中主设备号范围是0~4095
+设备号的操作函数
+MAJOR用于从dev_t中获取主设备号，将dev_t右移20位即可 MINOR用于从dev_t中获取次设备号，取dev_t的低20位即可 MKDEV用于将给定的主设备号和次设备号的值组合成dev_t类型的设备号 2、设备号的分配 静态设备号：注册字符设备需要给设备指定一个设备号，这个设备号可以是驱动开发者静态指定的设备号，但是要注意该设备号没有被内核开发者分配掉。使用cat/proc/devices命令即可查看当前系统中已经使用的设备号
+使用register_chrdev函数注册字符设备的时候只需要给定一个主设备号即可
+/* 注册字符设备驱动 */ retvalue = register_chrdev(CHRDEVBASE_MAJOR, CHRDEVBASE_NAME, &amp;chrdevbase_fops); 这是老版本字符设备注册函数，其0~1048575（2^20-1）这个区间的次设备号全部设置为0
+动态分配设备号：使用设备号的时候向linux内核申请，需要几个就申请几个，由linux内核分配设备可以使用的设备号。在注册字符设备之前先申请一个设备号，系统会自动给你一个没有被使用的设备号，这样就避免了冲突，卸载驱动的时候释放掉这个设备号即可
+int alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count, const char *name) dev：保存申请到的设备号
+baseminor：次设备号起始地址，alloc_chrdev_region可以申请一段连续的多个设备号，这些设备好的主设备号一样，但是次设备号不同，次设备号以baseminor为起始地址开始递增。一般baseminor为0，也就是次设备号从0开始
+count：要申请的设备号数量
+name：设别名字
+如果给定了设备的主设备号和次设备号就使用如下所示函数来注册设备号
+int register_chrdev_region(dev_t from, unsigned count, const char *name) 参数 from 是要申请的起始设备号，也就是给定的设备号 参数 count 是要申请的数量，一般都是一个 参数 name 是设备名字 一般采用动态分配设备号，模板如下
+/* 注册字符设备驱动 */ /* 1、创建设备号 */ if (newchrled.major) { /* 定义了设备号 */ newchrled." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/81c05a20d0cff7f758e9da92f154d521/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-10T15:16:37+08:00" />
+<meta property="article:modified_time" content="2023-03-10T15:16:37+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux驱动开发</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div class="kdocs-document"> 
+ <h2 style="">一、驱动分类</h2> 
+ <p style=""> Linux中包含三大类驱动：字符设备驱动、块设备驱动和网络设备驱动。其中字符设备驱动是最大的一类驱动，因为字符设备最多，从led到I2C、SPI、音频等都属于字符设备驱动。块设备驱动和网络设备驱动都要比字符设备驱动复杂。因为其比较复杂，所以半导体厂商都已经帮我们写好了，大部分情况下都是可以直接使用的。所谓的块设备驱动就是存储器设备的驱动，比如EMMC、NAND、SD卡和U盘等存储设备</p> 
+ <h2 style="">二、字符设备驱动开发</h2> 
+ <p style="">字符设备驱动是Linux驱动中最基本的一类设备驱动，字符设备就是一个一个字节，按照字节流进行读写操作的设备，读写数据是分先后顺序的。我们先来了解Linux下的应用程序是如何调用驱动程序的，如下图：</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:955px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:81.36125%;height:0;"> 
+    <img src="https://images2.imgbox.com/b3/75/3Acmw8de_o.png" style="margin-left:;display:block;width:955px;margin-top:-81.36125%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <p style="">应用程序运行在用户空间，而Linux驱动属于内核的一部分，因此驱动运行于内核空间。open、close、write和read等这些函数是由C库提供的，在LInux系统中，系统调用作为C库的一部分。</p> 
+ <div class="kdocs-line-container" style="display:flex;"> 
+  <div class="kdocs-img" style="flex-direction:column;max-width:100%;display:flex;width:1097px;justify-content:center;align-items:center;height:auto;"> 
+   <div class="kdocs-img" style="padding-top:14.676391%;height:0;"> 
+    <img src="https://images2.imgbox.com/94/04/PYxKvSFD_o.png" style="margin-left:;display:block;width:1097px;margin-top:-14.676391%;height:auto;"> 
+   </div> 
+  </div> 
+ </div> 
+ <h2 style="">三、Linux设备号</h2> 
+ <h5 style="">1、设备好的组成</h5> 
+ <p style="">为了方便管理，Linux中每个设备都有一个设备号，设备号由主设备号和次设备号两部分组成，主设备号表示某一个具体的驱动，次设备号表示使用这个驱动的各个设备。Linux提供了一个名为dev_t的数据类型表示设备号，dev_t定义在include/linux/types.h里面。dev_t其实是unsigned int类型，是一个32位的数据类型。其中高12位是主设备号，低20位是次设备号，因此Linux系统中主设备号范围是0~4095</p> 
+ <p style="">设备号的操作函数</p> 
+ <blockquote class="kdocs-blockquote" style="">
+   MAJOR用于从dev_t中获取主设备号，将dev_t右移20位即可 
+  <br>MINOR用于从dev_t中获取次设备号，取dev_t的低20位即可 
+  <br>MKDEV用于将给定的主设备号和次设备号的值组合成dev_t类型的设备号 
+ </blockquote> 
+ <h5 style="">2、设备号的分配</h5> 
+ <p style="">静态设备号：注册字符设备需要给设备指定一个设备号，这个设备号可以是驱动开发者静态指定的设备号，但是要注意该设备号没有被内核开发者分配掉。使用cat/proc/devices命令即可查看当前系统中已经使用的设备号</p> 
+ <p style="">使用register_chrdev函数注册字符设备的时候只需要给定一个主设备号即可</p> 
+ <pre class="kdocs-cpp"><code class="language-cpp">/* 注册字符设备驱动 */
+retvalue = register_chrdev(CHRDEVBASE_MAJOR, CHRDEVBASE_NAME, &amp;chrdevbase_fops);</code></pre> 
+ <p style="">这是老版本字符设备注册函数，其0~1048575（2^20-1）这个区间的次设备号全部设置为0</p> 
+ <p style="">动态分配设备号：使用设备号的时候向linux内核申请，需要几个就申请几个，由linux内核分配设备可以使用的设备号。在注册字符设备之前先申请一个设备号，系统会自动给你一个没有被使用的设备号，这样就避免了冲突，卸载驱动的时候释放掉这个设备号即可</p> 
+ <pre class="kdocs-cpp"><code class="language-cpp">int alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count, const char *name)</code></pre> 
+ <p style="">dev：保存申请到的设备号</p> 
+ <p style="">baseminor：次设备号起始地址，alloc_chrdev_region可以申请一段连续的多个设备号，这些设备好的主设备号一样，但是次设备号不同，次设备号以baseminor为起始地址开始递增。一般baseminor为0，也就是次设备号从0开始</p> 
+ <p style="">count：要申请的设备号数量</p> 
+ <p style="">name：设别名字</p> 
+ <p style="">如果给定了设备的主设备号和次设备号就使用如下所示函数来注册设备号</p> 
+ <blockquote class="kdocs-blockquote" style="">
+   int register_chrdev_region(dev_t from, unsigned count, const char *name) 
+  <br>参数 from 是要申请的起始设备号，也就是给定的设备号 
+  <br>参数 count 是要申请的数量，一般都是一个 
+  <br>参数 name 是设备名字 
+ </blockquote> 
+ <p style="">一般采用动态分配设备号，模板如下</p> 
+ <pre class="kdocs-cpp"><code class="language-cpp">/* 注册字符设备驱动 */
+/* 1、创建设备号 */
+if (newchrled.major) 
+{        
+    /*  定义了设备号 */
+    newchrled.devid = MKDEV(newchrled.major, 0);
+    register_chrdev_region(newchrled.devid, NEWCHRLED_CNT, NEWCHRLED_NAME);
+} 
+else 
+{        
+    /* 没有定义设备号 */
+    alloc_chrdev_region(&amp;newchrled.devid, 0, NEWCHRLED_CNT, NEWCHRLED_NAME);    /* 申请设备号 */
+    newchrled.major = MAJOR(newchrled.devid);    /* 获取分配号的主设备号 */
+    newchrled.minor = MINOR(newchrled.devid);    /* 获取分配号的次设备号 */
+}
+printk("newcheled major=%d,minor=%d\r\n",newchrled.major, newchrled.minor);    </code></pre> 
+ <p style="">注销设备号</p> 
+ <pre class="kdocs-cpp"><code class="language-cpp">void unregister_chrdev_region(dev_t from, unsigned count)</code></pre> 
+ <h2 style="">四、模块注册与卸载</h2> 
+ <p style="">Linux驱动有两种运行方式，第一种是将驱动编译进Linux内核中，当Linux内核启动的时候就会自动运行驱动程序。第二种是将驱动编写成模块(Linux下模块扩展名为ko)，在Linux内核启动以后使用相应命令加载驱动模块</p> 
+ <p style="">模块有加载和卸载两种操作，模块的加载和卸载注册函数如下</p> 
+ <pre class="kdocs-cpp"><code class="language-cpp">module_init(xxx_init); //注册模块加载函数
+module_exit(xxx_exit); //注册模块卸载函数</code></pre> 
+ <p style="">module_init函数来向Linux内核注册一个模块加载函数，参数xxx_init就是需要注册的具体函数，当使用insmod命令加载驱动的时候，xxx_init这个函数就会被调用</p> 
+ <p style="">module_exit函数用来向Linux内核注册一个模块卸载函数，参数xxx_exit就是需要注册的函数，当使用rmmod命令卸载驱动的时候xxx_exit就会被调用</p> 
+ <h2 style="">五、字符设备注册与注销</h2> 
+ <p style="">当驱动模块加载成功需要注册字符设备，卸载驱动模块的时候也需要注销掉字符设备</p> 
+ <pre class="kdocs-cpp"><code class="language-cpp">static inline int register_chrdev(unsigned int major, const char *name,const struct file_operations *fops)
+static inline void unregister_chrdev(unsigned int major, const char *name)</code></pre> 
+ <p style="">register_chrdev函数用于注册字符设备，unregister_chrdev注销掉字符设备</p> 
+ <p style="">一般字符设备的注册在驱动模块的入口函数xxx_init中进行，字符设备的注销在驱动模块的出口函数xxx_exit进行</p> 
+ <h2 style="">六、LICENSE和作者信息</h2> 
+ <p style="">在驱动中加如LICENSE和作者信息，其中LICENSE是必须添加的，否则的话编译会报错，作者信息可以不添加</p> 
+ <pre class="kdocs-cpp"><code class="language-cpp">MODULE_LICENSE("GPL") //添加模块 LICENSE 信息 ,LICENSE 采用 GPL 协议
+MODULE_AUTHOR("mingfei") //添加模块作者信息</code></pre> 
+ <h2 style="">七、测试指令</h2> 
+ <h5 style="">1、加载驱动模块</h5> 
+ <p style="">驱动模块一般挂载在lib/modules/4.1.15目录下，所以需要编写的驱动模块和测试软件复制到根文件系统rootfs/lib/modules/4.1.15目录下，通过tftfp和nfs启动后，在开发板的lib/modules/4.1.15目录下存在驱动模块和测试软件</p> 
+ <p style="">驱动编译完成以后扩展名是.ko，有两种命令可以加载模块：insmod和modprobe</p> 
+ <p style="">加载驱动模块</p> 
+ <blockquote class="kdocs-blockquote" style="">
+   insmod xxx.ko 
+  <br>modprobe xxx.ko 
+ </blockquote> 
+ <p style="">insmod不能解决模块的依赖关系，比如drv.ko依赖first.ko这个模块，就必须先使用insmod命令加载first.ko这个模块，然后再加载drv.ko这个模块</p> 
+ <p style="">但是modprobe就不会存在这样的问题，modprobe会分析模块的依赖关系，然后会将所有的依赖模块都加载到内核中</p> 
+ <p style="">若modprobe提示无法打开modules.dep，驱动挂载失败，输入depmod即可自动生成modules.dep</p> 
+ <h5 style="">2、创建设备节点文件</h5> 
+ <p style="">驱动加载成功需要在/dev目录下创建一个与之对应设备节点文件，应用程序就是通过操作设备节点文件来完成对具体设备的操作</p> 
+ <blockquote class="kdocs-blockquote" style="">
+   创建/dev/chrdev设备节点文件 
+  <br>mknod /dev/chrdev c 200 0 
+  <br>mknod:创建节点命令 
+  <br>/dev/chrdev：要创建的节点文件 
+  <br>c：字符设备 
+  <br>200 0：设备的主设备号和次设备号 
+ </blockquote> 
+ <p style="">创建完成以后就会存在/dev/chrdev文件，可以使用ls/dev/chrdev -l命令查看</p> 
+ <h5 style="">3、设备测试</h5> 
+ <p style="">运行测试程序</p> 
+ <blockquote class="kdocs-blockquote" style="">
+   ./xxx(程序) 参数1 参数2... (参数传给应用层的main函数) 
+  <br>./chrdevbaseApp /dev/chrdevbase 1 //例如测试对chrdevbase设备的写操作 
+ </blockquote> 
+ <h5 style="">4、卸载驱动模块</h5> 
+ <blockquote class="kdocs-blockquote" style="">
+   rmmod xxx.ko 
+ </blockquote> 
+ <p style="">卸载后可以使用lsmod查看卸载模块是否成功</p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/eb7b643fc0fd9067294ad338ac86baaa/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Docker环境离线安装教程，附docker容器镜像打包，导出，导入加载镜像等</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b70b3468a27591bdce7a36b2f4038e59/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">计算机考研机试指南第二版（王道）——第三章 排序和查找</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

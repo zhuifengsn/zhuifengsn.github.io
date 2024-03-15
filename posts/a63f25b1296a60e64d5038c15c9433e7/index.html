@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>虚拟试穿代码理解Down to the Last Detail: Virtual Try-on with Fine-grained Details（demo.py下） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="虚拟试穿代码理解Down to the Last Detail: Virtual Try-on with Fine-grained Details（demo.py下）" />
+<meta property="og:description" content="文章目录 demo.pyfoward函数（下）main函数 Down to the Last Detail: Virtual Try-on with Fine-grained Details, ACM MM 2020 Paper, Code/Model, ArXiv 深入到最后一个细节：能雕刻细节的虚拟试穿 理解得不对的地方欢迎评论区指正~ demo.py foward函数（下） #使用了torch.no_grad()上下文管理器，它会在其范围内禁用梯度计算，以减少内存占用并提高代码执行速度。 with torch.no_grad(): for i, result in enumerate(val_dataloader):#循环遍历val_dataloader中的数据。enumerate()函数可以同时返回数据的下标i和数据内容result #服装空间对齐模块（Clothing Spatial Alignment Module）：用于得到目标姿态下的变形后的服装图像。 &#39;warped cloth&#39; warped_cloth = warped_image(gmm, result)#执行warped_image函数，将数据传入gmm生成器模型中，并输出warped_cloth，表示变形后的衣服图像。 if opt.warp_cloth:#如果指定了opt.warp_cloth参数为True，则将warped_cloth保存到文件中 warped_cloth_name = result[&#39;warped_cloth_name&#39;] warped_cloth_path = os.path.join(&#39;dataset&#39;, &#39;warped_cloth&#39;, warped_cloth_name[0]) if not os.path.exists(os.path.split(warped_cloth_path)[0]):#判断 warped_cloth_path 路径所在的目录是否存在 os.makedirs(os.path.split(warped_cloth_path)[0])#不存在则使用 os.makedirs() 创建该目录 utils.save_image(warped_cloth * 0.5 &#43; 0.5, warped_cloth_path) print(&#39;processing_%d&#39;%i) continue #从result中提取出了多个tensor数据，将其赋值给对应的变量名。 source_parse = result[&#39;source_parse&#39;]." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/a63f25b1296a60e64d5038c15c9433e7/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-05T09:52:40+08:00" />
+<meta property="article:modified_time" content="2023-03-05T09:52:40+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">虚拟试穿代码理解Down to the Last Detail: Virtual Try-on with Fine-grained Details（demo.py下）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#demopy_5" rel="nofollow">demo.py</a></li><li><ul><li><a href="#foward_6" rel="nofollow">foward函数（下）</a></li><li><a href="#main_86" rel="nofollow">main函数</a></li></ul> 
+ </li></ul> 
+</div> 
+<br> Down to the Last Detail: Virtual Try-on with Fine-grained Details, ACM MM 2020 
+<br> 
+<a href="https://dl.acm.org/doi/pdf/10.1145/3394171.3413514" rel="nofollow">Paper</a>, 
+<a href="https://github.com/JDAI-CV/Down-to-the-Last-Detail-Virtual-Try-on-with-Detail-Carving">Code/Model</a>, 
+<a href="https://arxiv.org/abs/1912.06324v2" rel="nofollow">ArXiv</a> 
+<br> 深入到最后一个细节：能雕刻细节的虚拟试穿 
+<br> 理解得不对的地方欢迎评论区指正~ 
+<p></p> 
+<h2><a id="demopy_5"></a>demo.py</h2> 
+<h3><a id="foward_6"></a>foward函数（下）</h3> 
+<pre><code class="prism language-python"><span class="token comment">#使用了torch.no_grad()上下文管理器，它会在其范围内禁用梯度计算，以减少内存占用并提高代码执行速度。</span>
+    <span class="token keyword">with</span> torch<span class="token punctuation">.</span>no_grad<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">:</span>
+        <span class="token keyword">for</span> i<span class="token punctuation">,</span> result <span class="token keyword">in</span> <span class="token builtin">enumerate</span><span class="token punctuation">(</span>val_dataloader<span class="token punctuation">)</span><span class="token punctuation">:</span><span class="token comment">#循环遍历val_dataloader中的数据。enumerate()函数可以同时返回数据的下标i和数据内容result</span>
+            
+            <span class="token comment">#服装空间对齐模块（Clothing Spatial Alignment Module）：用于得到目标姿态下的变形后的服装图像。</span>
+            <span class="token string">'warped cloth'</span>
+            warped_cloth <span class="token operator">=</span> warped_image<span class="token punctuation">(</span>gmm<span class="token punctuation">,</span> result<span class="token punctuation">)</span><span class="token comment">#执行warped_image函数，将数据传入gmm生成器模型中，并输出warped_cloth，表示变形后的衣服图像。</span>
+            <span class="token keyword">if</span> opt<span class="token punctuation">.</span>warp_cloth<span class="token punctuation">:</span><span class="token comment">#如果指定了opt.warp_cloth参数为True，则将warped_cloth保存到文件中</span>
+                warped_cloth_name <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'warped_cloth_name'</span><span class="token punctuation">]</span>
+                warped_cloth_path <span class="token operator">=</span> os<span class="token punctuation">.</span>path<span class="token punctuation">.</span>join<span class="token punctuation">(</span><span class="token string">'dataset'</span><span class="token punctuation">,</span> <span class="token string">'warped_cloth'</span><span class="token punctuation">,</span> warped_cloth_name<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span>
+                <span class="token keyword">if</span> <span class="token keyword">not</span> os<span class="token punctuation">.</span>path<span class="token punctuation">.</span>exists<span class="token punctuation">(</span>os<span class="token punctuation">.</span>path<span class="token punctuation">.</span>split<span class="token punctuation">(</span>warped_cloth_path<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">:</span><span class="token comment">#判断 warped_cloth_path 路径所在的目录是否存在</span>
+                    os<span class="token punctuation">.</span>makedirs<span class="token punctuation">(</span>os<span class="token punctuation">.</span>path<span class="token punctuation">.</span>split<span class="token punctuation">(</span>warped_cloth_path<span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token comment">#不存在则使用 os.makedirs() 创建该目录</span>
+                utils<span class="token punctuation">.</span>save_image<span class="token punctuation">(</span>warped_cloth <span class="token operator">*</span> <span class="token number">0.5</span> <span class="token operator">+</span> <span class="token number">0.5</span><span class="token punctuation">,</span> warped_cloth_path<span class="token punctuation">)</span>
+                <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">'processing_%d'</span><span class="token operator">%</span>i<span class="token punctuation">)</span>
+                <span class="token keyword">continue</span>
+
+            <span class="token comment">#从result中提取出了多个tensor数据，将其赋值给对应的变量名。 </span>
+            source_parse <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'source_parse'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#输入的人物姿态解析图</span>
+            target_pose_embedding <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'target_pose_embedding'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#目标姿态的嵌入向量</span>
+            source_image <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'source_image'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#输入的人物图像</span>
+            cloth_parse <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'cloth_parse'</span><span class="token punctuation">]</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#衣服的姿态解析图</span>
+            cloth_image <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'cloth_image'</span><span class="token punctuation">]</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#衣服的图像</span>
+            target_pose_img <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'target_pose_img'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#目标姿态的图像</span>
+            cloth_parse <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'cloth_parse'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#转换成float类型</span>
+            source_parse_vis <span class="token operator">=</span> result<span class="token punctuation">[</span><span class="token string">'source_parse_vis'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#可视化的人物姿态解析图</span>
+
+            <span class="token comment">#将衣服的信息添加到输入张量中</span>
+            <span class="token string">"filter add cloth infomation"</span>
+            real_s <span class="token operator">=</span> source_parse<span class="token comment">#赋值</span>
+            index <span class="token operator">=</span> <span class="token punctuation">[</span>x <span class="token keyword">for</span> x <span class="token keyword">in</span> <span class="token builtin">list</span><span class="token punctuation">(</span><span class="token builtin">range</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token keyword">if</span> x <span class="token operator">!=</span> <span class="token number">5</span> <span class="token keyword">and</span> x <span class="token operator">!=</span> <span class="token number">6</span> <span class="token keyword">and</span> x <span class="token operator">!=</span> <span class="token number">7</span><span class="token punctuation">]</span><span class="token comment">#将real_s张量中索引为5、6和7的通道（通道数从0开始）从通道维度上去掉，得到real_s_张量</span>
+            real_s_ <span class="token operator">=</span> torch<span class="token punctuation">.</span>index_select<span class="token punctuation">(</span>real_s<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> torch<span class="token punctuation">.</span>tensor<span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token comment">#index_select函数从real_s张量的第1维度（即通道维度）中选择指定的索引，返回一个新的张量real_s_</span>
+            input_parse <span class="token operator">=</span> torch<span class="token punctuation">.</span>cat<span class="token punctuation">(</span><span class="token punctuation">(</span>real_s_<span class="token punctuation">,</span> target_pose_embedding<span class="token punctuation">,</span> cloth_parse<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#将real_s_、target_pose_embedding和cloth_parse三个张量沿着通道维度（dim=1）拼接起来</span>
+            
+            <span class="token comment">#解析转换网络（Parsing Transformation Network）：用于得到目标姿态下的目标语义图（人体分割图）。</span>
+            <span class="token string">'P'</span>
+            generate_parse <span class="token operator">=</span> generator_parsing<span class="token punctuation">(</span>input_parse<span class="token punctuation">)</span> <span class="token comment"># tanh 使用生成器模型generator_parsing对input_parse进行前向计算，生成一个张量generate_parse</span>
+            generate_parse <span class="token operator">=</span> F<span class="token punctuation">.</span>softmax<span class="token punctuation">(</span>generate_parse<span class="token punctuation">,</span> dim<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token comment">#softmax操作将每个元素变为正数，再将它们加起来变为1，得到了一个概率分布。</span>
+
+            generate_parse_argmax <span class="token operator">=</span> torch<span class="token punctuation">.</span>argmax<span class="token punctuation">(</span>generate_parse<span class="token punctuation">,</span> dim<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span> keepdim<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#返回每一行中最大值的索引</span>
+            res <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+            <span class="token keyword">for</span> index <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">:</span><span class="token comment">#for 循环将 generate_parse_argmax 的每一行转换成一个大小为 (batch_size, 20) 的 one-hot 向量。</span>
+                res<span class="token punctuation">.</span>append<span class="token punctuation">(</span>generate_parse_argmax <span class="token operator">==</span> index<span class="token punctuation">)</span><span class="token comment">#one-hot向量是指在一个固定长度的向量中，只有一个元素是1，其他元素都是0。这个唯一的1的位置表示一个特定的类别或状态，方便地处理分类问题。</span>
+            generate_parse_argmax <span class="token operator">=</span> torch<span class="token punctuation">.</span>cat<span class="token punctuation">(</span>res<span class="token punctuation">,</span> dim<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token builtin">float</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#将列表 res 中的所有 one-hot 向量按照第二个维度拼接起来，得到一个大小为 (batch_size, 20*20) 的 one-hot tensor，也就是 generate_parse_argmax。</span>
+
+            <span class="token comment">#详细外观生成网络（Detailed Appearance Generation Network）：CP-VTON模型中的一部分，用于生成初步的虚拟试衣结果。</span>
+            <span class="token string">"A"</span>
+            image_without_cloth <span class="token operator">=</span> create_part<span class="token punctuation">(</span>source_image<span class="token punctuation">,</span> source_parse<span class="token punctuation">,</span> <span class="token string">'image_without_cloth'</span><span class="token punctuation">,</span> <span class="token boolean">False</span><span class="token punctuation">)</span><span class="token comment">#生成源图像中不包含衣服的部分</span>
+            input_app <span class="token operator">=</span> torch<span class="token punctuation">.</span>cat<span class="token punctuation">(</span><span class="token punctuation">(</span>image_without_cloth<span class="token punctuation">,</span> warped_cloth<span class="token punctuation">,</span> generate_parse<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">.</span>cuda<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token comment">#将 image_without_cloth、warped_cloth 和 generate_parse 拼接起来作为输入</span>
+            generate_img <span class="token operator">=</span> generator_app_cpvton<span class="token punctuation">(</span>input_app<span class="token punctuation">)</span><span class="token comment">#送入generator_app_cpvton生成generate_img ，一个大小为 (batch_size, 6, H, W) 的张量，其中前3个通道是前景图像，后3个通道是遮罩图像。</span>
+            p_rendered<span class="token punctuation">,</span> m_composite <span class="token operator">=</span> torch<span class="token punctuation">.</span>split<span class="token punctuation">(</span>generate_img<span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token comment">#通过 torch.split 将其拆分成前景图像 p_rendered 和遮罩图像 m_composite。</span>
+            p_rendered <span class="token operator">=</span> F<span class="token punctuation">.</span>tanh<span class="token punctuation">(</span>p_rendered<span class="token punctuation">)</span><span class="token comment">#p_rendered 通过 F.tanh 转换到 [-1, 1] 范围内</span>
+            m_composite <span class="token operator">=</span> F<span class="token punctuation">.</span>sigmoid<span class="token punctuation">(</span>m_composite<span class="token punctuation">)</span><span class="token comment">#m_composite 通过 F.sigmoid 转换到 [0, 1] 范围内</span>
+            p_tryon <span class="token operator">=</span> warped_cloth <span class="token operator">*</span> m_composite <span class="token operator">+</span> p_rendered <span class="token operator">*</span> <span class="token punctuation">(</span><span class="token number">1</span> <span class="token operator">-</span> m_composite<span class="token punctuation">)</span><span class="token comment">#最终的虚拟试衣结果 p_tryon 通过加权平均的方式得到，其中 warped_cloth 的权重为遮罩图像，p_rendered 的权重为遮罩图像的补集。</span>
+            refine_img <span class="token operator">=</span> p_tryon
+
+            <span class="token comment">#面部细化网络（Face refinement Network）：用于为面部区域增加更多的细节和真实感。</span>
+            <span class="token string">"F"</span>
+            generate_face <span class="token operator">=</span> create_part<span class="token punctuation">(</span>refine_img<span class="token punctuation">,</span> generate_parse_argmax<span class="token punctuation">,</span> <span class="token string">'face'</span><span class="token punctuation">,</span> <span class="token boolean">False</span><span class="token punctuation">)</span><span class="token comment">#从分割结果(generate_parse_argmax)中提取出人脸部分(generate_face)。</span>
+            generate_img_without_face <span class="token operator">=</span> refine_img <span class="token operator">-</span> generate_face<span class="token comment">#与原始图像(refine_img)中的非人脸部分合成得到不包含人脸的图像(generate_img_without_face)。</span>
+            source_face <span class="token operator">=</span> create_part<span class="token punctuation">(</span>source_image<span class="token punctuation">,</span> source_parse<span class="token punctuation">,</span> <span class="token string">'face'</span><span class="token punctuation">,</span> <span class="token boolean">False</span><span class="token punctuation">)</span><span class="token comment">#从源图像(source_image)中提取出人脸部分(source_face)。</span>
+            input_face <span class="token operator">=</span> torch<span class="token punctuation">.</span>cat<span class="token punctuation">(</span><span class="token punctuation">(</span>source_face<span class="token punctuation">,</span> generate_face<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token comment">#将生成的人脸(generate_face)和源图像的人脸(source_face)连接起来</span>
+            fake_face <span class="token operator">=</span> generator_face<span class="token punctuation">(</span>input_face<span class="token punctuation">)</span><span class="token comment">#送入生成器网络(generator_face)生成伪造的人脸(fake_face)。</span>
+            fake_face <span class="token operator">=</span> create_part<span class="token punctuation">(</span>fake_face<span class="token punctuation">,</span> generate_parse_argmax<span class="token punctuation">,</span> <span class="token string">'face'</span><span class="token punctuation">,</span> <span class="token boolean">False</span><span class="token punctuation">)</span>
+            refine_img <span class="token operator">=</span> generate_img_without_face <span class="token operator">+</span> fake_face<span class="token comment">#将伪造的人脸(fake_face)插入到不包含人脸的图像(generate_img_without_face)中，得到最终的输出(refine_img)</span>
+
+            <span class="token comment">#用于保存模型生成的结果图像</span>
+            <span class="token string">"generate parse vis"</span>
+            <span class="token keyword">if</span> opt<span class="token punctuation">.</span>save_time<span class="token punctuation">:</span>
+                generate_parse_vis <span class="token operator">=</span> source_parse_vis
+            <span class="token keyword">else</span><span class="token punctuation">:</span>
+                generate_parse_vis <span class="token operator">=</span> torch<span class="token punctuation">.</span>argmax<span class="token punctuation">(</span>generate_parse<span class="token punctuation">,</span> dim<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span> keepdim<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span><span class="token punctuation">.</span>permute<span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">3</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">.</span>contiguous<span class="token punctuation">(</span><span class="token punctuation">)</span>
+                generate_parse_vis <span class="token operator">=</span> pose_utils<span class="token punctuation">.</span>decode_labels<span class="token punctuation">(</span>generate_parse_vis<span class="token punctuation">)</span><span class="token comment">#进行解码生成可视化的解析图像</span>
+            <span class="token string">"save results"</span>
+            images <span class="token operator">=</span> <span class="token punctuation">[</span>source_image<span class="token punctuation">,</span> cloth_image<span class="token punctuation">,</span> target_pose_img<span class="token punctuation">,</span> warped_cloth<span class="token punctuation">,</span> source_parse_vis<span class="token punctuation">,</span> generate_parse_vis<span class="token punctuation">,</span> p_tryon<span class="token punctuation">,</span> refine_img<span class="token punctuation">]</span><span class="token comment">#所需图像存储在 images 列表中</span>
+            pose_utils<span class="token punctuation">.</span>save_img<span class="token punctuation">(</span>images<span class="token punctuation">,</span> os<span class="token punctuation">.</span>path<span class="token punctuation">.</span>join<span class="token punctuation">(</span>refine_path<span class="token punctuation">,</span> <span class="token string">'%d.jpg'</span><span class="token punctuation">)</span><span class="token operator">%</span><span class="token punctuation">(</span>i<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token comment">#将列表中的图像保存在指定的路径下</span>
+
+    torch<span class="token punctuation">.</span>cuda<span class="token punctuation">.</span>empty_cache<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre> 
+<h3><a id="main_86"></a>main函数</h3> 
+<pre><code class="prism language-python"><span class="token keyword">if</span> __name__ <span class="token operator">==</span> <span class="token string">"__main__"</span><span class="token punctuation">:</span>
+    <span class="token comment">#定义四个模型的预训练权重的路径</span>
+    resume_gmm <span class="token operator">=</span> <span class="token string">"pretrained_checkpoint/step_009000.pth"</span>
+    resume_G_parse <span class="token operator">=</span> <span class="token string">'pretrained_checkpoint/parsing.tar'</span>
+    resume_G_app_cpvton <span class="token operator">=</span> <span class="token string">'pretrained_checkpoint/app.tar'</span>
+    resume_G_face <span class="token operator">=</span> <span class="token string">'pretrained_checkpoint/face.tar'</span>
+    paths <span class="token operator">=</span> <span class="token punctuation">[</span>resume_gmm<span class="token punctuation">,</span> resume_G_parse<span class="token punctuation">,</span> resume_G_app_cpvton<span class="token punctuation">,</span> resume_G_face<span class="token punctuation">]</span>
+    
+    <span class="token comment">#创建Config类的实例opt来接受传入参数</span>
+    opt <span class="token operator">=</span> Config<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>parse<span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token keyword">if</span> <span class="token keyword">not</span> os<span class="token punctuation">.</span>path<span class="token punctuation">.</span>exists<span class="token punctuation">(</span>opt<span class="token punctuation">.</span>forward_save_path<span class="token punctuation">)</span><span class="token punctuation">:</span>
+        os<span class="token punctuation">.</span>makedirs<span class="token punctuation">(</span>opt<span class="token punctuation">.</span>forward_save_path<span class="token punctuation">)</span>
+
+    forward<span class="token punctuation">(</span>opt<span class="token punctuation">,</span> paths<span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> opt<span class="token punctuation">.</span>forward_save_path<span class="token punctuation">)</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/8d86b25ab6faa40cb882b356c587e4c6/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">王道C语言督学营OJ练习全解【24考研最新版】</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/a7628cc2f43a16789ed9a7dcfb010812/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">洛谷 P1443 马的遍历 BFS解</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

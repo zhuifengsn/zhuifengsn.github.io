@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Redis的六种底层数据结构 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Redis的六种底层数据结构" />
+<meta property="og:description" content="Redis的六种底层数据结构 1、简单动态字符串（SDS）2、链表3、字典哈希表哈希表节点字典 4、跳跃表跳跃表节点（zskiplistNode）跳跃表（zskiplist） 5、整数集合6、压缩列表 本文章内容摘自《Redis设计与实现》一书。
+配套网站：http://redisbook.com/
+1、简单动态字符串（SDS） Redis 虽然是用 C 语言写的，但Redis没有直接使用C语言传统的字符串表示（以空字符 ‘\0’ 结尾的字符数组），二是自己构建了一种名为简单动态字符串（simple dynamic string，SDS）的抽象类型，并将 SDS 作为 Redis的默认字符串表示。
+在Redis里面，C字符串只会作为字符串字面量（string literal）用在一些无须对字符串值进行修改的地方，比如打印日志。
+SDS 的定义：
+struct sdshdr{ //记录buf数组中已使用字节的数量 //等于 SDS 所保存字符串的长度 int len; //记录 buf 数组中未使用字节的数量 int free; //字节数组，用于保存字符串 char buf[]; } ① free 属性的值为 0，表示这个SDS没有分配任何未使用的空间。
+② len 属性的值为 5，表示这个SDS保存了一个五字节长的字符串。
+③ buf 属性是一个char 类型的数组，数组前五个字节分别保存了 ‘R’、‘e’、
+‘d’、‘i’、‘s’ 五个字符，而最后一个字节则保存了空字符 ‘\0’ 。
+（SDS遵循C字符串以空字符结尾的惯例，保存空字符的 1 字节空间不计算在SDS的 len属性里面，并且为空字符分配额外的 1 字节空间，以及添加空字符到字符串末尾等操作，都是由SDS 函数自动完成的，所有这个空字符对于SDS的使用者来说是完全透明的。遵循空字符结尾这一惯例的好处是，SDS可以直接重用C字符串函数库里面的函数。）
+SDS 与 C 字浮串的区别：
+（1）常数复杂度获取字符串长度
+因为 C 字符串并不记录自身的长度信息， 所以为了获取一个 C 字符串的长度， 程序必须遍历整个字符串， 对遇到的每个字符进行计数， 直到遇到代表字符串结尾的空字符为止， 这个操作的复杂度为 O(N) 。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/8b9e63c2c41e2bdfaf02c7cdc8b8ddd2/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-02-06T21:38:44+08:00" />
+<meta property="article:modified_time" content="2023-02-06T21:38:44+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Redis的六种底层数据结构</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-dracula">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>Redis的六种底层数据结构</h4> 
+ <ul><li><a href="#1SDS_5" rel="nofollow">1、简单动态字符串（SDS）</a></li><li><a href="#2_57" rel="nofollow">2、链表</a></li><li><a href="#3_117" rel="nofollow">3、字典</a></li><li><ul><li><a href="#_122" rel="nofollow">哈希表</a></li><li><a href="#_144" rel="nofollow">哈希表节点</a></li><li><a href="#_172" rel="nofollow">字典</a></li></ul> 
+  </li><li><a href="#4_260" rel="nofollow">4、跳跃表</a></li><li><ul><li><a href="#zskiplistNode_278" rel="nofollow">跳跃表节点（zskiplistNode）</a></li><li><a href="#zskiplist_291" rel="nofollow">跳跃表（zskiplist）</a></li></ul> 
+  </li><li><a href="#5_297" rel="nofollow">5、整数集合</a></li><li><a href="#6_333" rel="nofollow">6、压缩列表</a></li></ul> 
+</div> 
+<p></p> 
+<p>本文章内容摘自《Redis设计与实现》一书。<br> 配套网站：<a href="http://redisbook.com/" rel="nofollow">http://redisbook.com/</a></p> 
+<h2><a id="1SDS_5"></a>1、简单动态字符串（SDS）</h2> 
+<p>Redis 虽然是用 C 语言写的，但Redis没有直接使用C语言传统的字符串表示（以空字符 ‘\0’ 结尾的字符数组），二是自己构建了一种名为简单动态字符串（simple dynamic string，SDS）的抽象类型，并将 SDS 作为 Redis的默认字符串表示。<br> 在Redis里面，C字符串只会作为字符串字面量（string literal）用在一些无须对字符串值进行修改的地方，比如打印日志。</p> 
+<p><strong>SDS 的定义：</strong></p> 
+<pre><code class="prism language-c"><span class="token keyword">struct</span> <span class="token class-name">sdshdr</span><span class="token punctuation">{<!-- --></span>
+     <span class="token comment">//记录buf数组中已使用字节的数量</span>
+     <span class="token comment">//等于 SDS 所保存字符串的长度</span>
+     <span class="token keyword">int</span> len<span class="token punctuation">;</span>
+     
+     <span class="token comment">//记录 buf 数组中未使用字节的数量</span>
+     <span class="token keyword">int</span> free<span class="token punctuation">;</span>
+     
+     <span class="token comment">//字节数组，用于保存字符串</span>
+     <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/54/41/WFcsLJGr_o.png" alt="在这里插入图片描述"><br> ① free 属性的值为 0，表示这个SDS没有分配任何未使用的空间。<br> ② len 属性的值为 5，表示这个SDS保存了一个五字节长的字符串。<br> ③ buf 属性是一个char 类型的数组，数组前五个字节分别保存了 ‘R’、‘e’、<br> ‘d’、‘i’、‘s’ 五个字符，而最后一个字节则保存了空字符 ‘\0’ 。</p> 
+<p>（SDS遵循C字符串以空字符结尾的惯例，保存空字符的 1 字节空间不计算在SDS的 len属性里面，并且为空字符分配额外的 1 字节空间，以及添加空字符到字符串末尾等操作，都是由SDS 函数自动完成的，所有这个空字符对于SDS的使用者来说是完全透明的。遵循空字符结尾这一惯例的好处是，SDS可以直接重用C字符串函数库里面的函数。）</p> 
+<p>SDS 与 C 字浮串的区别：</p> 
+<p>（1）<mark>常数复杂度获取字符串长度</mark><br> 因为 C 字符串并不记录自身的长度信息， 所以为了获取一个 C 字符串的长度， 程序必须遍历整个字符串， 对遇到的每个字符进行计数， 直到遇到代表字符串结尾的空字符为止， 这个操作的复杂度为 O(N) 。</p> 
+<p>和 C 字符串不同， 因为 SDS 在 len 属性中记录了 SDS 本身的长度， 所以获取一个 SDS 长度的复杂度仅为 O(1) 。</p> 
+<p>（2）<mark>杜绝缓冲区溢出</mark><br> 我们知道在 C 语言中使用 strcat 函数来进行两个字符串的拼接，一旦没有分配足够长度的内存空间，就会造成缓冲区溢出。而对于 SDS 数据类型，在进行字符修改的时候，会首先根据记录的 len 属性检查内存空间是否满足需求，如果不满足，会进行相应的空间扩展，然后在进行修改操作，所以不会出现缓冲区溢出。</p> 
+<p>（3）<mark>减少修改字符串的内存重新分配次数</mark><br> C语言由于不记录字符串的长度，所以如果要修改字符串，必须要重新分配内存（先释放再申请），因为如果没有重新分配，字符串长度增大时会造成内存缓冲区溢出，字符串长度减小时会造成内存泄露。</p> 
+<p>而对于SDS，由于len属性和free属性的存在，对于修改字符串SDS实现了空间预分配和惰性空间释放两种策略：</p> 
+<p><strong>1、空间预分配</strong>：对字符串进行空间扩展的时候，扩展的内存比实际需要的多，这样可以减少连续执行字符串增长操作所需的内存重分配次数。</p> 
+<p><strong>2、惰性空间释放</strong>：对字符串进行缩短操作时，程序不立即使用内存重新分配来回收缩短后多余的字节，而是使用 free 属性将这些字节的数量记录下来，等待后续使用。（当然SDS也提供了相应的API，当我们有需要时，也可以手动释放这些未使用的空间）。</p> 
+<p>（4）<mark>二进制安全</mark><br> 因为C字符串以空字符作为字符串结束的标识，而对于一些二进制文件（如图片等），内容可能包括空字符串，因此C字符串无法正确存取；而所有 SDS 的API 都是以处理二进制的方式来处理 buf 里面的元素，并且 SDS 不是以空字符串来判断是否结束，而是以 len 属性表示的长度来判断字符串是否结束。</p> 
+<p>（5）<mark>兼容部分 C 字符串函数</mark><br> 虽然 SDS 的 API 都是二进制安全的， 但它们一样遵循 C 字符串以空字符结尾的惯例： 这些 API 总会将 SDS 保存的数据的末尾设置为空字符， 并且总会在为 buf 数组分配空间时多分配一个字节来容纳这个空字符， 这是为了让那些保存文本数据的 SDS 可以重用一部分 &lt;string.h&gt; 库定义的函数。</p> 
+<p>（6）<mark>总结</mark><img src="https://images2.imgbox.com/fb/9c/7GsFM0AH_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="2_57"></a>2、链表</h2> 
+<p>作为一种常用数据结构，链表内置在很多高级的编程语言里面，因为Redis使用的 C 语言并没有内置这种数据结构，所以 Redis 构建了自己的链表结构。</p> 
+<p>每个链表节点使用一个 adlist.h/listNode 结构来表示：</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">listNode</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 前置节点</span>
+    <span class="token keyword">struct</span> <span class="token class-name">listNode</span> <span class="token operator">*</span>prev<span class="token punctuation">;</span>
+
+    <span class="token comment">// 后置节点</span>
+    <span class="token keyword">struct</span> <span class="token class-name">listNode</span> <span class="token operator">*</span>next<span class="token punctuation">;</span>
+
+    <span class="token comment">// 节点的值</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span>value<span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span> listNode<span class="token punctuation">;</span>
+</code></pre> 
+<p>多个 listNode 可以通过 prev 和 next 指针组成双端链表， 如图 3-1 所示。<br> <img src="https://images2.imgbox.com/e2/39/BSsEnIJw_o.png" alt="在这里插入图片描述"><br> 虽然仅仅使用多个 listNode 结构就可以组成链表， 但使用 adlist.h/list 来持有链表的话， 操作起来会更方便：</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">list</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 表头节点</span>
+    listNode <span class="token operator">*</span>head<span class="token punctuation">;</span>
+
+    <span class="token comment">// 表尾节点</span>
+    listNode <span class="token operator">*</span>tail<span class="token punctuation">;</span>
+
+    <span class="token comment">// 链表所包含的节点数量</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> len<span class="token punctuation">;</span>
+
+    <span class="token comment">// 节点值复制函数</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span><span class="token punctuation">(</span><span class="token operator">*</span>dup<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>ptr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 节点值释放函数</span>
+    <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>free<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>ptr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 节点值对比函数</span>
+    <span class="token keyword">int</span> <span class="token punctuation">(</span><span class="token operator">*</span>match<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>ptr<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span> list<span class="token punctuation">;</span>
+</code></pre> 
+<p>list 结构为链表提供了表头指针 head 、表尾指针 tail ， 以及链表长度计数器 len ， 而 dup 、 free 和 match 成员则是用于实现多态链表所需的类型特定函数：<br> ① dup 函数用于复制链表节点所保存的值；<br> ② free 函数用于释放链表节点所保存的值；<br> ③ match 函数则用于对比链表节点所保存的值和另一个输入值是否相等。</p> 
+<p>图 3-2 是由一个 list 结构和三个 listNode 结构组成的链表：<br> <img src="https://images2.imgbox.com/c0/ee/7AIrnrrO_o.png" alt="在这里插入图片描述"><br> Redis 的链表实现的特性可以总结如下：<br> ① <mark>双端</mark>： 链表节点带有 prev 和 next 指针， 获取某个节点的前置节点和后置节点的复杂度都是 O(1) 。<br> ② <mark>无环</mark>： 表头节点的 prev 指针和表尾节点的 next 指针都指向 NULL ， 对链表的访问以 NULL 为终点。<br> ③ <mark>带表头指针和表尾指针</mark>： 通过 list 结构的 head 指针和 tail 指针， 程序获取链表的表头节点和表尾节点的复杂度为 O(1) 。<br> ④ <mark>带链表长度计数器</mark>： 程序使用 list 结构的 len 属性来对 list 持有的链表节点进行计数， 程序获取链表中节点数量的复杂度为 O(1) 。<br> ⑤ <mark>多态</mark>： 链表节点使用 void* 指针来保存节点值， 并且可以通过 list 结构的 dup 、 free 、 match 三个属性为节点值设置类型特定函数， 所以链表可以用于保存各种不同类型的值。</p> 
+<h2><a id="3_117"></a>3、字典</h2> 
+<p>字典又称为符号表或者关联数组、或映射（map），是一种用于保存键值对的抽象数据结构。字典中的每一个键 key 都是唯一的，通过 key 可以对值来进行查找或修改。C 语言中没有内置这种数据结构的实现，所以字典依然是 Redis 自己构建的。</p> 
+<p>Redis 的字典使用哈希表作为底层实现， 一个哈希表里面可以有多个哈希表节点， 而每个哈希表节点就保存了字典中的一个键值对。</p> 
+<h3><a id="_122"></a>哈希表</h3> 
+<p>Redis 字典所使用的<strong>哈希表</strong>由 dict.h/dictht 结构定义：</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dictht</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 哈希表数组</span>
+    dictEntry <span class="token operator">*</span><span class="token operator">*</span>table<span class="token punctuation">;</span>
+
+    <span class="token comment">// 哈希表大小</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> size<span class="token punctuation">;</span>
+
+    <span class="token comment">// 哈希表大小掩码，用于计算索引值</span>
+    <span class="token comment">// 总是等于 size - 1</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> sizemask<span class="token punctuation">;</span>
+
+    <span class="token comment">// 该哈希表已有节点的数量</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> used<span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span> dictht<span class="token punctuation">;</span>
+</code></pre> 
+<p>图 4-1 展示了一个大小为 4 的空哈希表 （没有包含任何键值对）。<br> <img src="https://images2.imgbox.com/12/5b/FLIfh6pm_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_144"></a>哈希表节点</h3> 
+<p><strong>哈希表节点</strong>使用 dictEntry 结构表示， 每个 dictEntry 结构都保存着一个键值对：</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dictEntry</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 键</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">;</span>
+
+    <span class="token comment">// 值</span>
+    <span class="token keyword">union</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">void</span> <span class="token operator">*</span>val<span class="token punctuation">;</span>
+        <span class="token class-name">uint64_t</span> u64<span class="token punctuation">;</span>
+        <span class="token class-name">int64_t</span> s64<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> v<span class="token punctuation">;</span>
+
+    <span class="token comment">// 指向下个哈希表节点，形成链表</span>
+    <span class="token keyword">struct</span> <span class="token class-name">dictEntry</span> <span class="token operator">*</span>next<span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span> dictEntry<span class="token punctuation">;</span>
+</code></pre> 
+<p>key 用来保存键，val 属性用来保存值，值可以是一个指针，也可以是uint64_t 整数，也可以是 int64_t 整数。</p> 
+<p>注意这里还有一个指向下一个哈希表节点的指针，我们知道哈希表最大的问题是存在哈希冲突，如何解决哈希冲突，有开放地址法和链地址法。这里采用的便是<mark>链地址法</mark>，通过 next 这个指针可以将多个哈希值相同的键值对连接在一起，用来解决哈希冲突。</p> 
+<p>（<strong>因为 dictEntry 节点组成的链表没有指向链表表尾的指针， 所以为了速度考虑， 程序总是将新节点添加到链表的表头位置（复杂度为 O(1)）， 排在其他已有节点的前面。</strong>）<br> <img src="https://images2.imgbox.com/35/d1/wwGhRvd8_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_172"></a>字典</h3> 
+<p>Redis 中的字典由 dict.h/dict 结构表示：</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dict</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 类型特定函数</span>
+    dictType <span class="token operator">*</span>type<span class="token punctuation">;</span>
+
+    <span class="token comment">// 私有数据</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">;</span>
+
+    <span class="token comment">// 哈希表</span>
+    dictht ht<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// rehash 索引</span>
+    <span class="token comment">// 当 rehash 不在进行时，值为 -1</span>
+    <span class="token keyword">int</span> rehashidx<span class="token punctuation">;</span> 
+    <span class="token comment">/* rehashing not in progress if rehashidx == -1 */</span>
+
+<span class="token punctuation">}</span> dict<span class="token punctuation">;</span>
+</code></pre> 
+<p>type 属性和 privdata 属性是针对不同类型的键值对， 为创建多态字典而设置的：</p> 
+<p>● type 属性是一个指向 dictType 结构的指针， 每个 dictType 结构保存了一簇用于操作特定类型键值对的函数， Redis 会为用途不同的字典设置不同的类型特定函数。<br> ● 而 privdata 属性则保存了需要传给那些类型特定函数的可选参数。</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dictType</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 计算哈希值的函数</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">int</span> <span class="token punctuation">(</span><span class="token operator">*</span>hashFunction<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 复制键的函数</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span><span class="token punctuation">(</span><span class="token operator">*</span>keyDup<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 复制值的函数</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span><span class="token punctuation">(</span><span class="token operator">*</span>valDup<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>obj<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 对比键的函数</span>
+    <span class="token keyword">int</span> <span class="token punctuation">(</span><span class="token operator">*</span>keyCompare<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key1<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 销毁键的函数</span>
+    <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>keyDestructor<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">// 销毁值的函数</span>
+    <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>valDestructor<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>obj<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span> dictType<span class="token punctuation">;</span>
+</code></pre> 
+<p>ht 属性是一个包含两个项的数组， 数组中的每个项都是一个 dictht 哈希表， 一般情况下， 字典只使用 ht[0] 哈希表， ht[1] 哈希表只会在对 ht[0] 哈希表进行 rehash 时使用。</p> 
+<p>除了 ht[1] 之外， 另一个和 rehash 有关的属性就是 rehashidx ： 它记录了 rehash 目前的进度， 如果目前没有在进行 rehash ， 那么它的值为 -1 。</p> 
+<p>图 4-3 展示了一个普通状态下（没有进行 rehash）的字典：<br> <img src="https://images2.imgbox.com/b5/8f/GNTJOoem_o.png" alt="在这里插入图片描述"><br> ① <strong>哈希算法</strong>：Redis计算哈希值和索引值方法如下：</p> 
+<pre><code class="prism language-c"># 使用字典设置的哈希函数，计算键 key 的哈希值
+hash <span class="token operator">=</span> dict<span class="token operator">-&gt;</span>type<span class="token operator">-&gt;</span><span class="token function">hashFunction</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+# 使用哈希表的 sizemask 属性和哈希值，计算出索引值
+# 根据情况不同， ht<span class="token punctuation">[</span>x<span class="token punctuation">]</span> 可以是 ht<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> 或者 ht<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span>
+index <span class="token operator">=</span> hash <span class="token operator">&amp;</span> dict<span class="token operator">-&gt;</span>ht<span class="token punctuation">[</span>x<span class="token punctuation">]</span><span class="token punctuation">.</span>sizemask<span class="token punctuation">;</span>
+</code></pre> 
+<p>②<strong>解决哈希冲突</strong>：这个问题上面我们介绍了，方法是链地址法。通过字典里面的 *next 指针指向下一个具有相同索引值的哈希表节点。</p> 
+<p>③<strong>扩容和收缩(rehash)</strong>：当哈希表保存的键值对太多或者太少时，就要通过 rerehash(重新散列）来对哈希表进行相应的扩展或者收缩。具体步骤：</p> 
+<p>1、为字典的 ht[1] 哈希表分配空间， 这个哈希表的空间大小取决于要执行的操作， 以及 ht[0] 当前包含的键值对数量 （也即是 ht[0].used 属性的值）<br> ● 如果执行的是扩展操作， 那么 ht[1] 的大小为第一个大于等于 ht[0].used * 2<sup>n</sup>； （也就是每次扩展都是根据原哈希表已使用的空间扩大一倍创建另一个哈希表）<br> ● 如果执行的是收缩操作， 每次收缩是根据已使用空间缩小一倍创建一个新的哈希表。<br> 2、将保存在 ht[0] 中的所有键值对 rehash 到 ht[1] 上面： rehash 指的是重新计算键的哈希值和索引值， 然后将键值对放置到 ht[1] 哈希表的指定位置上。<br> 3、当 ht[0] 包含的所有键值对都迁移到了 ht[1] 之后 （ht[0] 变为空表）， 释放 ht[0] ， 将 ht[1] 设置为 ht[0] ， 并在 ht[1] 新创建一个空白哈希表， 为下一次 rehash 做准备。</p> 
+<p>④<strong>触发扩容与收缩的条件</strong>：<br> 1、服务器目前没有执行 BGSAVE 命令或者 BGREWRITEAOF 命令，并且负载因子大于等于1。</p> 
+<p>2、服务器目前正在执行 BGSAVE 命令或者 BGREWRITEAOF 命令，并且负载因子大于等于5。</p> 
+<p>ps：负载因子 = 哈希表已保存节点数量 / 哈希表大小。</p> 
+<p>3、另一方面， 当哈希表的负载因子小于 0.1 时， 程序自动开始对哈希表执行收缩操作。</p> 
+<p>⑤<strong>渐近式 rehash</strong><br> 什么叫渐进式 rehash？也就是说扩容和收缩操作不是一次性、集中式完成的，而是分多次、渐进式完成的。如果保存在Redis中的键值对只有几个几十个，那么 rehash 操作可以瞬间完成，但是如果键值对有几百万，几千万甚至几亿，那么要一次性的进行 rehash，势必会造成Redis一段时间内不能进行别的操作。所以Redis采用渐进式 rehash，这样在进行渐进式rehash期间，字典的删除查找更新等操作可能会在两个哈希表上进行，第一个哈希表没有找到，就会去第二个哈希表上进行查找。但是进行增加操作，一定是在新的哈希表上进行的。</p> 
+<h2><a id="4_260"></a>4、跳跃表</h2> 
+<p>跳跃表（skiplist）是一种有序数据结构，它通过在每个节点中维持多个指向其它节点的指针，从而达到快速访问节点的目的。</p> 
+<p>具有如下性质：<br> 1、由很多层结构组成；</p> 
+<p>2、每一层都是一个有序的链表，排列顺序为由高层到底层，都至少包含两个链表节点，分别是前面的head节点和后面的nil节点；</p> 
+<p>3、最底层的链表包含了所有的元素；</p> 
+<p>4、如果一个元素出现在某一层的链表中，那么在该层之下的链表也全都会出现（上一层的元素是当前层的元素的子集）；</p> 
+<p>5、链表中的每个节点都包含两个指针，一个指向同一层的下一个链表节点，另一个指向下一层的同一个链表节点；<br> <img src="https://images2.imgbox.com/23/cd/H3UIKFLn_o.png" alt="在这里插入图片描述"></p> 
+<p><mark>和链表、字典等数据结构被广泛地应用在 Redis 内部不同， Redis 只在两个地方用到了跳跃表， 一个是实现有序集合键， 另一个是在集群节点中用作内部数据结构， 除此之外， 跳跃表在 Redis 里面没有其他用途。</mark><br> <img src="https://images2.imgbox.com/13/f4/LyEMGDR3_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="zskiplistNode_278"></a>跳跃表节点（zskiplistNode）</h3> 
+<p>该结构包含以下属性：<br> ①层（level）：节点中用 L1 、 L2 、 L3 等字样标记节点的各个层， L1 代表第一层， L2 代表第二层，以此类推。每个层都带有两个属性：前进指针和跨度。前进指针用于访问位于表尾方向的其他节点，而跨度则记录了前进指针所指向节点和当前节点的距离。在上面的图片中，连线上带有数字的箭头就代表前进指针，而那个数字就是跨度。当程序从表头向表尾进行遍历时，访问会沿着层的前进指针进行。<br> <mark>每次创建一个新跳跃表节点的时候， 程序都根据幂次定律 （power law，越大的数出现的概率越小） 随机生成一个介于 1 和 32 之间的值作为 level 数组的大小， 这个大小就是层的“高度”。（<strong>所以说表头节点的高度就是32</strong>）</mark></p> 
+<p>②后退（backward）指针：节点中用 BW 字样标记节点的后退指针，它指向位于当前节点的前一个节点。后退指针在程序从表尾向表头遍历时使用。</p> 
+<p>③分值（score）：各个节点中的 1.0 、 2.0 和 3.0 是节点所保存的分值。在跳跃表中，节点按各自所保存的分值从小到大排列。</p> 
+<p>④成员对象（obj）：各个节点中的 o1 、 o2 和 o3 是节点所保存的成员对象。</p> 
+<p><mark>注意表头节点和其他节点的构造是一样的： 表头节点也有后退指针、分值和成员对象， 不过表头节点的这些属性都不会被用到， 所以图中省略了这些部分， 只显示了表头节点的各个层。</mark></p> 
+<h3><a id="zskiplist_291"></a>跳跃表（zskiplist）</h3> 
+<p>① header ：指向跳跃表的表头节点。<br> ② tail ：指向跳跃表的表尾节点。<br> ③ level ：记录目前跳跃表内，层数最大的那个节点的层数（表头节点的层数不计算在内）。<br> ④ length ：记录跳跃表的长度，也即是，跳跃表目前包含节点的数量（表头节点不计算在内）。</p> 
+<h2><a id="5_297"></a>5、整数集合</h2> 
+<p>整数集合（intset）是集合键的底层实现之一，当一个集合只包含整数值元素，并且这个集合的元素数量不多时，Redis就会使用集合作为集合键的底层实现。</p> 
+<p>整数集合（intset）是Redis用于保存整数值的集合抽象数据类型，它可以保存类型为int16_t、int32_t 或者int64_t 的整数值，并且保证集合中不会出现重复元素。</p> 
+<p>每个 intset.h/intset 结构表示一个整数集合：</p> 
+<pre><code class="prism language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">intset</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token comment">// 编码方式</span>
+    <span class="token class-name">uint32_t</span> encoding<span class="token punctuation">;</span>
+
+    <span class="token comment">// 集合包含的元素数量</span>
+    <span class="token class-name">uint32_t</span> length<span class="token punctuation">;</span>
+
+    <span class="token comment">// 保存元素的数组</span>
+    <span class="token class-name">int8_t</span> contents<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span> intset<span class="token punctuation">;</span>
+</code></pre> 
+<p>整数集合的每个元素都是 contents 数组的一个数据项，它们按照从小到大的顺序排列，并且不包含任何重复项。</p> 
+<p>length 属性记录了 contents 数组的大小。</p> 
+<p>需要注意的是虽然 contents 数组声明为 int8_t 类型，但是实际上contents 数组并不保存任何 int8_t 类型的值，其真正类型有 encoding 来决定。<br> <img src="https://images2.imgbox.com/e1/48/uHjP2xBx_o.png" alt="在这里插入图片描述"><br> ① 升级（<mark>encoding int16_t -&gt; int32_t -&gt; int64_t</mark>）<br> 当我们新增的元素类型比原集合元素类型的长度要大时，需要对整数集合进行升级，才能将新元素放入整数集合中。具体步骤：<br> 1、根据新元素类型，扩展整数集合底层数组的大小，并为新元素分配空间。<br> 2、将底层数组现有的所有元素都转成与新元素相同类型的元素，并将转换后的元素放到正确的位置，放置过程中，维持整个元素顺序都是有序的。<br> 3、将新元素添加到整数集合中（保证有序）。</p> 
+<p>② 降级<br> 整数集合不支持降级操作，一旦对数组进行了升级，编码就会一直保持升级后的状态。</p> 
+<h2><a id="6_333"></a>6、压缩列表</h2> 
+<p>压缩列表（ziplist）是列表键和哈希键的底层实现之一。<br> 当一个列表键只包含少量列表项， 并且每个列表项要么就是小整数值， 要么就是长度比较短的字符串， 那么 Redis 就会使用压缩列表来做列表键的底层实现。</p> 
+<p><mark>因为哈希键里面包含的所有键和值都是小整数值或者短字符串。</mark></p> 
+<p>压缩列表是 Redis 为了节约内存而开发的， 由一系列特殊编码的连续内存块组成的顺序型（sequential）数据结构。</p> 
+<p>一个压缩列表可以包含任意多个节点（entry）， 每个节点可以保存一个字节数组或者一个整数值。<br> <img src="https://images2.imgbox.com/4f/68/XCsvgyMt_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/b4/a1/swG5Wi7F_o.png" alt="在这里插入图片描述"><br> 每个压缩列表节点都由 previous_entry_length 、 encoding 、 content 三个部分组成<br> <img src="https://images2.imgbox.com/da/84/TXszqemJ_o.png" alt="在这里插入图片描述"><br> ① previous_entry_ength：记录压缩列表前一个字节的长度。previous_entry_ength 的长度可能是1个字节或者是5个字节。如果上一个节点的长度小于254，则该节点只需要一个字节就可以表示前一个节点的长度了。如果前一个节点的长度大于等于254，则属性的第一个字节为254，后面用四个字节表示当前节点前一个节点的长度。利用此原理即当前节点位置减去上一个节点的长度即得到上一个节点的起始位置，压缩列表可以从尾部向头部遍历。这么做很有效地减少了内存的浪费。</p> 
+<p>② encoding：节点的encoding保存的是节点的content的内容类型以及长度，encoding类型一共有两种，一种字节数组一种是整数，encoding区域长度为1字节、2字节或者5字节长。<br> <img src="https://images2.imgbox.com/e0/18/Q9dEtplu_o.png" alt="在这里插入图片描述"><br> ③ content：content区域用于保存节点的内容，节点内容类型和长度由encoding决定。<br> <img src="https://images2.imgbox.com/a5/0f/smSCAEr8_o.png" alt="在这里插入图片描述"><br> <mark>连锁更新问题</mark><br> 连锁更新在最坏情况下需要对压缩列表执行 N 次空间重分配操作， 而每次空间重分配的最坏复杂度为 O(N) ， 所以连锁更新的最坏复杂度为 O(N^2) 。</p> 
+<p><strong>要注意的是， 尽管连锁更新的复杂度较高， 但它真正造成性能问题的几率是很低的</strong></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/dc5ed8acda006b3f8024f3c7f0ab9a25/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">图像处理之频率域数学基础</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/366ab42313e0abf0b016908efc4b2044/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">SQL调优的几种方式</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

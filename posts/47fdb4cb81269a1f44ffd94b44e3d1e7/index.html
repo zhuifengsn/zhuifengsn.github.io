@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>如何调优SQL - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="如何调优SQL" />
+<meta property="og:description" content="如何调优SQL 如何定位并优化慢查询Sql 具体场景具体分析只提出大致思路，其实这个问题属于开放性的题目，主要考察有没有做过SQL优化，由于该问题属于经验的问题，做过了就是做过了没做过就是没做过，问了你就知道是没有做过的，没办法给出大家准确的答案只能给出大致思路，这里提前公布一下答案。然后我们再依依去讲解
+第一步：根据慢日志定位慢查询SQL
+第二部：使用explain等工具分析SQL
+第三部：修改SQL或者尽量让SQL走索引
+根据慢日志定位慢查询SQL 那开始我们的第一步，定位并优化慢SQL。首先我们先要分析慢日志，接下来我们将通过一个简单实用的调优例子，来看看这个问题。我们再次打开MySql客户端，连接上我们的database_demo这个数据库，那MySql呢有很多自带的系统变量，咱们可以通过查看一些系统变量来得知我们的配置信息，那这里呢，我们是要查询跟慢日志有关的配置信息。什么是慢日志呢，慢日志就是用来记录我们查询得比较慢得一些SQL。
+那我们来查询一些变量。
+show variables like &#39;%quer%&#39;; 我们可以查询出一些相关得变量来。
+那这些变量呢，我们只需要关注这3个。
+第一个是slow_query_log 顾名思义就是我们得慢日志了，它现在是 OFF 也就是是关闭的，我们需要将它打开。
+第二个是slow_query_log_flie 这个文件会记录我们的慢日志。
+第三个是long_query_time 现在表示得是每次执行sql花费10秒钟的话。就会被记录 到 slow_query_log_flie 对应的文件中。
+了解完这三个变量之后呢我们还需要对它进行设置，slow_query_log 我们是要将它进行打开的，并且呢long_query_time 它现在是10 秒钟对于我们的程序运行来说是非常非常慢的。因此通常情况下它执行超过1秒钟我们就认为这条sql是比较慢的了，要去做优化了，因此这里我们呢把 long_query_time 设置成 1秒。
+set global slow_query_log = on; # 打开慢查询 立即设置立即生效 set global long_query_time = 1; # 设置慢查询时间 单位 s (秒) 重新连接MySql客户端才能生效 # 如果想让 配置立即生效linux 可以在 my.cnf,windows是my.ini 配置文件，对这些值进行设置，一旦设置是永久# 保存的。如果我们仅在这里做set global 当我们重启数据库服务的时候，他就会还原成之前的状态，也就是说 # slow_query_log 是 OFF 它就是 OFF 那我们现在重新连接一下数据库。
+可以看到之前的 set global 设置已经成功了。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/47fdb4cb81269a1f44ffd94b44e3d1e7/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-06-06T17:44:49+08:00" />
+<meta property="article:modified_time" content="2022-06-06T17:44:49+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">如何调优SQL</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="SQL_2"></a>如何调优SQL</h3> 
+<h6><a id="Sql_4"></a>如何定位并优化慢查询Sql</h6> 
+<p>具体场景具体分析只提出大致思路，其实这个问题属于开放性的题目，主要考察有没有做过SQL优化，由于该问题属于经验的问题，做过了就是做过了没做过就是没做过，问了你就知道是没有做过的，没办法给出大家准确的答案只能给出大致思路，这里提前公布一下答案。然后我们再依依去讲解</p> 
+<p><strong>第一步：根据慢日志定位慢查询SQL</strong></p> 
+<p><strong>第二部：使用explain等工具分析SQL</strong></p> 
+<p><strong>第三部：修改SQL或者尽量让SQL走索引</strong></p> 
+<h6><a id="SQL_14"></a>根据慢日志定位慢查询SQL</h6> 
+<p>那开始我们的第一步，定位并优化慢SQL。首先我们先要分析慢日志，接下来我们将通过一个简单实用的调优例子，来看看这个问题。我们再次打开MySql客户端，连接上我们的database_demo这个数据库，那MySql呢有很多自带的系统变量，咱们可以通过查看一些系统变量来得知我们的配置信息，那这里呢，我们是要查询跟慢日志有关的配置信息。什么是慢日志呢，慢日志就是用来记录我们查询得比较慢得一些SQL。</p> 
+<p>那我们来查询一些变量。</p> 
+<pre><code class="prism language-sql"><span class="token keyword">show</span> variables <span class="token operator">like</span> <span class="token string">'%quer%'</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>我们可以查询出一些相关得变量来。</p> 
+<p><img src="https://images2.imgbox.com/45/90/bS50B8q5_o.png" alt="在这里插入图片描述"></p> 
+<p>那这些变量呢，我们只需要关注这3个。</p> 
+<p>第一个是slow_query_log 顾名思义就是我们得慢日志了，它现在是 OFF 也就是是关闭的，我们需要将它打开。</p> 
+<p>第二个是slow_query_log_flie 这个文件会记录我们的慢日志。</p> 
+<p>第三个是long_query_time 现在表示得是每次执行sql花费10秒钟的话。就会被记录 到 slow_query_log_flie 对应的文件中。</p> 
+<p>了解完这三个变量之后呢我们还需要对它进行设置，slow_query_log 我们是要将它进行打开的，并且呢long_query_time 它现在是10 秒钟对于我们的程序运行来说是非常非常慢的。因此通常情况下它执行超过1秒钟我们就认为这条sql是比较慢的了，要去做优化了，因此这里我们呢把 long_query_time 设置成 1秒。</p> 
+<pre><code class="prism language-sql"><span class="token keyword">set</span> <span class="token keyword">global</span> slow_query_log <span class="token operator">=</span> <span class="token keyword">on</span><span class="token punctuation">;</span> <span class="token comment"># 打开慢查询  立即设置立即生效</span>
+
+<span class="token keyword">set</span> <span class="token keyword">global</span> long_query_time <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span> <span class="token comment"># 设置慢查询时间 单位 s (秒)  重新连接MySql客户端才能生效</span>
+
+<span class="token comment"># 如果想让 配置立即生效linux 可以在 my.cnf,windows是my.ini 配置文件，对这些值进行设置，一旦设置是永久# 保存的。如果我们仅在这里做set global 当我们重启数据库服务的时候，他就会还原成之前的状态，也就是说 </span>
+<span class="token comment"># slow_query_log 是 OFF 它就是 OFF</span>
+</code></pre> 
+<p>那我们现在重新连接一下数据库。</p> 
+<p><img src="https://images2.imgbox.com/2c/ab/MkiPCIZJ_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-xbSTccTF-1632113548522)(ms图库/打开慢查询.png)]"></p> 
+<p>可以看到之前的 set global 设置已经成功了。</p> 
+<p>我们了解了变量，我们还需要了解一些系统的状态有个指令</p> 
+<pre><code class="prism language-sql"><span class="token keyword">show</span> <span class="token keyword">status</span> <span class="token operator">like</span> <span class="token string">'%slow_queries%'</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>我们执行一下可以看到，我们慢查询的数量</p> 
+<p><img src="https://images2.imgbox.com/d8/4e/UzV9ROA1_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-B7utlzHK-1632113548523)(ms图库/慢查询.png)]"></p> 
+<p>这里慢查询的数量是0，如果有一条SQL执行得比较慢得时候就会变为1，以此类推。（不过每次重新连接数据库都会清0）</p> 
+<p>现在我们开始来制造一些慢查询，之前我已经在person_info_large 这个数据库灌入了 两百万条数据。</p> 
+<pre><code class="prism language-sql"><span class="token keyword">select</span> <span class="token function">count</span><span class="token punctuation">(</span><span class="token operator">*</span><span class="token punctuation">)</span> <span class="token keyword">from</span> person_info_large<span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/4b/2f/Iv632izh_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-eobdvxD5-1632113548529)(ms图库/person_info_large的数据.png)]"></p> 
+<p>接下来我们先来制造一些慢查询，我们先来看看这个person_info_large 的结构</p> 
+<p><img src="https://images2.imgbox.com/f4/f0/L8tPdkXm_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-fCmtuoUl-1632113548533)(ms图库/person_info_large的结构.png)]"></p> 
+<p>发现他有一个name的字段。</p> 
+<p>通过name 来组织一个SQL出来</p> 
+<pre><code class="prism language-sql"><span class="token keyword">select</span> name <span class="token keyword">from</span> person_info_large <span class="token keyword">order</span> <span class="token keyword">by</span> name <span class="token keyword">desc</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>由于数据比较多，所以执行了3.36s 不过这里不是准的。</p> 
+<p><img src="https://images2.imgbox.com/1d/92/2RsvkIcw_o.png" alt="在这里插入图片描述"></p> 
+<p>我们再来看一下，慢查询日志发现多了一条数据。</p> 
+<p><img src="https://images2.imgbox.com/a7/96/fzfZsuGK_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-iA67E4cD-1632113548536)(ms图库/慢查询2.png)]"></p> 
+<p>我们看一下慢日志；</p> 
+<pre><code class="prism language-sql">sudo vim <span class="token operator">/</span>usr<span class="token operator">/</span><span class="token keyword">local</span><span class="token operator">/</span>mysql<span class="token operator">/</span><span class="token keyword">data</span><span class="token operator">/</span>baidudeMacBook<span class="token operator">-</span>Pro<span class="token operator">-</span>slow<span class="token punctuation">.</span>log
+</code></pre> 
+<p><img src="https://images2.imgbox.com/3e/b2/kGodkged_o.png" alt="在这里插入图片描述"></p> 
+<p>我们发现刚才我们的那条数据已经被记录到慢日志里面了。这里的Query_time : 6.337729 才是我们的真正查询时间，刚才我们客户端显示的是 3.36S 那是不正确的，实际以这个为准。</p> 
+<p><strong>到这里我们可以通过慢日志去捕获一些慢SQL，进而呢去分析这个SQL为什么那么慢</strong>，<strong>然后再对它进行调优</strong></p> 
+<h6><a id="explainSQL_119"></a>使用explain等工具分析SQL</h6> 
+<p>在分析和查询性能的时候，explain会非常管用，这个关键字呢一般会房子select 查询语句前面，用于描述MySql如何进行查询操作，以及MySql成功返回结果集需要执行的函数。explain可以帮我们分析select查询语句，让我们知道查询效率低下的原因，从而改进我们的查询。让查询优化器更好的工作。那explain是怎么用的呢？非常简单像这里我们分析一下刚才的查询为什么这么慢。</p> 
+<pre><code class="prism language-sql"><span class="token keyword">explain</span> <span class="token keyword">select</span> name <span class="token keyword">from</span> person_info_large <span class="token keyword">order</span> <span class="token keyword">by</span> name <span class="token keyword">desc</span><span class="token punctuation">;</span>
+<span class="token comment"># 格式： explain XXX(查询语句)</span>
+</code></pre> 
+<p>我们可以得到分析结果</p> 
+<p><img src="https://images2.imgbox.com/ed/0b/pv57iXYT_o.png" alt="在这里插入图片描述"></p> 
+<p>这里执行的非常快，那也就是说执行的时候，该SQL呢并没有真正的去运行。而是对它做了一些分析。</p> 
+<p>我们可以看出 explain 的结果由多列组成，其中有两列对调优SQL非常的重要，就是 type 和 Extra 。其他的也挺重要但是我们这里就不做解析了。</p> 
+<p><strong>type</strong></p> 
+<p>咱们先来讲讲type，type 表示MySql找到需要数据行的方式，如下。方式有很多，咱们不需要一一记忆，它们的性能从最优到最差会按照如图所示的顺序排序。</p> 
+<p><img src="https://images2.imgbox.com/37/a6/qmjAulmm_o.png" alt="在这里插入图片描述"></p> 
+<p>其中index和All 表明本次查询走的是全表扫描。因此当我们看到查询语句是慢查询语句 type 是这两个值中的一个的时候，证明语句是需要优化了的。</p> 
+<p><strong>Extra</strong></p> 
+<p>咱们再来讲讲Extra 虽然他们有 type 那么直观。但我们可以从它们这里获得一些更为详细的信息。辅助我们了解一些语句的查询方式，它的类型也非常的多，这里呢我们只需要关注两种 即有可能优化的方式</p> 
+<p><img src="https://images2.imgbox.com/4a/62/V5UKrhNb_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-wpUXpkfE-1632113548542)(ms图库/extra关键字.png)]"></p> 
+<p>很明显我们的刚刚的分析结果 type 对应的 All ，Extra 对应的 using filesort 所以它们要走的是全表扫描，所以这个语句是非常慢了。所以我们就要对这条语句进行调优了。</p> 
+<h6><a id="SQLSQL_159"></a>修改SQL或者尽量让这条SQL走索引</h6> 
+<p>咱们再回到这个语句里面看看怎么去优化它。第一，可以修改SQL，我们先看看它的构造。</p> 
+<p><img src="https://images2.imgbox.com/ff/d3/fklPRio7_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-H3CmSn5k-1632113548544)(ms图库/InnoDB使用Sql.png)]"></p> 
+<p>我们可以看到name是没有走索引的，而account是有索引的，那我们可以用account来替代name，这样也是能满足业务上的需求的。既然account走的是索引，那咱们可以这么该</p> 
+<pre><code class="prism language-sql"><span class="token keyword">select</span> name <span class="token keyword">from</span> person_info_large <span class="token keyword">order</span> <span class="token keyword">by</span> name <span class="token keyword">desc</span><span class="token punctuation">;</span> <span class="token comment"># 原sql</span>
+
+<span class="token keyword">select</span> account <span class="token keyword">from</span> person_info_large <span class="token keyword">order</span> <span class="token keyword">by</span> account <span class="token keyword">desc</span><span class="token punctuation">;</span> <span class="token comment"># 优化</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/45/e0/RkopZFqq_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-qNVULlay-1632113548546)(ms图库/explain分析2.png)]"></p> 
+<p>我们看到他们的性能已经得到了提升，type 等于 index ,Extra 等于 using index 也就是他已经走了索引了。那走的索引是什么呢。我们可以看到这个key是account,它是唯一键索引这样我们就能让它的性能得到明显的提升了。</p> 
+<p>我们来执行一下优化以后的，这时也挺慢。</p> 
+<p>我们再看一下慢日志：</p> 
+<pre><code class="prism language-shell"><span class="token function">sudo</span> <span class="token function">vim</span> /usr/local/mysql/data/baidudeMacBook-Pro-slow.log
+</code></pre> 
+<p><img src="https://images2.imgbox.com/b1/69/apUqTFtP_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-hpMTlBz4-1632113548550)(ms图库/慢日志log2.png)]"></p> 
+<p>我们可以看到第二条语句虽然也进入到了慢日志，但它已经变成4.061583秒了。明显快于刚才6秒。也就是我们的整体效率提升了 33%，那咱们呢就可以去吹牛逼了，我已经调优了某个程序这个程序的执行效率提升了33%。</p> 
+<p>那有时候呢，靠改SQL时没办法满足我们的业务需求的那我们的业务呢，就是按照name 来排序。那怎么办呢。这时候，我们还有另外一个方案。就是加索引了。</p> 
+<pre><code class="prism language-sql">alert <span class="token keyword">table</span> person_info_large <span class="token keyword">add</span> <span class="token keyword">index</span> idx_name<span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>这条语句执行的也挺慢，但是不会进入慢查询。因为这条SQL属于 DDL 也就是属于数据定义语言。它主要用来操纵我们的表结构的。而用来操纵数据的 对数据进行增删改查的 也就是我们的 DML 语言呢。才会进入到我们的慢查询log当中。</p> 
+<p>加了索引之后我们再执行</p> 
+<pre><code class="prism language-sql"><span class="token keyword">explain</span> <span class="token keyword">select</span> name <span class="token keyword">from</span> person_info_large <span class="token keyword">order</span> <span class="token keyword">by</span> name <span class="token keyword">desc</span><span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/8c/c1/HTUvQ17B_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-KFizZDzR-1632113548552)(ms图库/explain分析3.png)]"></p> 
+<p>我们就可以看到 type 走的时 index , key 走的时刚才我们刚刚定义的 idx_name ,Extra 走的是using index 也就是走了索引了，表示我们已经调优了相关语句。</p> 
+<p>我们在执行</p> 
+<pre><code class="prism language-sql"> <span class="token keyword">select</span> name <span class="token keyword">from</span> person_info_large <span class="token keyword">order</span> <span class="token keyword">by</span> name <span class="token keyword">desc</span><span class="token punctuation">;</span>
+</code></pre> 
+<pre><code class="prism language-shell"><span class="token function">sudo</span> <span class="token function">vim</span> /usr/local/mysql/data/baidudeMacBook-Pro-slow.log
+</code></pre> 
+<p><img src="https://images2.imgbox.com/f1/c2/GunTyHhv_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-Pf4rOont-1632113548554)(ms图库/慢日志3.png)]"></p> 
+<p>我们发现这次虽然也进了慢查询，但是这次只花费了3.479827 秒。比刚才 6.337729 秒有了显著的提升了。这既是我们调优语句的大致的方式了。</p> 
+<p>这是告诉大家如何调优SQL的一个方式，大家也可以依据大家实际的工作经验去做一个调整。</p> 
+<p>接下来来补充一个知识点，也就是问一下大家我们的</p> 
+<pre><code class="prism language-sql"><span class="token keyword">explain</span> <span class="token keyword">select</span> <span class="token function">count</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span> <span class="token keyword">from</span> person_info_large<span class="token punctuation">;</span>
+</code></pre> 
+<p>这条语句会走哪个索引?它应该会走索引吧，不会傻到进行全表扫描吧。那我们也可以回想到之前的知识哦，B+树的叶子节点它是有链表的因此我们统计的时候呢，就直接走链表了，就方便我们做统计</p> 
+<p><img src="https://images2.imgbox.com/63/75/Si9c6zNs_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-2zJEbD5c-1632113548555)(ms图库/B+树叶子节点.png)]"></p> 
+<p>有那么多个B+树它会选择哪个，他会选择密集索引还是选择我们的稀疏索引呢？有的同学可能会说它肯定会走主键啊，走我们的密集索引更快啦，毕竟它的数据也在里面嘛，那我们可以试着跑一下。</p> 
+<p><img src="https://images2.imgbox.com/f5/ab/vIsh1ZJB_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-KDq4xFDC-1632113548557)(ms图库/explain分析4.png)]"></p> 
+<p>结果出乎我们的意料啊，type = index 是预期的，但是key呢它却用的是account用的是我们的唯一键并不是用的我们的主键，然后Extra走的是索引了。为什么用的是account 而不是用的是我们的id呢，id才是它的主键啊，大家可能都有这样的疑问。之所以去走这个索引呢，是因为我们的这个查询优化器来做决定的。MySql的查询优化器是最重要的目标是尽可能地使用索引并且最严格地索引来消除尽可能多地数据行。最终目标是提交select 语句查找数据行，而不是排除数据行。优化器试图排除数据行地原因是它排除数据行的速度越快那么找到与条件匹配的数据行越快，因此查询优化器会根据它的一些分析和判断的标准决定走哪个索引，这里他没选择主键索引大致原因是由于密集索引的叶子节点把其它列的数据呢，也都存放到了叶子节点当中，在这里变成它的一个缺点了。这样查询的效率呢因为我们的数据都放在一起了，它的效率呢会比稀疏索引要低。因为毕竟稀疏索引只存储了关键字，即主键的值这样呢我们在内存里面就可以加载更多的关键字和主键的值去做 count 了。这样能够节约性能所以呢我们的查询优化器就选择它。不信我们可以直接强制的去走主键索引，然后我们对比一下两则的耗时。</p> 
+<p>这里我们先实现让它走主键索引</p> 
+<pre><code class="prism language-sql"><span class="token keyword">explain</span> <span class="token keyword">select</span> <span class="token function">count</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span> <span class="token keyword">from</span> person_info_large <span class="token keyword">force</span> <span class="token keyword">index</span><span class="token punctuation">(</span><span class="token keyword">primary</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">#force 是强制的意思</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/7b/b8/LcGEJPOk_o.png" alt="[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-yNbBMtvD-1632113548559)(ms图库/explain分析5.png)]"></p> 
+<p>我们发现它的type也是index,它的key变成了primary 了。那这样呢就能让它来走主键索引了</p> 
+<p>我们来执行对比一下：</p> 
+<pre><code class="prism language-sql"><span class="token keyword">select</span> <span class="token function">count</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span> <span class="token keyword">from</span> person_info_large<span class="token punctuation">;</span>   <span class="token comment"># 执行时间 663 ms</span>
+
+<span class="token keyword">select</span> <span class="token function">count</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span> <span class="token keyword">from</span> person_info_large <span class="token keyword">force</span> <span class="token keyword">index</span><span class="token punctuation">(</span><span class="token keyword">primary</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment"># 执行时间 775 ms</span>
+</code></pre> 
+<p>大家可以看到走primary key 未必比走其它索引要快。那MySQL查询优化器固然很厉害。但那只是个程序有时它按照其准则算出来的其索引，也不一定是最优的。还是要大家具体情况具体分析。根据一些特定场景的测试结果使用更适合的索引以使sql在改场景下最优。这时候呢我们就想到了这个force index ，使用force index 去测试各种索引去看看哪个索引是比较好的。</p> 
+<p>接下来我们来回顾一下这个如何调优sql的答案。</p> 
+<p>第一呢先根据慢日志，定位查询慢sql</p> 
+<p>第二使用explain 等工具分析该条sql</p> 
+<p>第三 修改sql或者尽量让该条sql走索引提升它的性能</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/3bab9d05b04284108259584da1be7518/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">小米笔记本pro 双硬盘双系统 opencore引导安装黑苹果</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/41f2925c5a51a8d4737cdfac27901f89/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">PID算法详解（1）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

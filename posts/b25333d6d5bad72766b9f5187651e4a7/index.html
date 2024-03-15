@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>WPF Dispatcher使用invoke，程序进入死锁 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="WPF Dispatcher使用invoke，程序进入死锁" />
+<meta property="og:description" content="两个后台线程中使用同一个Dispatcher invoke进行dialog展示，其中dialog中设置定时关闭窗口，这时会导致进入死锁状态
+调用dialog代码：
+Dispatcher dispatcher = Application.Current.Dispatcher; Task.Run(() =&gt; { dispatcher.Invoke(() =&gt; { _dialogService.ShowDialog(&#34;VerifyDialog&#34;, new DialogParameters(), null); }); }); Task.Run(() =&gt; { dispatcher.Invoke(() =&gt; { _dialogService.ShowDialog(&#34;VerifyDialog&#34;, new DialogParameters(), null); }); }); dialog定时关闭代码：
+public async void AutoCloseDialog() { await Task.Delay(1000); RequestClose?.Invoke(new DialogResult(ButtonResult.None)); } Dispatcher 改成InvokeAsync并等待无效果，同样会进入死锁
+Dispatcher dispatcher = Application.Current.Dispatcher; Task.Run(() =&gt; { dispatcher.InvokeAsync(() =&gt; { _dialogService.ShowDialog(&#34;VerifyDialog&#34;, new DialogParameters(), null); }).Wait(); }); Task.Run(() =&gt; { dispatcher.InvokeAsync(() =&gt; { _dialogService.ShowDialog(&#34;VerifyDialog&#34;, new DialogParameters(), null); })." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/b25333d6d5bad72766b9f5187651e4a7/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-05-16T14:12:01+08:00" />
+<meta property="article:modified_time" content="2023-05-16T14:12:01+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">WPF Dispatcher使用invoke，程序进入死锁</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>两个后台线程中使用同一个Dispatcher invoke进行dialog展示，其中dialog中设置定时关闭窗口，这时会导致进入死锁状态</p> 
+<p>调用dialog代码：</p> 
+<pre><code class="language-cs">Dispatcher dispatcher = Application.Current.Dispatcher;
+            Task.Run(() =&gt;
+            {
+                dispatcher.Invoke(() =&gt;
+                {
+                    _dialogService.ShowDialog("VerifyDialog", new DialogParameters(), null);
+                });
+            });
+
+            Task.Run(() =&gt;
+            {
+                dispatcher.Invoke(() =&gt;
+                {
+                    _dialogService.ShowDialog("VerifyDialog", new DialogParameters(), null);
+                });
+            });</code></pre> 
+<p>dialog定时关闭代码：</p> 
+<pre><code class="language-cs">public async void AutoCloseDialog()
+        {     
+            await Task.Delay(1000);
+            RequestClose?.Invoke(new DialogResult(ButtonResult.None));
+        }</code></pre> 
+<p>Dispatcher 改成InvokeAsync并等待无效果，同样会进入死锁</p> 
+<pre><code class="language-cs">Dispatcher dispatcher = Application.Current.Dispatcher;
+            Task.Run(() =&gt;
+            {
+                dispatcher.InvokeAsync(() =&gt;
+                {
+                    _dialogService.ShowDialog("VerifyDialog", new DialogParameters(), null);
+                }).Wait();
+            });
+
+            Task.Run(() =&gt;
+            {
+                dispatcher.InvokeAsync(() =&gt;
+                {
+                    _dialogService.ShowDialog("VerifyDialog", new DialogParameters(), null);
+                }).Wait();
+            });</code></pre> 
+<p>目前没有找到很好的解决方法，只能设置一个全局变量对dialog是否关闭进行监控和阻塞</p> 
+<pre><code class="language-cs"> Dispatcher dispatcher = Application.Current.Dispatcher;
+            Task.Run(() =&gt;
+            {
+                dispatcher.InvokeAsync(() =&gt;
+                {
+                    _dialogService.ShowDialog("VerifyDialog", new DialogParameters(), null);
+                });
+                while(!flag)
+                {
+                    Thread.Sleep(10);
+                }
+            });
+
+            Task.Run(() =&gt;
+            {
+                dispatcher.InvokeAsync(() =&gt;
+                {
+                    _dialogService.ShowDialog("VerifyDialog", new DialogParameters(), null);
+                }).Wait();
+                while (!flag)
+                {
+                    Thread.Sleep(10);
+                }
+            });</code></pre> 
+<pre><code class="language-cs"> public async void AutoCloseDialog()
+        {     
+            await Task.Delay(1000);
+            flag = true;
+            RequestClose?.Invoke(new DialogResult(ButtonResult.None));
+        }</code></pre> 
+<p> </p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/abac7b32cd2e0e01c55aa48c79ec7714/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">2023年Redis面试题（持续更新）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/2f32782fb5035aab8ed6bb747a17d11e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Android Studio初学者实例：SharedPreferences 登录/注册模块实现</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>相机雷达联合标定cam_lidar_calibration - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="相机雷达联合标定cam_lidar_calibration" />
+<meta property="og:description" content="文章目录 运行环境：1.1 ROS环境配置1）工作空间创建和编译2）官方数据集测试环境 2.1 在线标定1）数据类型2）标定板制作3）配置文件4）开始标定5）完整实现步骤 3.1 python版本选择3.2 rviz参数修改 运行环境： ubuntu18.04.6 melodic
+opencv 3.4.16
+python 2.7.17 (ros自带)
+usb-cam
+速腾robosense 16
+1.1 ROS环境配置 官方Github: https://github.com/acfr/cam_lidar_calibration
+rs_to_velodyne :https://github.com/HViktorTsoi/rs_to_velodyne
+1）工作空间创建和编译 # 创建工作空间 mkdir -p calib_new_ws/src cd calib_new_ws/src # 克隆仓库 git clone -c http.sslverify=false https://gitlab.acfr.usyd.edu.au/its/cam_lidar_calibration.git # 下载ros和python依赖 sudo apt update &amp;&amp; sudo apt-get install -y ros-noetic-pcl-conversions ros-noetic-pcl-ros ros-noetic-tf2-sensor-msgs pip install pandas scipy # 编译 cd calib_new_ws catkin_make 2）官方数据集测试环境 ①开始标定
+source ./devel/setup.bash roslaunch cam_lidar_calibration run_optimiser.launch import_samples:=true 标定好的文件保存在 cam_lidar_calibration/data/vlp/路径下" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/66fc9138dd8569082371da4e518713df/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-06-27T15:58:35+08:00" />
+<meta property="article:modified_time" content="2023-06-27T15:58:35+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">相机雷达联合标定cam_lidar_calibration</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><ul><li><a href="#_3" rel="nofollow">运行环境：</a></li><li><a href="#11_ROS_12" rel="nofollow">1.1 ROS环境配置</a></li><li><ul><li><a href="#1_15" rel="nofollow">1）工作空间创建和编译</a></li><li><a href="#2_33" rel="nofollow">2）官方数据集测试环境</a></li></ul> 
+   </li><li><a href="#21__48" rel="nofollow">2.1 在线标定</a></li><li><ul><li><a href="#1_49" rel="nofollow">1）数据类型</a></li><li><a href="#2_70" rel="nofollow">2）标定板制作</a></li><li><a href="#3_81" rel="nofollow">3）配置文件</a></li><li><a href="#4_93" rel="nofollow">4）开始标定</a></li><li><a href="#5_123" rel="nofollow">5）完整实现步骤</a></li></ul> 
+   </li><li><a href="#31_python_155" rel="nofollow">3.1 python版本选择</a></li><li><a href="#32_rviz_158" rel="nofollow">3.2 rviz参数修改</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h3><a id="_3"></a>运行环境：</h3> 
+<p><font color="mediumpurple">ubuntu18.04.6 melodic<br> opencv 3.4.16<br> python 2.7.17 (ros自带)<br> usb-cam<br> 速腾robosense 16</font></p> 
+<h3><a id="11_ROS_12"></a>1.1 ROS环境配置</h3> 
+<p><font color="green">官方Github: <a href="https://github.com/acfr/cam_lidar_calibration">https://github.com/acfr/cam_lidar_calibration</a><br> rs_to_velodyne :<a href="https://github.com/HViktorTsoi/rs_to_velodyne">https://github.com/HViktorTsoi/rs_to_velodyne</a></font></p> 
+<h4><a id="1_15"></a>1）工作空间创建和编译</h4> 
+<pre><code class="prism language-cpp"># 创建工作空间
+mkdir <span class="token operator">-</span>p calib_new_ws<span class="token operator">/</span>src
+cd calib_new_ws<span class="token operator">/</span>src
+
+# 克隆仓库
+git clone <span class="token operator">-</span>c http<span class="token punctuation">.</span>sslverify<span class="token operator">=</span><span class="token boolean">false</span> https<span class="token operator">:</span><span class="token comment">//gitlab.acfr.usyd.edu.au/its/cam_lidar_calibration.git</span>
+
+# 下载ros和python依赖
+sudo apt update <span class="token operator">&amp;&amp;</span> sudo apt<span class="token operator">-</span>get install <span class="token operator">-</span>y ros<span class="token operator">-</span>noetic<span class="token operator">-</span>pcl<span class="token operator">-</span>conversions ros<span class="token operator">-</span>noetic<span class="token operator">-</span>pcl<span class="token operator">-</span>ros ros<span class="token operator">-</span>noetic<span class="token operator">-</span>tf2<span class="token operator">-</span>sensor<span class="token operator">-</span>msgs
+pip install pandas scipy
+
+# 编译
+cd calib_new_ws
+catkin_make
+</code></pre> 
+<h4><a id="2_33"></a>2）官方数据集测试环境</h4> 
+<p>①开始标定</p> 
+<pre><code class="prism language-bash"><span class="token builtin class-name">source</span> ./devel/setup.bash
+roslaunch cam_lidar_calibration run_optimiser.launch import_samples:<span class="token operator">=</span>true
+</code></pre> 
+<blockquote> 
+ <p>标定好的文件保存在 cam_lidar_calibration/data/vlp/路径下</p> 
+</blockquote> 
+<p>②评估标定结果</p> 
+<pre><code class="prism language-bash">roslaunch cam_lidar_calibration assess_results.launch csv:<span class="token operator">=</span><span class="token string">"<span class="token variable"><span class="token variable">$(</span>rospack <span class="token function">find</span> cam_lidar_calibration<span class="token variable">)</span></span>/data/vlp/calibration_quickstart.csv"</span> visualise:<span class="token operator">=</span>true
+</code></pre> 
+<br> 
+<h3><a id="21__48"></a>2.1 在线标定</h3> 
+<h4><a id="1_49"></a>1）数据类型</h4> 
+<p><font color="mediumpurple">激光雷达点云类型为XYZIR<br> <font color="green">雷达话题数据类型 sensor_msgs::PointCloud2<br> <font color="green">相机话题数据类型 sensor_msgs::Image、sensor_msgs::CameraInfo</font></font></font></p> 
+<pre><code class="prism language-bash">rostopic list
+rostopic <span class="token builtin class-name">type</span> /velodyne_points
+rostopic <span class="token builtin class-name">type</span> /usb_cam/image_raw
+rostopic <span class="token builtin class-name">type</span> /usb_cam/camera_info
+</code></pre> 
+<pre><code class="prism language-bash"><span class="token comment"># 启动相机</span>
+<span class="token comment"># 启动雷达</span>
+<span class="token comment"># 速腾转rs</span>
+rosrun rs_to_velodyne rs_to_velodyne XYZIRT XYZIR
+</code></pre> 
+<blockquote> 
+ <p>标定好的文件保存在cam_lidar_calibration/data路径下</p> 
+</blockquote> 
+<h4><a id="2_70"></a>2）标定板制作</h4> 
+<p><a href="https://markhedleyjones.com/projects/calibration-checkerboard-collection" rel="nofollow">标定板打印路径</a><br> 我们标定板大小：图3—A1（841 x 594mm）, 小方格边长 95mm ，内部顶点 7x5</p> 
+<p><img src="https://images2.imgbox.com/d9/f7/FVOpLvFW_o.png" alt="在这里插入图片描述" width="200"><img src="https://images2.imgbox.com/fb/23/m7KRq7qP_o.png" alt="在这里插入图片描述" width="200"></p> 
+<p><img src="https://images2.imgbox.com/89/04/blC8zqaq_o.png" alt="在这里插入图片描述" width="240"></p> 
+<blockquote> 
+ <p>标定注意事项：标定板摆放与地面成45°角</p> 
+</blockquote> 
+<h4><a id="3_81"></a>3）配置文件</h4> 
+<p>设置params.yaml中的话题和棋盘格大小（参考标定板制作内容）</p> 
+<pre><code class="prism language-bash"><span class="token comment"># 速腾RS16 + usb_cam</span>
+camera_topic: <span class="token string">"/usb_cam/image_raw"</span>
+camera_info: <span class="token string">"/usb_cam/camera_info"</span>
+<span class="token comment"># rs 话题</span>
+<span class="token comment"># lidar_topic: "/rslidar_points" </span>
+<span class="token comment"># rs_to_velodyne 话题</span>
+lidar_topic: <span class="token string">"/velodyne_points"</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/2b/28/J7auObuU_o.png" alt="在这里插入图片描述" width="500"></p> 
+<h4><a id="4_93"></a>4）开始标定</h4> 
+<p>偏移量设置(减少平均误差) distance_offset_mm=-30<br> <img src="https://images2.imgbox.com/63/eb/cBAhml6F_o.png" alt="在这里插入图片描述" width="400"></p> 
+<p>①启动标定包</p> 
+<pre><code class="prism language-bash">roslaunch cam_lidar_calibration run_optimiser.launch import_samples:<span class="token operator">=</span>false
+</code></pre> 
+<p>②调整 rqt_reconfigure 中的 x、y 、 z 分离出棋盘点云, 分离好一张点Capture, 有问题的点discard。分离好20张左右点Optimise。<br> <img src="https://images2.imgbox.com/d7/1d/k6alcedO_o.png" alt="在这里插入图片描述" width="400"><br> <img src="https://images2.imgbox.com/bd/4c/hDNR50QS_o.png" alt="在这里插入图片描述" width="400"><br> <img src="https://images2.imgbox.com/9d/4c/yPtJckaq_o.png" alt="在这里插入图片描述" width="400"></p> 
+<blockquote> 
+ <p>标定注意事项：对于 VLP-16，至少保证7条线打在标定板上</p> 
+</blockquote> 
+<p>②获取标定结果</p> 
+<pre><code class="prism language-bash"><span class="token comment"># 官方</span>
+roslaunch cam_lidar_calibration assess_results.launch csv:<span class="token operator">=</span><span class="token string">"<span class="token variable"><span class="token variable">$(</span>rospack <span class="token function">find</span> cam_lidar_calibration<span class="token variable">)</span></span>/data/vlp/calibration_quickstart.csv"</span> visualise:<span class="token operator">=</span>true
+
+<span class="token comment"># 自己目录下的</span>
+roslaunch cam_lidar_calibration assess_results.launch csv:<span class="token operator">=</span><span class="token string">"<span class="token variable"><span class="token variable">$(</span>rospack <span class="token function">find</span> cam_lidar_calibration<span class="token variable">)</span></span>/data/2023-06-27_11-46-29/calibration_2023-06-27_11-56-14.csv"</span> visualise:<span class="token operator">=</span>true
+</code></pre> 
+<p><img src="https://images2.imgbox.com/e6/90/5FD0HqdG_o.png" alt="在这里插入图片描述" width="400"><br> <img src="https://images2.imgbox.com/89/33/5636iipI_o.png" alt="在这里插入图片描述" width="400"><br> <font color="mediumpurple"><img src="https://images2.imgbox.com/ae/d3/MJGId2ks_o.png" alt="在这里插入图片描述" width="400"></font></p> 
+<h4><a id="5_123"></a>5）完整实现步骤</h4> 
+<p>详细操作见博客：<br> <a href="https://blog.csdn.net/qq_42227760/article/details/129934094?spm=1001.2014.3001.5502">Robosense激光雷达Linux配置</a><br> <a href="https://blog.csdn.net/qq_42227760/article/details/129949614?spm=1001.2014.3001.5502">usb_cam 相机ROS配置</a><br> <a href="https://blog.csdn.net/qq_42227760/article/details/129973280?spm=1001.2014.3001.5502">usb_cam相机标定实践 ROS</a></p> 
+<pre><code class="prism language-bash"><span class="token number">1</span>.启动相机
+<span class="token builtin class-name">cd</span> /home/duduzai/SPbot/usb_cam_ws
+<span class="token builtin class-name">source</span> ./devel/setup.bash
+roslaunch usb_cam usb_cam.launch
+
+<span class="token number">2</span>.启动雷达（注释雷达launch中的rviz）
+<span class="token builtin class-name">cd</span> /home/duduzai/SPbot/robosense_ws
+<span class="token builtin class-name">source</span> ./devel/setup.bash
+roslaunch rslidar_sdk start.launch
+
+<span class="token number">3</span>.rs to velodyne
+<span class="token builtin class-name">cd</span> <span class="token builtin class-name">source</span> ./devel/setup.bash
+<span class="token builtin class-name">source</span> ./devel/setup.bash
+rosrun rs_to_velodyne rs_to_velodyne XYZIRT XYZIR
+
+<span class="token number">4</span>、标定
+<span class="token builtin class-name">cd</span> /home/duduzai/SPbot/calib_new_ws
+<span class="token builtin class-name">source</span> ./devel/setup.bash
+roslaunch cam_lidar_calibration run_optimiser.launch import_samples:<span class="token operator">=</span>false
+roslaunch cam_lidar_calibration assess_results.launch csv:<span class="token operator">=</span><span class="token string">"<span class="token variable"><span class="token variable">$(</span>rospack <span class="token function">find</span> cam_lidar_calibration<span class="token variable">)</span></span>/data/vlp/calibration_2023-04-20_17-23-44.csv"</span> visualise:<span class="token operator">=</span>true
+</code></pre> 
+<br> 
+<h3><a id="31_python_155"></a>3.1 python版本选择</h3> 
+<p><img src="https://images2.imgbox.com/21/58/ef0Jucbr_o.png" alt="在这里插入图片描述" width="400"></p> 
+<h3><a id="32_rviz_158"></a>3.2 rviz参数修改</h3> 
+<pre><code class="prism language-bash">Panels:
+  - Class: rviz/Displays
+    Help Height: <span class="token number">0</span>
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /Image1
+        - /Image2
+        - /MarkerArray1
+      Splitter Ratio: <span class="token number">0.5</span>
+    Tree Height: <span class="token number">366</span>
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Expanded:
+      - /2D Pose Estimate1
+      - /2D Nav Goal1
+      - /Publish Point1
+    Name: Tool Properties
+    Splitter Ratio: <span class="token number">0.5886790156364441</span>
+  - Class: rviz/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: <span class="token number">0.5</span>
+  - Class: rviz/Time
+    Experimental: <span class="token boolean">false</span>
+    Name: Time
+    SyncMode: <span class="token number">0</span>
+    SyncSource: Image
+  - Class: cam_lidar_calibration/CamLidarCalibration
+    Name: CamLidarCalibration
+Preferences:
+  PromptSaveOnExit: <span class="token boolean">true</span>
+Toolbars:
+  toolButtonStyle: <span class="token number">2</span>
+Visualization Manager:
+  Class: <span class="token string">""</span>
+  Displays:
+    - Alpha: <span class="token number">0.5</span>
+      Cell Size: <span class="token number">1</span>
+      Class: rviz/Grid
+      Color: <span class="token number">160</span><span class="token punctuation">;</span> <span class="token number">160</span><span class="token punctuation">;</span> <span class="token number">164</span>
+      Enabled: <span class="token boolean">true</span>
+      Line Style:
+        Line Width: <span class="token number">0.029999999329447746</span>
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: <span class="token number">0</span>
+      Offset:
+        X: <span class="token number">0</span>
+        Y: <span class="token number">0</span>
+        Z: <span class="token number">0</span>
+      Plane: XY
+      
+      <span class="token comment"># Plane Cell Count: 10</span>
+      Plane Cell Count: <span class="token number">50</span>
+      Reference Frame: <span class="token operator">&lt;</span>Fixed Frame<span class="token operator">&gt;</span>
+      Value: <span class="token boolean">true</span>
+    - Class: rviz/Image
+      Enabled: <span class="token boolean">true</span>
+      Image Topic: /gmsl/A0/image_color
+      Max Value: <span class="token number">1</span>
+      Median window: <span class="token number">5</span>
+      Min Value: <span class="token number">0</span>
+      Name: Image
+      Normalize Range: <span class="token boolean">true</span>
+      Queue Size: <span class="token number">2</span>
+      Transport Hint: raw
+      Unreliable: <span class="token boolean">false</span>
+      Value: <span class="token boolean">true</span>
+    - Class: rviz/Image
+      Enabled: <span class="token boolean">true</span>
+
+      <span class="token comment"># Image Topic: /camera_features</span>
+      Image Topic: /usb_cam/image_raw
+      Max Value: <span class="token number">1</span>
+      Median window: <span class="token number">5</span>
+      Min Value: <span class="token number">0</span>
+      Name: Image
+      Normalize Range: <span class="token boolean">true</span>
+      Queue Size: <span class="token number">2</span>
+      Transport Hint: raw
+      Unreliable: <span class="token boolean">false</span>
+      Value: <span class="token boolean">true</span>
+    - Alpha: <span class="token number">1</span>
+      Autocompute Intensity Bounds: <span class="token boolean">true</span>
+      Autocompute Value Bounds:
+        Max Value: <span class="token number">10</span>
+        Min Value: -10
+        Value: <span class="token boolean">true</span>
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span>
+      Color Transformer: Intensity
+      Decay Time: <span class="token number">0</span>
+      Enabled: <span class="token boolean">true</span>
+      Invert Rainbow: <span class="token boolean">false</span>
+      Max Color: <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span>
+
+      <span class="token comment"># Max Intensity: 217</span>
+      Max Intensity: <span class="token number">155</span>
+      Min Color: <span class="token number">0</span><span class="token punctuation">;</span> <span class="token number">0</span><span class="token punctuation">;</span> <span class="token number">0</span>
+      Min Intensity: <span class="token number">1</span>
+      Name: Experimental Region
+      Position Transformer: XYZ
+      Queue Size: <span class="token number">10</span>
+      Selectable: <span class="token boolean">true</span>
+      Size <span class="token punctuation">(</span>Pixels<span class="token punctuation">)</span>: <span class="token number">3</span>
+
+      <span class="token comment"># Size (m): 0.009999999776482582</span>
+      Size <span class="token punctuation">(</span>m<span class="token punctuation">)</span>: <span class="token number">0.01</span>
+      Style: Flat Squares
+      Topic: /feature_extraction/experimental_region
+      Unreliable: <span class="token boolean">false</span>
+      Use Fixed Frame: <span class="token boolean">true</span>
+      Use rainbow: <span class="token boolean">true</span>
+      Value: <span class="token boolean">true</span>
+    - Alpha: <span class="token number">1</span>
+      Autocompute Intensity Bounds: <span class="token boolean">true</span>
+      Autocompute Value Bounds:
+        Max Value: <span class="token number">10</span>
+        Min Value: -10
+        Value: <span class="token boolean">true</span>
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span>
+      Color Transformer: Intensity
+      Decay Time: <span class="token number">0</span>
+      Enabled: <span class="token boolean">true</span>
+      Invert Rainbow: <span class="token boolean">false</span>
+      Max Color: <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span><span class="token punctuation">;</span> <span class="token number">255</span>
+      Max Intensity: <span class="token number">60</span>
+      Min Color: <span class="token number">0</span><span class="token punctuation">;</span> <span class="token number">0</span><span class="token punctuation">;</span> <span class="token number">0</span>
+      Min Intensity: <span class="token number">1</span>
+      Name: Chessboard
+      Position Transformer: XYZ
+      Queue Size: <span class="token number">10</span>
+      Selectable: <span class="token boolean">true</span>
+      Size <span class="token punctuation">(</span>Pixels<span class="token punctuation">)</span>: <span class="token number">3</span>
+      Size <span class="token punctuation">(</span>m<span class="token punctuation">)</span>: <span class="token number">0.009999999776482582</span>
+      Style: Flat Squares
+      Topic: /feature_extraction/chessboard
+      Unreliable: <span class="token boolean">false</span>
+      Use Fixed Frame: <span class="token boolean">true</span>
+      Use rainbow: <span class="token boolean">true</span>
+      Value: <span class="token boolean">true</span>
+    - Class: rviz/MarkerArray
+      Enabled: <span class="token boolean">true</span>
+      Marker Topic: /feature_extraction/collected_samples
+      Name: MarkerArray
+      Namespaces:
+     
+    Frame Rate: <span class="token number">30</span>
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: <span class="token boolean">true</span>
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+      Theta std deviation: <span class="token number">0.2617993950843811</span>
+      Topic: /initialpose
+      X std deviation: <span class="token number">0.5</span>
+      Y std deviation: <span class="token number">0.5</span>
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: <span class="token boolean">true</span>
+      Topic: /clicked_point
+  Value: <span class="token boolean">true</span>
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: <span class="token number">7.726625442504883</span>
+      Enable Stereo Rendering:
+        Stereo Eye Separation: <span class="token number">0.05999999865889549</span>
+        Stereo Focal Distance: <span class="token number">1</span>
+        Swap Stereo Eyes: <span class="token boolean">false</span>
+        Value: <span class="token boolean">false</span>
+      Focal Point:
+        X: <span class="token number">2.3772096633911133</span>
+        Y: -1.2373826503753662
+        Z: <span class="token number">1.9428495168685913</span>
+      Focal Shape Fixed Size: <span class="token boolean">true</span>
+      Focal Shape Size: <span class="token number">0.05000000074505806</span>
+      Invert Z Axis: <span class="token boolean">false</span>
+      Name: Current View
+      Near Clip Distance: <span class="token number">0.009999999776482582</span>
+      Pitch: <span class="token number">0.6603978276252747</span>
+      Target Frame: <span class="token operator">&lt;</span>Fixed Frame<span class="token operator">&gt;</span>
+      Value: Orbit <span class="token punctuation">(</span>rviz<span class="token punctuation">)</span>
+      Yaw: <span class="token number">2.71859073638916</span>
+    Saved: ~
+Window Geometry:
+  CamLidarCalibration:
+    collapsed: <span class="token boolean">false</span>
+  Displays:
+    collapsed: <span class="token boolean">false</span>
+  Height: <span class="token number">1075</span>
+  Hide Left Dock: <span class="token boolean">false</span>
+  Hide Right Dock: <span class="token boolean">true</span>
+  Image:
+    collapsed: <span class="token boolean">false</span>
+  QMainWindow State: 000000ff00000000fd00000004000000000000016a00000391fc020000000cfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073000000003d000001ab000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0049006d006100670065010000003d000001660000001600fffffffb0000000a0049006d00610067006501000001a90000016d0000001600fffffffb0000000a0049006d0061006700650100000172000001400000000000000000fb0000002600430061006d004c006900640061007200430061006c006900620072006100740069006f006e010000031c000000b2000000a300ffffff000000010000010f00000315fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d00000315000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000078000000042fc0100000002fb0000000800540069006d0065010000000000000780000002eb00fffffffb0000000800540069006d00650100000000000004500000000000000000000006100000039100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Selection:
+    collapsed: <span class="token boolean">false</span>
+  Time:
+    collapsed: <span class="token boolean">false</span>
+  Tool Properties:
+    collapsed: <span class="token boolean">false</span>
+  Views:
+    collapsed: <span class="token boolean">true</span>
+  Width: <span class="token number">1920</span>
+  X: <span class="token number">1920</span>
+  Y: <span class="token number">201</span>  Value: <span class="token boolean">true</span>
+  Enabled: <span class="token boolean">true</span>
+  Global Options:
+    Background Color: <span class="token number">48</span><span class="token punctuation">;</span> <span class="token number">48</span><span class="token punctuation">;</span> <span class="token number">48</span>
+    Default Light: <span class="token boolean">true</span>
+    
+    <span class="token comment"># Fixed Frame: velodyne_front_link</span>
+    <span class="token comment"># Fixed Frame: rslidar </span>
+    Fixed Frame: velodyne
+    
+    Frame Rate: <span class="token number">30</span>
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: <span class="token boolean">true</span>
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+      Theta std deviation: <span class="token number">0.2617993950843811</span>
+      Topic: /initialpose
+      X std deviation: <span class="token number">0.5</span>
+      Y std deviation: <span class="token number">0.5</span>
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: <span class="token boolean">true</span>
+      Topic: /clicked_point
+  Value: <span class="token boolean">true</span>
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: <span class="token number">7.726625442504883</span>
+      Enable Stereo Rendering:
+        Stereo Eye Separation: <span class="token number">0.05999999865889549</span>
+        Stereo Focal Distance: <span class="token number">1</span>
+        Swap Stereo Eyes: <span class="token boolean">false</span>
+        Value: <span class="token boolean">false</span>
+      Focal Point:
+        X: <span class="token number">2.3772096633911133</span>
+        Y: -1.2373826503753662
+        Z: <span class="token number">1.9428495168685913</span>
+      Focal Shape Fixed Size: <span class="token boolean">true</span>
+      Focal Shape Size: <span class="token number">0.05000000074505806</span>
+      Invert Z Axis: <span class="token boolean">false</span>
+      Name: Current View
+      Near Clip Distance: <span class="token number">0.009999999776482582</span>
+      Pitch: <span class="token number">0.6603978276252747</span>
+      Target Frame: <span class="token operator">&lt;</span>Fixed Frame<span class="token operator">&gt;</span>
+      Value: Orbit <span class="token punctuation">(</span>rviz<span class="token punctuation">)</span>
+      Yaw: <span class="token number">2.71859073638916</span>
+    Saved: ~
+Window Geometry:
+  CamLidarCalibration:
+    collapsed: <span class="token boolean">false</span>
+  Displays:
+    collapsed: <span class="token boolean">false</span>
+  Height: <span class="token number">1075</span>
+  Hide Left Dock: <span class="token boolean">false</span>
+  Hide Right Dock: <span class="token boolean">true</span>
+  Image:
+    collapsed: <span class="token boolean">false</span>
+  QMainWindow State: 000000ff00000000fd00000004000000000000016a00000391fc020000000cfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073000000003d000001ab000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0049006d006100670065010000003d000001660000001600fffffffb0000000a0049006d00610067006501000001a90000016d0000001600fffffffb0000000a0049006d0061006700650100000172000001400000000000000000fb0000002600430061006d004c006900640061007200430061006c006900620072006100740069006f006e010000031c000000b2000000a300ffffff000000010000010f00000315fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d00000315000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000078000000042fc0100000002fb0000000800540069006d0065010000000000000780000002eb00fffffffb0000000800540069006d00650100000000000004500000000000000000000006100000039100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Selection:
+    collapsed: <span class="token boolean">false</span>
+  Time:
+    collapsed: <span class="token boolean">false</span>
+  Tool Properties:
+    collapsed: <span class="token boolean">false</span>
+  Views:
+    collapsed: <span class="token boolean">true</span>
+  Width: <span class="token number">1920</span>
+  X: <span class="token number">1920</span>
+  Y: <span class="token number">201</span>
+</code></pre> 
+<br> 
+<center>
+  ⭐⭐⭐ 
+ <font color="darkcyan">嘟嘟崽 ⭐⭐⭐ </font> 
+ <center>
+   ⭐⭐⭐ 
+  <font color="darkcyan">祝你成功 ⭐⭐⭐ </font> 
+ </center> 
+</center>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/fab4864e965486f610b1eab5991d7191/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">抽奖！抽奖！抽奖！大转盘、九宫格、老虎机开放抽奖组件！</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/68435c1013793943a0faaae76345cccb/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">安装部署vcenter 6.7（保姆级教学）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

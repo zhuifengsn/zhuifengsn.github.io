@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>C语言数据结构之利用栈进行括号匹配的检验 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="C语言数据结构之利用栈进行括号匹配的检验" />
+<meta property="og:description" content="括号匹配的检验:
+eg: [([][][)]] 不匹配
+[([][])] 匹配
+思路： 0x0.首先建立两个栈，并对其初始化 0x1.对表达式进行遍历，将相邻两个不能匹配的入栈到栈A，然后检测栈空间A是否为偶数，如果是表明有存在的可能，如果不是则提示不匹配。
+0x2.检测栈空间A是否为偶数，如果是表明有存在的可能，如果不是则提示不匹配，遍历栈A，将不匹配的入栈到栈B，如果匹配则判断是否是最后两个元素，如果是表明匹配
+0x3.判断出栈前的A和栈B长度是否相等，如果相等表明不匹配。
+0x4.栈A和栈B互换，重复步骤0x2,直到都为空.
+运行截图： 代码：
+Stack.h
+#ifndef _STACK_H_ #define _STACK_H_ #include &lt;stdbool.h&gt; #define STACK_INIT_SIZE 100 //栈控件初始化大小 #define STACK_INCREMENT 10 //栈控件增量 typedef struct{ void * base;//栈底 void * top;//栈顶 int stackSize;//当前已经分配的存储空间 int elementLength; }SqStack; typedef enum{ FAILED,SUCCESS }Status; Status initStack(SqStack * pStack,int elength); void destroyStack(SqStack * pStack); void clearStack(SqStack * pStack);//将栈置空 bool stackIsEmpty(SqStack * pStack); int stackLength(const SqStack * pStack); void * getTop(SqStack * pStack); void push(SqStack * pStack,void *data);//压栈 void pop(SqStack * pStack,void *data);//出栈,若不空删除栈顶元素并将其值返回 void * get(SqStack * pStack,int i);//获取栈的第i个位置的元素 /** * 输出栈中每个元素，如果direction为正则从头到尾输出，反之从尾到头输出." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/533f6c955b3e8001bc4b3d85be9468b2/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-03-02T20:55:21+08:00" />
+<meta property="article:modified_time" content="2018-03-02T20:55:21+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">C语言数据结构之利用栈进行括号匹配的检验</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>括号匹配的检验:</strong></p> 
+<p>    eg: [([][][)]]    不匹配</p> 
+<p>        [([][])] 匹配<strong><br></strong></p> 
+<h3><strong>思路：   <br></strong></h3> 
+<p><strong> 0x0.首先建立两个栈，并对其初始化      <br></strong></p> 
+<p><strong>0x1.对表达式进行遍历，将相邻两个不能匹配的入栈到栈A，然后检测栈空间A是否为偶数，如果是表明有存在的可能，如果不是则提示不匹配。</strong></p> 
+<p><strong>0x2.检测栈空间A是否为偶数，如果是表明有存在的可能，如果不是则提示不匹配<strong>，<strong>遍历栈A，将不匹配的入栈到栈B，如果</strong>匹配则判断是否是最后两个元素，如果是表明匹配</strong></strong></p> 
+<p><strong>0x3.判断出栈前的A和栈B长度是否相等，如果相等表明不匹配。</strong></p> 
+<p><strong>0x4.栈A和栈B互换，重复步骤0x2,直到都为空.</strong></p> 
+<p><br></p> 
+<h3><strong>运行截图：</strong></h3> 
+<p><img src="https://images2.imgbox.com/a3/05/LXO3Hbs6_o.png" alt=""><br></p> 
+<h3><strong>代码：</strong><br></h3> 
+<p>Stack.h</p> 
+<p></p> 
+<pre style="background-color:#2b2b2b;color:#a9b7c6;font-family:'DejaVu Sans Mono';font-size:11.3pt;"><span style="color:#bbb529;">#ifndef </span><span style="color:#908b25;">_STACK_H_
+</span><span style="color:#bbb529;">#define </span><span style="color:#908b25;">_STACK_H_
+</span><span style="color:#908b25;">
+</span><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">&lt;stdbool.h&gt;
+</span><span style="color:#bbb529;">#define </span><span style="color:#908b25;">STACK_INIT_SIZE </span><span style="color:#6897bb;">100 </span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">栈控件初始化大小
+</span><span style="color:#bbb529;">#define </span><span style="color:#908b25;">STACK_INCREMENT </span><span style="color:#6897bb;">10 </span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">栈控件增量
+</span><span style="font-family:'DejaVu Sans';color:#808080;">
+</span><span style="color:#cc7832;font-weight:bold;">typedef struct</span>{
+    <span style="color:#cc7832;font-weight:bold;">void </span>* <span style="color:#9373a5;">base</span><span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">栈底
+</span><span style="font-family:'DejaVu Sans';color:#808080;">    </span><span style="color:#cc7832;font-weight:bold;">void </span>* <span style="color:#9373a5;">top</span><span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">栈顶
+</span><span style="font-family:'DejaVu Sans';color:#808080;">    </span><span style="color:#cc7832;font-weight:bold;">int </span><span style="color:#9373a5;">stackSize</span><span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">当前已经分配的存储空间
+</span><span style="font-family:'DejaVu Sans';color:#808080;">    </span><span style="color:#cc7832;font-weight:bold;">int </span><span style="color:#9373a5;">elementLength</span><span style="color:#cc7832;">;
+</span>}<span style="color:#b9bcd1;">SqStack</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;font-weight:bold;">typedef enum</span>{
+    <span style="color:#9876aa;font-style:italic;">FAILED</span><span style="color:#cc7832;">,</span><span style="color:#9876aa;font-style:italic;">SUCCESS
+</span>}<span style="color:#b9bcd1;">Status</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#b9bcd1;">Status </span><span style="color:#ffc66d;">initStack</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">int </span>elength)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">destroyStack</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">clearStack</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)<span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">将栈置空
+</span><span style="color:#908b25;">bool </span><span style="color:#ffc66d;">stackIsEmpty</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;font-weight:bold;">int </span><span style="color:#ffc66d;">stackLength</span>(<span style="color:#cc7832;font-weight:bold;">const </span><span style="color:#b9bcd1;">SqStack </span>* pStack)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;font-weight:bold;">void </span>* <span style="color:#ffc66d;">getTop</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">push</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">void </span>*data)<span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">压栈
+</span><span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">pop</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">void </span>*data)<span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">出栈</span><span style="color:#808080;">,</span><span style="font-family:'DejaVu Sans';color:#808080;">若不空删除栈顶元素并将其值返回
+</span><span style="font-family:'DejaVu Sans';color:#808080;">
+</span><span style="color:#cc7832;font-weight:bold;">void </span>* <span style="color:#ffc66d;">get</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">int </span>i)<span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">获取栈的第</span><span style="color:#808080;">i</span><span style="font-family:'DejaVu Sans';color:#808080;">个位置的元素
+</span><span style="font-family:'DejaVu Sans';color:#808080;">
+</span><span style="color:#808080;">/**
+</span><span style="color:#808080;"> * </span><span style="font-family:'DejaVu Sans';color:#808080;">输出栈中每个元素，如果</span><span style="color:#808080;">direction</span><span style="font-family:'DejaVu Sans';color:#808080;">为正则从头到尾输出，反之从尾到头输出</span><span style="color:#808080;">.
+</span><span style="color:#808080;"> * @param pStack
+</span><span style="color:#808080;"> * @param pfun
+</span><span style="color:#808080;"> * @param direction
+</span><span style="color:#808080;"> */
+</span><span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">stackTraverse</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">void</span>(*pfun)(<span style="color:#cc7832;font-weight:bold;">void </span>*)<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">int </span>direction)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#bbb529;">#endif</span></pre> 
+<p><br></p> 
+<p>Stack.c</p> 
+<p></p> 
+<pre style="background-color:#2b2b2b;color:#a9b7c6;font-family:'DejaVu Sans Mono';font-size:11.3pt;"><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">&lt;malloc.h&gt;
+</span><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">&lt;memory.h&gt;
+</span><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">&lt;assert.h&gt;
+</span><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">"Stack.h"
+</span><span style="color:#6a8759;">
+</span><span style="color:#b9bcd1;">Status </span><span style="color:#ffc66d;">initStack</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">int </span>elength)
+{
+
+    pStack-&gt;<span style="color:#9373a5;">base </span>= malloc((<span style="color:#b9bcd1;">size_t</span>) (elength * <span style="color:#908b25;">STACK_INIT_SIZE</span>))<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">if</span>(!pStack-&gt;<span style="color:#9373a5;">base</span>)<span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">如果分配内存失败
+</span><span style="font-family:'DejaVu Sans';color:#808080;">        </span><span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#9876aa;font-style:italic;">FAILED</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">    </span>pStack-&gt;<span style="color:#9373a5;">elementLength </span>= elength<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>pStack-&gt;<span style="color:#9373a5;">top </span>= pStack-&gt;<span style="color:#9373a5;">base</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>pStack-&gt;<span style="color:#9373a5;">stackSize </span>= <span style="color:#908b25;">STACK_INIT_SIZE</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#9876aa;font-style:italic;">SUCCESS</span><span style="color:#cc7832;">;
+</span>}
+
+<span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">destroyStack</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)
+{
+    <span style="color:#cc7832;font-weight:bold;">if</span>(pStack)
+    {
+        free(pStack-&gt;<span style="color:#9373a5;">base</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>pStack-&gt;<span style="color:#9373a5;">base </span>= <span style="color:#908b25;">NULL</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>pStack-&gt;<span style="color:#9373a5;">top </span>= <span style="color:#908b25;">NULL</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>pStack-&gt;<span style="color:#9373a5;">stackSize </span>= <span style="color:#6897bb;">0</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}
+
+}
+
+<span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">clearStack</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)<span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">将栈置空
+</span>{
+    <span style="color:#cc7832;font-weight:bold;">if</span>(pStack)
+        pStack-&gt;<span style="color:#9373a5;">top </span>= pStack-&gt;<span style="color:#9373a5;">base</span><span style="color:#cc7832;">;
+</span>}
+
+<span style="color:#908b25;">bool </span><span style="color:#ffc66d;">stackIsEmpty</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)
+{
+    <span style="color:#cc7832;font-weight:bold;">if</span>(pStack)
+    {
+        <span style="color:#cc7832;font-weight:bold;">if</span>(pStack-&gt;<span style="color:#9373a5;">top </span>== pStack-&gt;<span style="color:#9373a5;">base</span>)
+            <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">true</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">else
+</span><span style="color:#cc7832;font-weight:bold;">            return </span><span style="color:#908b25;">false</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}
+
+    <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">false</span><span style="color:#cc7832;">;
+</span>}
+
+<span style="color:#808080;">/**
+</span><span style="color:#808080;"> * </span><span style="font-family:'DejaVu Sans';color:#808080;">返回栈当前长度</span><span style="color:#808080;">
+</span><span style="color:#808080;"> * </span><span style="font-family:'DejaVu Sans';color:#808080;">用栈顶减去栈底除以单个元素大小即可</span><span style="color:#808080;">.
+</span><span style="color:#808080;"> * @param pStack
+</span><span style="color:#808080;"> * @return
+</span><span style="color:#808080;"> */
+</span><span style="color:#cc7832;font-weight:bold;">int </span><span style="color:#ffc66d;">stackLength</span>(<span style="color:#cc7832;font-weight:bold;">const </span><span style="color:#b9bcd1;">SqStack </span>* pStack)
+{
+    <span style="color:#cc7832;font-weight:bold;">return </span>(<span style="color:#cc7832;font-weight:bold;">int</span>) (pStack-&gt;<span style="color:#9373a5;">top </span>- pStack-&gt;<span style="color:#9373a5;">base</span>)/pStack-&gt;<span style="color:#9373a5;">elementLength</span><span style="color:#cc7832;">;
+</span>}
+
+<span style="color:#cc7832;font-weight:bold;">void </span>* <span style="color:#ffc66d;">getTop</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack)
+{
+    <span style="color:#cc7832;font-weight:bold;">if</span>(pStack-&gt;<span style="color:#9373a5;">top </span>== pStack-&gt;<span style="color:#9373a5;">base</span>)
+        <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">NULL</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">else
+</span><span style="color:#cc7832;font-weight:bold;">        return </span>pStack-&gt;<span style="color:#9373a5;">top</span><span style="color:#cc7832;">;
+</span>}
+
+<span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">push</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">void </span>*data)<span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">压栈
+</span>{
+
+    <span style="color:#cc7832;font-weight:bold;">if</span>((pStack-&gt;<span style="color:#9373a5;">top </span>- pStack-&gt;<span style="color:#9373a5;">base</span>)/pStack-&gt;<span style="color:#9373a5;">elementLength </span>&gt;= pStack-&gt;<span style="color:#9373a5;">stackSize</span>)
+    {
+        pStack-&gt;<span style="color:#9373a5;">base </span>=
+                realloc(pStack-&gt;<span style="color:#9373a5;">base</span><span style="color:#cc7832;">,
+</span><span style="color:#cc7832;">                        </span>(<span style="color:#b9bcd1;">size_t</span>) ((pStack-&gt;<span style="color:#9373a5;">stackSize </span>+ <span style="color:#908b25;">STACK_INCREMENT</span>)*pStack-&gt;<span style="color:#9373a5;">elementLength</span>))<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">        </span><span style="color:#908b25;">assert</span>(pStack-&gt;<span style="color:#9373a5;">base </span>!= <span style="color:#908b25;">NULL</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>pStack-&gt;<span style="color:#9373a5;">top </span>= pStack-&gt;<span style="color:#9373a5;">base</span>+pStack-&gt;<span style="color:#9373a5;">stackSize</span>*pStack-&gt;<span style="color:#9373a5;">elementLength</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>pStack-&gt;<span style="color:#9373a5;">stackSize </span>+= <span style="color:#908b25;">STACK_INCREMENT</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}
+    memcpy(pStack-&gt;<span style="color:#9373a5;">top</span><span style="color:#cc7832;">, </span>data<span style="color:#cc7832;">, </span>(<span style="color:#b9bcd1;">size_t</span>) pStack-&gt;<span style="color:#9373a5;">elementLength</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">    </span>pStack-&gt;<span style="color:#9373a5;">top </span>= pStack-&gt;<span style="color:#9373a5;">top</span>+pStack-&gt;<span style="color:#9373a5;">elementLength</span><span style="color:#cc7832;">;
+</span>}
+
+<span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">pop</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">void </span>*data)<span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">出栈</span><span style="color:#808080;">,</span><span style="font-family:'DejaVu Sans';color:#808080;">若不空删除栈顶元素并将其值返回
+</span>{
+    <span style="color:#cc7832;font-weight:bold;">if</span>(pStack-&gt;<span style="color:#9373a5;">top </span>!= pStack-&gt;<span style="color:#9373a5;">base</span>)
+    {
+        pStack-&gt;<span style="color:#9373a5;">top </span>-= pStack-&gt;<span style="color:#9373a5;">elementLength</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">if</span>(data)
+            memcpy(data<span style="color:#cc7832;">,</span>pStack-&gt;<span style="color:#9373a5;">top</span><span style="color:#cc7832;">,</span>(<span style="color:#b9bcd1;">size_t</span>)pStack-&gt;<span style="color:#9373a5;">elementLength</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}
+}
+
+
+<span style="color:#cc7832;font-weight:bold;">void </span>* <span style="color:#ffc66d;">get</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">int </span>i)<span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">获取栈的第</span><span style="color:#808080;">i</span><span style="font-family:'DejaVu Sans';color:#808080;">个位置的元素
+</span>{
+    <span style="color:#cc7832;font-weight:bold;">void </span>* pn = <span style="color:#908b25;">NULL</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">if</span>(stackLength(pStack) != <span style="color:#6897bb;">0</span>)
+        pn = &amp;pStack-&gt;<span style="color:#9373a5;">base</span>[i]<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">return </span>pn<span style="color:#cc7832;">;
+</span>}
+
+
+<span style="color:#808080;">/**
+</span><span style="color:#808080;"> *
+</span><span style="color:#808080;"> * @param pStack
+</span><span style="color:#808080;"> * @param pfun
+</span><span style="color:#808080;"> * @param direction </span><span style="font-family:'DejaVu Sans';color:#808080;">遍历方向</span><span style="color:#808080;">
+</span><span style="color:#808080;"> * @param isHex </span><span style="font-family:'DejaVu Sans';color:#808080;">是否是</span><span style="color:#808080;">16</span><span style="font-family:'DejaVu Sans';color:#808080;">进制</span><span style="color:#808080;">
+</span><span style="color:#808080;"> */
+</span><span style="color:#cc7832;font-weight:bold;">void </span><span style="color:#ffc66d;">stackTraverse</span>(<span style="color:#b9bcd1;">SqStack </span>* pStack<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">void</span>(*pfun)(<span style="color:#cc7832;font-weight:bold;">void </span>*)<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">int </span>direction)
+{
+    <span style="color:#cc7832;font-weight:bold;">void </span>* pd = <span style="color:#908b25;">NULL</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">if</span>(direction &gt; <span style="color:#6897bb;">0</span>)
+    {
+        pd = pStack-&gt;<span style="color:#9373a5;">base</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">while</span>(pd &lt; pStack-&gt;<span style="color:#9373a5;">top</span>)
+        {
+            pfun(pd)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span>pd += pStack-&gt;<span style="color:#9373a5;">elementLength</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>}
+    }<span style="color:#cc7832;font-weight:bold;">else</span>{
+        pd = pStack-&gt;<span style="color:#9373a5;">top</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">while</span>(pd &gt; pStack-&gt;<span style="color:#9373a5;">base</span>)
+        {
+            pd -= pStack-&gt;<span style="color:#9373a5;">elementLength</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span>pfun(pd)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>}
+    }
+
+}</pre> 
+<p>main5.c</p> 
+<p></p> 
+<pre style="background-color:#2b2b2b;color:#a9b7c6;font-family:'DejaVu Sans Mono';font-size:11.3pt;"><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">&lt;stdio.h&gt;
+</span><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">&lt;stdlib.h&gt;
+</span><span style="color:#bbb529;">#include </span><span style="color:#6a8759;">"Stack.h"
+</span><span style="color:#6a8759;">
+</span><span style="color:#908b25;">bool </span><span style="color:#ffc66d;">signEqual</span>(<span style="color:#cc7832;font-weight:bold;">char </span>* c1<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">char </span>* c2)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#808080;">/**
+</span><span style="color:#808080;"> * </span><span style="font-family:'DejaVu Sans';color:#808080;">括号匹配检验</span><span style="color:#808080;">
+</span><span style="color:#808080;"> * @return
+</span><span style="color:#808080;"> */
+</span><span style="color:#808080;">
+</span><span style="color:#cc7832;font-weight:bold;">int </span><span style="color:#ffc66d;">main</span>(<span style="color:#cc7832;font-weight:bold;">void</span>) {
+    <span style="color:#b9bcd1;">SqStack </span>stack<span style="color:#cc7832;">,</span>stack2<span style="color:#cc7832;">,</span>staTemp<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>initStack(&amp;stack<span style="color:#cc7832;">, </span><span style="color:#cc7832;font-weight:bold;">sizeof</span>(<span style="color:#cc7832;font-weight:bold;">char</span>))<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>initStack(&amp;stack2<span style="color:#cc7832;">, </span><span style="color:#cc7832;font-weight:bold;">sizeof</span>(<span style="color:#cc7832;font-weight:bold;">char</span>))<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>printf(<span style="color:#6a8759;">"</span><span style="font-family:'DejaVu Sans';color:#6a8759;">请输入需要检测的字符串</span><span style="color:#6a8759;">,</span><span style="font-family:'DejaVu Sans';color:#6a8759;">以</span><span style="color:#6a8759;">#</span><span style="font-family:'DejaVu Sans';color:#6a8759;">结尾</span><span style="color:#6a8759;">:"</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">char </span>c<span style="color:#cc7832;">, </span>temp<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">    </span>scanf(<span style="color:#6a8759;">"</span><span style="color:#cc7832;">%c</span><span style="color:#6a8759;">"</span><span style="color:#cc7832;">, </span>&amp;c)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span><span style="color:#808080;">//[([][][)]]
+</span><span style="color:#808080;">    //[][][
+</span><span style="color:#808080;">    //</span><span style="font-family:'DejaVu Sans';color:#808080;">检测括号是否匹配</span><span style="color:#808080;">.
+</span><span style="color:#808080;">
+</span><span style="color:#808080;">    </span><span style="color:#cc7832;font-weight:bold;">while </span>(c != <span style="color:#6a8759;">'#'</span>)
+    {
+        <span style="color:#cc7832;font-weight:bold;">if</span>(c == <span style="color:#6a8759;">'(' </span>|| c == <span style="color:#6a8759;">'[' </span>|| c==<span style="color:#6a8759;">')' </span>|| c==<span style="color:#6a8759;">']'</span>)
+        {
+            scanf(<span style="color:#6a8759;">"</span><span style="color:#cc7832;">%c</span><span style="color:#6a8759;">"</span><span style="color:#cc7832;">,</span>&amp;temp)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">            </span><span style="color:#cc7832;font-weight:bold;">if</span>(signEqual(&amp;c<span style="color:#cc7832;">,</span>&amp;temp))<span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">如果匹配
+</span><span style="font-family:'DejaVu Sans';color:#808080;">            </span>{
+                scanf(<span style="color:#6a8759;">"</span><span style="color:#cc7832;">%c</span><span style="color:#6a8759;">"</span><span style="color:#cc7832;">,</span>&amp;c)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span>}<span style="color:#cc7832;font-weight:bold;">else</span>{
+                push(&amp;stack<span style="color:#cc7832;">,</span>&amp;c)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                </span>c = temp<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span>}
+        }<span style="color:#cc7832;font-weight:bold;">else if</span>(c !=<span style="color:#6a8759;">'#'</span>){
+            printf(<span style="color:#6a8759;">"</span><span style="font-family:'DejaVu Sans';color:#6a8759;">表达式中只允许包含</span><span style="color:#6a8759;">[]()</span><span style="font-family:'DejaVu Sans';color:#6a8759;">两种括号</span><span style="color:#6a8759;">!</span><span style="color:#cc7832;">\n</span><span style="color:#6a8759;">"</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span>exit(<span style="color:#6897bb;">1</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>}
+    }
+
+    <span style="color:#cc7832;font-weight:bold;">int </span>len<span style="color:#cc7832;">,</span>len2<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span><span style="color:#cc7832;font-weight:bold;">while</span>(!(stackIsEmpty(&amp;stack) &amp;&amp; stackIsEmpty(&amp;stack2)))
+    {
+
+        len = stackLength(&amp;stack)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">if</span>(len%<span style="color:#6897bb;">2 </span>== <span style="color:#6897bb;">0</span>)<span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">为偶数対表明存在正确匹配的可能
+</span><span style="font-family:'DejaVu Sans';color:#808080;">        </span>{
+            pop(&amp;stack<span style="color:#cc7832;">,</span>&amp;c)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span><span style="color:#cc7832;font-weight:bold;">do
+</span><span style="color:#cc7832;font-weight:bold;">            </span>{
+                pop(&amp;stack<span style="color:#cc7832;">,</span>&amp;temp)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                </span><span style="color:#cc7832;font-weight:bold;">if</span>(signEqual(&amp;c<span style="color:#cc7832;">,</span>&amp;temp))
+                {
+                    <span style="color:#cc7832;font-weight:bold;">if</span>(len == <span style="color:#6897bb;">2</span>)
+                    {
+                        printf(<span style="color:#6a8759;">"</span><span style="font-family:'DejaVu Sans';color:#6a8759;">表达式括号匹配</span><span style="color:#6a8759;">!</span><span style="color:#cc7832;">\n</span><span style="color:#6a8759;">"</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                        </span>exit(<span style="color:#6897bb;">1</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                    </span>}
+                    pop(&amp;stack<span style="color:#cc7832;">,</span>&amp;c)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                </span>}<span style="color:#cc7832;font-weight:bold;">else</span>{<!-- --><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">不匹配
+</span><span style="font-family:'DejaVu Sans';color:#808080;">                    </span><span style="color:#cc7832;font-weight:bold;">if</span>(len == <span style="color:#6897bb;">2</span>)
+                    {
+                        printf(<span style="color:#6a8759;">"</span><span style="font-family:'DejaVu Sans';color:#6a8759;">表达式括号不匹配</span><span style="color:#6a8759;">!</span><span style="color:#cc7832;">\n</span><span style="color:#6a8759;">"</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                        </span>exit(<span style="color:#6897bb;">1</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                    </span>}
+                    push(&amp;stack2<span style="color:#cc7832;">,</span>&amp;c)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                    </span>c = temp<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">                </span>}
+            }<span style="color:#cc7832;font-weight:bold;">while</span>(!stackIsEmpty(&amp;stack))<span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">如果栈不空
+</span><span style="font-family:'DejaVu Sans';color:#808080;">
+</span><span style="font-family:'DejaVu Sans';color:#808080;">            </span>push(&amp;stack2<span style="color:#cc7832;">,</span>&amp;c)<span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">将剩下的一个入栈
+</span><span style="font-family:'DejaVu Sans';color:#808080;">        </span>}<span style="color:#cc7832;font-weight:bold;">else</span>{
+            printf(<span style="color:#6a8759;">"</span><span style="font-family:'DejaVu Sans';color:#6a8759;">表达式括号不匹配</span><span style="color:#6a8759;">!</span><span style="color:#cc7832;">\n</span><span style="color:#6a8759;">"</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span>exit(<span style="color:#6897bb;">1</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>}
+
+        len2 = stackLength(&amp;stack2)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">if</span>(len == len2){
+            printf(<span style="color:#6a8759;">"</span><span style="font-family:'DejaVu Sans';color:#6a8759;">表达式括号不匹配</span><span style="color:#6a8759;">!</span><span style="color:#cc7832;">\n</span><span style="color:#6a8759;">"</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">            </span>exit(<span style="color:#6897bb;">1</span>)<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>}
+
+        staTemp = stack<span style="color:#cc7832;">;</span><span style="color:#808080;">//</span><span style="font-family:'DejaVu Sans';color:#808080;">交换顺序
+</span><span style="font-family:'DejaVu Sans';color:#808080;">        </span>stack = stack2<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span>stack2 = staTemp<span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}
+
+    <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#6897bb;">0</span><span style="color:#cc7832;">;
+</span>}
+
+
+
+
+<span style="color:#808080;">/**
+</span><span style="color:#808080;"> * </span><span style="font-family:'DejaVu Sans';color:#808080;">判断符号</span><span style="color:#808080;">1</span><span style="font-family:'DejaVu Sans';color:#808080;">和符号二是否匹配</span><span style="color:#808080;">
+</span><span style="color:#808080;"> * @param c1
+</span><span style="color:#808080;"> * @param c2
+</span><span style="color:#808080;"> * @return
+</span><span style="color:#808080;"> */
+</span><span style="color:#908b25;">bool </span><span style="color:#ffc66d;">signEqual</span>(<span style="color:#cc7832;font-weight:bold;">char </span>* c1<span style="color:#cc7832;">,</span><span style="color:#cc7832;font-weight:bold;">char </span>* c2)
+{
+    <span style="color:#cc7832;font-weight:bold;">if</span>(*c1 == <span style="color:#6a8759;">'['</span>)
+    {
+        <span style="color:#cc7832;font-weight:bold;">if</span>(*c2 == <span style="color:#6a8759;">']'</span>)
+            <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">true</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">else
+</span><span style="color:#cc7832;font-weight:bold;">            return </span><span style="color:#908b25;">false</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}<span style="color:#cc7832;font-weight:bold;">else if</span>(*c1 == <span style="color:#6a8759;">'('</span>)
+    {
+        <span style="color:#cc7832;font-weight:bold;">if</span>(*c2 == <span style="color:#6a8759;">')'</span>)
+            <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">true</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">else
+</span><span style="color:#cc7832;font-weight:bold;">            return </span><span style="color:#908b25;">false</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}<span style="color:#cc7832;font-weight:bold;">else if</span>(*c1 == <span style="color:#6a8759;">']'</span>)
+    {
+        <span style="color:#cc7832;font-weight:bold;">if</span>(*c2 == <span style="color:#6a8759;">'['</span>)
+            <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">true</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">else
+</span><span style="color:#cc7832;font-weight:bold;">            return </span><span style="color:#908b25;">false</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}<span style="color:#cc7832;font-weight:bold;">else if</span>(*c1 == <span style="color:#6a8759;">')'</span>)
+    {
+        <span style="color:#cc7832;font-weight:bold;">if</span>(*c2 == <span style="color:#6a8759;">'('</span>)
+            <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">true</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">        </span><span style="color:#cc7832;font-weight:bold;">else
+</span><span style="color:#cc7832;font-weight:bold;">            return </span><span style="color:#908b25;">false</span><span style="color:#cc7832;">;
+</span><span style="color:#cc7832;">    </span>}
+        <span style="color:#cc7832;font-weight:bold;">return </span><span style="color:#908b25;">false</span><span style="color:#cc7832;">;
+</span>}
+</pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/4ae7dcf01597bd4df7acd6032ed34026/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">x射线图像去坏点算法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/18590f04680f15b76799cdce643ea2cb/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C#中的static静态变量的用法</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

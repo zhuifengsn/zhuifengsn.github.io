@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>LCD1602原理驱动代码及例程 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="LCD1602原理驱动代码及例程" />
+<meta property="og:description" content="LCD1602概述 LCD1602是一种工业字符型液晶，能够显示16x02即32字符的内容，是一种广泛使用的字符显示模块。它是由字符型液晶显示屏（LCD）、控制驱动主电路HD44780及其扩展驱动电路HD44100，以及少量电阻、电容元件和结构件等装配在PCB板上而组成。该显示屏的优点是耗电量低、体积小、辐射低。
+LCD1602引脚接口说明 第四脚：RS为寄存器选择，高电平时选择数据寄存器、低电平时选择指令寄存器。
+第五脚：R/W 为读写信号线，高电平时进行读操作，低电平时进行写操作。当 RS 和 R/W 共
+同为低电平时可以写入指令或者显示地址，当 RS 为低电平 R/W 为高电平时可以读忙信号，
+当 RS 为高电平 R/W 为低电平时可以写入数据。
+LCD1602模块控制指令 在哪显示，如何显示 显示在那 我们可以在LCD中看到的只有32的位置，在开发中我们是不是可以用2的5次方来进行定义，但实际上LCD1602会有我们看不见的部分，所以我们用D0到D7八根导线来实现对于显示位置的确定，例如第二行第一个字符的地址是 40H，那么是否直接写入 40H 就可以将光标定位在第二行第
+一个字符的位置呢？这样不行，因为写入显示地址时要求最高位 D7 恒定为高电平 1 所以实
+际写入的数据应该是 01000000B(40H) &#43;10000000B(80H)=11000000B(C0H)
+显示什么 例如显示一个字母a，根据上图我们可以知道它应该为0110 0001换算成16进制为0x61，ASII值为97对应他的ASII值。
+时序图 读操作时序
+写操作
+数序参数
+由于时序时间间隔太小，我们同意用空函数nop（）代替间隔
+显示一个字符 #include &lt;REGX51.H&gt; #include&#34;intrins.h&#34; #define databuffer P0 //定义8位数据线，P0端口组 sbit RS=P1^0; //读写寄存器选择位 sbit RW=P1^1; //读写信号线 sbit EN=P1^4; //使能端 void chek_busy() { char tmp; while(tmp &amp; 0x80){ RS=0; RW=1; EN=0; _nop_(); tmp=databuffer; //使用databuffer进行对于数据的缓存 EN=1; _nop_(); _nop_(); EN=0; _nop_(); } } void Write_Cmd_Func(char cmd) { chek_busy(); RS=0; RW=0; EN=0; _nop_(); databuffer=cmd; _nop_(); EN=1; _nop_(); _nop_(); EN=0; _nop_();	} void Write_Data_Func(char cmd) { chek_busy(); RS=1; RW=0; EN=0; _nop_(); databuffer=cmd; _nop_(); EN=1; _nop_(); _nop_(); EN=0; _nop_();	} void Delay15ms()	//@11." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e53640f7671bf984c2bb6320c717c041/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-03T09:09:56+08:00" />
+<meta property="article:modified_time" content="2023-03-03T09:09:56+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">LCD1602原理驱动代码及例程</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>LCD1602概述</h2> 
+<p>LCD1602是一种工业字符型液晶，能够显示16x02即32字符的内容，是一种广泛使用的字符显示模块。它是由字符型液晶显示屏（LCD）、控制驱动主电路HD44780及其扩展驱动电路HD44100，以及少量电阻、电容元件和结构件等装配在PCB板上而组成。该显示屏的优点是耗电量低、体积小、辐射低。</p> 
+<h3 id="LCD1602%E5%BC%95%E8%84%9A%E6%8E%A5%E5%8F%A3%E8%AF%B4%E6%98%8E">LCD1602引脚接口说明</h3> 
+<p style="text-align:center;"><img alt="" src="https://images2.imgbox.com/3b/19/xRPDMiW9_o.jpg"></p> 
+<p><strong> 第四脚：</strong>RS为寄存器选择，高电平时选择数据寄存器、低电平时选择指令寄存器。</p> 
+<p><strong>第五脚：</strong>R/W 为读写信号线，高电平时进行读操作，低电平时进行写操作。当 RS 和 R/W 共<br> 同为低电平时可以写入指令或者显示地址，当 RS 为低电平 R/W 为高电平时可以读忙信号，<br> 当 RS 为高电平 R/W 为低电平时可以写入数据。</p> 
+<h4 id="LCD1602%E6%A8%A1%E5%9D%97%E6%8E%A7%E5%88%B6%E6%8C%87%E4%BB%A4">LCD1602模块控制指令</h4> 
+<p style="text-align:center;"><img alt="" src="https://images2.imgbox.com/ae/f8/ajnAVxBF_o.jpg"></p> 
+<h4 id="%C2%A0%20%C2%A0%E5%9C%A8%E5%93%AA%E6%98%BE%E7%A4%BA%EF%BC%8C%E5%A6%82%E4%BD%95%E6%98%BE%E7%A4%BA">   在哪显示，如何显示</h4> 
+<h4 id="%E6%98%BE%E7%A4%BA%E5%9C%A8%E9%82%A3">显示在那</h4> 
+<p><img alt="" height="326" src="https://images2.imgbox.com/1e/ba/b3GrXFbt_o.png" width="758"></p> 
+<p> 我们可以在LCD中看到的只有32的位置，在开发中我们是不是可以用2的5次方来进行定义，但实际上LCD1602会有我们看不见的部分，所以我们用D0到D7八根导线来实现对于显示位置的确定，例如第二行第一个字符的地址是 40H，那么是否直接写入 40H 就可以将光标定位在第二行第<br> 一个字符的位置呢？这样不行，因为写入显示地址时要求最高位 D7 恒定为高电平 1 所以实<br> 际写入的数据应该是 01000000B(40H) +10000000B(80H)=11000000B(C0H)</p> 
+<h4 id="%E6%98%BE%E7%A4%BA%E4%BB%80%E4%B9%88">显示什么</h4> 
+<p><img alt="" height="501" src="https://images2.imgbox.com/8c/63/5DJOW4eQ_o.png" width="435"></p> 
+<p> 例如显示一个字母a，根据上图我们可以知道它应该为0110 0001换算成16进制为0x61，ASII值为97对应他的ASII值。</p> 
+<h2 id="%E6%97%B6%E5%BA%8F%E5%9B%BE">时序图</h2> 
+<p>读操作时序<br><img alt="" height="349" src="https://images2.imgbox.com/02/46/nymzLATv_o.png" width="776"></p> 
+<p> 写操作</p> 
+<p><img alt="" height="379" src="https://images2.imgbox.com/f8/89/JKLls02T_o.png" width="759"></p> 
+<p> 数序参数</p> 
+<p><img alt="" height="257" src="https://images2.imgbox.com/31/be/RUz7Y3qd_o.png" width="754"></p> 
+<p> 由于时序时间间隔太小，我们同意用空函数nop（）代替间隔</p> 
+<h3 id="%E6%98%BE%E7%A4%BA%E4%B8%80%E4%B8%AA%E5%AD%97%E7%AC%A6">显示一个字符</h3> 
+<pre><code class="language-cpp">#include &lt;REGX51.H&gt;
+#include"intrins.h"
+
+#define databuffer P0  //定义8位数据线，P0端口组
+
+sbit RS=P1^0;    //读写寄存器选择位
+sbit RW=P1^1;    //读写信号线
+sbit EN=P1^4;    //使能端
+
+void chek_busy()
+{
+	char tmp;
+	while(tmp &amp; 0x80){
+    RS=0;
+    RW=1;
+	EN=0;
+	_nop_();
+	tmp=databuffer;    //使用databuffer进行对于数据的缓存
+	EN=1;
+	_nop_();
+	_nop_();
+	EN=0;
+	_nop_();
+	}
+}
+
+void   Write_Cmd_Func(char cmd)
+{
+chek_busy();
+ RS=0; 
+ RW=0;
+ EN=0;
+ _nop_();
+ databuffer=cmd;
+	_nop_();
+ EN=1;
+ _nop_();
+ _nop_();
+ EN=0;
+ _nop_();	
+}
+void Write_Data_Func(char cmd)
+{
+	chek_busy();
+ RS=1; 
+ RW=0;
+ EN=0;
+ _nop_();
+ databuffer=cmd;
+	_nop_();
+ EN=1;
+ _nop_();
+ _nop_();
+ EN=0;
+ _nop_();	
+}
+void Delay15ms()		//@11.0592MHz
+{
+	unsigned char i, j;
+
+	i = 27;
+	j = 226;
+	do
+	{
+		while (--j);
+	} while (--i);
+}
+void Delay5ms()		//@11.0592MHz
+{
+	unsigned char i, j;
+
+	i = 9;
+	j = 244;
+	do
+	{
+		while (--j);
+	} while (--i);
+}
+
+void LCD1602_INIT()
+{
+	//（1）延时 15ms
+
+ Delay15ms();
+
+//（2）写指令 38H(不检测忙信号) 
+
+ Write_Cmd_Func(0x38);
+
+//（3）延时 5ms
+
+ Delay5ms();
+
+//（4）以后每次写指令，读/写数据操作均需要检测忙信号
+
+//（5）写指令 38H：显示模式设置
+
+ Write_Cmd_Func(0x38);
+
+//（6）写指令 08H：显示关闭
+
+ Write_Cmd_Func(0x08);
+
+//（7）写指令 01H：显示清屏
+
+ Write_Cmd_Func(0x01);
+
+//（8）写指令 06H：显示光标移动设置
+
+ Write_Cmd_Func(0x06);
+
+//（9）写指令 0CH：显示开及光标设置}
+
+ Write_Cmd_Func(0x0c);
+
+}
+
+void main()
+{
+char position=0x80+0x05;
+char dataShow='c';
+	
+	LCD1602_INIT();
+	Write_Cmd_Func(position);  //选择要显示的地址
+	Write_Data_Func(dataShow);   //发送要显示的字符
+ 
+	
+}</code></pre> 
+<p>显示字符串</p> 
+<pre><code class="language-cpp">#include &lt;REGX51.H&gt;
+#include"intrins.h"
+
+#define databuffer P0  //定义8位数据线，P0端口组
+
+sbit RS=P1^0;
+sbit RW=P1^1;
+sbit EN=P1^4;
+
+void chek_busy()
+{
+	char tmp;
+	while(tmp &amp; 0x80){
+    RS=0;
+    RW=1;
+	EN=0;
+	_nop_();
+	tmp=databuffer;
+	EN=1;
+	_nop_();
+	_nop_();
+	EN=0;
+	_nop_();
+	}
+}
+
+void   Write_Cmd_Func(char cmd)
+{
+chek_busy();
+ RS=0; 
+ RW=0;
+ EN=0;
+ _nop_();
+ databuffer=cmd;
+	_nop_();
+ EN=1;
+ _nop_();
+ _nop_();
+ EN=0;
+ _nop_();	
+}
+void Write_Data_Func(char cmd)
+{
+	chek_busy();
+ RS=1; 
+ RW=0;
+ EN=0;
+ _nop_();
+ databuffer=cmd;
+	_nop_();
+ EN=1;
+ _nop_();
+ _nop_();
+ EN=0;
+ _nop_();	
+}
+void Delay15ms()		//@11.0592MHz
+{
+	unsigned char i, j;
+
+	i = 27;
+	j = 226;
+	do
+	{
+		while (--j);
+	} while (--i);
+}
+void Delay5ms()		//@11.0592MHz
+{
+	unsigned char i, j;
+
+	i = 9;
+	j = 244;
+	do
+	{
+		while (--j);
+	} while (--i);
+}
+
+void LCD1602_INIT()
+{
+	//（1）延时 15ms
+
+ Delay15ms();
+
+//（2）写指令 38H(不检测忙信号) 
+
+ Write_Cmd_Func(0x38);
+
+//（3）延时 5ms
+
+ Delay5ms();
+
+//（4）以后每次写指令，读/写数据操作均需要检测忙信号
+
+//（5）写指令 38H：显示模式设置
+
+ Write_Cmd_Func(0x38);
+
+//（6）写指令 08H：显示关闭
+
+ Write_Cmd_Func(0x08);
+
+//（7）写指令 01H：显示清屏
+
+ Write_Cmd_Func(0x01);
+
+//（8）写指令 06H：显示光标移动设置
+
+ Write_Cmd_Func(0x06);
+
+//（9）写指令 0CH：显示开及光标设置}
+
+ Write_Cmd_Func(0x0c);
+
+}
+void LCD1602_showLine(char row ,char col,char *string)
+{
+    switch(row){
+	    case 1:
+			 Write_Cmd_Func(0x80+col);
+		     while(*string){
+			  Write_Data_Func(*string);
+                string++;				 
+			 }
+			 break;
+			  case 2:
+			 Write_Cmd_Func(0x80+0x40+col);
+		     while(*string){
+			  Write_Data_Func(*string);
+                string++;
+			 }
+               break;			 
+	}
+	
+}
+
+void main()
+{
+char position=0x80+0x05;
+
+	
+	LCD1602_INIT();
+	
+    LCD1602_showLine(1,5,"NO1");
+	LCD1602_showLine(2,0,"niuchenhui");
+	
+}</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/ce5112dfbafe5d8a103b3220cbb4f844/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Redis底层数据结构</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/fa62a6d5a80b85c2f72d779788a3136d/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">虚拟试穿代码理解Down to the Last Detail: Virtual Try-on with Fine-grained Details（demo.py上）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

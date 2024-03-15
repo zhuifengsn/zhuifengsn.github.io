@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux系统编程--进程间通信 ---管道篇 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux系统编程--进程间通信 ---管道篇" />
+<meta property="og:description" content="进程间通信 进程间通信进程间通信的定义进程间通信的目的进程间通信的发展。进程间通信的分类 进程通信的方式及原理介绍管道匿名管道匿名管道的创建匿名管道的特性：操作系统是怎么知道你保存的文件属性匿名管道的使用场景匿名管道的本质修改管道默认属性 命名管道使用mkfifo创建命名管道使用函数创建 进程间通信 进程间通信的定义 进程间通信就是在不同进程之间传播或交换信息
+进程间通信的目的 数据传输：一个进程需要将它的数据发送给另一个进程
+资源共享：多个进程之间共享同样的资源。
+通知事件：一个进程需要向另一个或一组进程发送消息，通知它（它们）发生了某种事件（如进程终止时要通知父进程）。
+进程控制：有些进程希望完全控制另一个进程的执行（如Debug进程），此时控制进程希望能够拦截另一个进程的所有陷入和异常，并能够及时知道它的状态改变。
+进程间通信的发展。 管道
+System V进程间通信
+POSIX进程间通信
+进程间通信的分类 管道
+匿名管道pipe
+命名管道
+System V IPC
+System V 消息队列
+System V 共享内存
+System V 信号量
+POSIX IPC
+消息队列
+共享内存
+信号量
+互斥量
+条件变量
+读写锁
+进程通信的方式及原理介绍 管道 管道是Unix中最古老的进程间通信的形式。
+我们把从一个进程连接到另一个进程的一个数据流称为一个“管道”
+管道分类：
+匿名管道和命名管道
+匿名管道 匿名管道的创建 int pipe(fd[2]);
+头文件#include&lt;unistd.h&gt;
+返回值： 0代表成功创建，-1代表管道创建失败
+参数为输出型参数，其中数组第一个元素为读端，第二个为写入端。
+匿名管道的特性： 1.管道是半双工的，只能一端写，一端读。
+2.匿名管道创建出来的话是没有标识符的，导致了其他进程无法查询到此缓冲区。但是创建的进程可以通过读写端进行操作。
+3.匿名管道只支持具有亲缘关系的进程间进行通信。一般是父子进程。本质原因：具有亲缘关系的进程复制了父进程的PCB。
+4，当管道为空时，在默认情况下，read会阻塞。
+验证：
+1 #include&lt;iostream&gt; 2 #include&lt;unistd.h&gt; 3 #include&lt;fcntl.h&gt; 4 #include&lt;string.h&gt; 5 #include&lt;stdlib." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/b91166d1aeed19283138033e4da92b91/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-07-04T23:00:29+08:00" />
+<meta property="article:modified_time" content="2021-07-04T23:00:29+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux系统编程--进程间通信 ---管道篇</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>进程间通信</h4> 
+ <ul><li><a href="#_1" rel="nofollow">进程间通信</a></li><li><ul><li><a href="#_2" rel="nofollow">进程间通信的定义</a></li><li><a href="#_4" rel="nofollow">进程间通信的目的</a></li><li><a href="#_9" rel="nofollow">进程间通信的发展。</a></li><li><a href="#_13" rel="nofollow">进程间通信的分类</a></li></ul> 
+  </li><li><a href="#_28" rel="nofollow">进程通信的方式及原理介绍</a></li><li><ul><li><a href="#_29" rel="nofollow">管道</a></li><li><a href="#_34" rel="nofollow">匿名管道</a></li><li><ul><li><a href="#_35" rel="nofollow">匿名管道的创建</a></li><li><a href="#_43" rel="nofollow">匿名管道的特性：</a></li><li><a href="#_420" rel="nofollow">操作系统是怎么知道你保存的文件属性</a></li><li><a href="#_422" rel="nofollow">匿名管道的使用场景</a></li><li><a href="#_428" rel="nofollow">匿名管道的本质</a></li><li><a href="#_431" rel="nofollow">修改管道默认属性</a></li></ul> 
+   </li><li><a href="#_469" rel="nofollow">命名管道</a></li><li><ul><li><a href="#mkfifo_473" rel="nofollow">使用mkfifo创建命名管道</a></li><li><a href="#_484" rel="nofollow">使用函数创建</a></li></ul> 
+  </li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_1"></a>进程间通信</h2> 
+<h3><a id="_2"></a>进程间通信的定义</h3> 
+<p>进程间通信就是在<strong>不同进程之间传播或交换信息</strong></p> 
+<h3><a id="_4"></a>进程间通信的目的</h3> 
+<p><strong>数据传输</strong>：一个进程需要将它的数据发送给另一个进程<br> <strong>资源共享</strong>：多个进程之间共享同样的资源。<br> <strong>通知事件</strong>：一个进程需要向另一个或一组进程发送消息，通知它（它们）发生了某种事件（如进程终止时要通知父进程）。<br> <strong>进程控制</strong>：有些进程希望完全控制另一个进程的执行（如Debug进程），此时控制进程希望能够拦截另一个进程的所有陷入和异常，并能够及时知道它的状态改变。</p> 
+<h3><a id="_9"></a>进程间通信的发展。</h3> 
+<p>管道<br> System V进程间通信<br> POSIX进程间通信</p> 
+<h3><a id="_13"></a>进程间通信的分类</h3> 
+<p><strong>管道</strong><br> 匿名管道pipe<br> 命名管道<br> <strong>System V IPC</strong><br> System V 消息队列<br> System V 共享内存<br> System V 信号量<br> <strong>POSIX IPC</strong><br> 消息队列<br> 共享内存<br> 信号量<br> 互斥量<br> 条件变量<br> 读写锁</p> 
+<h2><a id="_28"></a>进程通信的方式及原理介绍</h2> 
+<h3><a id="_29"></a>管道</h3> 
+<p>管道是Unix中最古老的进程间通信的形式。<br> 我们把从<strong>一个进程连接到另一个进程的一个数据流</strong>称为一个“管道”<br> 管道分类：<br> 匿名管道和命名管道</p> 
+<h3><a id="_34"></a>匿名管道</h3> 
+<h4><a id="_35"></a>匿名管道的创建</h4> 
+<p><strong>int pipe(fd[2]);</strong><br> <img src="https://images2.imgbox.com/64/e9/qyc9YLpM_o.png" alt="在这里插入图片描述"><br> 头文件#include&lt;unistd.h&gt;<br> 返回值： 0代表成功创建，-1代表管道创建失败<br> 参数为<strong>输出型参数</strong>，其中数组第一个元素为读端，第二个为写入端。</p> 
+<h4><a id="_43"></a>匿名管道的特性：</h4> 
+<p>1.管道是<strong>半双工</strong>的，只能一端写，一端读。<br> 2.匿名管道创建出来的话是没有标识符的，导致了其他进程无法查询到此缓冲区。但是创建的进程可以通过读写端进行操作。<br> 3.匿名管道只支持具有亲缘关系的进程间进行通信。一般是父子进程。本质原因：<strong>具有亲缘关系的进程复制了父进程的PCB</strong>。<br> 4，<strong>当管道为空时，在默认情况下，read会阻塞。</strong><br> 验证：</p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>string<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">7</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">8</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">9</span>     <span class="token keyword">int</span> fk<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">10</span>     <span class="token function">pipe</span><span class="token punctuation">(</span>fk<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">11</span>     pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">13</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">14</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token punctuation">(</span><span class="token string">"fork error"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">15</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">16</span>     <span class="token punctuation">}</span>
+ <span class="token number">17</span> 
+ <span class="token number">18</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">19</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">20</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">21</span>         <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                                                    
+ <span class="token number">22</span>         <span class="token keyword">const</span> <span class="token keyword">char</span><span class="token operator">*</span>str<span class="token operator">=</span><span class="token string">"hello my son ,i am your father"</span><span class="token punctuation">;</span>
+ <span class="token number">23</span>         <span class="token function">write</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>str<span class="token punctuation">,</span><span class="token function">strlen</span><span class="token punctuation">(</span>str<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">24</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">25</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"i send you "</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>     <span class="token punctuation">}</span>
+ <span class="token number">27</span>     <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">28</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">29</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">30</span>         <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">128</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+ <span class="token number">31</span>      <span class="token function">read</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token number">128</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">32</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"i receive your message"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">33</span> 
+ <span class="token number">34</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">35</span> 
+ <span class="token number">36</span>         cout<span class="token operator">&lt;&lt;</span>buf<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">37</span>     <span class="token punctuation">}</span>
+ <span class="token number">38</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">39</span> <span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/88/b4/CcnFmaqI_o.png" alt="在这里插入图片描述"></p> 
+<p>5，管道的大小为64k。<br> 6，write函数在往文件中写入内容时，<strong>若写满，则会阻塞管道。</strong></p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>                                                                                                                                                                    
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>string<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">7</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">8</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">9</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>     <span class="token keyword">int</span> fk<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">11</span>     <span class="token function">pipe</span><span class="token punctuation">(</span>fk<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>     pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">13</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">14</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">15</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token punctuation">(</span><span class="token string">"fork error"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">16</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">17</span>     <span class="token punctuation">}</span>
+ <span class="token number">18</span> 
+ <span class="token number">19</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">20</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">21</span>        <span class="token comment">// close(fk[0]); </span>
+ <span class="token number">22</span>         <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">23</span>        <span class="token comment">// const char*str="hello my son ,i am your father";</span>
+ <span class="token number">24</span>        <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">25</span>        <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">26</span>        <span class="token punctuation">{<!-- --></span>
+ <span class="token number">27</span> 
+ <span class="token number">28</span>        <span class="token comment">// write(fk[1],'i',1);</span>
+ <span class="token number">29</span>        <span class="token function">write</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span><span class="token string">"c"</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">30</span>        count<span class="token operator">++</span><span class="token punctuation">;</span>
+ <span class="token number">31</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"after write:"</span><span class="token operator">&lt;&lt;</span>count<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">32</span>        <span class="token punctuation">}</span>
+ <span class="token number">33</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">34</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"i send you "</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">35</span> 
+ <span class="token number">36</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">37</span> <span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/5d/38/ximCWz6k_o.png" alt="在这里插入图片描述"></p> 
+<p>7，匿名管道的生命周期是追随进程的。<br> 8，管道提供字节流服务，字节流：描述符的前后两个数据间没有明显的边界。<br> 9，从管道中读取内容时，不是管道内容的一份拷贝，而是直接将内容拿走。</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>string<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">7</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">8</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">9</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>     <span class="token keyword">int</span> fk<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">11</span>     <span class="token function">pipe</span><span class="token punctuation">(</span>fk<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>     pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">13</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">14</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">15</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token punctuation">(</span><span class="token string">"fork error"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">16</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">17</span>     <span class="token punctuation">}</span>                                                                                                                                                                                 
+ <span class="token number">18</span> 
+ <span class="token number">19</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">20</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">21</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">22</span>         <span class="token keyword">const</span> <span class="token keyword">char</span><span class="token operator">*</span>str<span class="token operator">=</span><span class="token string">"hello my son ,i am your father"</span><span class="token punctuation">;</span>
+ <span class="token number">23</span>         <span class="token function">write</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>str<span class="token punctuation">,</span><span class="token function">strlen</span><span class="token punctuation">(</span>str<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">24</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">25</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"i send you "</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>       <span class="token punctuation">}</span>
+ <span class="token number">27</span>     <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span> pd<span class="token operator">==</span><span class="token number">0</span> <span class="token punctuation">)</span>
+ <span class="token number">28</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">29</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">30</span>         <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">31</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">32</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">33</span>           size_t ret<span class="token operator">=</span><span class="token function">read</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token number">64</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">34</span>           <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">35</span>           cout<span class="token operator">&lt;&lt;</span>ret<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">36</span> 
+ <span class="token number">37</span>         <span class="token punctuation">}</span>
+ <span class="token number">38</span>     <span class="token punctuation">}</span>
+ <span class="token number">39</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">40</span>     <span class="token punctuation">}</span>
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/c1/48/CXptMeiY_o.png" alt="在这里插入图片描述"></p> 
+<p>10，当对管道进行读写操作时，此时若读写的字节数小于pipe_size 512字节，则保证操作的原子性。原子性：执行了，必须要执行完。<br> 11.如果写端不关闭文件描述符，且不写入，则读端可能长时间阻塞。<br> 可能：比如管道内本身就写入了一些内容的话，此时就会读完阻塞。。</p> 
+<p>12.如果写端在写入完成时，关闭文件描述符，读端在读取完成后，会读到文件尾。</p> 
+<pre><code class="prism language-cpp">  <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>                                                                                                                                                                  
+    <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">4</span> #include<span class="token operator">&lt;</span>string<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">5</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">6</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+    <span class="token number">7</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+    <span class="token number">8</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token number">9</span> <span class="token punctuation">{<!-- --></span>
+   <span class="token number">10</span>     <span class="token keyword">int</span> fk<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+   <span class="token number">11</span>     <span class="token function">pipe</span><span class="token punctuation">(</span>fk<span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">12</span>     pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">13</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+   <span class="token number">14</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">15</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token punctuation">(</span><span class="token string">"fork error"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">16</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">17</span>     <span class="token punctuation">}</span>
+   <span class="token number">18</span> 
+   <span class="token number">19</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+   <span class="token number">20</span>     <span class="token punctuation">{<!-- --></span>
+   <span class="token number">21</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> 
+   <span class="token number">22</span>         <span class="token keyword">const</span> <span class="token keyword">char</span><span class="token operator">*</span>str<span class="token operator">=</span><span class="token string">"hello my father ,i am your son\n"</span><span class="token punctuation">;</span>
+   <span class="token number">23</span>         <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">24</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+   <span class="token number">25</span>         <span class="token punctuation">{<!-- --></span>
+   <span class="token number">26</span>           
+   <span class="token number">27</span>         <span class="token function">write</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>str<span class="token punctuation">,</span><span class="token function">strlen</span><span class="token punctuation">(</span>str<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  
+   <span class="token number">28</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"CHILD :"</span><span class="token operator">&lt;&lt;</span>count<span class="token operator">++</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+   <span class="token number">29</span>         <span class="token keyword">if</span><span class="token punctuation">(</span>count<span class="token operator">==</span><span class="token number">3</span><span class="token punctuation">)</span>
+   <span class="token number">30</span>         <span class="token punctuation">{<!-- --></span>
+   <span class="token number">31</span>             <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">32</span>             <span class="token keyword">break</span><span class="token punctuation">;</span>
+   <span class="token number">33</span>         <span class="token punctuation">}</span>
+   <span class="token number">34</span>         <span class="token punctuation">}</span>        
+   <span class="token number">35</span>       
+   <span class="token number">36</span>     <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">37</span>     <span class="token punctuation">}</span>
+   <span class="token number">38</span>     <span class="token keyword">else</span>  <span class="token keyword">if</span><span class="token punctuation">(</span> pd<span class="token operator">&gt;</span><span class="token number">0</span> <span class="token punctuation">)</span>
+   <span class="token number">39</span>     <span class="token punctuation">{<!-- --></span>
+    <span class="token number">40</span>         <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">41</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">42</span>         <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+   <span class="token number">43</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+   <span class="token number">44</span>         <span class="token punctuation">{<!-- --></span>
+   <span class="token number">45</span> 
+   <span class="token number">46</span>           size_t ret<span class="token operator">=</span><span class="token function">read</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token number">64</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">47</span>           <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+   <span class="token number">48</span>           <span class="token punctuation">{<!-- --></span>
+   <span class="token number">49</span>               cout<span class="token operator">&lt;&lt;</span>buf<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+   <span class="token number">50</span>               <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">51</span>           <span class="token punctuation">}</span>
+   <span class="token number">52</span>           cout<span class="token operator">&lt;&lt;</span>ret<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+   <span class="token number">53</span>           <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+   <span class="token number">54</span>        <span class="token punctuation">}</span>        
+   <span class="token number">55</span> 
+   <span class="token number">56</span>     <span class="token comment">//    char buf[64]={0};</span>
+   <span class="token number">57</span>     <span class="token comment">//    while(1)</span>
+   <span class="token number">58</span>     <span class="token comment">//    {<!-- --></span>
+   <span class="token number">59</span> 
+   <span class="token number">60</span>     <span class="token comment">//    }                                                                                                                                                                         </span>
+   <span class="token number">61</span>     <span class="token punctuation">}</span>
+   <span class="token number">62</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+   <span class="token number">63</span> <span class="token punctuation">}</span>
+
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/0c/7b/5ABs9YBq_o.png" alt="在这里插入图片描述"></p> 
+<p>13，<strong>如果读端关闭，写端进程可能会被进程直接干掉。</strong></p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>string<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">7</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">8</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">9</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>     <span class="token keyword">int</span> fk<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">11</span>     <span class="token function">pipe</span><span class="token punctuation">(</span>fk<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>     pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">13</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">14</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">15</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token punctuation">(</span><span class="token string">"fork error"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">16</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">17</span>     <span class="token punctuation">}</span>
+ <span class="token number">18</span> 
+ <span class="token number">19</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">20</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">21</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">22</span>         <span class="token keyword">const</span> <span class="token keyword">char</span><span class="token operator">*</span>str<span class="token operator">=</span><span class="token string">"hello my father ,i am your son\n"</span><span class="token punctuation">;</span>
+ <span class="token number">23</span>         <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">24</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">25</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">26</span> 
+ <span class="token number">27</span>         <span class="token function">write</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>str<span class="token punctuation">,</span><span class="token function">strlen</span><span class="token punctuation">(</span>str<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">28</span>         cout<span class="token operator">&lt;&lt;</span><span class="token string">"CHILD :"</span><span class="token operator">&lt;&lt;</span>count<span class="token operator">++</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">29</span>         <span class="token punctuation">}</span>
+ <span class="token number">30</span>                                                                                        
+ <span class="token number">31</span>     <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">32</span>     <span class="token punctuation">}</span>
+ <span class="token number">33</span>     <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span> pd<span class="token operator">&gt;</span><span class="token number">0</span> <span class="token punctuation">)</span>
+ <span class="token number">34</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">35</span>         <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">36</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">37</span>         <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">38</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">39</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">39</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">40</span> 
+ <span class="token number">41</span>           size_t ret<span class="token operator">=</span><span class="token function">read</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token number">64</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">42</span>           <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">43</span>           <span class="token punctuation">{<!-- --></span>
+ <span class="token number">44</span>               cout<span class="token operator">&lt;&lt;</span>buf<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">45</span>               <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">46</span>           <span class="token punctuation">}</span>
+ <span class="token number">47</span>           <span class="token keyword">if</span><span class="token punctuation">(</span>count<span class="token operator">++</span><span class="token operator">==</span><span class="token number">3</span><span class="token punctuation">)</span>
+ <span class="token number">48</span>           <span class="token punctuation">{<!-- --></span>
+ <span class="token number">49</span>               <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">50</span>           <span class="token punctuation">}</span>
+ <span class="token number">51</span>         <span class="token punctuation">}</span>
+ <span class="token number">52</span> 
+ <span class="token number">53</span>     <span class="token comment">//    char buf[64]={0};</span>
+ <span class="token number">54</span>     <span class="token comment">//    while(1)</span>
+ <span class="token number">55</span>     <span class="token comment">//    {<!-- --></span>
+ <span class="token number">56</span> 
+ <span class="token number">57</span>     <span class="token comment">//    }</span>
+ <span class="token number">58</span>     <span class="token punctuation">}</span>
+ <span class="token number">59</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">60</span> <span class="token punctuation">}</span>                 
+
+</code></pre> 
+<p>sheel脚本： while : ; do ps axj | grep mypipe | grep -v grep;echo “#########”;sleep 1; done<br> 可以得出子进程已经被干掉–即写端被干掉<br> <img src="https://images2.imgbox.com/6d/1e/sY95UmA1_o.png" alt="在这里插入图片描述"><br> <strong>获取退出原因</strong>：</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>                                                                                                                                                                    
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>sys<span class="token operator">/</span>wait<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>string<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">6</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">7</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">8</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">9</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+ <span class="token number">10</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">11</span>     <span class="token keyword">int</span> fk<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">12</span>     <span class="token function">pipe</span><span class="token punctuation">(</span>fk<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">13</span>     pid_t pd<span class="token operator">=</span><span class="token function">fork</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">14</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">15</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">16</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token punctuation">(</span><span class="token string">"fork error"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">17</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">18</span> 
+ <span class="token number">19</span>     <span class="token punctuation">}</span>
+ <span class="token number">20</span> 
+ <span class="token number">21</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>pd<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">22</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">23</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">24</span>         <span class="token keyword">const</span> <span class="token keyword">char</span><span class="token operator">*</span>str<span class="token operator">=</span><span class="token string">"hello my father ,i am your son\n"</span><span class="token punctuation">;</span>
+ <span class="token number">25</span>         <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">26</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">27</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">28</span> 
+ <span class="token number">29</span>             <span class="token function">write</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>str<span class="token punctuation">,</span><span class="token function">strlen</span><span class="token punctuation">(</span>str<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">30</span>             cout<span class="token operator">&lt;&lt;</span><span class="token string">"CHILD :"</span><span class="token operator">&lt;&lt;</span>count<span class="token operator">++</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">31</span> 
+ <span class="token number">32</span>         <span class="token punctuation">}</span>
+ <span class="token number">33</span> 
+ <span class="token number">34</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">35</span> 
+ <span class="token number">36</span>     <span class="token punctuation">}</span>
+ <span class="token number">37</span>     <span class="token keyword">else</span> <span class="token keyword">if</span><span class="token punctuation">(</span> pd<span class="token operator">&gt;</span><span class="token number">0</span>  <span class="token punctuation">)</span>
+ <span class="token number">38</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">39</span>         <span class="token keyword">int</span> count<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">40</span>         <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">41</span>         <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">]</span><span class="token operator">=</span><span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+ <span class="token number">42</span>         <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">43</span>         <span class="token punctuation">{<!-- --></span>
+ <span class="token number">44</span>             <span class="token punctuation">{<!-- --></span>
+ <span class="token number">45</span> 
+ <span class="token number">46</span>                 size_t ret<span class="token operator">=</span><span class="token function">read</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token number">64</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">47</span>                 <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">48</span>                 <span class="token punctuation">{<!-- --></span>
+ <span class="token number">49</span>                     cout<span class="token operator">&lt;&lt;</span>buf<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">50</span>                     buf<span class="token punctuation">[</span>ret<span class="token punctuation">]</span><span class="token operator">=</span><span class="token string">'\0'</span><span class="token punctuation">;</span>
+ <span class="token number">51</span>                     <span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">52</span> 
+ <span class="token number">53</span>                 <span class="token punctuation">}</span>
+ <span class="token number">54</span>                 <span class="token keyword">if</span><span class="token punctuation">(</span>count<span class="token operator">++</span><span class="token operator">==</span><span class="token number">3</span><span class="token punctuation">)</span>
+ <span class="token number">55</span>                 <span class="token punctuation">{<!-- --></span>
+ <span class="token number">56</span>                     <span class="token function">close</span><span class="token punctuation">(</span>fk<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">57</span>                     <span class="token keyword">break</span><span class="token punctuation">;</span>
+ <span class="token number">58</span>                 <span class="token punctuation">}</span>
+ <span class="token number">59</span>             <span class="token punctuation">}</span>
+ <span class="token number">60</span> 
+ <span class="token number">61</span>         <span class="token punctuation">}</span>
+ <span class="token number">62</span>         
+ <span class="token number">63</span>                 <span class="token keyword">int</span> status<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">64</span>                 <span class="token function">waitpid</span><span class="token punctuation">(</span>pd<span class="token punctuation">,</span><span class="token operator">&amp;</span>status<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">65</span>                 cout<span class="token operator">&lt;&lt;</span><span class="token string">"退出码为"</span><span class="token operator">&lt;&lt;</span><span class="token punctuation">(</span>status<span class="token operator">&amp;</span><span class="token number">0x7F</span><span class="token punctuation">)</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">66</span> 
+ <span class="token number">67</span>         <span class="token punctuation">}</span>
+ <span class="token number">68</span>         <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">69</span> 
+ <span class="token number">70</span>     <span class="token punctuation">}</span>                                                                                                                                                                                 
+ <span class="token number">71</span> 
+
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/a1/99/PU7EFy7k_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/4e/6b/ypScFqSH_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_420"></a>操作系统是怎么知道你保存的文件属性</h4> 
+<p><img src="https://images2.imgbox.com/9d/4e/rEyv6zll_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_422"></a>匿名管道的使用场景</h4> 
+<p><img src="https://images2.imgbox.com/b6/80/bfVj33mf_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/ea/3f/DMTJ0F6L_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_428"></a>匿名管道的本质</h4> 
+<p><img src="https://images2.imgbox.com/ac/2c/5eTKXcjv_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/bb/c0/RSi9VbMc_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_431"></a>修改管道默认属性</h4> 
+<p><img src="https://images2.imgbox.com/9a/e4/XeTG5Z88_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>stdlib<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">6</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">7</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">8</span>     <span class="token keyword">int</span> fd<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+  <span class="token number">9</span> 
+ <span class="token number">10</span>    <span class="token keyword">int</span> ret<span class="token operator">=</span> <span class="token function">pipe</span><span class="token punctuation">(</span>fd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">11</span>    <span class="token keyword">if</span><span class="token punctuation">(</span>ret<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">12</span>    <span class="token punctuation">{<!-- --></span>
+ <span class="token number">13</span>      cerr<span class="token operator">&lt;&lt;</span><span class="token string">"pipe()"</span><span class="token punctuation">;</span>
+ <span class="token number">14</span>      <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">15</span>    <span class="token punctuation">}</span>
+ <span class="token number">16</span>    <span class="token keyword">int</span> fg<span class="token operator">=</span><span class="token function">fcntl</span><span class="token punctuation">(</span>fd<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>F_GETFL<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">17</span>    cout<span class="token operator">&lt;&lt;</span><span class="token string">"读端"</span><span class="token operator">&lt;&lt;</span>fg<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">18</span>    <span class="token keyword">int</span> fg1<span class="token operator">=</span><span class="token function">fcntl</span><span class="token punctuation">(</span>fd<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>F_GETFL<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">19</span>    cout<span class="token operator">&lt;&lt;</span><span class="token string">"写端"</span><span class="token operator">&lt;&lt;</span>fg1<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">20</span>   <span class="token function">fcntl</span><span class="token punctuation">(</span>fd<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>F_SETFL<span class="token punctuation">,</span>fg<span class="token operator">|</span>O_NONBLOCK<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">21</span>     fg<span class="token operator">=</span><span class="token function">fcntl</span><span class="token punctuation">(</span>fd<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>F_GETFL<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">22</span>    cout<span class="token operator">&lt;&lt;</span><span class="token string">"更改后读端"</span><span class="token operator">&lt;&lt;</span>fg<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">23</span>    <span class="token function">fcntl</span><span class="token punctuation">(</span>fd<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>F_SETFL<span class="token punctuation">,</span>fg1<span class="token operator">|</span>O_NONBLOCK<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">24</span>     fg1<span class="token operator">=</span><span class="token function">fcntl</span><span class="token punctuation">(</span>fd<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>F_GETFL<span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                                                                                                         
+ <span class="token number">25</span>    cout<span class="token operator">&lt;&lt;</span><span class="token string">"更改后写端"</span><span class="token operator">&lt;&lt;</span>fg1<span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">26</span>    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">27</span> 
+ <span class="token number">28</span> <span class="token punctuation">}</span>
+
+
+</code></pre> 
+<p><img src="https://images2.imgbox.com/b7/32/Nzfl7ZoZ_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/e2/2c/eB9RnhKu_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/24/e4/lXanok1a_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_469"></a>命名管道</h3> 
+<p>区别于匿名管道来说，命名管道可以<strong>被用于非亲缘关系的进程间通信</strong>。</p> 
+<h4><a id="mkfifo_473"></a>使用mkfifo创建命名管道</h4> 
+<p><img src="https://images2.imgbox.com/c6/f0/GcwDiqpm_o.png" alt="在这里插入图片描述"><br> 测试：<br> <img src="https://images2.imgbox.com/02/92/Fa9zlXyK_o.png" alt="在这里插入图片描述"></p> 
+<p>makefile文件</p> 
+<p><img src="https://images2.imgbox.com/12/71/Cxwkt3v7_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/f2/40/q6MYK2c7_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="_484"></a>使用函数创建</h4> 
+<p><img src="https://images2.imgbox.com/4b/1d/O9hdeGM6_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/ad/84/a2EYUbte_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/3f/8d/WFLIuWMD_o.png" alt="在这里插入图片描述"><br> server端：</p> 
+<pre><code class="prism language-cpp"> <span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>sys<span class="token operator">/</span>stat<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>cstdlib<span class="token operator">&gt;</span>
+  <span class="token number">6</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">7</span> 
+  <span class="token number">8</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">9</span> <span class="token punctuation">{<!-- --></span>
+ <span class="token number">10</span>     <span class="token function">umask</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">11</span>     <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token operator">-</span><span class="token number">1</span><span class="token operator">==</span><span class="token function">mkfifo</span><span class="token punctuation">(</span><span class="token string">"./pipe"</span><span class="token punctuation">,</span><span class="token number">0664</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+ <span class="token number">12</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">13</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token string">"mkfifo()"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">14</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">15</span>     <span class="token punctuation">}</span>
+ <span class="token number">16</span>     <span class="token keyword">int</span> fd<span class="token operator">=</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token string">"./pipe"</span><span class="token punctuation">,</span>O_RDONLY<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">17</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>fd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">18</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">19</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token string">"open()"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">20</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">21</span>     <span class="token punctuation">}</span>
+ <span class="token number">22</span>     <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+ <span class="token number">23</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">24</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">25</span>      ssize_t s<span class="token operator">=</span>  <span class="token function">read</span><span class="token punctuation">(</span>fd<span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">26</span>      <span class="token keyword">if</span><span class="token punctuation">(</span>s<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">27</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">28</span>          buf<span class="token punctuation">[</span>s<span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">29</span>          cout<span class="token operator">&lt;&lt;</span><span class="token string">"server get message #"</span><span class="token operator">&lt;&lt;</span>buf<span class="token punctuation">;</span>                                            
+ <span class="token number">30</span>      <span class="token punctuation">}</span>
+ <span class="token number">31</span>      <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>s<span class="token operator">==</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">32</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">33</span>          cout<span class="token operator">&lt;&lt;</span><span class="token string">"client quit ,i have to quit!!"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">34</span>          <span class="token keyword">break</span><span class="token punctuation">;</span>
+ <span class="token number">35</span>      <span class="token punctuation">}</span>
+ <span class="token number">36</span>      <span class="token keyword">else</span>
+ <span class="token number">37</span>      <span class="token punctuation">{<!-- --></span>
+ <span class="token number">38</span>          cout<span class="token operator">&lt;&lt;</span><span class="token string">"读取错误"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">39</span>          <span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">2</span><span class="token punctuation">;</span>
+ <span class="token number">40</span>      <span class="token punctuation">}</span>
+ <span class="token number">41</span> 
+ <span class="token number">42</span>     <span class="token punctuation">}</span>
+ <span class="token number">43</span>    
+ <span class="token number">44</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">45</span> 
+ <span class="token number">46</span> <span class="token punctuation">}</span>          
+
+</code></pre> 
+<p>client端</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> #include<span class="token operator">&lt;</span>iostream<span class="token operator">&gt;</span>
+  <span class="token number">2</span> #include<span class="token operator">&lt;</span>unistd<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">3</span> #include<span class="token operator">&lt;</span>fcntl<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">4</span> #include<span class="token operator">&lt;</span>stdio<span class="token punctuation">.</span>h<span class="token operator">&gt;</span>
+  <span class="token number">5</span> #include<span class="token operator">&lt;</span>cstdlib<span class="token operator">&gt;</span>
+  <span class="token number">6</span> <span class="token keyword">using</span> <span class="token keyword">namespace</span> std<span class="token punctuation">;</span>
+  <span class="token number">7</span> <span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token number">8</span> <span class="token punctuation">{<!-- --></span>
+  <span class="token number">9</span>     <span class="token keyword">int</span> fd<span class="token operator">=</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token string">"./pipe"</span><span class="token punctuation">,</span>O_WRONLY<span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">10</span>     <span class="token keyword">if</span><span class="token punctuation">(</span>fd<span class="token operator">&lt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">11</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">12</span>         cerr<span class="token operator">&lt;&lt;</span><span class="token string">"open()"</span><span class="token operator">&lt;&lt;</span>endl<span class="token punctuation">;</span>
+ <span class="token number">13</span>         <span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">14</span>     <span class="token punctuation">}</span>
+ <span class="token number">15</span>     <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+ <span class="token number">16</span>     <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span>
+ <span class="token number">17</span>     <span class="token punctuation">{<!-- --></span>
+ <span class="token number">18</span>       cout<span class="token operator">&lt;&lt;</span><span class="token string">"please enter your words#"</span><span class="token punctuation">;</span>
+ <span class="token number">19</span>       <span class="token function">fflush</span><span class="token punctuation">(</span><span class="token constant">stdout</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                                  
+ <span class="token number">20</span>        ssize_t s<span class="token operator">=</span> <span class="token function">read</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">21</span>        <span class="token keyword">if</span><span class="token punctuation">(</span>s<span class="token operator">&gt;</span><span class="token number">0</span><span class="token punctuation">)</span>
+ <span class="token number">22</span>        <span class="token punctuation">{<!-- --></span>
+ <span class="token number">23</span>            buf<span class="token punctuation">[</span>s<span class="token punctuation">]</span><span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">24</span>            <span class="token function">write</span><span class="token punctuation">(</span>fd<span class="token punctuation">,</span>buf<span class="token punctuation">,</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+ <span class="token number">25</span>        <span class="token punctuation">}</span>
+ <span class="token number">26</span>     <span class="token punctuation">}</span>
+ <span class="token number">27</span>     <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+ <span class="token number">28</span> <span class="token punctuation">}</span>
+
+</code></pre> 
+<p>makfile文件</p> 
+<pre><code class="prism language-cpp"><span class="token number">1</span> all<span class="token operator">:</span>client server
+  <span class="token number">2</span> client<span class="token operator">:</span>client<span class="token punctuation">.</span>cpp
+  <span class="token number">3</span>     g<span class="token operator">++</span> $<span class="token operator">^</span> <span class="token operator">-</span>o $@
+  <span class="token number">4</span> server<span class="token operator">:</span>server<span class="token punctuation">.</span>cpp
+  <span class="token number">5</span>     g<span class="token operator">++</span> $<span class="token operator">^</span> <span class="token operator">-</span>o $@
+  <span class="token number">6</span> <span class="token punctuation">.</span>PNONY<span class="token operator">:</span>clean
+  <span class="token number">7</span> clean<span class="token operator">:</span>
+  <span class="token number">8</span>     rm client server pipe 
+</code></pre> 
+<p><img src="https://images2.imgbox.com/fa/24/e8JXs46B_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/983483c164a41199d134c8466c8329c8/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">链路追踪的traceid原理梳理</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/48724a89c52c7035387a1b997bdf2fb5/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">计算机导论中英文试题,2016级《计算机导论(双语)》期末考试试题A卷</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

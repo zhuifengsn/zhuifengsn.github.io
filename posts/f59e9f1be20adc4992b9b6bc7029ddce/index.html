@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>STM32F103C8T6基于HAL库移植uc/OS-III - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="STM32F103C8T6基于HAL库移植uc/OS-III" />
+<meta property="og:description" content="文章目录 一、UCOS系统简介1.版本介绍2.UCOSIII的任务简介3.UCOSIII的系统任务4.UCOSIII的任务状态5.UCOSIII的任务详解 二、STM32CubeMX工程创建1.创建新项目2.选择芯片3.配置RCC4.配置SYS5.设置GPIO6.设置串口USART17.设置时钟树8.设置工程 三、获取uCOS-III源码四、移植前的文件准备及移植过程1.找到下载好的文件夹2.复制文件到MDK-ARM文件夹下3.打开cubeMX生成的keil文件，将uCOS文件添加到项目中4.分别给新增的文件夹添加文件5.导入文件路径 五、构建多任务环境1.代码添加2.修改部分代码3.初始化管脚4.撰写主函数5.程序编译及生成hex文件6.电路连接7.程序烧录8.串口调试9.运行结果 六、总结七、参考链接 一、UCOS系统简介 1.版本介绍 UCOS是Micrium公司出品的RTOS类实时操作系统， UCOS目前有两个版本：UCOSII和UCOSIII。
+◉UCOSIII是一个可裁剪、可剥夺型的多任务内核，而且没有任务数限制。
+◉UCOSIII提供了实时操作系统所需的所有功能，包括资源管理、同步、任务通信等。
+◉UCOSIII是用C和汇编来写的，其中绝大部分都是用C语言编写的，只有极少数的与处理器密切相关的部分代码才是用汇编写的， UCOSIII结构简洁，可读性很强！最主要的是非常适合初次接触嵌入式实时操作系统学生、嵌入式系统开发人员和爱好者学习。
+2.UCOSIII的任务简介 在UCOSIII中任务就是程序实体，UCOSIII能够管理和调度这些小任务（程序）。UCOSIII中的任务由三部分组成：任务堆栈、任务控制块和任务函数。
+✦任务堆栈：上下文切换的时候用来保存任务的工作环境，就是STM32的内部寄存器值；
+✦任务控制块：任务控制块用来记录任务的各个属性；
+✦任务函数：由用户编写的任务处理代码，是实实在在干活的。一般写法如下：
+void XXX_task(void *p_arg) {
+while(1)
+{
+… //任务处理过程
+}
+}
+◉可以看出用任务函数通常是一个无限循环，当然了，也可以是一个只执行一次的任务。任务的参数是一个void类型的，这么做的目的是可以可以传递不同类型的数据甚至是函数。
+◉可以看出任务函数其实就是一个C语言的函数，但是在使用UCOIII的情况下这个函数不能有用户自行调用，任务函数何时执行执行，何时停止完全有操作系统来控制。
+3.UCOSIII的系统任务 UCOSIII默认有5个系统任务：
+◉空闲任务：UCOSIII创建的第一个任务，UCOSIII必须创建的任务，此任务有UCOSIII自动创建，不需要用户手动创建;
+◉时钟节拍任务：此任务也是必须创建的任务;
+◉统计任务：可选任务，用来统计CPU使用率和各个任务的堆栈使用量。此任务是可选任务，由宏OS_CFG_STAT_TASK_EN控制是否使用此任务;
+◉定时任务：用来向用户提供定时服务，也是可选任务，由宏OS_CFG_TMR_EN控制是否使用此任务;
+◉中断服务管理任务：可选任务，由宏OS_CFG_ISR_POST_DEFERRED_EN控制是否使用此任务。
+前两个系统任务时必须创建的任务，而后三者不是。控制后三者任务的宏都是在文件OS_CFG.h中。
+4.UCOSIII的任务状态 从用户的角度看，UCOSIII的任务一共有5种状态：
+◉休眠态：任务已经在CPU的flash中了，但是还不受UCOSIII管理；
+◉就绪态：系统为任务分配了任务控制块，并且任务已经在就绪表中登记，这时这个任务就具有了运行的条件，此时任务的状态就是就绪态；
+◉运行态：任务获得CPU的使用权，正在运行；
+◉等待态：正在运行的任务需要等待一段时间，或者等待某个事件，这个任务就进入了等待态，此时系统就会把CPU使用权转交给别的任务；
+◉中断服务态：当发送中断，当前正在运行的任务会被挂起，CPU转而去执行中断服务函数，此时任务的任务状态叫做中断服务态。
+这5种状态之间相互转化的关系如下图：
+5.UCOSIII的任务详解 （1）任务堆栈
+任务堆栈是任务的重要部分，堆栈是在RAM中按照“先进先出（FIFO）”的原则组织的一块连续的存储空间。为了满足任务切换和响应中断时保存CPU寄存器中的内容及任务调用其它函数时的需要，每个任务都应该有自己的堆栈。
+◉任务堆栈创建
+代码如下：
+#define START_STK_SIZE 512 //堆栈大小 CPU_STK START_TASK_STK[START_STK_SIZE]; //定义一个数组来作为任务堆栈
+◉任务堆栈的大小
+CPU_STK为CPU_INT32U类型，也就是unsigned int类型，为4字节的，那么任务堆栈START_TASK_STK的大小就为：512 X 4=2048字节。
+◉任务堆栈初始化
+任务切换回上一个任务并且还能接着从上次被中断的地方开始运行的办法是恢复现场，现场就是CPU的内部各个寄存器。因此在创建一个新任务时，必须把系统启动这个任务时所需的CPU各个寄存器初始值事先存放在任务堆栈中。这样当任务获得CPU使用权时，就把任务堆栈的内容复制到CPU的各个寄存器，从而可以任务顺利地启动并运行。
+把任务初始数据存放到任务堆栈的工作就叫做任务堆栈的初始化，UCOSIII提供了完成堆栈初始化的函数：OSTaskStkInit()。
+CPU_STK *OSTaskStkInit (OS_TASK_PTR p_task," />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f59e9f1be20adc4992b9b6bc7029ddce/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-11-07T23:28:50+08:00" />
+<meta property="article:modified_time" content="2022-11-07T23:28:50+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">STM32F103C8T6基于HAL库移植uc/OS-III</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#UCOS_1" rel="nofollow">一、UCOS系统简介</a></li><li><ul><li><a href="#1_2" rel="nofollow">1.版本介绍</a></li><li><a href="#2UCOSIII_7" rel="nofollow">2.UCOSIII的任务简介</a></li><li><a href="#3UCOSIII_21" rel="nofollow">3.UCOSIII的系统任务</a></li><li><a href="#4UCOSIII_29" rel="nofollow">4.UCOSIII的任务状态</a></li><li><a href="#5UCOSIII_38" rel="nofollow">5.UCOSIII的任务详解</a></li></ul> 
+  </li><li><a href="#STM32CubeMX_176" rel="nofollow">二、STM32CubeMX工程创建</a></li><li><ul><li><a href="#1_177" rel="nofollow">1.创建新项目</a></li><li><a href="#2_180" rel="nofollow">2.选择芯片</a></li><li><a href="#3RCC_184" rel="nofollow">3.配置RCC</a></li><li><a href="#4SYS_187" rel="nofollow">4.配置SYS</a></li><li><a href="#5GPIO_190" rel="nofollow">5.设置GPIO</a></li><li><a href="#6USART1_193" rel="nofollow">6.设置串口USART1</a></li><li><a href="#7_196" rel="nofollow">7.设置时钟树</a></li><li><a href="#8_199" rel="nofollow">8.设置工程</a></li></ul> 
+  </li><li><a href="#uCOSIII_204" rel="nofollow">三、获取uCOS-III源码</a></li><li><a href="#_212" rel="nofollow">四、移植前的文件准备及移植过程</a></li><li><ul><li><a href="#1_213" rel="nofollow">1.找到下载好的文件夹</a></li><li><a href="#2MDKARM_216" rel="nofollow">2.复制文件到MDK-ARM文件夹下</a></li><li><a href="#3cubeMXkeiluCOS_220" rel="nofollow">3.打开cubeMX生成的keil文件，将uCOS文件添加到项目中</a></li><li><a href="#4_223" rel="nofollow">4.分别给新增的文件夹添加文件</a></li><li><a href="#5_256" rel="nofollow">5.导入文件路径</a></li></ul> 
+  </li><li><a href="#_260" rel="nofollow">五、构建多任务环境</a></li><li><ul><li><a href="#1_261" rel="nofollow">1.代码添加</a></li><li><a href="#2_370" rel="nofollow">2.修改部分代码</a></li><li><a href="#3_401" rel="nofollow">3.初始化管脚</a></li><li><a href="#4_429" rel="nofollow">4.撰写主函数</a></li><li><a href="#5hex_811" rel="nofollow">5.程序编译及生成hex文件</a></li><li><a href="#6_814" rel="nofollow">6.电路连接</a></li><li><a href="#7_824" rel="nofollow">7.程序烧录</a></li><li><a href="#8_832" rel="nofollow">8.串口调试</a></li><li><a href="#9_835" rel="nofollow">9.运行结果</a></li></ul> 
+  </li><li><a href="#_839" rel="nofollow">六、总结</a></li><li><a href="#_841" rel="nofollow">七、参考链接</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="UCOS_1"></a>一、UCOS系统简介</h2> 
+<h3><a id="1_2"></a>1.版本介绍</h3> 
+<p>UCOS是Micrium公司出品的RTOS类实时操作系统， UCOS目前有两个版本：UCOSII和UCOSIII。<br> ◉UCOSIII是一个可裁剪、可剥夺型的多任务内核，而且没有任务数限制。<br> ◉UCOSIII提供了实时操作系统所需的所有功能，包括资源管理、同步、任务通信等。<br> ◉UCOSIII是用C和汇编来写的，其中绝大部分都是用C语言编写的，只有极少数的与处理器密切相关的部分代码才是用汇编写的， UCOSIII结构简洁，可读性很强！最主要的是非常适合初次接触嵌入式实时操作系统学生、嵌入式系统开发人员和爱好者学习。</p> 
+<h3><a id="2UCOSIII_7"></a>2.UCOSIII的任务简介</h3> 
+<p>在UCOSIII中任务就是程序实体，UCOSIII能够管理和调度这些小任务（程序）。UCOSIII中的任务由三部分组成：任务堆栈、任务控制块和任务函数。<br> ✦任务堆栈：上下文切换的时候用来保存任务的工作环境，就是STM32的内部寄存器值；<br> ✦任务控制块：任务控制块用来记录任务的各个属性；<br> ✦任务函数：由用户编写的任务处理代码，是实实在在干活的。一般写法如下：</p> 
+<blockquote> 
+ <p>void XXX_task(void *p_arg) {<!-- --><br> while(1)<br> {<!-- --><br> … //任务处理过程<br> }<br> }</p> 
+</blockquote> 
+<p>◉可以看出用任务函数通常是一个无限循环，当然了，也可以是一个只执行一次的任务。任务的参数是一个void类型的，这么做的目的是可以可以传递不同类型的数据甚至是函数。<br> ◉可以看出任务函数其实就是一个C语言的函数，但是在使用UCOIII的情况下这个函数不能有用户自行调用，任务函数何时执行执行，何时停止完全有操作系统来控制。</p> 
+<h3><a id="3UCOSIII_21"></a>3.UCOSIII的系统任务</h3> 
+<p>UCOSIII默认有<code>5个系统任务</code>：<br> ◉<code>空闲任务：</code>UCOSIII创建的第一个任务，UCOSIII必须创建的任务，此任务有UCOSIII自动创建，不需要用户手动创建;<br> ◉<code>时钟节拍任务：</code>此任务也是必须创建的任务;<br> ◉<code>统计任务：</code>可选任务，用来统计CPU使用率和各个任务的堆栈使用量。此任务是可选任务，由宏OS_CFG_STAT_TASK_EN控制是否使用此任务;<br> ◉<code>定时任务：</code>用来向用户提供定时服务，也是可选任务，由宏OS_CFG_TMR_EN控制是否使用此任务;<br> ◉<code>中断服务管理任务：</code>可选任务，由宏OS_CFG_ISR_POST_DEFERRED_EN控制是否使用此任务。<br> 前两个系统任务时必须创建的任务，而后三者不是。控制后三者任务的宏都是在文件OS_CFG.h中。</p> 
+<h3><a id="4UCOSIII_29"></a>4.UCOSIII的任务状态</h3> 
+<p>从用户的角度看，UCOSIII的任务一共有<code>5种状态</code>：<br> ◉<code>休眠态：</code>任务已经在CPU的flash中了，但是还不受UCOSIII管理；<br> ◉<code>就绪态：</code>系统为任务分配了任务控制块，并且任务已经在就绪表中登记，这时这个任务就具有了运行的条件，此时任务的状态就是就绪态；<br> ◉<code>运行态：</code>任务获得CPU的使用权，正在运行；<br> ◉<code>等待态：</code>正在运行的任务需要等待一段时间，或者等待某个事件，这个任务就进入了等待态，此时系统就会把CPU使用权转交给别的任务；<br> ◉<code>中断服务态：</code>当发送中断，当前正在运行的任务会被挂起，CPU转而去执行中断服务函数，此时任务的任务状态叫做中断服务态。<br> 这5种状态之间相互转化的关系如下图：<br> <img src="https://images2.imgbox.com/a6/8e/1u1mVKUD_o.png" alt=""></p> 
+<h3><a id="5UCOSIII_38"></a>5.UCOSIII的任务详解</h3> 
+<p>（1）任务堆栈<br> 任务堆栈是任务的重要部分，堆栈是在RAM中按照“先进先出（FIFO）”的原则组织的一块连续的存储空间。为了满足任务切换和响应中断时保存CPU寄存器中的内容及任务调用其它函数时的需要，每个任务都应该有自己的堆栈。<br> ◉任务堆栈创建<br> 代码如下：</p> 
+<blockquote> 
+ <p>#define START_STK_SIZE 512 //堆栈大小 CPU_STK START_TASK_STK[START_STK_SIZE]; //定义一个数组来作为任务堆栈</p> 
+</blockquote> 
+<p>◉任务堆栈的大小<br> CPU_STK为CPU_INT32U类型，也就是unsigned int类型，为4字节的，那么任务堆栈START_TASK_STK的大小就为：512 X 4=2048字节。<br> ◉任务堆栈初始化<br> 任务切换回上一个任务并且还能接着从上次被中断的地方开始运行的办法是恢复现场，现场就是CPU的内部各个寄存器。因此在创建一个新任务时，必须把系统启动这个任务时所需的CPU各个寄存器初始值事先存放在任务堆栈中。这样当任务获得CPU使用权时，就把任务堆栈的内容复制到CPU的各个寄存器，从而可以任务顺利地启动并运行。<br> 把任务初始数据存放到任务堆栈的工作就叫做任务堆栈的初始化，UCOSIII提供了完成堆栈初始化的函数：<code>OSTaskStkInit()</code>。</p> 
+<blockquote> 
+ <p>CPU_STK *OSTaskStkInit (OS_TASK_PTR p_task,<br> void *p_arg,<br> CPU_STK *p_stk_base,<br> CPU_STK *p_stk_limit,<br> CPU_STK_SIZE stk_size,<br> OS_OPT opt) {<!-- --><br> … //函数内容<br> return (p_stk); }</p> 
+</blockquote> 
+<p>当然，<strong>用户一般不会直接操作堆栈初始化函数，任务堆栈初始化函数由任务创建函数OSTaskCreate()调用</strong>。不同的CPU对于的寄存器和对堆栈的操作方式不同，因此在移植UCOSIII的时候需要用户根据各自所选的CPU来编写任务堆栈初始化函数。</p> 
+<blockquote> 
+ <p>void OSTaskCreate (OS_TCB *p_tcb, //任务控制块<br> CPU_CHAR *p_name, //任务名字<br> OS_TASK_PTR p_task, //任务函数<br> void *p_arg, //传递给任务函数的参数<br> OS_PRIO prio, //任务优先级<br> CPU_STK *p_stk_base, //------任务堆栈基地址<br> CPU_STK_SIZE stk_limit, //------任务堆栈深度限位<br> CPU_STK_SIZE stk_size, //------任务堆栈大小<br> OS_MSG_QTY q_size,<br> OS_TICK time_quanta,<br> void *p_ext, //用户补充的存储区<br> OS_OPT opt,<br> OS_ERR *p_err) //存放该函数错误时的返回值 {<!-- --><br> … //函数内容 }</p> 
+</blockquote> 
+<p>✦函数OSTaskCreate()中的参数p_stk_base（任务堆栈基地址）的确定方式：<br> 根据堆栈的增长方式，堆栈有<code>两种增长方式</code>：<br> <code>向上增长：</code>堆栈的增长方向从<code>低地址向高地址</code>增长；<br> <code>向下增长：</code>堆栈的增长方向从<code>高地址向低地址</code>增长。<br> 函数OSTaskCreate()中的参数p_stk_base是任务堆栈基地址，那么如果CPU的堆栈是向上增长的话那么基地址就&amp;START_TASK_STK[0]；如果CPU堆栈是向下增长的话基地址就是&amp;START_TASK_STK[START_STK_SIZE-1]。STM32的堆栈是向下增长的。<br> （2）任务控制块<br> 任务控制块是用来记录与任务相关的信息的数据结构，每个任务都要有自己的任务控制块。我们使用OSTaskCreate()函数来创建任务的时候就会给任务分配一个任务控制块。任务控制块由用户自行创建，代码如下：</p> 
+<blockquote> 
+ <p>OS_TCB StartTaskTCB; //创建一个任务控制块</p> 
+</blockquote> 
+<p>OS_TCB为一个结构体，描述了任务控制块，任务控制块中的成员变量用户不能直接访问，更不可能改变他们。<br> OS_TCB为一个结构体，其中有些成员采用了条件编译的方式来确定。</p> 
+<blockquote> 
+ <p>struct os_tcb {<!-- --><br> CPU_STK <em>StkPtr; /</em> 指向当前任务堆栈的栈顶 */<br> void <em>ExtPtr; /</em> 指向用户可定义的数据区 */<br> CPU_STK <em>StkLimitPtr; /</em> 可指向任务堆栈中的某个位置 */<br> OS_TCB <em>NextPtr; /</em> Pointer to next TCB in the TCB list */<br> OS_TCB <em>PrevPtr; /</em> Pointer to previous TCB in the TCB list */<br> OS_TCB *TickNextPtr;<br> OS_TCB *TickPrevPtr;<br> OS_TICK_SPOKE <em>TickSpokePtr; /</em> Pointer to tick spoke if task is in the tick list */<br> CPU_CHAR <em>NamePtr; /</em> Pointer to task name */<br> CPU_STK <em>StkBasePtr; /</em> Pointer to base address of stack <em>/<br> #if defined(OS_CFG_TLS_TBL_SIZE) &amp;&amp; (OS_CFG_TLS_TBL_SIZE &gt; 0u)<br> OS_TLS TLS_Tbl[OS_CFG_TLS_TBL_SIZE];<br> #endif<br> OS_TASK_PTR TaskEntryAddr; /</em> Pointer to task entry point address <em>/<br> void <em>TaskEntryArg; /</em> Argument passed to task when it was created <em>/<br> OS_PEND_DATA <em>PendDataTblPtr; /</em> Pointer to list containing objects pended on <em>/<br> OS_STATE PendOn; /</em> Indicates what task is pending on <em>/<br> OS_STATUS PendStatus; /</em> Pend status <em>/<br> OS_STATE TaskState; /</em> See OS_TASK_STATE_xxx <em>/<br> OS_PRIO Prio; /</em> Task priority (0 == highest) <em>/<br> CPU_STK_SIZE StkSize; /</em> Size of task stack (in number of stack elements) <em>/<br> OS_OPT Opt; /</em> Task options as passed by OSTaskCreate()</em>/<br> OS_OBJ_QTY PendDataTblEntries; /</em> Size of array of objects to pend on <em>/<br> CPU_TS TS; /</em> Timestamp <em>/<br> OS_SEM_CTR SemCtr; /</em> Task specific semaphore counter <em>/<br> /</em> DELAY / TIMEOUT <em>/<br> OS_TICK TickCtrPrev; /</em> Previous time when task was ready <em>/<br> OS_TICK TickCtrMatch; /</em> Absolute time when task is going to be ready <em>/<br> OS_TICK TickRemain; /</em> Number of ticks remaining for a match <em>/<br> /</em> … run-time by OS_StatTask() */<br> OS_TICK TimeQuanta;<br> OS_TICK TimeQuantaCtr;<br> #if OS_MSG_EN &gt; 0u<br> void <em>MsgPtr; /</em> Message received <em>/<br> OS_MSG_SIZE MsgSize;<br> #endif<br> #if OS_CFG_TASK_Q_EN &gt; 0u<br> OS_MSG_Q MsgQ; /</em> Message queue associated with task <em>/<br> #if OS_CFG_TASK_PROFILE_EN &gt; 0u<br> CPU_TS MsgQPendTime; /</em> Time it took for signal to be received <em>/<br> CPU_TS MsgQPendTimeMax; /</em> Max amount of time it took for signal to be received <em>/<br> #endif<br> #endif<br> #if OS_CFG_TASK_REG_TBL_SIZE &gt; 0u<br> OS_REG RegTbl[OS_CFG_TASK_REG_TBL_SIZE]; /</em> Task specific registers <em>/<br> #endif<br> #if OS_CFG_FLAG_EN &gt; 0u<br> OS_FLAGS FlagsPend; /</em> Event flag(s) to wait on <em>/<br> OS_FLAGS FlagsRdy; /</em> Event flags that made task ready to run <em>/<br> OS_OPT FlagsOpt; /</em> Options (See OS_OPT_FLAG_xxx) <em>/<br> #endif<br> #if OS_CFG_TASK_SUSPEND_EN &gt; 0u<br> OS_NESTING_CTR SuspendCtr; /</em> Nesting counter for OSTaskSuspend() <em>/<br> #endif<br> #if OS_CFG_TASK_PROFILE_EN &gt; 0u<br> OS_CPU_USAGE CPUUsage; /</em> CPU Usage of task (0.00-100.00%) <em>/<br> OS_CPU_USAGE CPUUsageMax; /</em> CPU Usage of task (0.00-100.00%) - Peak <em>/<br> OS_CTX_SW_CTR CtxSwCtr; /</em> Number of time the task was switched in <em>/<br> CPU_TS CyclesDelta; /</em> value of OS_TS_GET() - .CyclesStart <em>/<br> CPU_TS CyclesStart; /</em> Snapshot of cycle counter at start of task resumption <em>/<br> OS_CYCLES CyclesTotal; /</em> Total number of # of cycles the task has been running <em>/<br> OS_CYCLES CyclesTotalPrev; /</em> Snapshot of previous # of cycles <em>/<br> CPU_TS SemPendTime; /</em> Time it took for signal to be received <em>/<br> CPU_TS SemPendTimeMax; /</em> Max amount of time it took for signal to be received <em>/<br> #endif<br> #if OS_CFG_STAT_TASK_STK_CHK_EN &gt; 0u<br> CPU_STK_SIZE StkUsed; /</em> Number of stack elements used from the stack <em>/<br> CPU_STK_SIZE StkFree; /</em> Number of stack elements free on the stack <em>/<br> #endif<br> #ifdef CPU_CFG_INT_DIS_MEAS_EN<br> CPU_TS IntDisTimeMax; /</em> Maximum interrupt disable time <em>/<br> #endif<br> #if OS_CFG_SCHED_LOCK_TIME_MEAS_EN &gt; 0u<br> CPU_TS SchedLockTimeMax; /</em> Maximum scheduler lock time */<br> #endif<br> #if OS_CFG_DBG_EN &gt; 0u<br> OS_TCB *DbgPrevPtr;<br> OS_TCB *DbgNextPtr;<br> CPU_CHAR *DbgNamePtr;<br> #endif };</p> 
+</blockquote> 
+<p>◉任务控制块初始化<br> USOCIII提供了用于<code>任务控制块初始化的函数</code>：<code>OS_TaskInitTCB()</code>。但是，用户不需要自行初始化任务控制块。因为和任务堆栈初始化函数一样，函数OSTaskCreate()在创建任务的时候会对任务的任务控制块进行初始化。</p> 
+<h2><a id="STM32CubeMX_176"></a>二、STM32CubeMX工程创建</h2> 
+<h3><a id="1_177"></a>1.创建新项目</h3> 
+<p>打开STM32CubeMX主界面，点击“ACCESS TO MCU SELECTOR”,创建新项目<br> <img src="https://images2.imgbox.com/63/c0/CgxNA48W_o.png" alt=""></p> 
+<h3><a id="2_180"></a>2.选择芯片</h3> 
+<p>在“Commerical Part Number”里面选择自己需要的芯片，点击信息栏中的具体芯片信息选中，再点击“Start Project”<br> <img src="https://images2.imgbox.com/04/82/YnV8cvDh_o.png" alt=""></p> 
+<h3><a id="3RCC_184"></a>3.配置RCC</h3> 
+<p>先点击System Core将其展开，再点击RCC，将HSE设置为Crystal/Ceramic Resonator<br> <img src="https://images2.imgbox.com/6d/a4/lreKw8jE_o.png" alt=""></p> 
+<h3><a id="4SYS_187"></a>4.配置SYS</h3> 
+<p>点击SYS，将Debug设置为Serial Wire<br> <img src="https://images2.imgbox.com/af/88/hP9sB9zf_o.png" alt=""></p> 
+<h3><a id="5GPIO_190"></a>5.设置GPIO</h3> 
+<p>点击GPIO，然后点击管脚PA3和PC13，将其设置为GPIO_Output<br> <img src="https://images2.imgbox.com/51/bb/GhmtLrg7_o.png" alt=""></p> 
+<h3><a id="6USART1_193"></a>6.设置串口USART1</h3> 
+<p>先点击Connectivity将其展开，再点击USART1，将Mode设置为Asynchronous，然后点击Parameter Settings，设置波特率为115200，1位停止位，无校验位<br> <img src="https://images2.imgbox.com/fc/40/hY4YqE4x_o.png" alt=""></p> 
+<h3><a id="7_196"></a>7.设置时钟树</h3> 
+<p>点击“Clock Configuration”，勾选PLLCLK和HSE，并将晶振频率设置为最大值72MHz<br> <img src="https://images2.imgbox.com/37/f9/foRHyzXe_o.png" alt=""></p> 
+<h3><a id="8_199"></a>8.设置工程</h3> 
+<p>（1）点击Project Manager→Project，配置好自己的项目名和项目存放路径，将IDE设置为MDK-ARM<br> <img src="https://images2.imgbox.com/b7/0a/koPEd4mi_o.png" alt=""><br> （2）点击Code Generate界面，选择生成初始化文件.c/.h，之后再点击GENERATE CODE即可成功创建项目<br> <img src="https://images2.imgbox.com/6d/6b/MByYNdNU_o.png" alt=""></p> 
+<h2><a id="uCOSIII_204"></a>三、获取uCOS-III源码</h2> 
+<p>（1）进入 Micrium 公司官网下载中心：<a href="http://micrium.com/downloadcenter/" rel="nofollow">http://micrium.com/downloadcenter/</a><br> 选择ST系列，点击 View all STMicroelectronics，点击 STMicroelectronics STM32F103<br> 之后按照提示注册下载即可。<br> （2）直接下载如下网盘链接内容<br> 链接：<a href="https://pan.baidu.com/s/10RqsDRecbmVteWmDv2oUNQ" rel="nofollow">https://pan.baidu.com/s/10RqsDRecbmVteWmDv2oUNQ</a><br> 提取码：1234</p> 
+<h2><a id="_212"></a>四、移植前的文件准备及移植过程</h2> 
+<h3><a id="1_213"></a>1.找到下载好的文件夹</h3> 
+<p>打开下载好的文件夹（我是网盘链接直接下载），如下图：<br> <img src="https://images2.imgbox.com/4e/0e/sMN7opPG_o.png" alt=""></p> 
+<h3><a id="2MDKARM_216"></a>2.复制文件到MDK-ARM文件夹下</h3> 
+<p>将uCOS的5个相关文件复制到cubeMX工程的MDK-ARM文件夹下<br> <img src="https://images2.imgbox.com/78/48/VRB08zvo_o.png" alt=""><br> <img src="https://images2.imgbox.com/3b/2f/CGYKcTNx_o.png" alt=""></p> 
+<h3><a id="3cubeMXkeiluCOS_220"></a>3.打开cubeMX生成的keil文件，将uCOS文件添加到项目中</h3> 
+<p>依次点击Manage Project Items→New（Insert），将下图6个文件添加到项目中<br> <img src="https://images2.imgbox.com/10/da/FDR0db25_o.png" alt=""></p> 
+<h3><a id="4_223"></a>4.分别给新增的文件夹添加文件</h3> 
+<p>（1）点击CPU→Add Files…，按如下路径选中以下文件（文件类型选择“All Files”），然后点击Add<br> <img src="https://images2.imgbox.com/7c/fd/ISyXlDFs_o.png" alt=""><br> ◉<code>MDK-ARM\uC-CPU</code>路径下选中下图红框文件，Add添加<br> <img src="https://images2.imgbox.com/3e/a2/qvWbQVIo_o.png" alt=""><br> ◉<code>MDK-ARM\uC-CPU\ARM-Cortex-M3\RealView</code>路径下选中下图红框文件，Add添加<br> <img src="https://images2.imgbox.com/73/d8/t5VCHxxY_o.png" alt=""><br> （2）点击LIB→Add Files…，按如下路径选中以下文件（文件类型选择“All Files”），然后点击Add<br> <img src="https://images2.imgbox.com/2a/33/3L9rjNGg_o.png" alt=""><br> ◉<code>MDK-ARM\uC-LIB</code>路径下选中下图红框文件，Add添加<br> <img src="https://images2.imgbox.com/f0/6d/OHGdsl6j_o.png" alt=""><br> ◉<code>MDK-ARM\uC-LIB\Ports\ARM-Cortex-M3\RealView</code>路径下选中下图红框文件，Add添加<br> <img src="https://images2.imgbox.com/6c/b9/Ng4YKv27_o.png" alt=""><br> （3）点击PORT→Add Files…，按如下路径选中以下文件（文件类型选择“All Files”），然后点击Add<br> <img src="https://images2.imgbox.com/b0/59/AQ4j0QJC_o.png" alt=""><br> ◉<code>MDK-ARM\uCOS-III\Ports\ARM-Cortex-M3\Generic\RealView</code>路径下选中下图红框文件，Add添加<br> <img src="https://images2.imgbox.com/7c/13/lKhN3kjE_o.png" alt=""><br> （4）点击SOURCE→Add Files…，按如下路径选中以下文件（文件类型选择“All Files”），然后点击Add<br> <img src="https://images2.imgbox.com/4e/0d/n6XQJ99j_o.png" alt=""><br> ◉<code>MDK-ARM\uCOS-III\Source</code>路径下选中目录下全部 .c .h 文件，Add添加<br> <img src="https://images2.imgbox.com/8a/8d/yWh7TpE2_o.png" alt=""><br> （5）点击CONFIG→Add Files…，按如下路径选中以下文件（文件类型选择“All Files”），然后点击Add<br> <img src="https://images2.imgbox.com/23/c8/bIV3e9j7_o.png" alt=""><br> ◉<code>MDK-ARM\uC-CONFIG</code>路径下选中目录下全部文件，Add添加</p> 
+<p><img src="https://images2.imgbox.com/5a/ba/vAApXObB_o.png" alt=""><br> （6）点击BSP→Add Files…，按如下路径选中以下文件（文件类型选择“All Files”），然后点击Add<br> ◉<code>MDK-ARM\uC-BSP</code>路径下选中以下全部文件，Add添加<br> <img src="https://images2.imgbox.com/4e/c3/6mK7G4My_o.png" alt=""><br> <strong>上述步骤全部完成后点击OK（一定记得点击OK，不然就前功尽弃！！！）</strong><br> <img src="https://images2.imgbox.com/70/34/TIricixs_o.png" alt=""><br> 此时项目结构会发生变化，如下图：<br> <img src="https://images2.imgbox.com/fe/17/pRpUSh3I_o.png" alt=""></p> 
+<h3><a id="5_256"></a>5.导入文件路径</h3> 
+<p>依次点击魔法棒→C/C++→…→New(Insert)→需要添加的路径→OK<br> <img src="https://images2.imgbox.com/0e/61/JsER3Voj_o.png" alt=""></p> 
+<h2><a id="_260"></a>五、构建多任务环境</h2> 
+<h3><a id="1_261"></a>1.代码添加</h3> 
+<p>（1）为<code>bsp.c</code>添加如下代码：</p> 
+<pre><code class="prism language-c"><span class="token comment">// bsp.c</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"includes.h"</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span>  <span class="token macro-name">DWT_CR</span>      <span class="token expression"><span class="token operator">*</span><span class="token punctuation">(</span>CPU_REG32 <span class="token operator">*</span><span class="token punctuation">)</span><span class="token number">0xE0001000</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span>  <span class="token macro-name">DWT_CYCCNT</span>  <span class="token expression"><span class="token operator">*</span><span class="token punctuation">(</span>CPU_REG32 <span class="token operator">*</span><span class="token punctuation">)</span><span class="token number">0xE0001004</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span>  <span class="token macro-name">DEM_CR</span>      <span class="token expression"><span class="token operator">*</span><span class="token punctuation">(</span>CPU_REG32 <span class="token operator">*</span><span class="token punctuation">)</span><span class="token number">0xE000EDFC</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span>  <span class="token macro-name">DBGMCU_CR</span>   <span class="token expression"><span class="token operator">*</span><span class="token punctuation">(</span>CPU_REG32 <span class="token operator">*</span><span class="token punctuation">)</span><span class="token number">0xE0042004</span></span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span>  <span class="token macro-name">DEM_CR_TRCENA</span>                   <span class="token expression"><span class="token punctuation">(</span><span class="token number">1</span> <span class="token operator">&lt;&lt;</span> <span class="token number">24</span><span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span>  <span class="token macro-name">DWT_CR_CYCCNTENA</span>                <span class="token expression"><span class="token punctuation">(</span><span class="token number">1</span> <span class="token operator">&lt;&lt;</span>  <span class="token number">0</span><span class="token punctuation">)</span></span></span>
+
+CPU_INT32U  <span class="token function">BSP_CPU_ClkFreq</span> <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">return</span> <span class="token function">HAL_RCC_GetHCLKFreq</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">void</span> <span class="token function">BSP_Tick_Init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	CPU_INT32U cpu_clk_freq<span class="token punctuation">;</span>
+	CPU_INT32U cnts<span class="token punctuation">;</span>
+	cpu_clk_freq <span class="token operator">=</span> <span class="token function">BSP_CPU_ClkFreq</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+	<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span><span class="token expression"><span class="token punctuation">(</span>OS_VERSION<span class="token operator">&gt;=</span><span class="token number">3000u</span><span class="token punctuation">)</span></span></span>
+		cnts <span class="token operator">=</span> cpu_clk_freq<span class="token operator">/</span><span class="token punctuation">(</span>CPU_INT32U<span class="token punctuation">)</span>OSCfg_TickRate_Hz<span class="token punctuation">;</span>
+	<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">else</span></span>
+		cnts <span class="token operator">=</span> cpu_clk_freq<span class="token operator">/</span><span class="token punctuation">(</span>CPU_INT32U<span class="token punctuation">)</span>OS_TICKS_PER_SEC<span class="token punctuation">;</span>
+	<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+	<span class="token function">OS_CPU_SysTickInit</span><span class="token punctuation">(</span>cnts<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+
+<span class="token keyword">void</span> <span class="token function">BSP_Init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	<span class="token function">BSP_Tick_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">MX_GPIO_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression"><span class="token punctuation">(</span>CPU_CFG_TS_TMR_EN <span class="token operator">==</span> DEF_ENABLED<span class="token punctuation">)</span></span></span>
+<span class="token keyword">void</span>  <span class="token function">CPU_TS_TmrInit</span> <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    CPU_INT32U  cpu_clk_freq_hz<span class="token punctuation">;</span>
+
+
+    DEM_CR         <span class="token operator">|=</span> <span class="token punctuation">(</span>CPU_INT32U<span class="token punctuation">)</span>DEM_CR_TRCENA<span class="token punctuation">;</span>                <span class="token comment">/* Enable Cortex-M3's DWT CYCCNT reg.                   */</span>
+    DWT_CYCCNT      <span class="token operator">=</span> <span class="token punctuation">(</span>CPU_INT32U<span class="token punctuation">)</span><span class="token number">0u</span><span class="token punctuation">;</span>
+    DWT_CR         <span class="token operator">|=</span> <span class="token punctuation">(</span>CPU_INT32U<span class="token punctuation">)</span>DWT_CR_CYCCNTENA<span class="token punctuation">;</span>
+
+    cpu_clk_freq_hz <span class="token operator">=</span> <span class="token function">BSP_CPU_ClkFreq</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">CPU_TS_TmrFreqSet</span><span class="token punctuation">(</span>cpu_clk_freq_hz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression"><span class="token punctuation">(</span>CPU_CFG_TS_TMR_EN <span class="token operator">==</span> DEF_ENABLED<span class="token punctuation">)</span></span></span>
+CPU_TS_TMR  <span class="token function">CPU_TS_TmrRd</span> <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>CPU_TS_TMR<span class="token punctuation">)</span>DWT_CYCCNT<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression"><span class="token punctuation">(</span>CPU_CFG_TS_32_EN <span class="token operator">==</span> DEF_ENABLED<span class="token punctuation">)</span></span></span>
+CPU_INT64U  <span class="token function">CPU_TS32_to_uSec</span> <span class="token punctuation">(</span>CPU_TS32  ts_cnts<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	CPU_INT64U  ts_us<span class="token punctuation">;</span>
+  CPU_INT64U  fclk_freq<span class="token punctuation">;</span>
+
+ 
+  fclk_freq <span class="token operator">=</span> <span class="token function">BSP_CPU_ClkFreq</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  ts_us     <span class="token operator">=</span> ts_cnts <span class="token operator">/</span> <span class="token punctuation">(</span>fclk_freq <span class="token operator">/</span> DEF_TIME_NBR_uS_PER_SEC<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>ts_us<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+ 
+ 
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression"><span class="token punctuation">(</span>CPU_CFG_TS_64_EN <span class="token operator">==</span> DEF_ENABLED<span class="token punctuation">)</span></span></span>
+CPU_INT64U  <span class="token function">CPU_TS64_to_uSec</span> <span class="token punctuation">(</span>CPU_TS64  ts_cnts<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	CPU_INT64U  ts_us<span class="token punctuation">;</span>
+	CPU_INT64U  fclk_freq<span class="token punctuation">;</span>
+
+
+  fclk_freq <span class="token operator">=</span> <span class="token function">BSP_CPU_ClkFreq</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  ts_us     <span class="token operator">=</span> ts_cnts <span class="token operator">/</span> <span class="token punctuation">(</span>fclk_freq <span class="token operator">/</span> DEF_TIME_NBR_uS_PER_SEC<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>ts_us<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+</code></pre> 
+<p>（2）为<code>bsp.h</code>添加如下代码：</p> 
+<pre><code class="prism language-c"><span class="token comment">// bsp.h</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifndef</span>  <span class="token expression">__BSP_H__</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span>  <span class="token macro-name">__BSP_H__</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"stm32f1xx_hal.h"</span></span>
+
+<span class="token keyword">void</span> <span class="token function">BSP_Init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+</code></pre> 
+<h3><a id="2_370"></a>2.修改部分代码</h3> 
+<p>（1）打开<code>startup_stm32f103xb.s</code>文件<br> ◉在以下位置处将<code>PendSV_Handler</code>改为<code>OS_CPU_PendSVHandler</code>，<br> <code>SysTick_Handler</code>改为<code>OS_CPU_SysTickHandler</code><br> <img src="https://images2.imgbox.com/28/63/SLgr7WeO_o.png" alt=""><br> <img src="https://images2.imgbox.com/c9/67/y40Vo69f_o.png" alt=""><br> （2）打开<code>app_cfg.h</code>文件<br> ◉<code>DEF_ENABLED</code> 改为 <code>DEF_DISABLED</code><br> <img src="https://images2.imgbox.com/60/c0/xo4CI0Cw_o.png" alt="">◉<code>#define APP_TRACE BSP_Ser_Printf</code> 改为 <code>#define APP_TRACE(void)</code><br> <img src="https://images2.imgbox.com/0b/64/3kqXGGX1_o.png" alt=""><br> （3）打开<code>includes.h</code>文件<br> 在<code>#include &lt;bsp.h&gt;</code>下面添加 <code>#include “gpio.h”</code> ，<code>#include “app_cfg.h”</code><br> 将<code>#include &lt;stm32f10x_lib.h&gt;</code> 改为 <code>#include “stm32f1xx_hal.h”</code><br> <img src="https://images2.imgbox.com/30/30/ebicBvKl_o.png" alt=""><br> （4）打开<code>lib_cfg.h</code>文件<br> 修改为5u*1024u（该处宏定义设置堆空间的大小，STM32F103C8T6的RAM只有20K，所以要改小一点）<br> <img src="https://images2.imgbox.com/3c/53/JSPq6rde_o.png" alt=""><br> （5）打开<code>usart.c</code>文件，添加如下代码完成printf重定向</p> 
+<pre><code class="prism language-c"><span class="token comment">/* USER CODE BEGIN 1 */</span>
+
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">__FILE</span> FILE<span class="token punctuation">;</span>
+<span class="token keyword">int</span> <span class="token function">fputc</span><span class="token punctuation">(</span><span class="token keyword">int</span> ch<span class="token punctuation">,</span>FILE <span class="token operator">*</span>f<span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+	<span class="token function">HAL_UART_Transmit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>huart1<span class="token punctuation">,</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>ch<span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">0xffff</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">return</span> ch<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/* USER CODE END 1 */</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/85/89/CKAaXyDr_o.png" alt=""></p> 
+<h3><a id="3_401"></a>3.初始化管脚</h3> 
+<p>在<code>gpio.c</code>文件中修改代码</p> 
+<pre><code class="prism language-c"><span class="token keyword">void</span> <span class="token function">MX_GPIO_Init</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+
+  GPIO_InitTypeDef GPIO_InitStruct <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+  <span class="token comment">/* GPIO Ports Clock Enable */</span>
+  <span class="token function">__HAL_RCC_GPIOC_CLK_ENABLE</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">__HAL_RCC_GPIOD_CLK_ENABLE</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">__HAL_RCC_GPIOA_CLK_ENABLE</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token comment">/*Configure GPIO pin Output Level */</span>
+  <span class="token function">HAL_GPIO_WritePin</span><span class="token punctuation">(</span>GPIOC<span class="token punctuation">,</span> GPIO_PIN_13<span class="token punctuation">,</span> GPIO_PIN_RESET<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">HAL_GPIO_WritePin</span><span class="token punctuation">(</span>GPIOA<span class="token punctuation">,</span> GPIO_PIN_3<span class="token punctuation">,</span> GPIO_PIN_RESET<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+  <span class="token comment">/*Configure GPIO pin : PC13|PA3 */</span>
+  GPIO_InitStruct<span class="token punctuation">.</span>Pin <span class="token operator">=</span> GPIO_PIN_13<span class="token operator">|</span>GPIO_PIN_3<span class="token punctuation">;</span>
+  GPIO_InitStruct<span class="token punctuation">.</span>Mode <span class="token operator">=</span> GPIO_MODE_OUTPUT_PP<span class="token punctuation">;</span>
+  GPIO_InitStruct<span class="token punctuation">.</span>Pull <span class="token operator">=</span> GPIO_NOPULL<span class="token punctuation">;</span>
+  GPIO_InitStruct<span class="token punctuation">.</span>Speed <span class="token operator">=</span> GPIO_SPEED_FREQ_LOW<span class="token punctuation">;</span>
+  <span class="token function">HAL_GPIO_Init</span><span class="token punctuation">(</span>GPIOC<span class="token punctuation">,</span> <span class="token operator">&amp;</span>GPIO_InitStruct<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">HAL_GPIO_Init</span><span class="token punctuation">(</span>GPIOA<span class="token punctuation">,</span> <span class="token operator">&amp;</span>GPIO_InitStruct<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/6c/ed/6SSOSbzB_o.png" alt=""></p> 
+<h3><a id="4_429"></a>4.撰写主函数</h3> 
+<p>将<code>main.c</code>修改为如下代码：</p> 
+<pre><code class="prism language-c"><span class="token comment">/* USER CODE END Header */</span>
+<span class="token comment">/* Includes ------------------------------------------------------------------*/</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"main.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"gpio.h"</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"usart.h"</span></span>
+<span class="token comment">/* Private includes ----------------------------------------------------------*/</span>
+<span class="token comment">/* USER CODE BEGIN Includes */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">&lt;includes.h&gt;</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">include</span> <span class="token string">"stm32f1xx_hal.h"</span></span>
+<span class="token comment">/* USER CODE END Includes */</span>
+
+<span class="token comment">/* Private typedef -----------------------------------------------------------*/</span>
+<span class="token comment">/* USER CODE BEGIN PTD */</span>
+
+<span class="token comment">/* USER CODE END PTD */</span>
+
+<span class="token comment">/* Private define ------------------------------------------------------------*/</span>
+<span class="token comment">/* USER CODE BEGIN PD */</span>
+<span class="token comment">/* 任务优先级 */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">START_TASK_PRIO</span>		<span class="token expression"><span class="token number">3</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">LED0_TASK_PRIO</span>		<span class="token expression"><span class="token number">4</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">MSG_TASK_PRIO</span>		<span class="token expression"><span class="token number">5</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">LED1_TASK_PRIO</span>		<span class="token expression"><span class="token number">6</span></span></span>
+
+<span class="token comment">/* 任务堆栈大小	*/</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">START_STK_SIZE</span> 		<span class="token expression"><span class="token number">96</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">LED0_STK_SIZE</span> 		<span class="token expression"><span class="token number">64</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">MSG_STK_SIZE</span> 		<span class="token expression"><span class="token number">64</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">LED1_STK_SIZE</span> 		<span class="token expression"><span class="token number">64</span></span></span>
+
+<span class="token comment">/* 任务栈 */</span>	
+CPU_STK START_TASK_STK<span class="token punctuation">[</span>START_STK_SIZE<span class="token punctuation">]</span><span class="token punctuation">;</span>
+CPU_STK LED0_TASK_STK<span class="token punctuation">[</span>LED0_STK_SIZE<span class="token punctuation">]</span><span class="token punctuation">;</span>
+CPU_STK MSG_TASK_STK<span class="token punctuation">[</span>MSG_STK_SIZE<span class="token punctuation">]</span><span class="token punctuation">;</span>
+CPU_STK LED1_TASK_STK<span class="token punctuation">[</span>LED1_STK_SIZE<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+<span class="token comment">/* 任务控制块 */</span>
+OS_TCB StartTaskTCB<span class="token punctuation">;</span>
+OS_TCB Led0TaskTCB<span class="token punctuation">;</span>
+OS_TCB MsgTaskTCB<span class="token punctuation">;</span>
+OS_TCB Led1TaskTCB<span class="token punctuation">;</span>
+
+<span class="token comment">/* USER CODE END PD */</span>
+
+<span class="token comment">/* Private macro -------------------------------------------------------------*/</span>
+<span class="token comment">/* USER CODE BEGIN PM */</span>
+
+<span class="token comment">/* USER CODE END PM */</span>
+
+<span class="token comment">/* Private variables ---------------------------------------------------------*/</span>
+
+<span class="token comment">/* USER CODE BEGIN PV */</span>
+
+<span class="token comment">/* 任务函数定义 */</span>
+<span class="token keyword">void</span> <span class="token function">start_task</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">AppTaskCreate</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">AppObjCreate</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">led_pc13</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">send_msg</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">led_pa3</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">/* USER CODE END PV */</span>
+
+<span class="token comment">/* Private function prototypes -----------------------------------------------*/</span>
+<span class="token keyword">void</span> <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">/* USER CODE BEGIN PFP */</span>
+
+<span class="token comment">/* USER CODE END PFP */</span>
+
+<span class="token comment">/* Private user code ---------------------------------------------------------*/</span>
+<span class="token comment">/* USER CODE BEGIN 0 */</span>
+<span class="token comment">/**
+  * @brief System Clock Configuration
+  * @retval None
+  */</span>
+<span class="token keyword">void</span> <span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  RCC_OscInitTypeDef RCC_OscInitStruct <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+  RCC_ClkInitTypeDef RCC_ClkInitStruct <span class="token operator">=</span> <span class="token punctuation">{<!-- --></span><span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+  <span class="token comment">/**Initializes the CPU, AHB and APB busses clocks 
+  */</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>OscillatorType <span class="token operator">=</span> RCC_OSCILLATORTYPE_HSE<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>HSEState <span class="token operator">=</span> RCC_HSE_ON<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>HSEPredivValue <span class="token operator">=</span> RCC_HSE_PREDIV_DIV1<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>HSIState <span class="token operator">=</span> RCC_HSI_ON<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>PLL<span class="token punctuation">.</span>PLLState <span class="token operator">=</span> RCC_PLL_ON<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>PLL<span class="token punctuation">.</span>PLLSource <span class="token operator">=</span> RCC_PLLSOURCE_HSE<span class="token punctuation">;</span>
+  RCC_OscInitStruct<span class="token punctuation">.</span>PLL<span class="token punctuation">.</span>PLLMUL <span class="token operator">=</span> RCC_PLL_MUL9<span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_RCC_OscConfig</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>RCC_OscInitStruct<span class="token punctuation">)</span> <span class="token operator">!=</span> HAL_OK<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+    <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/**Initializes the CPU, AHB and APB busses clocks 
+  */</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>ClockType <span class="token operator">=</span> RCC_CLOCKTYPE_HCLK<span class="token operator">|</span>RCC_CLOCKTYPE_SYSCLK
+                              <span class="token operator">|</span>RCC_CLOCKTYPE_PCLK1<span class="token operator">|</span>RCC_CLOCKTYPE_PCLK2<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>SYSCLKSource <span class="token operator">=</span> RCC_SYSCLKSOURCE_PLLCLK<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>AHBCLKDivider <span class="token operator">=</span> RCC_SYSCLK_DIV1<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>APB1CLKDivider <span class="token operator">=</span> RCC_HCLK_DIV2<span class="token punctuation">;</span>
+  RCC_ClkInitStruct<span class="token punctuation">.</span>APB2CLKDivider <span class="token operator">=</span> RCC_HCLK_DIV1<span class="token punctuation">;</span>
+
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">HAL_RCC_ClockConfig</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>RCC_ClkInitStruct<span class="token punctuation">,</span> FLASH_LATENCY_2<span class="token punctuation">)</span> <span class="token operator">!=</span> HAL_OK<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+    <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/* USER CODE END 0 */</span>
+
+<span class="token comment">/**
+  * @brief  The application entry point.
+  * @retval int
+  */</span>
+<span class="token keyword">int</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	OS_ERR  err<span class="token punctuation">;</span>
+	<span class="token function">OSInit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">HAL_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token function">SystemClock_Config</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">//MX_GPIO_Init(); 这个在BSP的初始化里也会初始化</span>
+  <span class="token function">MX_USART1_UART_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	
+	<span class="token comment">/* 创建任务 */</span>
+	<span class="token function">OSTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">(</span>OS_TCB     <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>StartTaskTCB<span class="token punctuation">,</span>                <span class="token comment">/* Create the start task                                */</span>
+				 <span class="token punctuation">(</span>CPU_CHAR   <span class="token operator">*</span><span class="token punctuation">)</span><span class="token string">"start task"</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>OS_TASK_PTR <span class="token punctuation">)</span> start_task<span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span><span class="token keyword">void</span>       <span class="token operator">*</span><span class="token punctuation">)</span> <span class="token number">0</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>OS_PRIO     <span class="token punctuation">)</span> START_TASK_PRIO<span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>CPU_STK    <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>START_TASK_STK<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span> START_STK_SIZE<span class="token operator">/</span><span class="token number">10</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span> START_STK_SIZE<span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>OS_MSG_QTY  <span class="token punctuation">)</span> <span class="token number">0</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>OS_TICK     <span class="token punctuation">)</span> <span class="token number">0</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span><span class="token keyword">void</span>       <span class="token operator">*</span><span class="token punctuation">)</span> <span class="token number">0</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>OS_OPT      <span class="token punctuation">)</span><span class="token punctuation">(</span>OS_OPT_TASK_STK_CHK <span class="token operator">|</span> OS_OPT_TASK_STK_CLR<span class="token punctuation">)</span><span class="token punctuation">,</span>
+				 <span class="token punctuation">(</span>OS_ERR     <span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">/* 启动多任务系统，控制权交给uC/OS-III */</span>
+	<span class="token function">OSStart</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>            <span class="token comment">/* Start multitasking (i.e. give control to uC/OS-III). */</span>
+               
+<span class="token punctuation">}</span>
+
+
+<span class="token keyword">void</span> <span class="token function">start_task</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+	OS_ERR err<span class="token punctuation">;</span>
+	<span class="token function">CPU_SR_ALLOC</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	p_arg <span class="token operator">=</span> p_arg<span class="token punctuation">;</span>
+	
+	<span class="token comment">/* YangJie add 2021.05.20*/</span>
+  <span class="token function">BSP_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                   <span class="token comment">/* Initialize BSP functions */</span>
+  <span class="token comment">//CPU_Init();</span>
+  <span class="token comment">//Mem_Init();                                                 /* Initialize Memory Management Module */</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression">OS_CFG_STAT_TASK_EN <span class="token operator">&gt;</span> <span class="token number">0u</span></span></span>
+   <span class="token function">OSStatTaskCPUUsageInit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>  		<span class="token comment">//统计任务                </span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+	
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">CPU_CFG_INT_DIS_MEAS_EN			</span><span class="token comment">//如果使能了测量中断关闭时间</span></span>
+    <span class="token function">CPU_IntDisMeasMaxCurReset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span>	<span class="token expression">OS_CFG_SCHED_ROUND_ROBIN_EN  		</span><span class="token comment">//当使用时间片轮转的时候</span></span>
+	 <span class="token comment">//使能时间片轮转调度功能,时间片长度为1个系统时钟节拍，既1*5=5ms</span>
+	<span class="token function">OSSchedRoundRobinCfg</span><span class="token punctuation">(</span>DEF_ENABLED<span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>  
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span>		</span>
+	
+	<span class="token function">OS_CRITICAL_ENTER</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//进入临界区</span>
+	<span class="token comment">/* 创建LED0任务 */</span>
+	<span class="token function">OSTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">(</span>OS_TCB 	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>Led0TaskTCB<span class="token punctuation">,</span>		
+				 <span class="token punctuation">(</span>CPU_CHAR	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token string">"led_pc13"</span><span class="token punctuation">,</span> 		
+                 <span class="token punctuation">(</span>OS_TASK_PTR <span class="token punctuation">)</span>led_pc13<span class="token punctuation">,</span> 			
+                 <span class="token punctuation">(</span><span class="token keyword">void</span>		<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_PRIO	  <span class="token punctuation">)</span>LED0_TASK_PRIO<span class="token punctuation">,</span>     
+                 <span class="token punctuation">(</span>CPU_STK   <span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>LED0_TASK_STK<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>	
+                 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span>LED0_STK_SIZE<span class="token operator">/</span><span class="token number">10</span><span class="token punctuation">,</span>	
+                 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span>LED0_STK_SIZE<span class="token punctuation">,</span>		
+                 <span class="token punctuation">(</span>OS_MSG_QTY  <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_TICK	  <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span><span class="token keyword">void</span>   	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_OPT      <span class="token punctuation">)</span>OS_OPT_TASK_STK_CHK<span class="token operator">|</span>OS_OPT_TASK_STK_CLR<span class="token punctuation">,</span>
+                 <span class="token punctuation">(</span>OS_ERR 	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>		
+
+<span class="token comment">/* 创建LED1任务 */</span>
+	<span class="token function">OSTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">(</span>OS_TCB 	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>Led1TaskTCB<span class="token punctuation">,</span>		
+				 <span class="token punctuation">(</span>CPU_CHAR	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token string">"led_pa3"</span><span class="token punctuation">,</span> 		
+                 <span class="token punctuation">(</span>OS_TASK_PTR <span class="token punctuation">)</span>led_pa3<span class="token punctuation">,</span> 			
+                 <span class="token punctuation">(</span><span class="token keyword">void</span>		<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_PRIO	  <span class="token punctuation">)</span>LED1_TASK_PRIO<span class="token punctuation">,</span>     
+                 <span class="token punctuation">(</span>CPU_STK   <span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>LED1_TASK_STK<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>	
+                 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span>LED1_STK_SIZE<span class="token operator">/</span><span class="token number">10</span><span class="token punctuation">,</span>	
+                 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span>LED1_STK_SIZE<span class="token punctuation">,</span>		
+                 <span class="token punctuation">(</span>OS_MSG_QTY  <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_TICK	  <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span><span class="token keyword">void</span>   	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_OPT      <span class="token punctuation">)</span>OS_OPT_TASK_STK_CHK<span class="token operator">|</span>OS_OPT_TASK_STK_CLR<span class="token punctuation">,</span>
+                 <span class="token punctuation">(</span>OS_ERR 	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>										 
+				 
+	<span class="token comment">/* 创建MSG任务 */</span>
+	<span class="token function">OSTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">(</span>OS_TCB 	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>MsgTaskTCB<span class="token punctuation">,</span>		
+				 <span class="token punctuation">(</span>CPU_CHAR	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token string">"send_msg"</span><span class="token punctuation">,</span> 		
+                 <span class="token punctuation">(</span>OS_TASK_PTR <span class="token punctuation">)</span>send_msg<span class="token punctuation">,</span> 			
+                 <span class="token punctuation">(</span><span class="token keyword">void</span>		<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_PRIO	  <span class="token punctuation">)</span>MSG_TASK_PRIO<span class="token punctuation">,</span>     	
+                 <span class="token punctuation">(</span>CPU_STK   <span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>MSG_TASK_STK<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">,</span>	
+                 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span>MSG_STK_SIZE<span class="token operator">/</span><span class="token number">10</span><span class="token punctuation">,</span>	
+                 <span class="token punctuation">(</span>CPU_STK_SIZE<span class="token punctuation">)</span>MSG_STK_SIZE<span class="token punctuation">,</span>		
+                 <span class="token punctuation">(</span>OS_MSG_QTY  <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span>OS_TICK	  <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>					
+                 <span class="token punctuation">(</span><span class="token keyword">void</span>   	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token number">0</span><span class="token punctuation">,</span>				
+                 <span class="token punctuation">(</span>OS_OPT      <span class="token punctuation">)</span>OS_OPT_TASK_STK_CHK<span class="token operator">|</span>OS_OPT_TASK_STK_CLR<span class="token punctuation">,</span> 
+                 <span class="token punctuation">(</span>OS_ERR 	<span class="token operator">*</span> <span class="token punctuation">)</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				 
+	<span class="token function">OS_TaskSuspend</span><span class="token punctuation">(</span><span class="token punctuation">(</span>OS_TCB<span class="token operator">*</span><span class="token punctuation">)</span><span class="token operator">&amp;</span>StartTaskTCB<span class="token punctuation">,</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>		<span class="token comment">//挂起开始任务			 </span>
+	<span class="token function">OS_CRITICAL_EXIT</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>	<span class="token comment">//进入临界区</span>
+<span class="token punctuation">}</span>
+<span class="token comment">/**
+  * 函数功能: 启动任务函数体。
+  * 输入参数: p_arg 是在创建该任务时传递的形参
+  * 返 回 值: 无
+  * 说    明：无
+  */</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">led_pc13</span> <span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  OS_ERR      err<span class="token punctuation">;</span>
+
+  <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>p_arg<span class="token punctuation">;</span>
+
+  <span class="token function">BSP_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                 <span class="token comment">/* Initialize BSP functions                             */</span>
+  <span class="token function">CPU_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token function">Mem_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                 <span class="token comment">/* Initialize Memory Management Module                  */</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression">OS_CFG_STAT_TASK_EN <span class="token operator">&gt;</span> <span class="token number">0u</span></span></span>
+  <span class="token function">OSStatTaskCPUUsageInit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>                               <span class="token comment">/* Compute CPU capacity with no task running            */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+  <span class="token function">CPU_IntDisMeasMaxCurReset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token function">AppTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                            <span class="token comment">/* Create Application Tasks                             */</span>
+
+  <span class="token function">AppObjCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                             <span class="token comment">/* Create Application Objects                           */</span>
+
+  <span class="token keyword">while</span> <span class="token punctuation">(</span>DEF_TRUE<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+		<span class="token function">HAL_GPIO_WritePin</span><span class="token punctuation">(</span>GPIOC<span class="token punctuation">,</span>GPIO_PIN_13<span class="token punctuation">,</span>GPIO_PIN_RESET<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">OSTimeDlyHMSM</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span>OS_OPT_TIME_HMSM_STRICT<span class="token punctuation">,</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//设置固定接在 PC13 GPIO端口以1s为周期闪烁</span>
+		<span class="token function">HAL_GPIO_WritePin</span><span class="token punctuation">(</span>GPIOC<span class="token punctuation">,</span>GPIO_PIN_13<span class="token punctuation">,</span>GPIO_PIN_SET<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">OSTimeDlyHMSM</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span>OS_OPT_TIME_HMSM_STRICT<span class="token punctuation">,</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">/* USER CODE END WHILE */</span>
+
+    <span class="token comment">/* USER CODE BEGIN 3 */</span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/* USER CODE END 3 */</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">led_pa3</span> <span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  OS_ERR      err<span class="token punctuation">;</span>
+
+  <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>p_arg<span class="token punctuation">;</span>
+
+  <span class="token function">BSP_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                 <span class="token comment">/* Initialize BSP functions                             */</span>
+  <span class="token function">CPU_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token function">Mem_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                 <span class="token comment">/* Initialize Memory Management Module                  */</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression">OS_CFG_STAT_TASK_EN <span class="token operator">&gt;</span> <span class="token number">0u</span></span></span>
+  <span class="token function">OSStatTaskCPUUsageInit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>                               <span class="token comment">/* Compute CPU capacity with no task running            */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+  <span class="token function">CPU_IntDisMeasMaxCurReset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token function">AppTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                            <span class="token comment">/* Create Application Tasks                             */</span>
+
+  <span class="token function">AppObjCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                             <span class="token comment">/* Create Application Objects                           */</span>
+
+  <span class="token keyword">while</span> <span class="token punctuation">(</span>DEF_TRUE<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+		<span class="token function">HAL_GPIO_WritePin</span><span class="token punctuation">(</span>GPIOA<span class="token punctuation">,</span>GPIO_PIN_3<span class="token punctuation">,</span>GPIO_PIN_RESET<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">OSTimeDlyHMSM</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span>OS_OPT_TIME_HMSM_STRICT<span class="token punctuation">,</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//延时函数，括号内的4个参数分别表示：小时，分钟，秒，毫秒</span>
+		<span class="token function">HAL_GPIO_WritePin</span><span class="token punctuation">(</span>GPIOA<span class="token punctuation">,</span>GPIO_PIN_3<span class="token punctuation">,</span>GPIO_PIN_SET<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token function">OSTimeDlyHMSM</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span>OS_OPT_TIME_HMSM_STRICT<span class="token punctuation">,</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//设置外接LED以3s为周期闪烁</span>
+    <span class="token comment">/* USER CODE END WHILE */</span>
+
+    <span class="token comment">/* USER CODE BEGIN 3 */</span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/* USER CODE END 3 */</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">send_msg</span> <span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>p_arg<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  OS_ERR      err<span class="token punctuation">;</span>
+
+  <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>p_arg<span class="token punctuation">;</span>
+
+  <span class="token function">BSP_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                 <span class="token comment">/* Initialize BSP functions                             */</span>
+  <span class="token function">CPU_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token function">Mem_Init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                                 <span class="token comment">/* Initialize Memory Management Module                  */</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression">OS_CFG_STAT_TASK_EN <span class="token operator">&gt;</span> <span class="token number">0u</span></span></span>
+  <span class="token function">OSStatTaskCPUUsageInit</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span>                               <span class="token comment">/* Compute CPU capacity with no task running            */</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
+
+  <span class="token function">CPU_IntDisMeasMaxCurReset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token function">AppTaskCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                            <span class="token comment">/* Create Application Tasks                             */</span>
+
+  <span class="token function">AppObjCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                                             <span class="token comment">/* Create Application Objects                           */</span>
+
+  <span class="token keyword">while</span> <span class="token punctuation">(</span>DEF_TRUE<span class="token punctuation">)</span>
+  <span class="token punctuation">{<!-- --></span>
+			<span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"hello uc/OS!欢迎来到RTOS多任务环境！ \r\n"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	  <span class="token function">OSTimeDlyHMSM</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span>OS_OPT_TIME_HMSM_STRICT<span class="token punctuation">,</span><span class="token operator">&amp;</span>err<span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token comment">//设置串口以2s为周期发送数据</span>
+    <span class="token comment">/* USER CODE END WHILE */</span>
+
+    <span class="token comment">/* USER CODE BEGIN 3 */</span>
+  <span class="token punctuation">}</span>
+  <span class="token comment">/* USER CODE END 3 */</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token comment">/* USER CODE BEGIN 4 */</span>
+<span class="token comment">/**
+  * 函数功能: 创建应用任务
+  * 输入参数: p_arg 是在创建该任务时传递的形参
+  * 返 回 值: 无
+  * 说    明：无
+  */</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">AppTaskCreate</span> <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  
+<span class="token punctuation">}</span>
+
+
+<span class="token comment">/**
+  * 函数功能: uCOSIII内核对象创建
+  * 输入参数: 无
+  * 返 回 值: 无
+  * 说    明：无
+  */</span>
+<span class="token keyword">static</span>  <span class="token keyword">void</span>  <span class="token function">AppObjCreate</span> <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+
+<span class="token punctuation">}</span>
+
+<span class="token comment">/* USER CODE END 4 */</span>
+
+<span class="token comment">/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */</span>
+<span class="token keyword">void</span> <span class="token function">Error_Handler</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span>
+  <span class="token comment">/* USER CODE BEGIN Error_Handler_Debug */</span>
+  <span class="token comment">/* User can add his own implementation to report the HAL error return state */</span>
+
+  <span class="token comment">/* USER CODE END Error_Handler_Debug */</span>
+<span class="token punctuation">}</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span>  <span class="token expression">USE_FULL_ASSERT</span></span>
+<span class="token comment">/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */</span>
+<span class="token keyword">void</span> <span class="token function">assert_failed</span><span class="token punctuation">(</span><span class="token class-name">uint8_t</span> <span class="token operator">*</span>file<span class="token punctuation">,</span> <span class="token class-name">uint32_t</span> line<span class="token punctuation">)</span>
+<span class="token punctuation">{<!-- --></span> 
+  <span class="token comment">/* USER CODE BEGIN 6 */</span>
+  <span class="token comment">/* User can add his own implementation to report the file name and line number,
+     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */</span>
+  <span class="token comment">/* USER CODE END 6 */</span>
+<span class="token punctuation">}</span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span> <span class="token comment">/* USE_FULL_ASSERT */</span></span>
+
+<span class="token comment">/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/</span>
+</code></pre> 
+<h3><a id="5hex_811"></a>5.程序编译及生成hex文件</h3> 
+<p>点击Rebuild编译程序，若没有错误即可成功创建hex文件<br> <img src="https://images2.imgbox.com/86/38/rCALYxJ3_o.png" alt=""></p> 
+<h3><a id="6_814"></a>6.电路连接</h3> 
+<table><thead><tr><th>USB转TTL</th><th>STM32F103C8T6</th></tr></thead><tbody><tr><td>GND</td><td>GND</td></tr><tr><td>3v3</td><td>3v3</td></tr><tr><td>TXD</td><td>A10</td></tr><tr><td>RXD</td><td>A9</td></tr></tbody></table> 
+<p>LED负极接STM32F103C8T6的A3管脚，正极接3.3v管脚。<br> STM32F103C8T6的B6管脚接自身的C13管脚。</p> 
+<h3><a id="7_824"></a>7.程序烧录</h3> 
+<p>置BOOT0为0，BOOT1为1<br> （1）打开mcuisp，选择串口为COM5，并选择生成的hex文件<br> <img src="https://images2.imgbox.com/06/0a/Y3p7fttr_o.png" alt=""><br> （2）点击读器件信息，若显示一切正常则进行下一步<br> <img src="https://images2.imgbox.com/48/35/adi9nguj_o.png" alt=""><br> （3）点击开始编程，若显示一切正常则说明烧录成功<br> <img src="https://images2.imgbox.com/11/e1/tG8fsHbL_o.png" alt=""></p> 
+<h3><a id="8_832"></a>8.串口调试</h3> 
+<p>打开野火串口调试助手，将波特率设置为115200，数据位设置为8，停止位设置为1，校验位设置为None，然后点击打开串口<br> <img src="https://images2.imgbox.com/0f/1d/GCX9nPYB_o.png" alt=""></p> 
+<h3><a id="9_835"></a>9.运行结果</h3> 
+<p><img src="https://images2.imgbox.com/85/d2/93nF3PTh_o.gif" alt=""><img src="https://images2.imgbox.com/b2/09/alyToeKh_o.gif" alt=""><br> 由上面的运行结果可以观察到，实现了以1s和3s周期对LED灯进行点亮-熄灭的控制，同时以2s周期通过串口发送“hello uc/OS! 欢迎来到RTOS多任务环境！”。说明实验成功！</p> 
+<h2><a id="_839"></a>六、总结</h2> 
+<p>通过本次实验，我对嵌入式实时操作系统（RTOS）有了一定的了解，特别是对uc/OS，熟悉了其移植过程，也学会了构建多任务环境。当然，如果我们需要处理器完成的任务比较单一，可以不使用操作系统；如果需要处理器完成的任务比较多，为了便于管理可以引入轻巧的实时操作系统。在实验过程中，要特别仔细，本实验步骤比较繁琐，需要添加的东西也比较多，稍不注意就会漏掉某个步骤，然后就会导致程序编译不成功，从而达不到预期实验效果。总的来说，此实验并不是很复杂，只要多参考学长学姐地博客，细心一点，一步一步地做就能成功。</p> 
+<h2><a id="_841"></a>七、参考链接</h2> 
+<p><a href="https://blog.csdn.net/qq_45659777/article/details/121570886?spm=1001.2014.3001.5506">https://blog.csdn.net/qq_45659777/article/details/121570886?spm=1001.2014.3001.5506</a><br> <a href="https://blog.csdn.net/qq_46467126/article/details/121441622?spm=1001.2014.3001.5506">https://blog.csdn.net/qq_46467126/article/details/121441622?spm=1001.2014.3001.5506</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/6aa74c8a53493a4867d68bff0567b5d8/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">单片机控制直流电机(风扇)电路详解</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/65aac9d3635128a4422860196eaeae23/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">输入一个数，判断为星期几。</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

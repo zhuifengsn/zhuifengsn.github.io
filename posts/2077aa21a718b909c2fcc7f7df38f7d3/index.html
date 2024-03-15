@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>实现linux cp指令的代码 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="实现linux cp指令的代码" />
+<meta property="og:description" content="实现思路：
+1、打开demo1.c文件
+2、把demo1.c文件中的内容写到buf上
+3、创建/打开demo2.c文件
+4、把写入的buf中的文件内容读取到demo2.c中
+5、关闭两个文件
+引入main函数标准原型：
+main(int argc, char **argv, char **enpv);或者main(int argc, char *argv[], char *enpv[]);
+int argc：整型，其中包括的是命令行参数的个数（如下图展示）
+char **argv：二维的char型指针，存放命令行参数字符串
+char **enpv：二维的char型指针，存放环境变量
+#include&lt;stdio.h&gt; int main(int argc,char *argv[]) { printf(&#34;参数总个数是:%d\n&#34;,argc); printf(&#34;第一个参数是:%s\n&#34;,argv[0]); printf(&#34;第二个参数是:%s\n&#34;,argv[1]); printf(&#34;第三个参数是:%s\n&#34;,argv[2]); return 0; } 程序运行的结果：./a.out demo1 demo2 参数总个数是:3 第一个参数是:./a.out 第二个参数是:demo1 第三个参数是:demo2 实现cp指令代码
+#include&lt;stdio.h&gt; #include &lt;sys/types.h&gt; #include &lt;sys/stat.h&gt; #include &lt;fcntl.h&gt; #include&lt;stdlib.h&gt; #include &lt;unistd.h&gt; #include&lt;string.h&gt; int main(int argc,char *argv[])//argc表示参数的个数，argv表示字符串数组是二级指针 { int fd; int fd2; int size; int n_read; int n_write; char*readbuf=NULL; if(argc!" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2077aa21a718b909c2fcc7f7df38f7d3/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-01-20T20:10:40+08:00" />
+<meta property="article:modified_time" content="2024-01-20T20:10:40+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">实现linux cp指令的代码</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>实现思路：</strong></p> 
+<p>1、打开demo1.c文件</p> 
+<p>2、把demo1.c文件中的内容写到buf上</p> 
+<p>3、创建/打开demo2.c文件</p> 
+<p>4、把写入的buf中的文件内容读取到demo2.c中</p> 
+<p>5、关闭两个文件</p> 
+<p></p> 
+<p><strong>引入main函数标准原型：</strong></p> 
+<p>main(int argc, char **argv, char **enpv);或者main(int argc, char *argv[], char *enpv[]);</p> 
+<p>int argc：整型，其中包括的是命令行参数的个数（如下图展示）</p> 
+<p>char **argv：二维的char型指针，存放命令行参数字符串</p> 
+<p>char **enpv：二维的char型指针，存放环境变量</p> 
+<pre><code class="language-cpp">#include&lt;stdio.h&gt;
+int main(int argc,char *argv[])
+{
+        printf("参数总个数是:%d\n",argc);
+        printf("第一个参数是:%s\n",argv[0]);
+        printf("第二个参数是:%s\n",argv[1]);
+        printf("第三个参数是:%s\n",argv[2]);
+        return 0;
+}
+
+程序运行的结果：./a.out demo1 demo2
+
+参数总个数是:3
+第一个参数是:./a.out
+第二个参数是:demo1
+第三个参数是:demo2
+</code></pre> 
+<p></p> 
+<p>实现cp指令代码</p> 
+<pre><code class="language-cpp">#include&lt;stdio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/stat.h&gt;
+#include &lt;fcntl.h&gt;
+#include&lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include&lt;string.h&gt;
+
+int main(int argc,char *argv[])//argc表示参数的个数，argv表示字符串数组是二级指针
+{
+        int fd;
+        int fd2;
+        int size;
+        int n_read;
+        int n_write;
+        char*readbuf=NULL;
+
+        if(argc!=3){
+                printf("input error\n");
+                exit(0);//正常退出              
+        }
+
+        fd=open(argv[1],O_RDWR);
+        if(fd==-1){
+                printf("file open failed\n");
+                perror("open");
+                exit(0);
+        }
+
+        size=lseek(fd,0,SEEK_END);
+        readbuf=(char*)malloc(sizeof(char)*size+8);
+
+        lseek(fd,0,SEEK_SET);
+
+        n_read=read(fd,readbuf,sizeof(char)*size+8);
+        if(n_read==-1){
+                printf("file read failed\n");
+                perror("read");
+                exit(0);
+        }
+
+        fd2=open(argv[2],O_RDWR|O_CREAT|O_TRUNC,0600);
+        if(fd2==-1){
+                printf("open error\n");
+                perror("open");
+                exit(0);
+        }
+
+        n_write=write(fd2,readbuf,strlen(readbuf));
+        if(n_write==-1){
+                printf("file write failed");
+                perror("write");
+                exit(0);
+        }
+
+        close(fd);
+        close(fd2);
+
+        return 0;
+}
+</code></pre> 
+<p>但是我们在运行这个实现cp指令的代码时（我们在编译时改名字为cp），需要输入./cp xxx xxx</p> 
+<p>但是真实的cp指令并不需要“./”，这是因为环境变量的原因，大家可以看一下下面这个文章里面提到的环境变量的小节部分：<a href="https://blog.csdn.net/zhezhehenkenai/article/details/135701102" title="进程相关概念及C程序的存储空间的分配-CSDN博客">进程相关概念及C程序的存储空间的分配-CSDN博客</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/f0163692b90da0fee67fbde1c4f26252/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">删除顺序表表中值为X的数据元素，要求时间复杂度为O(n)，空间复杂度为O(1)</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b61b0171f074c4d0283ef97e5a85da52/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【数据结构】时间复杂度和空间复杂度</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

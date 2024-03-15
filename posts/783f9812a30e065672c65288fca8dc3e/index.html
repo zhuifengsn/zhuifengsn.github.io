@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Spring IoC容器以及Bean的创建过程 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Spring IoC容器以及Bean的创建过程" />
+<meta property="og:description" content="1 Spring 静态结构介绍 什么是Spring，可以自己网上查询，总之，可以说是一个面向Web应用开发的，轻量级，企业级框架。它包含了如下图所示一些模块，这些模块的详细的概念和所负责的职责，可以通过搜索检索到。 1.1 BeanFactory BeanFactory关键类继承 上图1所示位置， BeanFactory是整个BeanFactoryl类体系中最顶层的接口。
+上图2所示， HierachicalBeanFactory 描述了BeanFactory是可以组成一个链表结构。使用名字等信息去查找Bean的时候，当子级BeanFactory内没有找到相应的Bean，可以去父级BeanFactory内去查找。这样可以节省框架内Bean占用的内存。
+上图3所示， ListableBeanFactory 是存放Bean的列表接口，可以直接将所有的Bean枚举出来，而不是通过BeanFactory接口中，通过名字等信息来查询Bean。
+上图6所示， DefaultListableBeanFactory 实现了BeanDefinitionRegister接口；在DefaultListableBeanFactory中，首先可以看到保存beanDefinition名字和对象映射beanDefinitionMap的一个Map中；另外，所有beanDefinition的名字保存到一个列表中beanDefinitionNames /** Map of bean definition objects, keyed by bean name */
+private final Map&lt;String, BeanDefinition&gt; beanDefinitionMap = new ConcurrentHashMap&lt;String, BeanDefinition&gt;(64);
+/** List of bean definition names, in registration order */
+private final List&lt;String&gt; beanDefinitionNames = new ArrayList&lt;String&gt;(64);
+另外，BeanDefinition是用来描述Bean的元信息的类，内部包含了Bean是否有Singleton，Lazyinit，Depends on属性， Dependency check等特性。BeanDefinition可以通过继承于BeanFactoryPostProcessor的接口的类中来修改。
+上图4所示， DefaultSingletonBeanRegistry 用于注册，获得，管理singleton对象。
+1.2 ApplicationContext ApplicationContext继承图 AbstractApplicationContext从上图可以看出，是整个继承体系中，第一个类（抽象类），是整个容器的核心处理类，此类内部有模板函数fresh（模板设计模式），在此函数内，约定容器启动的步骤。子类们可以实现具体特化的启动步骤。另外，注意， 在此类中，有抽象函数getBeanFactory函数，用来获取真正的BeanFactory实例。而AbstractApplicationContext也继承了BeanFactory的接口，而AbstractApplicationContext实现BeanFactory的接口是通过代理getBeanFactory获取的工厂实例实现的，是一个标准的代理设计模式。
+@Override public Object getBean(String name) throws BeansException { return getBeanFactory()." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/783f9812a30e065672c65288fca8dc3e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-10-18T01:19:05+08:00" />
+<meta property="article:modified_time" content="2021-10-18T01:19:05+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Spring IoC容器以及Bean的创建过程</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h3>1 Spring 静态结构介绍</h3> 
+<p>     什么是Spring，可以自己网上查询，总之，可以说是一个面向Web应用开发的，轻量级，企业级框架。它包含了如下图所示一些模块，这些模块的详细的概念和所负责的职责，可以通过搜索检索到。 </p> 
+<p><img alt="" height="608" src="https://images2.imgbox.com/0f/4e/ZXprKr2Q_o.png" width="940"></p> 
+<h3> 1.1 BeanFactory</h3> 
+<figure class="image"> 
+ <img alt="" height="724" src="https://images2.imgbox.com/19/aa/flht4aH8_o.png" width="1200"> 
+ <figcaption>
+   BeanFactory关键类继承 
+ </figcaption> 
+</figure> 
+<p></p> 
+<p>上图1所示位置， BeanFactory是整个BeanFactoryl类体系中最顶层的接口。</p> 
+<p>上图2所示， HierachicalBeanFactory  描述了BeanFactory是可以组成一个链表结构。使用名字等信息去查找Bean的时候，当子级BeanFactory内没有找到相应的Bean，可以去父级BeanFactory内去查找。这样可以节省框架内Bean占用的内存。</p> 
+<p>上图3所示， ListableBeanFactory 是存放Bean的列表接口，可以直接将所有的Bean枚举出来，而不是通过BeanFactory接口中，通过名字等信息来查询Bean。</p> 
+<p>上图6所示， DefaultListableBeanFactory 实现了BeanDefinitionRegister接口；在DefaultListableBeanFactory中，首先可以看到保存beanDefinition名字和对象映射beanDefinitionMap的一个Map中；另外，所有beanDefinition的名字保存到一个列表中beanDefinitionNames     </p> 
+<p>/** Map of bean definition objects, keyed by bean name */</p> 
+<p>private final Map&lt;String, BeanDefinition&gt; beanDefinitionMap = new ConcurrentHashMap&lt;String, BeanDefinition&gt;(64);</p> 
+<p>/** List of bean definition names, in registration order */</p> 
+<p>private final List&lt;String&gt; beanDefinitionNames = new ArrayList&lt;String&gt;(64);</p> 
+<p>另外，<strong>BeanDefinition</strong>是用来描述Bean的元信息的类，内部包含了Bean是否有<strong>Singleton</strong>，<strong>Lazyinit</strong>，<strong>Depends on</strong>属性， <strong>Dependency check</strong>等特性。<strong>BeanDefinition</strong>可以通过继承于BeanFactoryPostProcessor的接口的类中来修改。</p> 
+<p>上图4所示， DefaultSingletonBeanRegistry  用于注册，获得，管理singleton对象。</p> 
+<h3>1.2 ApplicationContext</h3> 
+<figure class="image"> 
+ <img alt="" height="539" src="https://images2.imgbox.com/e9/7b/hfoBR4w1_o.png" width="702"> 
+ <figcaption>
+   ApplicationContext继承图 
+ </figcaption> 
+</figure> 
+<p>          AbstractApplicationContext从上图可以看出，是整个继承体系中，第一个类（抽象类），是整个容器的核心处理类，此类内部有模板函数<strong>fresh</strong>（模板设计模式），在此函数内，<strong>约定容器启动的步骤</strong>。子类们可以实现具体特化的启动步骤。另外，注意， 在此类中，有抽象函数getBeanFactory函数，用来获取真正的BeanFactory实例。而AbstractApplicationContext也继承了BeanFactory的接口，而AbstractApplicationContext实现BeanFactory的接口是通过代理getBeanFactory获取的工厂实例实现的，是一个标准的代理设计模式。</p> 
+<pre><code class="language-java">     @Override
+     public Object getBean(String name) throws BeansException {
+          return getBeanFactory().getBean(name);
+     }</code></pre> 
+<p>public abstract ConfigurableListableBeanFactory getBeanFactory() throws IllegalStateException;</p> 
+<p>ClassPathXmlApplicationContext生成的beanFactory的实例，是DefaultListableBeanFactory的对象。此实例，保存在AbstractRefreshableApplicationContext类中。   </p> 
+<p><img alt="" height="102" src="https://images2.imgbox.com/05/b9/yQY2Z0sM_o.png" width="1196"></p> 
+<p></p> 
+<p>AbstractApplicationContext中的BeanFactory接口的代理设计模式的实现实例如下，</p> 
+<p>后续我们在研究整个容器创建过程也是通过<strong>refresh</strong>这个函数为主线，进行展开的。</p> 
+<h3>2 Spring动态创建简介</h3> 
+<h4>2.1 Spring中的多级容器概念</h4> 
+<p>      在第一小节中，介绍了HierachicalBeanFactory 接口，说明Spring的容器可以是一个级链为一个列表，并且子容器可以复用父级容器内的Bean；</p> 
+<p>      接下来，我们查看Web.xml文件；一般来说，一共生成了两个容器，一个是ROOT_WEB_APPLICATION_CONTEXT容器，另一个容器是SpringMVC容器，SpringMVC容器的父容器是ROOT_WEB_APPLICATION_CONTEXT容器。</p> 
+<p>      ROOT_WEB_APPLICATION_CONTEXT根容器是通过ContextLoaderListener类生成的，这个类的调用时因为继承了ServletContextListener接口的，所以，ContextLoaderListener会在创建完ServletContext后，进行调用，这个时刻，所有的Servlet还未创建。因为，要在这个地方来初始化Servlet公用的一些对象，例如数据库相关的对象，以备后续的Servlet来调用。</p> 
+<pre><code class="language-XML">&lt;!--第一个容器： Spring上下文监听器配置，生成根容器 --&gt;
+     &lt;listener&gt;
+          &lt;listener-class&gt;org.springframework.web.context.ContextLoaderListener&lt;/listener-class&gt;
+     &lt;/listener&gt;
+     &lt;!--DispatcherServlet MVC容器 --&gt;
+     &lt;servlet&gt;
+          &lt;servlet-name&gt;spring&lt;/servlet-name&gt;
+          &lt;servlet-class&gt;org.springframework.web.servlet.DispatcherServlet&lt;/servlet-class&gt;
+          &lt;!-- 配置文件 --&gt;
+          &lt;init-param&gt;
+              &lt;param-name&gt;contextConfigLocation&lt;/param-name&gt;
+              &lt;param-value&gt;classpath:context-dispatcher.xml&lt;/param-value&gt;
+          &lt;/init-param&gt;
+     &lt;/servlet&gt;</code></pre> 
+<p>我们查看ContextLoadListener调用栈，能明显的看到ROOT_WEB_APPLICATION_CONTEXT容器的创建调用栈。</p> 
+<figure class="image"> 
+ <img alt="" height="268" src="https://images2.imgbox.com/67/7f/AMdnzrWm_o.png" width="954"> 
+ <figcaption>
+   ServletContextListener初始化Spring容器调用栈 
+ </figcaption> 
+</figure> 
+<p></p> 
+<h4>2.2  Spring根容器创建的过程</h4> 
+<p>            Spring Ioc容器创建的过程，如果直接去跟踪代码的话，是一个非常复杂的过程，很容易陷入进去。下图也是从另外一个博客中直接拷贝的，现在也忘记链接了，希望作者不要介意。从下图，能很明白的看出，重要分为以下4步的执行，完成容器的创建。</p> 
+<figure class="image"> 
+ <img alt="" height="1200" src="https://images2.imgbox.com/9d/52/ljll1s27_o.png" width="1200"> 
+ <figcaption>
+   容器内Bean创建过程 
+ </figcaption> 
+</figure> 
+<p></p> 
+<p>     1 创建<strong>BeanFactory</strong>，之后，将BeanDefinition注册到BeanFactory的实例中，最后将这些信息保存在上文描述的beanDefinitionMap中，并且将名字也保存到beanDefinitionNames的数组中。这里要说明的是，Spring中的Bean的创建信息，是以BeanDefinition类来描述的。内部描述当前Bean是否是单例Bean，是否延时初始化，依赖属性，依赖值类型检测等属性。</p> 
+<p>     2 对第一步创建的BeanDefinition进行修改；继承于BeanFactoryPostProcessor接口的类，实例化后，要对第一步生成的BeanDefinition实例的属性进行修改。在下图中的第二部invokeBeanFactoryPostProcessors函数中，调用这些接口，用来修改BeanDefinition的  某些特性；</p> 
+<p>     3 实例化并注册继承于BeanPostProcessor接口的类；在registerBeanPostProcessors的函数中，会实例化Bean的后处理器。这些后处理器，是继承于BeanPostProcessor接口的子类，是针对初始化完毕的Bean实例进行一些属性的修改（这里要注意，继承于BeanFactoryPostProcessor的类是用来修改BeanDefinition的属性，而继承于BeanPostProcessor的类是用来修改Bean的。这两类接口统称为PostProcessor后处理，主要是为了统一修改BeanDefinition和Bean的）。这些需要修改的Bean，通常是通过通过注释或者接口，来标记这些需要修改的Bean。Spring中，一个非常重要的应用AOP，就是在靠这些继承于BeanPostProcessor接口的类来进行处理的。</p> 
+<p>     4 创建Bean</p> 
+<p>     在finishBeanFactoryInitialization函数中，初始化Bean。从以下代码中，能看出，容器的初始化过程refresh函数内，函数的调用过程。<img alt="" height="482" src="https://images2.imgbox.com/58/3e/9s93eglc_o.png" width="969"></p> 
+<h4> 2.3 Bean初始化过程</h4> 
+<p>      此章节，将概要的介绍2.2中第四步的初始Bean流程。所以，可见Bean和new出来的实例对象，完全不是一个概念。Bean生成的过程更复杂，只有完成了所有的初始化过程，才是合格的SpringBean。</p> 
+<p>1 循环在之前步骤中生成的beanDefinitionNames数组；</p> 
+<p>2 查看每个BeanDefinition，是否有依赖属性需要实例化，需要的话，先实例所有需要实例化的依赖属性</p> 
+<p>3 利用反射原理，实例化Bean实例</p> 
+<p>4 将依赖属性注入到Bean中；</p> 
+<p>5 执行初始化过程，内部会调用后处理器（继承于BeanPostProcessor的类），以及一些初始化接口</p> 
+<p>接下来将通过代码，概要介绍下，Bean的生成过程；由于DefaultListableFactory实例保存了BeanDefinition的对象Map，和名字数组beanDefinitionNames，所有，首先就是循环这个beanDefinitionNames列表，在循环体内，会调用getBean来尝试的获取Bean。</p> 
+<pre><code class="language-java"> public void preInstantiateSingletons() throws BeansException {
+        List&lt;String&gt; beanNames = new ArrayList&lt;String&gt;(this.beanDefinitionNames);
+        for (String beanName : beanNames) {
+            RootBeanDefinition bd = getMergedLocalBeanDefinition(beanName);
+            if (!bd.isAbstract() &amp;&amp; bd.isSingleton() &amp;&amp; !bd.isLazyInit()) { //初始化非延时加载的单例Bean
+                ... ...省略
+                getBean(beanName);
+            }
+        }
+    }</code></pre> 
+<p>       进入getBean函数，可以看到，程序会最终调用到AbstractBeanFactory中的doGetBean函数中。我们只看主流程，获取名字对应的BeanDefinition对象，检查是否有依赖属性，如果有，就循环创建依赖属性的Bean，然后，通过createBean来创建Bean。</p> 
+<pre><code class="language-java">//AbstractBeanFactory 
+        protected &lt;T&gt; T doGetBean(
+            final String name, final Class&lt;T&gt; requiredType, final Object[] args, boolean typeCheckOnly)
+            throws BeansException {
+        ... ... 省略
+        final String beanName = transformedBeanName(name);
+        final RootBeanDefinition mbd = getMergedLocalBeanDefinition(beanName);
+        // 是否有依赖属性，如果有，循环创建依赖属性的Bean
+        String[] dependsOn = mbd.getDependsOn();
+        if (dependsOn != null) {
+            for (String dependsOnBean : dependsOn) {
+                registerDependentBean(dependsOnBean, beanName);
+                getBean(dependsOnBean);
+            }
+        }
+        // 创建Bean
+        if (mbd.isSingleton()) {
+            sharedInstance = getSingleton(beanName, new ObjectFactory&lt;Object&gt;() {
+                @Override
+                public Object getObject() throws BeansException {
+                    return createBean(beanName, mbd, args);
+                }
+            });
+        }
+        ... ...省略
+        
+        }</code></pre> 
+<p>继续查看 createBean的源代码，最后能看到最终调用的是doCreateBean函数，在此函数中，首先通过调用createBeanInstance来实例化Bean；感兴趣可以自己去查看细节，主要还是通过反射原理来实例化类，具体的实例化细节，不会影响对整个过程的理解。</p> 
+<pre><code class="language-java">   protected Object doCreateBean(final String beanName, final RootBeanDefinition mbd, final Object[] args) {
+        // Instantiate the bean.
+        BeanWrapper instanceWrapper = null;
+        //... ... 省略
+        if (instanceWrapper == null) {
+            instanceWrapper = createBeanInstance(beanName, mbd, args);
+        }
+        // Initialize the bean instance.
+        Object exposedObject = bean;
+        //填充依赖属性
+        populateBean(beanName, mbd, instanceWrapper);
+        if (exposedObject != null) {
+            exposedObject = initializeBean(beanName, exposedObject, mbd);
+        }
+        // ... ... 省略
+        return exposedObject;
+    }</code></pre> 
+<div>
+  接下来查看，initializeBean这个函数。这个函数很重要，对Bean实例后实例的一系列修改处理，有通过Bean继承的接口进行修改的，有通过PostProcessor后处理器实例进行修改；具体，可以查看以下代码，一共有三个重要步骤，1 PostProcessor的后处理器的postProcessBeforeInitialization接口函数调用 2 如果当前Bean实现了InitializingBean接口，那么afterPropertiesSet函数将会被调用 3 postProcessor的后处理器的postProcessAfterInitialization接口函数调用。 
+</div> 
+<div> 
+ <pre><code class="language-java">//AbstractAutowareCapableBeanFactory
+protected Object initializeBean(final String beanName, final Object bean, RootBeanDefinition mbd) {
+    //... ...省略
+    Object wrappedBean = bean;
+    if (mbd == null || !mbd.isSynthetic()) {
+       //PostProcessor的后处理器的postProcessBeforeInitialization接口函数调用
+        wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
+    }
+
+//... ...省略
+   //如果当前Bean实现了InitializingBean接口，那么afterPropertiesSet函数将会被调用
+    invokeInitMethods(beanName, wrappedBean, mbd); 
+//... ...省略
+
+    if (mbd == null || !mbd.isSynthetic()) {
+       //PostProcessor的后处理器的postProcessAfterInitialization接口函数调用
+        wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName); 
+    }
+    return wrappedBean;
+}</code></pre> 
+ <p>        这里要注意，PostProcessor也可以理解为，是Spring框架给了我们一个可以对Bean做一切处理一个机会。例如，ApplicationContextAwareProcessor这个后处理器，这个处理器是内置的后处理器。但是，这个类是为了当前Bean如果实现了某些<strong>特定的接口</strong>，那么这个后处理，可以去调用这些接口方法，来初始化当前Bean。例如，<strong>ApplicationContextAware</strong>接口，可以使我们获取ApplicationContext容器对象，具体见如下代码。至此，一个合格的Bean就创建完毕。</p> 
+ <pre><code class="language-java">class ApplicationContextAwareProcessor implements BeanPostProcessor {
+    @Override
+    public Object postProcessBeforeInitialization(final Object bean, String beanName) throws BeansException {
+        //省略
+        invokeAwareInterfaces(bean);
+        return bean;
+    }
+
+    private void invokeAwareInterfaces(Object bean) {
+        if (bean instanceof Aware) {
+            if (bean instanceof EnvironmentAware) {
+                ((EnvironmentAware) bean).setEnvironment(this.applicationContext.getEnvironment());
+            }
+            if (bean instanceof EmbeddedValueResolverAware) {
+                ((EmbeddedValueResolverAware) bean).setEmbeddedValueResolver(
+                        new EmbeddedValueResolver(this.applicationContext.getBeanFactory()));
+            }
+            if (bean instanceof ResourceLoaderAware) {
+                ((ResourceLoaderAware) bean).setResourceLoader(this.applicationContext);
+            }
+            if (bean instanceof ApplicationEventPublisherAware) {
+                ((ApplicationEventPublisherAware) bean).setApplicationEventPublisher(this.applicationContext);
+            }
+            if (bean instanceof MessageSourceAware) {
+                ((MessageSourceAware) bean).setMessageSource(this.applicationContext);
+            }
+ // 如果当前Bean实现了此接口，将会被调用
+            if (bean instanceof ApplicationContextAware) {
+                ((ApplicationContextAware) bean).setApplicationContext(this.applicationContext);
+            }
+        }
+    }
+}
+</code></pre> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/2ff44aff722660a6b8354531986320c7/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">6种JavaScript判断数组是否包含某个值的方法</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/02c48d98615427239a3d56dbbfb38afd/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C语言程序的编译&#43;链接详解</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

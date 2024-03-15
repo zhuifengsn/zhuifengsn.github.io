@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>ARMv8-AArch64 的异常处理模型详解之异常向量表vector tables - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="ARMv8-AArch64 的异常处理模型详解之异常向量表vector tables" />
+<meta property="og:description" content="目录
+一，AArch64 异常向量表
+二，栈指针以及SP寄存器的选择
+三，从异常返回
+一，AArch64 异常向量表 异常向量表（vector tables）是一组存放于普通内存（normal memory）空间的，用于处理不同类型异常的指令（exception handler）。
+当异常发生时，处理器需要跳转到对应的异常处理器（exception handler）来处理异常。异常处理器充当调度代码，识别异常的原因，然后调用相关的处理程序代码（异常处理子程序）来处理异常。
+exception vector：在内存中存储异常处理器（exception handler）的位置称为异常向量。 exception vector tables ：异常向量统一存放的区域称为异常向量表。 每个异常级别都有它自己的向量表，其基地址由它自己的向量基地址寄存器（Vector Base Address Register） VBAR_EL&lt;x&gt;定义，其中&lt;x&gt;为1、2或3。需要注意的是，没有针对EL0的向量表，因为异常永远不会在EL0中被处理。VBAR的值需要由软件进行初始化，它们在reset后的值是未定义的。 所有的向量表都使用相同的格式，对不同的异常类型和异常来源，有着不同的异常处理器（异常向量） ，并且，针对每种异常类型，在距离向量基地址的固定偏移量处（0x80）都有一个异常向量。 异常向量的区分和选择取决于如下因素： 异常的类型，比如有（SError, FIQ, IRQ以及同步异常）。当前异常等级以及目标异常等级（The Exception levels the exception is being taken from and to）。当前支持的执行状态（AArch32或者AArch64）所使用的栈指针寄存器（SP_EL0还是SP_ELx) 下表为AArch64的异常向量表格式：
+Address
+Exception type
+Description
+VBAR_ELn &#43; 0x000
+Synchronous
+Current EL with SP0
+&#43; 0x080
+IRQ/vIRQ
+&#43; 0x100
+FIQ/vFIQ
+&#43; 0x180
+SError/vSError
+&#43; 0x200
+Synchronous
+Current EL with SPx" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/0073c7c331f4f748936b6f9ee38188e6/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-21T23:20:10+08:00" />
+<meta property="article:modified_time" content="2024-02-21T23:20:10+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">ARMv8-AArch64 的异常处理模型详解之异常向量表vector tables</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p id="main-toc"><strong>目录</strong></p> 
+<p id="%E4%B8%80%EF%BC%8CAArch64%20%E5%BC%82%E5%B8%B8%E5%90%91%E9%87%8F%E8%A1%A8-toc" style="margin-left:0px;"><a href="#%E4%B8%80%EF%BC%8CAArch64%20%E5%BC%82%E5%B8%B8%E5%90%91%E9%87%8F%E8%A1%A8" rel="nofollow">一，AArch64 异常向量表</a></p> 
+<p id="%C2%A0%E4%BA%8C%EF%BC%8C%E6%A0%88%E6%8C%87%E9%92%88%E4%BB%A5%E5%8F%8ASP%E5%AF%84%E5%AD%98%E5%99%A8%E7%9A%84%E9%80%89%E6%8B%A9-toc" style="margin-left:0px;"><a href="#%C2%A0%E4%BA%8C%EF%BC%8C%E6%A0%88%E6%8C%87%E9%92%88%E4%BB%A5%E5%8F%8ASP%E5%AF%84%E5%AD%98%E5%99%A8%E7%9A%84%E9%80%89%E6%8B%A9" rel="nofollow"> 二，栈指针以及SP寄存器的选择</a></p> 
+<p id="%E4%B8%89%EF%BC%8C%E4%BB%8E%E5%BC%82%E5%B8%B8%E8%BF%94%E5%9B%9E-toc" style="margin-left:0px;"><a href="#%E4%B8%89%EF%BC%8C%E4%BB%8E%E5%BC%82%E5%B8%B8%E8%BF%94%E5%9B%9E" rel="nofollow">三，从异常返回</a></p> 
+<hr id="hr-toc"> 
+<p></p> 
+<p> </p> 
+<h2 id="%E4%B8%80%EF%BC%8CAArch64%20%E5%BC%82%E5%B8%B8%E5%90%91%E9%87%8F%E8%A1%A8">一，AArch64 异常向量表</h2> 
+<p>异常向量表<strong><span style="color:#0d0016;">（vector tables）</span></strong>是一组存放于普通内存（<span style="color:#000000;">normal memory）</span>空间的，用于处理不同类型异常的指令（exception handler）。</p> 
+<p>当异常发生时，处理器需要跳转到对应的异常处理器（exception handler）来处理异常。异常处理器充当调度代码，识别异常的原因，然后调用相关的处理程序代码（异常处理子程序）来处理异常。</p> 
+<ul><li><span style="color:#000000;">exception vector：</span>在内存中存储异常处理器（exception handler）的位置称为异常向量。</li><li> 
+  <div> 
+   <span style="color:#000000;">exception vector tables ：异常向量统一存放的区域称为异常向量表。</span> 
+  </div> </li></ul> 
+<div> 
+ <strong><span style="color:#000000;">每个异常级别都有它自己的向量表，其基地址由它自己的向量基地址寄存器（</span>Vector Base Address Register）</strong> 
+ <span style="color:#000000;"><strong>VBAR_EL&lt;x&gt;定义，其中&lt;x&gt;为1、2或3</strong>。需要注意的是，没有针对EL0的向量表，因为异常永远不会在EL0中被处理。VBAR的值需要由软件进行初始化，它们在reset后的值是未定义的。</span> 
+</div> 
+<div> 
+ <span style="color:#000000;">所有的向量表都使用相同的格式，对不同的异常类型和异常来源，有着不同的</span>异常处理器（异常向量） 
+ <span style="color:#000000;">，并且，针对每种异常类型，在距离向量基地址的固定偏移量处（0x80）都有一个异常向量。</span> 
+</div> 
+<div> 
+ <span style="color:#000000;">异常向量的区分和选择取决于如下因素：</span> 
+</div> 
+<ul><li><span style="color:#000000;">异常的类型，比如有（SError, FIQ, IRQ以及同步异常）。</span></li><li><span style="color:#000000;">当前异常等级以及目标异常等级（The Exception levels the exception is being taken from and to）。</span></li><li><span style="color:#000000;">当前支持的执行状态（AArch32或者AArch64）</span></li><li><span style="color:#000000;">所使用的栈指针寄存器（SP_EL0还是SP_ELx)</span></li></ul> 
+<p>下表为AArch64的异常向量表格式：</p> 
+<table><tbody><tr><td> <p><strong>Address</strong></p> </td><td> <p><strong>Exception type</strong></p> </td><td> <p><strong>Description</strong></p> </td></tr><tr><td> <p>VBAR_ELn + 0x000</p> </td><td> <p>Synchronous</p> </td><td rowspan="4"> <p>Current EL with SP0</p> </td></tr><tr><td> <p>+ 0x080</p> </td><td> <p>IRQ/vIRQ</p> </td></tr><tr><td> <p>+ 0x100</p> </td><td> <p>FIQ/vFIQ</p> </td></tr><tr><td> <p>+ 0x180</p> </td><td> <p>SError/vSError</p> </td></tr><tr><td> <p>+ 0x200</p> </td><td> <p>Synchronous</p> </td><td rowspan="4"> <p>Current EL with SPx</p> </td></tr><tr><td> <p>+ 0x280</p> </td><td> <p>IRQ/vIRQ</p> </td></tr><tr><td> <p>+ 0x300</p> </td><td> <p>FIQ/vFIQ</p> </td></tr><tr><td> <p>+ 0x380</p> </td><td> <p>SError/vSError</p> </td></tr><tr><td> <p>+ 0x400</p> </td><td> <p>Synchronous</p> </td><td rowspan="4"> <p>Lower EL using AArch64</p> </td></tr><tr><td> <p>+ 0x480</p> </td><td> <p>IRQ/vIRQ</p> </td></tr><tr><td> <p>+ 0x500</p> </td><td> <p>FIQ/vFIQ</p> </td></tr><tr><td> <p>+ 0x580</p> </td><td> <p>SError/vSError</p> </td></tr><tr><td> <p>+ 0x600</p> </td><td> <p>Synchronous</p> </td><td rowspan="4"> <p>Lower EL using AArch32</p> </td></tr><tr><td> <p>+ 0x680</p> </td><td> <p>IRQ/vIRQ</p> </td></tr><tr><td> <p>+ 0x700</p> </td><td> <p>FIQ/vFIQ</p> </td></tr><tr><td> <p>+ 0x780</p> </td><td> <p>SError/vSError</p> </td></tr></tbody></table> 
+<p>从这张表我们可以知道，这些向量被分为两组，每一组又被分为两个子组： </p> 
+<ul><li>异常等级有变化（准确来说是异常等级提高，从低等级进入到更高等级，<span style="color:#000000;">Exception from Lower EL）</span> 
+  <ul><li><span style="color:#000000;">低等级是AArch32状态</span></li><li><span style="color:#000000;">低等级是AArch64状态</span></li></ul></li><li><span style="color:#000000;">异常等级无变化</span> 
+  <ul><li><span style="color:#000000;">异常使用SP_ELx。</span></li><li><span style="color:#000000;">异常使用SP_EL0。</span></li></ul></li></ul> 
+<p>在VBAR_ELn 的向量基地址已知的情况下，当发生异常时，处理器可以根据当前的状态以及异常的类型，找到对应的异常向量进行异常处理。</p> 
+<p>如下图所示，为一个简单的异常处理流程图，当异常发生时，处理器会跳到对应异常向量中，首先将易失寄存器，也就是当前处理器的寄存器上下文保存到栈中。然后调用针对当前异常类型的异常处理函数进行处理。在异常处理完之后，再将之前保存在栈中的寄存器上下文恢复。最后执行ERET指令，从异常中返回。</p> 
+<p>AArch64的异常向量有32 个word的空间（128 bytes），可以存放32条指令，可以用于栈操作（寄存器上下文的压栈以及出栈）、调用特定异常处理函数以及ERET指令。</p> 
+<p><img alt="" height="781" src="https://images2.imgbox.com/8c/b6/BlSY3TDE_o.png" width="1200"></p> 
+<p> </p> 
+<h2 id="%C2%A0%E4%BA%8C%EF%BC%8C%E6%A0%88%E6%8C%87%E9%92%88%E4%BB%A5%E5%8F%8ASP%E5%AF%84%E5%AD%98%E5%99%A8%E7%9A%84%E9%80%89%E6%8B%A9"> 二，栈指针以及SP寄存器的选择</h2> 
+<p> 在上节中提到过异常向量的选择因素中有一项<span style="color:#000000;">所使用的栈指针寄存器（SP_EL0还是SP_ELx)。当处理器执行在AArch64状态下时，ARM架构允许软件为当前的异常等级选择栈指针寄存器：</span></p> 
+<ul><li><span style="color:#000000;">SP_EL0（需要配置PSTATE的SP）。</span></li><li><span style="color:#000000;">SP_ELx，x为当前的异常等级（默认情况）。</span></li></ul> 
+<p><span style="color:#000000;">比如处理器当前处于EL1，默认情况下是使用SP_EL1作为当前的SP寄存器，但是也可以配置成使用SP_EL0。基于此配置，异常向量也被多分成了两组（使用SP_EL0还是SP_ELx)。</span></p> 
+<p><span style="color:#000000;">当异常发生时，默认情况下，会自动使用目标异常等级的SP_ELx作为栈指针寄存器。但是栈指针寄存器的选择可以通过配置PSTATE来实现，另外必须遵守如下规则：</span></p> 
+<ul><li><span style="color:#000000;">如果当前处于EL0，则处理器使用EL0的栈指针寄存器：SP_EL0。</span></li><li><span style="color:#000000;">如果处于EL1，EL2或者EL3时，处理器使用的栈指针寄存器受到PSTATE.SP位控制</span> 
+  <ul><li><span style="color:#000000;">​​​​​​​​​​​​​​如果PSTATE.SP=0，则处理器使用SP_EL0。</span></li><li><span style="color:#000000;">如果PSTATE.SP=1(默认情况下为1，在warm reset后，SP也为1），则处理器使用SP_ELx。</span></li></ul></li></ul> 
+<p> 为什么会有<span style="color:#000000;">SP_EL0和SP_ELx的选择配置呢？</span></p> 
+<p><span style="color:#000000;">主要是因为EL0是应用层，一般的应用程序都在EL0上运行，因此给SP_EL0分配的栈空间一般都非常大。如果异常处理时有比较大的栈空间需求，SP_EL0是更好的选择，软件可以通过设置PSTATE.SP=0，让其他异常等级上的程序工作使用SP_EL0。</span></p> 
+<h2 id="%E4%B8%89%EF%BC%8C%E4%BB%8E%E5%BC%82%E5%B8%B8%E8%BF%94%E5%9B%9E"><span style="color:#000000;">三，从异常返回</span></h2> 
+<p>当异常处理完成后，处理器需要恢复到异常发生前的状态，需要：</p> 
+<ul><li>恢复所有的之前压入栈的寄存器上下文。</li><li>执行ERET指令。</li></ul> 
+<p>ERET指令主要干了两件事：</p> 
+<ul><li>将<span style="color:#000000;">SPSR_EL&lt;x&gt;</span>寄存器里的值恢复到PSTATE。</li><li>将ELR<span style="color:#000000;">_EL&lt;x&gt;</span>里保存的地址恢复到PC寄存器，相当于处理器跳转到ELR<span style="color:#000000;">_EL&lt;x&gt;</span>中的地址。</li></ul> 
+<p><span style="color:#000000;">SPSR_EL&lt;x&gt;和</span>ELR<span style="color:#000000;">_EL&lt;x&gt;的x是目标异常等级，也就是（taken to和returned from的异常等级），SPSR_EL&lt;x&gt;寄存器里也同样保存着执行状态控制bit，如果想要改变处理器的执行状态，其中一个方法就是在ERET指令之前，将想要的执行状态（AArch32或者AArch64）提前写入SPSR_ELx。需要注意的是，写入SPSR_ELx的执行状态需要和SCR_EL3.RW 或者HCR_EL2.RW配置相对应，不然会产生非法的异常返回。</span></p> 
+<p><span style="color:#000000;">ERET主要是将SPSR_EL&lt;x&gt;和</span>ELR<span style="color:#000000;">_EL&lt;x&gt;的值更新到PSTATE和PC寄存器，为了让处理器不会进入未定义的状态，这两个更新操作是原子性的（不会被打断），而且对处理器来说是不可见的。</span></p> 
+<p>下图是ERET指令的伪代码，通过对伪代码进行分析，可以知道，虽然ERET的两个更新操作是原子性的，但是也有先后顺序：先更新SPSR，再更新PC 。</p> 
+<p><img alt="" height="154" src="https://images2.imgbox.com/e2/79/SUjo3HB6_o.png" width="373"><img alt="" height="647" src="https://images2.imgbox.com/00/75/cue6GlKO_o.png" width="826"></p> 
+<p><img alt="" height="586" src="https://images2.imgbox.com/c3/de/iXKjZoWG_o.png" width="896"> </p> 
+<p> <img alt="" height="847" src="https://images2.imgbox.com/da/b2/KVU15i4T_o.png" width="636"></p> 
+<p><img alt="" height="384" src="https://images2.imgbox.com/c9/f3/OLAiN2vy_o.png" width="805"> </p> 
+<p> 对于ELR的使用，有一点要特别注意：ELR中保存的地址与异常类型有关。</p> 
+<ul><li>对于同步的异常服务调用指令，比如SVC、HVC以及SMC。假设执行了SMC指令进入到EL3，ELR_EL3中保存的是SMC的下一条指令。</li><li>对于其他的同步异常，ELR保存的是产生异常的那条指令的地址。</li><li>对于异步异常，ELR中保存的是当异常发生时，第一条还没有被执行完成的指令的地址。</li></ul> 
+<p>当然异常处理程序软件也可以再适当的时候修改ELR寄存器里的内容，确保处理器在ERET指令后能回到正确的程序流中。</p> 
+<p>下图是ARMv7的各类型异常的首选异常返回地址：</p> 
+<p><img alt="" height="590" src="https://images2.imgbox.com/3f/82/1ijsPZ5T_o.png" width="1182"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/5554350629369072d2868a8d217b379d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">计算机网络--物理层练习题</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/d11d55bde704b2eadbb34149fee933b9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">鸿蒙会成为安卓的终结者吗？</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

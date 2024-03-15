@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>binderService如何实现acitivity和service的绑定 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="binderService如何实现acitivity和service的绑定" />
+<meta property="og:description" content="binderService如何实现acitivity和service的绑定 首先从bindService这个方法看起
+@Override public boolean bindService(Intent service, ServiceConnection conn, int flags) { return mBase.bindService(service, conn, flags); } 调用的是ContextWrapper里的bindService。看一下这个mBase是何方神圣？
+public class ContextWrapper extends Context { Context mBase; public ContextWrapper(Context base) { mBase = base; } 就是Context，我们都知道Context的是个抽象类，实现类就是ContextImp，所以来到ContextImp内的bindService
+@Override public boolean bindService(Intent service, ServiceConnection conn, int flags) { warnIfCallingFromSystemProcess(); return bindServiceCommon(service, conn, flags, Process.myUserHandle()); } 可以看到是调用了bindServiceCommon这个方法
+private boolean bindServiceCommon(Intent service, ServiceConnection conn, int flags, UserHandle user) { IServiceConnection sd; if (conn == null) { throw new IllegalArgumentException(&#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/445b88dc58a1207d4b4dbcad07e85603/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-07-29T01:21:18+08:00" />
+<meta property="article:modified_time" content="2021-07-29T01:21:18+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">binderService如何实现acitivity和service的绑定</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h4><a id="binderServiceacitivityservice_0"></a>binderService如何实现acitivity和service的绑定</h4> 
+<p>首先从bindService这个方法看起</p> 
+<pre><code>@Override
+public boolean bindService(Intent service, ServiceConnection conn,
+        int flags) {
+    return mBase.bindService(service, conn, flags);
+}
+</code></pre> 
+<p>调用的是ContextWrapper里的bindService。看一下这个mBase是何方神圣？</p> 
+<pre><code>public class ContextWrapper extends Context {
+    Context mBase;
+
+    public ContextWrapper(Context base) {
+        mBase = base;
+    }
+</code></pre> 
+<p>就是Context，我们都知道Context的是个抽象类，实现类就是ContextImp，所以来到ContextImp内的bindService</p> 
+<pre><code>@Override
+public boolean bindService(Intent service, ServiceConnection conn,
+        int flags) {
+    warnIfCallingFromSystemProcess();
+    return bindServiceCommon(service, conn, flags, Process.myUserHandle());
+}
+</code></pre> 
+<p>可以看到是调用了bindServiceCommon这个方法</p> 
+<pre><code>private boolean bindServiceCommon(Intent service, ServiceConnection conn, int flags,
+        UserHandle user) {
+    IServiceConnection sd;
+    if (conn == null) {
+        throw new IllegalArgumentException("connection is null");
+    }
+    if (mPackageInfo != null) {
+        sd = mPackageInfo.getServiceDispatcher(conn, getOuterContext(),
+                mMainThread.getHandler(), flags);
+    } else {
+        throw new RuntimeException("Not supported in system context");
+    }
+    validateServiceIntent(service);
+    try {
+        IBinder token = getActivityToken();
+        if (token == null &amp;&amp; (flags&amp;BIND_AUTO_CREATE) == 0 &amp;&amp; mPackageInfo != null
+                &amp;&amp; mPackageInfo.getApplicationInfo().targetSdkVersion
+                &lt; android.os.Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+            flags |= BIND_WAIVE_PRIORITY;
+        }
+        service.prepareToLeaveProcess();
+        //看这行，如果了解过binder机制和aidl的人应该会觉得很眼熟，就是stub和proxy类
+        int res = ActivityManagerNative.getDefault().bindService(
+            mMainThread.getApplicationThread(), getActivityToken(), service,
+            service.resolveTypeIfNeeded(getContentResolver()),
+            sd, flags, getOpPackageName(), user.getIdentifier());
+        if (res &lt; 0) {
+            throw new SecurityException(
+                    "Not allowed to bind to service " + service);
+        }
+        return res != 0;
+    } catch (RemoteException e) {
+        throw new RuntimeException("Failure from system", e);
+    }
+}
+</code></pre> 
+<p>这里和AIDL的机制相同，根据是否在同一进程，调用asInterFace判断返回的是ActivityMangerProxy还是ActivityMangerNative。然后回调用bindService这个方法。</p> 
+<p>如果是不同进程，就会返回ActivityMangerProxy，然后在bindService中调用transact发送数据，然后到ActivityMangerNative的onTransact中接受。如下所示（类似于aidl中的proxy和stub）</p> 
+<pre><code>public int bindService(IApplicationThread caller, IBinder token,
+        Intent service, String resolvedType, IServiceConnection connection,
+        int flags,  String callingPackage, int userId) throws RemoteException {
+    Parcel data = Parcel.obtain();
+    Parcel reply = Parcel.obtain();
+    data.writeInterfaceToken(IActivityManager.descriptor);
+    data.writeStrongBinder(caller != null ? caller.asBinder() : null);
+    data.writeStrongBinder(token);
+    service.writeToParcel(data, 0);
+    data.writeString(resolvedType);
+    data.writeStrongBinder(connection.asBinder());
+    data.writeInt(flags);
+    data.writeString(callingPackage);
+    data.writeInt(userId);
+    mRemote.transact(BIND_SERVICE_TRANSACTION, data, reply, 0);
+    reply.readException();
+    int res = reply.readInt();
+    data.recycle();
+    reply.recycle();
+    return res;
+}
+</code></pre> 
+<p>接着来到onTransact方法中，省略其他的case情况单独关注bindService的</p> 
+<pre><code>@Override
+public boolean onTransact(int code, Parcel data, Parcel reply, int flags)
+        throws RemoteException {
+        …………
+          case BIND_SERVICE_TRANSACTION: {
+            data.enforceInterface(IActivityManager.descriptor);
+            IBinder b = data.readStrongBinder();
+            IApplicationThread app = ApplicationThreadNative.asInterface(b);
+            IBinder token = data.readStrongBinder();
+            Intent service = Intent.CREATOR.createFromParcel(data);
+            String resolvedType = data.readString();
+            b = data.readStrongBinder();
+            int fl = data.readInt();
+            String callingPackage = data.readString();
+            int userId = data.readInt();
+            IServiceConnection conn = IServiceConnection.Stub.asInterface(b);
+            //这一行
+            int res = bindService(app, token, service, resolvedType, conn, fl,
+                    callingPackage, userId);
+            reply.writeNoException();
+            reply.writeInt(res);
+            return true;
+        }
+ }
+</code></pre> 
+<p>接着在这个方法中会调用真正服务的bindService。注意这里直接调用的bindService，然而这个类中并没有这个方法。这是怎么回事？这个也是我看这里才明白的一个新知识点。</p> 
+<p>首先ActivityMangerNative是一个抽象类，实现的是IActivityManager这个接口，bindService在接口内。其次抽象类实现接口时，可以不实现接口内的所有方法，而是可以在抽象类的实现类中去实现接口的方法。换句话说，bindService真正的实现是在ActivityMangerNative的子类。那么谁是它的实现类呢。</p> 
+<pre><code>public final class ActivityManagerService extends ActivityManagerNative
+        implements Watchdog.Monitor, BatteryStatsImpl.BatteryCallback {
+        
+}
+</code></pre> 
+<p>就是大名鼎鼎的ActivityManagerService，也就是AMS。再看这个方法</p> 
+<pre><code>public int bindService(IApplicationThread caller, IBinder token, Intent service,
+        String resolvedType, IServiceConnection connection, int flags, String callingPackage,
+        int userId) throws TransactionTooLargeException {
+    enforceNotIsolatedCaller("bindService");
+
+    // Refuse possible leaked file descriptors
+    if (service != null &amp;&amp; service.hasFileDescriptors() == true) {
+        throw new IllegalArgumentException("File descriptors passed in Intent");
+    }
+
+    if (callingPackage == null) {
+        throw new IllegalArgumentException("callingPackage cannot be null");
+    }
+
+    synchronized(this) {
+        return mServices.bindServiceLocked(caller, token, service,
+                resolvedType, connection, flags, callingPackage, userId);
+    }
+}
+</code></pre> 
+<p>调用的是ActiveServices的bindServiceLocked</p> 
+<p>因为接下来的代码太多了，就直接拎出重点，会通过bringupServiceLocked来借助handler机制向Activity进程内的h类传递message，调用handleCreateService这个方法反射创建目标服务（如果该进程没有创建的话，还会先创建进程）</p> 
+<p>接着就会在requestServiceBindingLocked检测是否已经绑定，同样会借助handler机制调用handleBindService 如果未绑定会先调用onBind否则会调用rebind）接着就会调用onserviceConnected</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/643bee647b1a2653d13e615e10260521/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">word文档更改所有者和计算机信息,批量更改100份Word文件名称，这招你一定要会！-批量修改文件名...</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/9c9f14e1c7e5decbc33f8c0d5f862db0/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">GC回收机制</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

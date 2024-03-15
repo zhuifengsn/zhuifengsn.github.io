@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>如何在python中表示微分_Python实现自动微分(Automatic Differentiation) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="如何在python中表示微分_Python实现自动微分(Automatic Differentiation)" />
+<meta property="og:description" content="什么是自动微分
+自动微分(Automatic Differentiation)是什么？微分是函数在某一处的导数值，自动微分就是使用计算机程序自动求解函数在某一处的导数值。自动微分可用于计算神经网络反向传播的梯度大小，是机器学习训练中不可或缺的一步。
+如何计算微分
+微分计算离不开数学求导，如果你还对高等数学有些印象，大概记得如下求导公式：常见求导公式
+这些公式难免让人头大，好在自动微分就是帮助我们“自动”解决微分问题的。机器学习平台如TensorFlow、PyTorch都实现了自动微分，使用非常的方便，不过有必要理解其原理。要理解“自动微分”，需要先理解常见的求解微分的方式，可分为以下四种：手动求解法(Manual Differentiation)
+数值微分法(Numerical Differentiation)
+符号微分法(Symbolic Differentiation)
+自动微分法(Automatic Differentiation)
+手动求解法
+所谓手动求解法就是手动算出求导公式，然后将公式编写成计算机代码完成计算。比如对于函数
+求微分，首先根据求导公式表找出其导数函数 ，然后将这个公式写成计算机程序，对于任意的输入 都能用这段程序求出其导数，也就是此时的微分。是不是很简单？
+这样做虽然直观，但却有两个明显的缺点：每次都要根据手动算出求导公式然后编写代码，导致程序很难复用。
+更让人难受的是，复杂的函数普通人很难轻易写出求导公式
+于是引出数值微分法。
+数值微分法
+数值微分法直接根据微分的极限定义形式：
+只需要在
+附近区一个很小的 (比如 0.00001)，分别计算 和 的值，然后做一个减法和除法就能得到此时的微分了，非常的直观。无论 是多么复杂的函数都可以带入上述公式求得微分。
+该方法的缺陷是计算量太大，并且存在roundoff error和truncation error的问题。现实中仅仅常用它来验证其他自动微分程序的正确性，而不用于实际生产。
+符号微分法
+回顾“手动求解法”能联想到将常见求导公式写成固有函数，直接调用岂不是更方便？在此基础上基于链式求导法则对复杂公式求导，岂不是就解决了全部问题！链式求导法则
+来看一下实际效果，下表展示了几个函数的符号微分公式：符号微分公式
+上图中第一列是原函数，第二列是符号微分法的计算公式，第三列是第二列的数学简化。即使是简化之后，微分计算公式也还要比原函数要复杂(更大的计算量)！所以这个方法也是理论上可行，实际上并不会采用。
+自动微分
+自动微分同时结合了“数值微分”和“符号微分”的长处，既对于已知函数直接采用数值微分法求取微分，并作为中间结果保存；对于组合函数采用符号微分法将公示展开，并将上一步数值微分的中间结果代入，二者结合降低了求解和计算的复杂度。
+举个栗子，对于下列函数求解微分：
+将上述公式转换为计算图：计算图
+上图中每个圈圈表示操作产生中间结果，下标顺序表示他们的计算顺序。根据计算图我们一步步来计算函数的值，如下表所示，其中左侧表示数值计算过的过程，右侧表示梯度计算过程：梯度求解过程(Forward mod)
+表中计算了函数在
+这一点的函数值和 的偏导数，整个计算过程结合者上图很容易理解。最终计算出 在 处的偏导数是5.5。如果要计算 的偏导数，还需要再重新计算一遍。相信你已经发现问题了：有多少个输入参数，这种偏导数计算流程就要执行多少遍。
+有没有办法优化呢？答案是肯定的。就是将微分反向计算，把上面计算图的连线反向就得到了反向计算图：计算图
+反向求微分流程如下：自动微分(Reverse mode)
+反向微分的好处是一次可以算出所有输入参数的偏导数，比如
+在 处的偏导数分别是5.5和1.716。
+Python代码实现
+采用python代码实现自动微分程序。其中有三个关键类：Op表示各种具体的操作，包括操作本身的计算和梯度计算。仅仅表示计算不保存操作的输入和状态，对应上面图中的一条边。
+Node用于保存计算的状态，包括计算的输入参数、结果、梯度。每一次Op操作会产生新的Node，对应上面图中的一个圈圈。
+Executor表示整个执行链路，用于正向对整个公式(在TensorFlow中叫做graph)求值以及反向自动微分。
+为便于演示我们采用了eager执行的模式，既每个Node的值都是立即求得的。实际TensorFlow采用的是lazy模式，既首先构建公式然后再整体求值，这么做可以方便进行剪枝等优化操作，但不方便调试。
+lazy模式的执行方式为，首先对计算图进行拓扑排序，然后按照拓扑排序的顺序从前往后依次求值。代码中Executor.run()方法演示了这个过程。其实着整个程序已经不仅仅是“自动微分”的演示了，而是tf图计算流程的演示，包括前向和后向(真实的算法模型中会使用更多种类的Op、模型本身也会更加复杂，但求解流程类似)
+# -* encoding:utf-8 *-
+import math
+class Node(object):" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/a32688f4c6737303b8ccac63fa141c08/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-12-14T11:58:46+08:00" />
+<meta property="article:modified_time" content="2020-12-14T11:58:46+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">如何在python中表示微分_Python实现自动微分(Automatic Differentiation)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <div style="font-size:16px;"> 
+ <p>什么是自动微分</p> 
+ <p>自动微分(Automatic Differentiation)是什么？微分是函数在某一处的导数值，自动微分就是使用计算机程序自动求解函数在某一处的导数值。自动微分可用于计算神经网络反向传播的梯度大小，是机器学习训练中不可或缺的一步。</p> 
+ <p>如何计算微分</p> 
+ <p align="center">微分计算离不开数学求导，如果你还对高等数学有些印象，大概记得如下求导公式：<img src="" alt="">常见求导公式</p> 
+ <p>这些公式难免让人头大，好在自动微分就是帮助我们“自动”解决微分问题的。机器学习平台如TensorFlow、PyTorch都实现了自动微分，使用非常的方便，不过有必要理解其原理。要理解“自动微分”，需要先理解常见的求解微分的方式，可分为以下四种：手动求解法(Manual Differentiation)</p> 
+ <p>数值微分法(Numerical Differentiation)</p> 
+ <p>符号微分法(Symbolic Differentiation)</p> 
+ <p>自动微分法(Automatic Differentiation)</p> 
+ <p>手动求解法</p> 
+ <p>所谓手动求解法就是手动算出求导公式，然后将公式编写成计算机代码完成计算。比如对于函数</p> 
+ <p align="center"><img src="" alt=""> 求微分，首先根据求导公式表找出其导数函数 </p> 
+ <p align="center"><img src="" alt=""> ，然后将这个公式写成计算机程序，对于任意的输入 </p> 
+ <p align="center"><img src="" alt=""> 都能用这段程序求出其导数，也就是此时的微分。是不是很简单？</p> 
+ <p>这样做虽然直观，但却有两个明显的缺点：每次都要根据手动算出求导公式然后编写代码，导致程序很难复用。</p> 
+ <p>更让人难受的是，复杂的函数普通人很难轻易写出求导公式</p> 
+ <p>于是引出数值微分法。</p> 
+ <p>数值微分法</p> 
+ <p>数值微分法直接根据微分的极限定义形式：</p> 
+ <p align="center"><img src="" alt=""></p> 
+ <p>只需要在</p> 
+ <p align="center"><img src="" alt=""> 附近区一个很小的 </p> 
+ <p align="center"><img src="" alt=""> (比如 0.00001)，分别计算 </p> 
+ <p align="center"><img src="" alt=""> 和 </p> 
+ <p align="center"><img src="" alt=""> 的值，然后做一个减法和除法就能得到此时的微分了，非常的直观。无论 </p> 
+ <p align="center"><img src="" alt=""> 是多么复杂的函数都可以带入上述公式求得微分。</p> 
+ <p>该方法的缺陷是计算量太大，并且存在roundoff error和truncation error的问题。现实中仅仅常用它来验证其他自动微分程序的正确性，而不用于实际生产。</p> 
+ <p>符号微分法</p> 
+ <p align="center">回顾“手动求解法”能联想到将常见求导公式写成固有函数，直接调用岂不是更方便？在此基础上基于链式求导法则对复杂公式求导，岂不是就解决了全部问题！<img src="" alt="">链式求导法则</p> 
+ <p align="center">来看一下实际效果，下表展示了几个函数的符号微分公式：<img src="" alt="">符号微分公式</p> 
+ <p>上图中第一列是原函数，第二列是符号微分法的计算公式，第三列是第二列的数学简化。即使是简化之后，微分计算公式也还要比原函数要复杂(更大的计算量)！所以这个方法也是理论上可行，实际上并不会采用。</p> 
+ <p>自动微分</p> 
+ <p>自动微分同时结合了“数值微分”和“符号微分”的长处，既对于已知函数直接采用数值微分法求取微分，并作为中间结果保存；对于组合函数采用符号微分法将公示展开，并将上一步数值微分的中间结果代入，二者结合降低了求解和计算的复杂度。</p> 
+ <p>举个栗子，对于下列函数求解微分：</p> 
+ <p align="center"><img src="" alt=""></p> 
+ <p align="center">将上述公式转换为计算图：<img src="" alt="">计算图</p> 
+ <p align="center">上图中每个圈圈表示操作产生中间结果，下标顺序表示他们的计算顺序。根据计算图我们一步步来计算函数的值，如下表所示，其中左侧表示数值计算过的过程，右侧表示梯度计算过程：<img src="" alt="">梯度求解过程(Forward mod)</p> 
+ <p>表中计算了函数在</p> 
+ <p align="center"><img src="" alt=""> 这一点的函数值和 </p> 
+ <p align="center"><img src="" alt=""> 的偏导数，整个计算过程结合者上图很容易理解。最终计算出 </p> 
+ <p align="center"><img src="" alt=""> 在 </p> 
+ <p align="center"><img src="" alt=""> 处的偏导数是5.5。如果要计算 </p> 
+ <p align="center"><img src="" alt=""> 的偏导数，还需要再重新计算一遍。相信你已经发现问题了：有多少个输入参数，这种偏导数计算流程就要执行多少遍。</p> 
+ <p align="center">有没有办法优化呢？答案是肯定的。就是将微分反向计算，把上面计算图的连线反向就得到了反向计算图：<img src="" alt="">计算图</p> 
+ <p align="center">反向求微分流程如下：<img src="" alt="">自动微分(Reverse mode)</p> 
+ <p>反向微分的好处是一次可以算出所有输入参数的偏导数，比如</p> 
+ <p align="center"><img src="" alt=""> 在 </p> 
+ <p align="center"><img src="" alt=""> 处的偏导数分别是5.5和1.716。</p> 
+ <p>Python代码实现</p> 
+ <p>采用python代码实现自动微分程序。其中有三个关键类：Op表示各种具体的操作，包括操作本身的计算和梯度计算。仅仅表示计算不保存操作的输入和状态，对应上面图中的一条边。</p> 
+ <p>Node用于保存计算的状态，包括计算的输入参数、结果、梯度。每一次Op操作会产生新的Node，对应上面图中的一个圈圈。</p> 
+ <p>Executor表示整个执行链路，用于正向对整个公式(在TensorFlow中叫做graph)求值以及反向自动微分。</p> 
+ <p>为便于演示我们采用了eager执行的模式，既每个Node的值都是立即求得的。实际TensorFlow采用的是lazy模式，既首先构建公式然后再整体求值，这么做可以方便进行剪枝等优化操作，但不方便调试。</p> 
+ <p>lazy模式的执行方式为，首先对计算图进行拓扑排序，然后按照拓扑排序的顺序从前往后依次求值。代码中Executor.run()方法演示了这个过程。其实着整个程序已经不仅仅是“自动微分”的演示了，而是tf图计算流程的演示，包括前向和后向(真实的算法模型中会使用更多种类的Op、模型本身也会更加复杂，但求解流程类似)</p> 
+ <p># -* encoding:utf-8 *-</p> 
+ <p>import math</p> 
+ <p>class Node(object):</p> 
+ <p>"""表示具体的数值或者某个Op的数据结果。"""</p> 
+ <p>global_id = -1</p> 
+ <p>def __init__(self, op, inputs):</p> 
+ <p>self.inputs = inputs # 产生该Node的输入</p> 
+ <p>self.op = op # 产生该Node的Op</p> 
+ <p>self.grad = 0.0 # 初始化梯度</p> 
+ <p>self.evaluate() # 立即求值</p> 
+ <p># 调试信息</p> 
+ <p>self.id = Node.global_id</p> 
+ <p>Node.global_id += 1</p> 
+ <p>print("eager exec:%s" % self)</p> 
+ <p>def input2values(self):</p> 
+ <p>""" 将输入统一转换成数值，因为具体的计算只能发生在数值上 """</p> 
+ <p>new_inputs = []</p> 
+ <p>for i in self.inputs:</p> 
+ <p>if isinstance(i, Node):</p> 
+ <p>i = i.value</p> 
+ <p>new_inputs.append(i)</p> 
+ <p>return new_inputs</p> 
+ <p>def evaluate(self):</p> 
+ <p>self.value = self.op.compute(self.input2values())</p> 
+ <p>def __repr__(self):</p> 
+ <p>return self.__str__()</p> 
+ <p>def __str__(self):</p> 
+ <p>return "Node%d:%s%s=%s, grad:%.3f" % (</p> 
+ <p>self.id, self.input2values(), self.op.name(), self.value, self.grad)</p> 
+ <p>class Op(object):</p> 
+ <p>"""所有操作的基类。注意Op本身不包含状态，计算的状态保存在Node中，每次调用Op都会产生一个Node。"""</p> 
+ <p>def name(self):</p> 
+ <p>pass</p> 
+ <p>def __call__(self):</p> 
+ <p>""" 产生一个新的Node，表示此次计算的结果 """</p> 
+ <p>pass</p> 
+ <p>def compute(self, inputs):</p> 
+ <p>""" Op的计算 """</p> 
+ <p>pass</p> 
+ <p>def gradient(self, output_grad):</p> 
+ <p>""" 计算梯度 """</p> 
+ <p>pass</p> 
+ <p>class AddOp(Op):</p> 
+ <p>"""加法运算"""</p> 
+ <p>def name(self):</p> 
+ <p>return "add"</p> 
+ <p>def __call__(self, a, b):</p> 
+ <p>return Node(self, [a, b])</p> 
+ <p>def compute(self, inputs):</p> 
+ <p>return inputs[0] + inputs[1]</p> 
+ <p>def gradient(self, inputs, output_grad):</p> 
+ <p>return [output_grad, output_grad] # gradient of a and b</p> 
+ <p>class SubOp(Op):</p> 
+ <p>"""减法运算"""</p> 
+ <p>def name(self):</p> 
+ <p>return "sub"</p> 
+ <p>def __call__(self, a, b):</p> 
+ <p>return Node(self, [a, b])</p> 
+ <p>def compute(self, inputs):</p> 
+ <p>return inputs[0] - inputs[1]</p> 
+ <p>def gradient(self, inputs, output_grad):</p> 
+ <p>return [output_grad, -output_grad]</p> 
+ <p>class MulOp(Op):</p> 
+ <p>"""乘法运算"""</p> 
+ <p>def name(self):</p> 
+ <p>return "mul"</p> 
+ <p>def __call__(self, a, b):</p> 
+ <p>return Node(self, [a, b])</p> 
+ <p>def compute(self, inputs):</p> 
+ <p>return inputs[0] * inputs[1]</p> 
+ <p>def gradient(self, inputs, output_grad):</p> 
+ <p>return [inputs[1] * output_grad, inputs[0] * output_grad]</p> 
+ <p>class LnOp(Op):</p> 
+ <p>"""自然对数运算"""</p> 
+ <p>def name(self):</p> 
+ <p>return "ln"</p> 
+ <p>def __call__(self, a):</p> 
+ <p>return Node(self, [a])</p> 
+ <p>def compute(self, inputs):</p> 
+ <p>return math.log(inputs[0])</p> 
+ <p>def gradient(self, inputs, output_grad):</p> 
+ <p>return [1.0/inputs[0] * output_grad]</p> 
+ <p>class SinOp(Op):</p> 
+ <p>"""正弦运算"""</p> 
+ <p>def name(self):</p> 
+ <p>return "sin"</p> 
+ <p>def __call__(self, a):</p> 
+ <p>return Node(self, [a])</p> 
+ <p>def compute(self, inputs):</p> 
+ <p>return math.sin(inputs[0])</p> 
+ <p>def gradient(self, inputs, output_grad):</p> 
+ <p>return [math.cos(inputs[0]) * output_grad]</p> 
+ <p>class IdentityOp(Op):</p> 
+ <p>"""输入输出一样"""</p> 
+ <p>def name(self):</p> 
+ <p>return "identity"</p> 
+ <p>def __call__(self, a):</p> 
+ <p>return Node(self, [a])</p> 
+ <p>def compute(self, inputs):</p> 
+ <p>return inputs[0]</p> 
+ <p>def gradient(self, inputs, output_grad):</p> 
+ <p>return [output_grad]</p> 
+ <p>class Executor(object):</p> 
+ <p>""" 计算图的执行和自动微分 """</p> 
+ <p>def __init__(self, root):</p> 
+ <p>self.topo_list = self.__topological_sorting(root) # 拓扑排序的顺序就是正向求值的顺序</p> 
+ <p>self.root = root</p> 
+ <p>def run(self):</p> 
+ <p>"""按照拓扑排序的顺序对计算图求值。注意：因为我们之前对node采用了eager模式，实际上每个node值之前已经计算好了，但为了演示lazy计算的效果，这里使用拓扑排序又计算了一遍。"""</p> 
+ <p>node_evaluated = set() # 保证每个node只被求值一次</p> 
+ <p>print("\nEVALUATE ORDER:")</p> 
+ <p>for n in self.topo_list:</p> 
+ <p>if n not in node_evaluated:</p> 
+ <p>n.evaluate()</p> 
+ <p>node_evaluated.add(n)</p> 
+ <p>print("evaluate:%s" % n)</p> 
+ <p>return self.root.value</p> 
+ <p>def __dfs(self, topo_list, node):</p> 
+ <p>if Node == None or not isinstance(node, Node):</p> 
+ <p>return</p> 
+ <p>for n in node.inputs:</p> 
+ <p>self.__dfs(topo_list, n)</p> 
+ <p>topo_list.append(node) # 同一个节点可以添加多次，他们的梯度会累加</p> 
+ <p>def __topological_sorting(self, root):</p> 
+ <p>"""拓扑排序：采用DFS方式"""</p> 
+ <p>lst = []</p> 
+ <p>self.__dfs(lst, root)</p> 
+ <p>return lst</p> 
+ <p>def gradients(self):</p> 
+ <p>reverse_topo = list(reversed(self.topo_list)) # 按照拓扑排序的反向开始微分</p> 
+ <p>reverse_topo[0].grad = 1.0 # 输出节点梯度是1.0</p> 
+ <p>for n in reverse_topo:</p> 
+ <p>grad = n.op.gradient(n.input2values(), n.grad)</p> 
+ <p># 将梯度累加到每一个输入变量的梯度上</p> 
+ <p>for i, g in zip(n.inputs, grad):</p> 
+ <p>if isinstance(i, Node):</p> 
+ <p>i.grad += g</p> 
+ <p>print("\nAFTER AUTODIFF:")</p> 
+ <p>for n in reverse_topo:</p> 
+ <p>print(n)</p> 
+ <p># 开始验证程序</p> 
+ <p>add, mul, ln, sin, sub, identity = AddOp(), MulOp(), LnOp(), SinOp(), SubOp(), IdentityOp()</p> 
+ <p>x1, x2 = identity(2.0), identity(5.0)</p> 
+ <p>y = sub(add(ln(x1), mul(x1, x2)), sin(x2)) # y = ln(x1) + x1*x2 - sin(x2)</p> 
+ <p>ex = Executor(y)</p> 
+ <p>print("y=%.3f" % ex.run())</p> 
+ <p>ex.gradients() # 反向计算 自动微分</p> 
+ <p>print("x1.grad=%.3f" % x1.grad)</p> 
+ <p>print("x2.grad=%.3f" % x2.grad)</p> 
+ <p align="center">输出如下：<img src="" alt=""></p> 
+ <p>参考文献</p> 
+</div>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/8eb05bab95cc0c4722d41d05dde9261e/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">电池供电的电容麦_动圈麦克风和电容麦克风的区别在哪里？</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/9516130e0f97457e798bcb3da58c3b21/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Python爬虫：ZzzFun动漫视频网</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>automake的理解和实践总结 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="automake的理解和实践总结" />
+<meta property="og:description" content="automake的背景和作用：一般情况下我们在做一个项目时需要编写一份Makefile文件来对整个项目的文件进行编译生成可执行文件，但是一般这样编写Makefile文件会相对比较复杂而且会存在不同编译环境时需要对Makefile文件做相应的修改。为了解决这个问题，所以就引入了automake。对于automake，用户只是需要编译和配置一些参数就可以了，其它所有的操作都可以通过automake的一系列命令来实现。 automake生成Makefile文件所需的工具：GUN Automake、GNU Autoconf、GNU m4、PERL、GNU Libtool
+automake生成Makefile文件所需的文件：需要编译的源文件、configure.ac或者configure.in、Makefile.am
+下图是我对整个automake过程理解整理的一张流程图，详细的描述了整个执行过程、所需要的文件和输出文件。
+下面通过来详细说明每一步操作：
+1、创建需要编译的源文件hello.c：
+#include &lt;stdio.h&gt; int main(void) { printf(&#34;Test automake.\n&#34;); return 0; } 2、准备automake所需要的文件configure.ac或者configure.in（两个文件的格式都是一样的知识命名不同），这个过程可以完全手动编写也可以通过aotoscan的帮助生成configure.scan文件，然后在configure.scan的文件基础上更改并命名为configure.ac或者configure.in。 autoscan会扫描源代码以搜寻普通的可移植性问题，比如检查编译器、库、头文件等，生成文件configure.scan，它是configure.ac或者configure.in的雏形。
+执行autoscan：
+configure.scan内容解释：
+3、编辑configure.scan并命名为configure.in：
+修改后的文档如下：
+4、aclocal 是一个perl 脚本程序。aclocal 根据configure.in 文件的内容，自动生成aclocal.m4 和autom4te.cache文件。但是使用configure.in时会提示一个warning，为避免这个warning可以命名为configure.ac。
+下面是以configure.in命令的结果：
+下面则是以configure.ac命名的结果：
+5、autoheader是创建configure头文件模板的操作，这一步执不执行与在configure.ac/configure.in中是否定义AC_CONFIG_HEADERS([config.h])有关，如果没有定义就不需要执行，如果定义了就一定需要执行。
+如果没有定义AC_CONFIG_HEADERS([config.h])而执行的结果：
+如果定义了AC_CONFIG_HEADERS([config.h])但是没有执行的则会在automake时提示错误。
+6、创建Makefile.am文件：
+7、automake根据 configure.in 中和config.h.in中的宏把Makefile.am 转成 Makefile.in 文件。其中config.h.in文件是否需要与是否定义AC_CONFIG_HEADERS([config.h])有关，定义了则需要没定义则不需要。--add-missing选项是让automake自动添加一些必需的脚本文件。
+如果定义了AC_CONFIG_HEADERS([config.h])而没有执行autoheader的话就会提示下面的错误：
+8、autoconf：是用来产生configure 文件的。configure 是一个脚本，它能设置源程序来适应各种不同的操作系统平台，并且根据不同的系统来产生合适的Makefile ，从而可以使你的源代码能在不同的操作系统平台上被编译出来。configure.in/configure.ac 文件的内容是一些宏，这些宏经过autoconf 处理后会变成检查系统特性、环境变量、软件必须的参数的shell 脚本。configure.in 文件中的宏的顺序并没有规定，但是你必须在所有宏的最前面和最后面分别加上AC_INIT 宏和AC_OUTPUT 宏。具体生成使需要依赖aclocal.m4、configure.ac/configure.in和config.h.in，其中config.h.in文件根据是否定义AC_CONFIG_HEADERS([config.h])有关。
+下面是生成文件：
+下面是缺少configure.ac的执行错误：
+下面是缺少aclocal.m4的执行错误：
+9、./configure：执行配置文件会依据Makefile.in和configure文件生成Makefile文件
+但是我第一遍执行时出现了下面错误：
+进过查找，原因是在AM_INIT_AUTOMAKE(hello, 1.0)前面存在空行导致的。
+10、执行make和运行二进制文件
+最后生成的Makefile文件支持的命令：
+make:根据Makefile编译源代码，链接生成可执行文件
+make clean:清除make生成的object文件和可执行文件
+make dist：产生发布软件包文件（即distribution package ）。这个命令将会将可执行文件及相关文件打包成一个tar." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3aa8448565cb44374e508a5a180bec3e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2016-10-15T11:11:38+08:00" />
+<meta property="article:modified_time" content="2016-10-15T11:11:38+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">automake的理解和实践总结</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><span style="white-space:pre"></span></p> automake的背景和作用：一般情况下我们在做一个项目时需要编写一份Makefile文件来对整个项目的文件进行编译生成可执行文件，但是一般这样编写Makefile文件会相对比较复杂而且会存在不同编译环境时需要对Makefile文件做相应的修改。为了解决这个问题，所以就引入了automake。对于automake，用户只是需要编译和配置一些参数就可以了，其它所有的操作都可以通过automake的一系列命令来实现。 
+<p><br> </p> 
+<p><span style="white-space:pre"></span>automake生成Makefile文件所需的工具：GUN Automake、GNU Autoconf、GNU m4、PERL、GNU Libtool</p> 
+<p><span style="white-space:pre"></span>automake生成Makefile文件所需的文件：需要编译的源文件、configure.ac或者configure.in、Makefile.am<br> </p> 
+<p><br> </p> 
+<p><span style="white-space:pre"></span>下图是我对整个automake过程理解整理的一张流程图，详细的描述了整个执行过程、所需要的文件和输出文件。</p> 
+<p><img src="https://images2.imgbox.com/19/e8/DWNTt3JE_o.jpg" alt=""><br> </p> 
+<p><span style="white-space:pre"></span>下面通过来详细说明每一步操作：</p> 
+<p><span style="white-space:pre"></span>1、创建需要编译的源文件hello.c：</p> 
+<p><span style="white-space:pre"></span></p> 
+<pre><code class="language-cpp">#include &lt;stdio.h&gt;
+
+int main(void)
+{
+        printf("Test automake.\n");
+
+        return 0;
+}</code></pre> 
+<span style="white-space:pre"></span>2、准备automake所需要的文件configure.ac或者configure.in（两个文件的格式都是一样的知识命名不同），这个过程可以完全手动编写也可以通过aotoscan的帮助生成configure.scan文件，然后在configure.scan的文件基础上更改并命名为configure.ac或者configure.in。 
+<p></p> 
+<p><span style="white-space:pre"><span style="white-space:pre"></span>autoscan会扫描源代码以搜寻普通的可移植性问题，比如检查编译器、库、头文件等，生成文件configure.scan，它是configure.ac或者configure.in的雏形。</span></p> 
+<p><span style="white-space:pre"><span style="white-space:pre"></span>执行autoscan：</span></p> 
+<p><span style="white-space:pre"><span style="white-space:pre"><img src="https://images2.imgbox.com/8a/0f/ytihaZVC_o.png" alt=""></span></span></p> 
+<p><span style="white-space:pre"><span style="white-space:pre"><span style="white-space:pre"></span>configure.scan</span>内容解释：</span></p> 
+<p><span style="white-space:pre"><span style="white-space:pre"><img src="https://images2.imgbox.com/cd/7c/Erar9vOi_o.png" alt=""></span></span></p> 
+<p><span style="white-space:pre"><span style="white-space:pre"><span style="white-space:pre"></span>3</span>、编辑configure.scan并命名为configure.in：</span></p> 
+<p><span style="white-space:pre">修改后的文档如下：</span></p> 
+<p><span style="white-space:pre"><img src="https://images2.imgbox.com/a4/07/qIV5bJbl_o.png" alt=""><br> </span></p> 
+<p><span style="white-space:pre">4、<span style="">aclocal</span><span style=""> </span><span style="">是一个</span><span style="">perl </span><span style="">脚本程序。</span><span style="">aclocal</span><span style=""> </span><span style="">根据</span><span style="">configure.in</span><span style=""> </span><span style="">文件的内容，自动生成</span><span style="">aclocal.m4</span><span style=""> 和autom4te.cache</span><span style="">文件。但是使用configure.in时会提示一个warning，为避免这个warning可以命名为configure.ac。</span></span></p> 
+<p><span style="white-space:pre"><span style="">下面是以configure.in命令的结果：</span></span></p> 
+<p><span style="white-space:pre"><span style=""><img src="https://images2.imgbox.com/87/d8/0RP4slrC_o.png" alt=""><br> </span></span></p> 
+<p><span style="white-space:pre"><span style="">下面则是以configure.ac命名的结果：</span></span></p> 
+<p><span style="white-space:pre"><span style=""><img src="https://images2.imgbox.com/a5/66/EWt7R2Ft_o.png" alt=""><br> </span></span></p> 
+<p><span style="white-space:pre"><span style="">5、autoheader是创建configure头文件模板的操作，这一步执不执行与在configure.ac/configure.in中是否定义AC_CONFIG_HEADERS([config.h])有关，如果没有定义就不需要执行，如果定义了就一定需要执行。</span></span></p> 
+<p><span style="white-space:pre"><span style="">如果没有定义AC_CONFIG_HEADERS([config.h])而执行的结果：</span></span></p> 
+<p><span style="white-space:pre"><span style=""><img src="https://images2.imgbox.com/73/66/xVm3drCi_o.png" alt=""><br> </span></span></p> 
+<p><span style="white-space:pre"><span style="">如果定义了AC_CONFIG_HEADERS([config.h])但是没有执行的则会在automake时提示错误。</span></span></p> 
+<p><span style="white-space:pre"><span style="">6、创建Makefile.am文件：</span></span></p> 
+<p><span style="white-space:pre"><span style=""><img src="https://images2.imgbox.com/27/25/CwP84Wlg_o.png" alt=""><br> </span></span></p> 
+<p><span style="white-space:pre"><span style="">7、automake<span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)">根据 configure.in 中和config.h.in中<span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; letter-spacing:1px; line-height:19.5px; white-space:pre; background-color:rgb(248,248,248)">的宏</span>把Makefile.am 转成 Makefile.in 文件。其中config.h.in文件是否需要与是否定义<span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">AC_CONFIG_HEADERS([config.h])有关，定义了则需要没定义则不需要。--add-missing选项是让automake自动添加一些必需的脚本文件。</span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/79/16/OMkqOu1e_o.png" alt=""><br> </span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">如果定义了<span style="color:rgb(61,70,77); font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">AC_CONFIG_HEADERS([config.h])而没有执行autoheader的话就会提示下面的错误：</span></span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><span style="color:rgb(61,70,77); font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/a0/13/tTSRrkQ2_o.png" alt=""><br> </span></span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">8、autoconf：<span style="">是用来产生</span><span style="">configure</span><span style=""> </span><span style="">文件的。</span><span style="">configure</span><span style=""> </span><span style="">是一个脚本，它能设置源程序来适应各种不同的操作系统平台，并且根据不同的系统来产生合适的</span><span style="">Makefile</span><span style=""> </span><span style="">，从而可以使你的源代码能在不同的操作系统平台上被编译出来。<span style=""><span style=""><span style="">configure.in/configure.ac</span></span></span><span style=""><span style=""> </span><span style="">文件的内容是一些宏，这些宏经过</span><span style="">autoconf </span><span style="">处理后会变成检查系统特性、环境变量、软件必须的参数的</span><span style="">shell</span><span style=""> </span><span style="">脚本。</span><span style="">configure.in</span><span style=""> </span><span style="">文件中的宏的顺序并没有规定，但是你必须在所有宏的最前面和最后面分别加上</span><span style="">AC_INIT</span><span style=""> </span><span style="">宏和</span><span style="">AC_OUTPUT</span><span style=""> </span><span style="">宏。具体生成使需要依赖aclocal.m4、configure.ac/configure.in和config.h.in，其中config.h.in文件根据是否定义<span style="color:rgb(61,70,77); font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">AC_CONFIG_HEADERS([config.h])有关。</span></span></span></span></span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><span style=""><span style=""><span style=""><span style="color:rgb(61,70,77); font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">下面是生成文件：</span></span></span></span></span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><span style=""><span style=""><span style=""><span style="color:rgb(61,70,77); font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/db/63/0TRJdjz4_o.png" alt=""><br> </span></span></span></span></span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><span style=""><span style=""><span style=""><span style="color:rgb(61,70,77); font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">下面是缺少configure.ac的执行错误：</span></span></span></span></span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); font-family:'Pingfang SC',STHeiti,'Lantinghei SC','Open Sans',Arial,'Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',SimSun,sans-serif; font-size:12px; line-height:19.5px; background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><span style=""><span style=""><span style=""><span style="color:rgb(61,70,77); font-family:Arial; font-size:10px; letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/b7/57/bkPYS2dh_o.png" alt=""><br> </span></span></span></span></span></span></span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">下面是缺少aclocal.m4的执行错误：</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/46/13/mtJZz95a_o.png" alt=""><br> </span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; line-height:20px; letter-spacing:1px; white-space:pre; background-color:rgb(248,248,248)">9、./configure：执行配置文件会依据Makefile.in和configure文件生成Makefile文件</span><span style="letter-spacing:1px; white-space:pre; background-color:rgb(248,248,248)"></span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; line-height:20px; letter-spacing:1px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/a1/d8/UHzV1Q0L_o.png" alt=""><br> </span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; line-height:20px; letter-spacing:1px; white-space:pre; background-color:rgb(248,248,248)">但是我第一遍执行时出现了下面错误：</span></span></span></span></p> 
+<p><span style="white-space:pre"><span style=""><span style="color:rgb(61,70,77); background-color:rgb(248,248,248)"><span style="font-family:Arial; font-size:10px; line-height:20px; letter-spacing:1px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/7e/0f/MYmOK1iM_o.png" alt=""><br> </span></span></span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">进过查找，原因是在AM_INIT_AUTOMAKE(hello, 1.0)前面存在空行导致的。</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/7d/72/cetbIgoS_o.png" alt=""><br> </span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">10、执行make和运行二进制文件</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)"><img src="https://images2.imgbox.com/0b/cf/C8ByXJJ9_o.png" alt=""><br> </span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">最后生成的Makefile文件支持的命令：</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">make:根据Makefile编译源代码，链接生成可执行文件</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">make clean:清除make生成的object文件和可执行文件</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">make dist：产生发布软件包文件（即distribution package ）。这个命令将会将可执行文件及相关文件打包成一个tar.gz 压缩的文件用来作为发布软件的软件包。</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">make install: 将编译成功的可执行文件安装到系统目录中，一般为/usr/local/bin 目录。</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">make distcheck: 生成发布软件包并对其进行测试检查，以确定发布包的正确性。这个操作将自动把压缩包文件解开，然后执行configure命令，并且执行make，来确认编译不出现错误，最后提示你软件包已经准备好，可以发布了。</span></span></p> 
+<p><span style="font-family:Arial; font-size:10px; color:#3d464d"><span style="letter-spacing:1px; line-height:20px; white-space:pre; background-color:rgb(248,248,248)">make distclean：类似make clean ，但同时也将configure 生成的文件全部删除掉，包括Makefile 。</span></span></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/243a83081e1e32d97958499391cf3b0d/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">详解互联网平台的资金系统方案 自建支付清结算系统优势明显</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/847249eed3f277467e271b39441d2fed/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">HBuilder从下载到使用</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux十字病毒查杀处理 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux十字病毒查杀处理" />
+<meta property="og:description" content="https://blog.51cto.com/ixdba/2163018
+一、现象 接到客户的电话，说自己的云服务器被提供商禁止访问了，原因是监测到网络流量暴满，服务器不停的向外发包，在确认客户没有业务量突增的情况下，初步判断可能服务器遭受了流量攻&amp;击（DDOS），不过按照常理来说，客户的业务系统就是一个小的web系统，平时流量不大，影响力也一般，不至于遭受DDOs，带着这些疑问，要到了客户服务器的登录方式，废话少说，还是进入系统，一查究竟吧。
+二、排查问题 下图是登录系统后，执行top命令的输出结果，综合查看，系统整体负载并不高，但是带宽占用很高，由于云服务器带宽基本耗尽，ssh登录服务器也非常慢，几乎不能执行任何操作。
+此外，还发现第一个进程占用很大cpu资源，就是名为apgffcztwi的进程，这个进程名刚好10个字符，这是什么进程，名字相当古怪，肯定有问题，从文件名看出，这不像一个正常的系统进程。
+既然有古怪，那就看看这个进程是哪个程序启动的，操作方式见下图：
+简单吧，通过刚才那个进程的pid，然后去proc下面查看pid目录下面对应的exe文件，就能找到进程对应的启动程序，linux就是这么敞亮，一下子找到了这个程序位于/usr/bin目录下。
+既然找到了这个程序，那就详细查看下这个程序的属性信息吧，如下图：
+看到了吗，第一个文件，文件的读、写和执行属性均没有，相当古怪。好吧，先记录下来这个文件的位置和路径。
+下面继续查看系统进程信息，看看有无其它异常，通过ps命令又发现了新的线索，如下图：
+在/usr/bin目录下有隐藏的.sshd文件，这个文件是正常系统所没有的，又一个可疑线路，仍然记录下来。
+继续查看系统进程，可疑进程还远远不止这些，这不，又发现了一个可疑进程，如下图：
+/usr/bin/dpkgd/ps -ef这个进程很明显是个变种的病毒，因为我们指定ps命令肯定不会存在/usr/bin/dpkgd目录下，既然说到/usr/bin/dpkgd目录，那么就到这个目录下去看个究竟，继续上图：
+又发现一些隐藏的病毒文件了，比如lsof ps netstat ss，这些都是变种病毒文件，主要用来替换系统中的一些命令，当看到netstat这个命令时，基本明白了这个病毒的意图了，它无非就是发流量包，造成网络瘫痪，病毒替换了系统原有的包，换成自身经过改写的命令包，这样，既隐藏了自己的行为，又不会对服务器造成太大影响，但是它的真正目的就是用咱们的机器做肉鸡啊。真是用心良苦。
+记录这个线索，然后继续通过dmesg命令查看系统信息，看看有没有异常，上图：
+果然有异常信息，nf_conntrack是iptables里面的连接跟踪模块，它通过哈希表记录已建立的连接，包括其他机器到本机、本机到其他机器、本机到本机的连接，出现dropping packet，就是由于服务器访问量大，内核netfilter模块conntrack相关参数配置不合理，导致新连接被drop掉。查看nf_conntrack_max，看看设置多大：
+[root@server~]# cat /proc/sys/net/netfilter/nf_conntrack_max 2097152 nf_conntrack_max设置200多万，已经设置很大了，看来不是这个参数设置导致的。估计应该是上面的一些异常进程导致的。
+三、开始干活 通过上面发现的几个线索，为了能快速解决问题，先尝试关闭或删除进程和文件，然后看看网络是否能够恢复正常，一不做二不休，开整吧!
+第一步，先删除/usr/bin/.sshd文件，然后关闭此文件对应的进程，看下面的图：
+这样先删除进程对应的文件，然后kill掉.sshd进程，那么，进程就无法重新启动了。
+第二步，删除/usr/bin/dpkgd目录下所有的变种病毒文件，同时删除/usr/bin/apgffcztwi文件，写个脚本，批量删除如下：
+执行删除后，发现ps命令不好使了，可恶啊，不过，这点问题，难不倒俺，重新安装一个ps命令即可，或者从别的机器拷贝一个ps命令过来，这里来个干脆的，重新安装一个，安装过程看下图：
+大家能看到这个操作吧，先看看ps命令属于按个rpm包，然后yum在线安装一个新的包即可。
+这个procps包安装完成后，ps命令又可以使用了，现在通过ps命令查看到的系统信息，才是真实的系统啊，刚才那个ps命令是加壳的，屏蔽了很多系统中黑暗的勾当。
+还在兴奋中，接着执行了一个lsof命令，又发现新情况了：
+刚刚删除了/usr/bin/apgffcztwi文件，但是又自动生成了新的文件，/usr/bin/fhmlrqtqvz，并且还有一个文件/usr/bin/fgqnvqzzck已经被删除了，但是进程仍然存在，那个deleted就是文件的状态。并且新生成的文件，仍然是10个字符。
+看来是低估这个病毒程序了，继续往下深究！
+考虑到会自动产生病毒文件，感觉应该是linux下的crontab完成的工作，那么是不是病毒在crontab里面做了手脚，去看看就知道了。
+切换到系统的/var/log/cron目录下（此目录记录了linux下所有用户的计划任务信息，以crontab -u -e方式写入的计划任务都会在此目录下生成文件），没看到任何文件，看来不是用户级别的crontab在作怪，那么再看看系统级别的crontab，就是/etc/crontab文件，贴图如下：
+看最后一行，发现了一个定时任务，此任务每三分钟执行一次，任务对应的是个kill.sh脚本，找到脚本就好办了，看看这个脚本的内容：
+脚本很简单，但是却是个重大发现，此脚本会自动重启网卡，然后执行一个cp操作，将/lib/libkill.so文件复制一个/lib/libkill.so.6文件，然后执行这个文件。这个文件是个二进制的文件，无法查看内容，猜想应该就是自动生成那个十个字符文件的病原体。
+这里看到的病原体名称是libkill.so，它的名称不是固定的，常见的还有类似libudev.so、/lib/udev/udev等类似名称，但是作用应该都是一样的。
+到这里为止，思路基本清楚了，大概理了一下思路，这个×××执行的原理应该是这样的：libkill.so是所有进程的病原体，通过kill.sh脚本每隔3分钟自动检测一次，如果发现病毒程序不存在了，就从病原体复制一份儿到/lib/libkill.so.6，病毒副本/lib/libkill.so.6执行后，就会生成一个随机命名（10个字符）的程序，放到/usr/bin/、/boot，/etc/init.d等目录下。 同时还修改了自启动配置chkconfig –add xxx，修改自启动项/etc/rc.local等，让×××程序开机自动运行。
+这就是为什么无法杀掉病毒进程的原因。
+至此，病毒运行的原理已经清晰了，下面的工作就是清除病毒程序。
+四、清除病毒 清除病毒也是需要技巧的，如果直接删除kill.sh文件，你会发现，这个文件又自动生成了，这就是病毒程序在起作用。
+那么怎么彻底清除呢，可通过下面方式实现：
+通过top或者lsof命令可以获取那个自动启动的×××进程的pid为17161，然后执行如下操作：
+kill -STOP 17161 注意，这里-STOP选项的含义，不是关闭这个进程，而是停止这个进程。进程停止执行后，进程仍然存在，这样就绕过了病毒进程就监测。紧接着，再来点硬货：
+chattr &#43;i /etc/crontab 这样，先锁定crontab文件，不让任何进程写入数据。
+下面就可以安静的删除之前的那些病毒文件了。
+先删除这个kill.sh文件，让他不再定期执行：
+[root@server ~]# ll /etc/cron.hourly/kill.sh 接着删除/usr/bin下和/etc/init." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e95aa0367d4ab44581ee9872600d89e8/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-02-12T14:53:07+08:00" />
+<meta property="article:modified_time" content="2020-02-12T14:53:07+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux十字病毒查杀处理</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p> </p> 
+<p><a href="https://blog.51cto.com/ixdba/2163018" rel="nofollow">https://blog.51cto.com/ixdba/2163018</a></p> 
+<h2>一、现象</h2> 
+<p>接到客户的电话，说自己的云服务器被提供商禁止访问了，原因是监测到网络流量暴满，服务器不停的向外发包，在确认客户没有业务量突增的情况下，初步判断可能服务器遭受了流量攻&amp;击（DDOS），不过按照常理来说，客户的业务系统就是一个小的web系统，平时流量不大，影响力也一般，不至于遭受DDOs，带着这些疑问，要到了客户服务器的登录方式，废话少说，还是进入系统，一查究竟吧。</p> 
+<h2>二、排查问题</h2> 
+<p>下图是登录系统后，执行top命令的输出结果，综合查看，系统整体负载并不高，但是带宽占用很高，由于云服务器带宽基本耗尽，ssh登录服务器也非常慢，几乎不能执行任何操作。</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/3d/37/4PBpEW2R_o.png"></p> 
+<p>此外，还发现第一个进程占用很大cpu资源，就是名为apgffcztwi的进程，这个进程名刚好10个字符，这是什么进程，名字相当古怪，肯定有问题，从文件名看出，这不像一个正常的系统进程。</p> 
+<p>既然有古怪，那就看看这个进程是哪个程序启动的，操作方式见下图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/09/bb/6SI6Wb5X_o.png"></p> 
+<p>简单吧，通过刚才那个进程的pid，然后去proc下面查看pid目录下面对应的exe文件，就能找到进程对应的启动程序，linux就是这么敞亮，一下子找到了这个程序位于/usr/bin目录下。</p> 
+<p>既然找到了这个程序，那就详细查看下这个程序的属性信息吧，如下图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/06/5a/ZgwlqB8U_o.png"></p> 
+<p>看到了吗，第一个文件，文件的读、写和执行属性均没有，相当古怪。好吧，先记录下来这个文件的位置和路径。</p> 
+<p>下面继续查看系统进程信息，看看有无其它异常，通过ps命令又发现了新的线索，如下图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/c2/16/FKBX5DlG_o.png"></p> 
+<p>在/usr/bin目录下有隐藏的.sshd文件，这个文件是正常系统所没有的，又一个可疑线路，仍然记录下来。</p> 
+<p>继续查看系统进程，可疑进程还远远不止这些，这不，又发现了一个可疑进程，如下图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/b3/e4/wCrzCM9Q_o.png"></p> 
+<p>/usr/bin/dpkgd/ps -ef这个进程很明显是个变种的病毒，因为我们指定ps命令肯定不会存在/usr/bin/dpkgd目录下，既然说到/usr/bin/dpkgd目录，那么就到这个目录下去看个究竟，继续上图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/b4/91/tAMZStEy_o.png"></p> 
+<p>又发现一些隐藏的病毒文件了，比如lsof ps netstat ss，这些都是变种病毒文件，主要用来替换系统中的一些命令，当看到netstat这个命令时，基本明白了这个病毒的意图了，它无非就是发流量包，造成网络瘫痪，病毒替换了系统原有的包，换成自身经过改写的命令包，这样，既隐藏了自己的行为，又不会对服务器造成太大影响，但是它的真正目的就是用咱们的机器做肉鸡啊。真是用心良苦。</p> 
+<p>记录这个线索，然后继续通过dmesg命令查看系统信息，看看有没有异常，上图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/22/53/gePBxGt3_o.png"></p> 
+<p>果然有异常信息，nf_conntrack是iptables里面的连接跟踪模块，它通过哈希表记录已建立的连接，包括其他机器到本机、本机到其他机器、本机到本机的连接，出现dropping packet，就是由于服务器访问量大，内核netfilter模块conntrack相关参数配置不合理，导致新连接被drop掉。查看nf_conntrack_max，看看设置多大：</p> 
+<pre><code>[root@server~]# cat /proc/sys/net/netfilter/nf_conntrack_max
+2097152</code></pre> 
+<p>nf_conntrack_max设置200多万，已经设置很大了，看来不是这个参数设置导致的。估计应该是上面的一些异常进程导致的。</p> 
+<h2>三、开始干活</h2> 
+<p>通过上面发现的几个线索，为了能快速解决问题，先尝试关闭或删除进程和文件，然后看看网络是否能够恢复正常，一不做二不休，开整吧!</p> 
+<p>第一步，先删除/usr/bin/.sshd文件，然后关闭此文件对应的进程，看下面的图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/9d/0f/5SV4H4IJ_o.png"></p> 
+<p>这样先删除进程对应的文件，然后kill掉.sshd进程，那么，进程就无法重新启动了。</p> 
+<p>第二步，删除/usr/bin/dpkgd目录下所有的变种病毒文件，同时删除/usr/bin/apgffcztwi文件，写个脚本，批量删除如下：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/33/d8/KbVNAJos_o.png"></p> 
+<p>执行删除后，发现ps命令不好使了，可恶啊，不过，这点问题，难不倒俺，重新安装一个ps命令即可，或者从别的机器拷贝一个ps命令过来，这里来个干脆的，重新安装一个，安装过程看下图：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/ca/88/LYa2qtkL_o.png"></p> 
+<p>大家能看到这个操作吧，先看看ps命令属于按个rpm包，然后yum在线安装一个新的包即可。</p> 
+<p>这个procps包安装完成后，ps命令又可以使用了，现在通过ps命令查看到的系统信息，才是真实的系统啊，刚才那个ps命令是加壳的，屏蔽了很多系统中黑暗的勾当。</p> 
+<p>还在兴奋中，接着执行了一个lsof命令，又发现新情况了：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/a9/d5/gH9VcsFT_o.png"></p> 
+<p>刚刚删除了/usr/bin/apgffcztwi文件，但是又自动生成了新的文件，/usr/bin/fhmlrqtqvz，并且还有一个文件/usr/bin/fgqnvqzzck已经被删除了，但是进程仍然存在，那个deleted就是文件的状态。并且新生成的文件，仍然是10个字符。</p> 
+<p>看来是低估这个病毒程序了，继续往下深究！</p> 
+<p>考虑到会自动产生病毒文件，感觉应该是linux下的crontab完成的工作，那么是不是病毒在crontab里面做了手脚，去看看就知道了。</p> 
+<p>切换到系统的/var/log/cron目录下（此目录记录了linux下所有用户的计划任务信息，以crontab -u -e方式写入的计划任务都会在此目录下生成文件），没看到任何文件，看来不是用户级别的crontab在作怪，那么再看看系统级别的crontab，就是/etc/crontab文件，贴图如下：</p> 
+<p> <img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/d4/e0/W4Nia1qr_o.png"></p> 
+<p>看最后一行，发现了一个定时任务，此任务每三分钟执行一次，任务对应的是个kill.sh脚本，找到脚本就好办了，看看这个脚本的内容：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/53/30/8DAFFN3y_o.png"></p> 
+<p>脚本很简单，但是却是个重大发现，此脚本会自动重启网卡，然后执行一个cp操作，将/lib/libkill.so文件复制一个/lib/libkill.so.6文件，然后执行这个文件。这个文件是个二进制的文件，无法查看内容，猜想应该就是自动生成那个十个字符文件的病原体。</p> 
+<p>这里看到的病原体名称是libkill.so，它的名称不是固定的，常见的还有类似libudev.so、/lib/udev/udev等类似名称，但是作用应该都是一样的。</p> 
+<p>到这里为止，思路基本清楚了，大概理了一下思路，这个×××执行的原理应该是这样的：libkill.so是所有进程的病原体，通过kill.sh脚本每隔3分钟自动检测一次，如果发现病毒程序不存在了，就从病原体复制一份儿到/lib/libkill.so.6，病毒副本/lib/libkill.so.6执行后，就会生成一个随机命名（10个字符）的程序，放到/usr/bin/、/boot，/etc/init.d等目录下。 同时还修改了自启动配置chkconfig –add xxx，修改自启动项/etc/rc.local等，让×××程序开机自动运行。</p> 
+<p>这就是为什么无法杀掉病毒进程的原因。</p> 
+<p>至此，病毒运行的原理已经清晰了，下面的工作就是清除病毒程序。</p> 
+<h2>四、清除病毒</h2> 
+<p>清除病毒也是需要技巧的，如果直接删除kill.sh文件，你会发现，这个文件又自动生成了，这就是病毒程序在起作用。</p> 
+<p>那么怎么彻底清除呢，可通过下面方式实现：</p> 
+<p>通过top或者lsof命令可以获取那个自动启动的×××进程的pid为17161，然后执行如下操作：</p> 
+<pre><code>kill -STOP 17161</code></pre> 
+<p>注意，这里-STOP选项的含义，不是关闭这个进程，而是停止这个进程。进程停止执行后，进程仍然存在，这样就绕过了病毒进程就监测。紧接着，再来点硬货：</p> 
+<pre><code>chattr +i /etc/crontab</code></pre> 
+<p>这样，先锁定crontab文件，不让任何进程写入数据。</p> 
+<p>下面就可以安静的删除之前的那些病毒文件了。</p> 
+<p>先删除这个kill.sh文件，让他不再定期执行：</p> 
+<pre><code>[root@server ~]# ll /etc/cron.hourly/kill.sh</code></pre> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/ed/91/D2WDscXu_o.png"></p> 
+<p>接着删除/usr/bin下和/etc/init.d下的所有可疑文件：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/16/65/l0gvcOaa_o.png"></p> 
+<p>比如上图中，第1、2、4、5、6都是可疑文件，随便看一个文件：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/4b/2b/kiub6E3V_o.png"></p> 
+<p>可以看到，这个文件又指向了/root/xd文件，而这个xd文件肯定也是病毒文件，需要删除。</p> 
+<p>最后，删除病原体文件：</p> 
+<pre><code>[root@server ~]# rm -rf /lib/libkill.so.6
+[root@server ~]# rm -rf /lib/libkill.so</code></pre> 
+<p>最最后，别忘了，还要清理现场，关闭一直处于停止状态的那个pid为17161的病毒进程：</p> 
+<pre><code>[root@server ~]# kill -9 17161</code></pre> 
+<p>现在就可以直接执行kill -9的操作了，因为病原体已经被删除，定时任务文件也被锁定，定时执行的脚本也被删除，所以这个病毒再无回天之力了。</p> 
+<p>最后，再看下清除病毒后的系统状态：</p> 
+<p><img alt="十字符病毒，杀不死的小强，一次云服务器沦陷实录" src="https://images2.imgbox.com/ed/f3/HNWyLvdV_o.png"></p> 
+<p>整个世界清静了。</p> 
+<p>但是，但是，好像我又发现了什么，是的，我发现了一个redis进程在运行。瞬间，明白了这个事件发生的原因了：估计是Redis未授权访问漏洞导致的。</p> 
+<p>经过验证，确实如此，服务器上的redis没有密码验证机制，可直接登录，不过这不算什么，最悲催的是redis的6379端口默认对全网开放。。。。。</p> 
+<p>这里科普下什么是十字叉病毒，它是一个或者多个十位随机字母组成的木&amp;马病毒进程，主要目的消耗服务各项资源。属于一种挂马，此病毒会自我保护和自我恢复。主要特征是会往外发送大量数据包。</p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/b0cb429f12022ee3f52dd382b94329bc/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">使用shell脚本实现自动SSH互信功能（免密登录）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/20f24bb3151f62d0f647ef965564b6d3/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">如何设置树莓派 VNC 的分辨率</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

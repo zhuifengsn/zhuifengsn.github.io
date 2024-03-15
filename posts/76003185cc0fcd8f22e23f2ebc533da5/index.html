@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Spring之IoC源码分析及设计思想(一)——BeanFactory - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Spring之IoC源码分析及设计思想(一)——BeanFactory" />
+<meta property="og:description" content="关于Spring的IOC Spring 是一个开源的 Java 平台，它提供了一种简化应用程序开发的框架。它是一个分层的框架，包括两个主要的内核：控制反转（IOC）和面向切面编程（AOP）。IOC 允许应用程序将组件之间的依赖关系交给框架来管理，从而实现松耦合；而 AOP 则允许应用程序以声明式的方式实现横切关注点，如日志、事务、安全等。
+Spring 的 IOC（Inversion of Control）是其核心特性之一，它允许应用程序将组件之间的依赖关系交给框架来管理，从而实现松耦合。 在传统的程序设计中，对象之间的依赖关系是由程序代码直接控制的，而在 IOC 的思想下，对象之间的依赖关系是由 Spring 容器控制的，程序代码只需要声明依赖关系，而不需要直接创建或管理对象。换言之，当我们通过配置声明好对象之间的依赖后，Spring容器会根据我们的配置帮我们创建对象实例并完成对象中各个成员变量的装配，而不需要我们手动创建或者查找各个对象实例来进行组装。我们可以认为IOC与JNDI相反——后者从容器中主动查找依赖(所需要的对象)，而前者在容器初始化某个对象时不等对象请求就主动将依赖传递给它。
+IOC的底层采用了工厂模式，所有的Bean(对象实例)都将由BeanFactory也就是Bean工厂来完成实例化，且实例化后理论上都需要被注册到容器中，由容器负责Bean的生命周期的管理(Bean的创建、依赖装配、初始化、销毁)。 开发者只需要按照Spring约定好的方式提供Bean的定义信息(主要以XML配置和注解配置为主，有时候也可以在运行期间通过某些方式实时提供)即可，Bean工厂会根据这些Bean定义来完成Bean的生成。因此，对Bean工厂的认识与理解正是认识SpringIOC的关键(Bean工厂是SpringIOC的逻辑实现)。
+从片面的角度上来说，我们可以认为Spring就是一个针对Bean生命周期进行管理的容器。
+关于BeanFactory 前面提到Bean工厂是SpringIOC的逻辑实现，因此正确理解Bean工厂正是认识SpringIOC的关键(这里的Bean工厂并不指的是BeanFactory接口，而是包含BeanFactory接口在内的一整套类与接口的实现)。下图是Bean工厂的实现类图：
+从整个类图来看，我们可以发现所有的接口与类最终汇聚到了DefaultListableBeanFactory上了。DefaultListableBeanFactory这个类包含了SpringIOC完整的逻辑实现，是Spring默认的BeanFactory实现。事实上，在我们使用Spring时最熟悉的ClassPathXmlApplicationContext与FileSystemXmlApplicationContext两个类都是通过DefaultListableBeanFactory来实现SpringIOC的功能。具体源码可见下图：
+在图中我们可以看到ApplicationContext的getBean逻辑正是调用了DefaultListableBeanFactory来实现的Bean的获取。其中AbstractApplicationContext正是前面提到的ClassPathXmlApplicationContext与FileSystemXmlApplicationContext的高层父类。
+因此，我们对于SpringIOC的源码和分析只需要局限于DefaultListableBeanFactory即可。DefaultListableBeanFactory已经封装了SpringIOC中对Bean操作的完整逻辑。从前面第一张图(Bean工厂的实现类图)可以看到，在DefaultListableBeanFactory之上有着大量的接口和类，组成了非常复杂的类继承结构。但是其中最顶层的接口就只有BeanFactory、AliasRegistry以及SingletonBeanRegistry。三者分别赋予了Bean工厂不同的能力。而从DefaultListableBeanFactory的类名来看，也可以发现Spring对它的定义就是一个BeanFactory。本文主要讨论BeanFactory接口在SpringIOC设计中所承担的职责与角色，而不着重于类图中其他类与接口的能力。
+BeanFactory接口 BeanFactory接口是Spring定义的顶层接口，被定义为是Bean容器的客户端视图。即我们对Bean容器中Bean的获取可以通过BeanFactory接口来实现，而不需要关心其获取逻辑。换句话说，BeanFactory接口赋予了Bean容器向外提供Bean的能力。下图是BeanFactory接口中定义的方法列表：
+从图中看，我们能够发现BeanFactory接口中差不多有近一半的方法都是以getBean为名通过Bean名称、Bean类型去获取符合条件的Bean实例。至于剩下的基本也都是与Bean及其特性相关的操作，比如是否包含Bean、判断Bean是单例Bean还是原型Bean、类型是否匹配、获取Bean的类型和别名等。
+因此，我们也能够确认BeanFactory接口确实与之前所说一致，是一个被设计用来访问Bean容器中Bean实例的客户端视图，定义了实现该接口的类获取Bean的能力。
+本章不谈具体的实现逻辑，因为IOC的实现是一个复杂的过程，在不了解Spring设计意图的前提下盲目去讨论其直接实现类AbstractBeanFactory的实现逻辑会容易让人迷茫，因为其中参杂着其他许多类与接口的部分。相信跟着源码debug过的同学深有体会。其中Bean的缓存是由DefaultSingletonRegistry实现的，Bean的构建和装配等逻辑又是由AbstractAutowireCapableBeanFactory类实现的，这些部分的逻辑又被嵌入在获取Bean的逻辑中，所以通过debug去追溯源码执行逻辑的方式并不可取。
+接口方法说明 下面提供对BeanFactory中函数的简单说明，可看可不看。因为大概的作用在前面已经点的差不多了，有了解的同学可以不用看这部分。
+Object getBean(String name) throws BeansException; 根据name或者alias获取容器中的Bean
+&lt;T&gt; T getBean(String name, Class&lt;T&gt; requiredType) throws BeansException; 通过传入的name查找到Bean然后转成requiredType的类型，如果找不到会抛出 NoSuchBeanDefinitionException.
+如果转化类型失败会抛出BeanNotOfRequiredTypeException.
+Object getBean(String name, Object... args) throws BeansException; 返回一个实例，该实例可以是指定bean的共享或独立的。
+允许指定显式构造函数自变量/工厂方法自变量，并覆盖Bean定义中指定的默认自变量（如果有） 。
+注意，如果Bean已经被创建了，那么通过这个方式就无法将参数放进去了。
+&lt;T&gt; T getBean(Class&lt;T&gt; requiredType) throws BeansException; 根据类型查找Bean，如果找不到Bean会抛出 NoSuchBeanDefinitionException;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/76003185cc0fcd8f22e23f2ebc533da5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-07-29T13:05:00+08:00" />
+<meta property="article:modified_time" content="2023-07-29T13:05:00+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Spring之IoC源码分析及设计思想(一)——BeanFactory</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-tomorrow-night">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="SpringIOC_0"></a>关于Spring的IOC</h2> 
+<p>Spring 是一个开源的 Java 平台，它提供了一种简化应用程序开发的框架。它是一个分层的框架，包括两个主要的内核：<mark>控制反转（IOC）和面向切面编程（AOP）</mark>。IOC 允许应用程序将组件之间的依赖关系交给框架来管理，从而实现松耦合；而 AOP 则允许应用程序以声明式的方式实现横切关注点，如日志、事务、安全等。</p> 
+<p><strong>Spring 的 IOC（Inversion of Control）是其核心特性之一，它允许应用程序将组件之间的依赖关系交给框架来管理，从而实现松耦合。</strong> 在传统的程序设计中，对象之间的依赖关系是由程序代码直接控制的，而在 IOC 的思想下，对象之间的依赖关系是由 Spring 容器控制的，程序代码只需要声明依赖关系，而不需要直接创建或管理对象。换言之，当我们通过配置声明好对象之间的依赖后，Spring容器会根据我们的配置帮我们创建对象实例并完成对象中各个成员变量的装配，而不需要我们手动创建或者查找各个对象实例来进行组装。我们可以认为IOC与JNDI相反——后者从容器中主动查找依赖(所需要的对象)，而前者在容器初始化某个对象时不等对象请求就主动将依赖传递给它。</p> 
+<p><strong>IOC的底层采用了工厂模式，所有的Bean(对象实例)都将由BeanFactory也就是Bean工厂来完成实例化，且实例化后理论上都需要被注册到容器中，由容器负责Bean的生命周期的管理(Bean的创建、依赖装配、初始化、销毁)。</strong> 开发者只需要按照Spring约定好的方式提供Bean的定义信息(主要以XML配置和注解配置为主，有时候也可以在运行期间通过某些方式实时提供)即可，Bean工厂会根据这些Bean定义来完成Bean的生成。因此，<mark>对Bean工厂的认识与理解正是认识SpringIOC的关键(Bean工厂是SpringIOC的逻辑实现)。</mark></p> 
+<p><mark>从片面的角度上来说，我们可以认为Spring就是一个针对Bean生命周期进行管理的容器。</mark></p> 
+<h2><a id="BeanFactory_9"></a>关于BeanFactory</h2> 
+<p>前面提到Bean工厂是SpringIOC的逻辑实现，因此正确理解Bean工厂正是认识SpringIOC的关键(这里的Bean工厂并不指的是BeanFactory接口，而是包含BeanFactory接口在内的一整套类与接口的实现)。下图是Bean工厂的实现类图：<br> <img src="https://images2.imgbox.com/51/62/yt9taMao_o.png" alt="Bean工厂的实现类图"><br> 从整个类图来看，我们可以发现所有的接口与类最终汇聚到了DefaultListableBeanFactory上了。<strong><mark>DefaultListableBeanFactory这个类包含了SpringIOC完整的逻辑实现，是Spring默认的BeanFactory实现</mark></strong>。事实上，在我们使用Spring时最熟悉的<strong>ClassPathXmlApplicationContext与FileSystemXmlApplicationContext两个类都是通过DefaultListableBeanFactory来实现SpringIOC的功能</strong>。具体源码可见下图：</p> 
+<p><img src="https://images2.imgbox.com/ac/28/Hy9FlBVy_o.jpg" alt="ApplicationContext的getBean逻辑"><br> 在图中我们可以看到<strong>ApplicationContext的getBean逻辑正是调用了DefaultListableBeanFactory来实现的Bean的获取</strong>。其中AbstractApplicationContext正是前面提到的ClassPathXmlApplicationContext与FileSystemXmlApplicationContext的高层父类。</p> 
+<p>因此，<mark>我们对于SpringIOC的源码和分析只需要局限于DefaultListableBeanFactory即可</mark>。DefaultListableBeanFactory已经封装了SpringIOC中对Bean操作的完整逻辑。从前面第一张图(Bean工厂的实现类图)可以看到，在DefaultListableBeanFactory之上有着大量的接口和类，组成了非常复杂的类继承结构。但是其中最顶层的接口就只有BeanFactory、AliasRegistry以及SingletonBeanRegistry。三者分别赋予了Bean工厂不同的能力。而从DefaultListableBeanFactory的类名来看，也可以发现Spring对它的定义就是一个BeanFactory。<strong>本文主要讨论BeanFactory接口在SpringIOC设计中所承担的职责与角色，而不着重于类图中其他类与接口的能力</strong>。</p> 
+<h2><a id="BeanFactory_19"></a>BeanFactory接口</h2> 
+<p><mark>BeanFactory接口是Spring定义的顶层接口，被定义为是Bean容器的客户端视图</mark>。即我们对Bean容器中Bean的获取可以通过BeanFactory接口来实现，而不需要关心其获取逻辑。换句话说，<strong>BeanFactory接口赋予了Bean容器向外提供Bean的能力</strong>。下图是BeanFactory接口中定义的方法列表：<br> <img src="https://images2.imgbox.com/f1/2a/pzQe1Chr_o.jpg" alt="BeanFactory接口结构" width="475" height="485"><br> 从图中看，我们能够发现BeanFactory接口中差不多有近一半的方法都是以getBean为名通过Bean名称、Bean类型去获取符合条件的Bean实例。至于剩下的基本也都是与Bean及其特性相关的操作，比如是否包含Bean、判断Bean是单例Bean还是原型Bean、类型是否匹配、获取Bean的类型和别名等。</p> 
+<p>因此，我们也能够确认BeanFactory接口确实与之前所说一致，是一个被设计用来访问Bean容器中Bean实例的客户端视图，定义了实现该接口的类获取Bean的能力。</p> 
+<p>本章不谈具体的实现逻辑，因为IOC的实现是一个复杂的过程，在不了解Spring设计意图的前提下盲目去讨论其直接实现类AbstractBeanFactory的实现逻辑会容易让人迷茫，因为其中参杂着其他许多类与接口的部分。相信跟着源码debug过的同学深有体会。其中Bean的缓存是由DefaultSingletonRegistry实现的，Bean的构建和装配等逻辑又是由AbstractAutowireCapableBeanFactory类实现的，这些部分的逻辑又被嵌入在获取Bean的逻辑中，所以通过debug去追溯源码执行逻辑的方式并不可取。</p> 
+<h3><a id="_29"></a>接口方法说明</h3> 
+<p>下面提供对BeanFactory中函数的简单说明，可看可不看。因为大概的作用在前面已经点的差不多了，有了解的同学可以不用看这部分。</p> 
+<pre><code class="prism language-java"><span class="token class-name">Object</span> <span class="token function">getBean</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">BeansException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>根据name或者alias获取容器中的Bean</p> 
+<pre><code class="prism language-java"><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token class-name">T</span> <span class="token function">getBean</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">,</span> <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> requiredType<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">BeansException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>通过传入的name查找到Bean然后转成requiredType的类型，如果找不到会抛出 NoSuchBeanDefinitionException.<br> 如果转化类型失败会抛出BeanNotOfRequiredTypeException.</p> 
+<pre><code class="prism language-java"><span class="token class-name">Object</span> <span class="token function">getBean</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">BeansException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>返回一个实例，该实例可以是指定bean的共享或独立的。<br> 允许指定显式构造函数自变量/工厂方法自变量，并覆盖Bean定义中指定的默认自变量（如果有） 。<br> 注意，如果Bean已经被创建了，那么通过这个方式就无法将参数放进去了。</p> 
+<pre><code class="prism language-java"><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token class-name">T</span> <span class="token function">getBean</span><span class="token punctuation">(</span><span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> requiredType<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">BeansException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>根据类型查找Bean，如果找不到Bean会抛出 NoSuchBeanDefinitionException;<br> 如果找到不止一个，则抛出NoUniqueBeanDefinitionException</p> 
+<pre><code class="prism language-java"><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token class-name">T</span> <span class="token function">getBean</span><span class="token punctuation">(</span><span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> requiredType<span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">BeansException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>根据type查找Bean,如果该Bean未被实例化，那么可以将传入的参数对Bean进行DI</p> 
+<pre><code class="prism language-java"><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token class-name">ObjectProvider</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token function">getBeanProvider</span><span class="token punctuation">(</span><span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> requiredType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token class-name">ObjectProvider</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token function">getBeanProvider</span><span class="token punctuation">(</span><span class="token class-name">ResolvableType</span> requiredType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>getBeanProvider()方法用于获取指定bean的ObjectProvider。<br> ObjectProvider是用与延迟构造Bean的，因为正常直接通过getBean来获取Bean会使得容器直接实例化Bean，但有些时候我们可能并不希望这样。ObjectProvider正好可以用来解决这个问题，它使得我们只有调用了ObjectProvider中的getObject方法才会出发Bean的实例化。这个类不需要深究，不影响IOC的源码理解。</p> 
+<pre><code class="prism language-java"><span class="token keyword">boolean</span> <span class="token function">containsBean</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>容器中是否包含Bean,按照name或者alias进行查找</p> 
+<pre><code class="prism language-java"><span class="token keyword">boolean</span> <span class="token function">isSingleton</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">NoSuchBeanDefinitionException</span><span class="token punctuation">;</span>
+<span class="token keyword">boolean</span> <span class="token function">isPrototype</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">NoSuchBeanDefinitionException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>判断当前的Bean是单例还是原型的作用域</p> 
+<pre><code class="prism language-java"><span class="token keyword">boolean</span> <span class="token function">isTypeMatch</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">,</span> <span class="token class-name">ResolvableType</span> typeToMatch<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">NoSuchBeanDefinitionException</span><span class="token punctuation">;</span>
+<span class="token keyword">boolean</span> <span class="token function">isTypeMatch</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">,</span> <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> typeToMatch<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">NoSuchBeanDefinitionException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>检查具有给定信息的Bean是否与指定的类型匹配。更具体地说，检查对给定名称的getBean调用是否将返回可分配给指定目标类型的对象。将别名转换回相应的规范bean名称。将询问父工厂是否在该工厂实例中找不到该bean。</p> 
+<pre><code class="prism language-java"><span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> <span class="token function">getType</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">NoSuchBeanDefinitionException</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>获取bean对应的class</p> 
+<pre><code class="prism language-java"><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token function">getAliases</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>返回Bean的别名数组</p> 
+<h2><a id="_85"></a>总结</h2> 
+<p>Spring的IOC实际上是由两个部分组成的，以Regisrty结尾的接口赋予了类缓存Bean以及其他需要用到的对象的缓存能力，也就是容器的能力。而本文谈到的BeanFactory及其以BeanFactory结尾的子接口则赋予了实现类访问容器的能力，使得我们可以通过这些接口完成Bean的构建和获取等操作。因此对于IOC的认识需要分为BeanFactory和Registry两个脉络去了解，两条脉络最终在DefaultListableBeanFactory这个类上完成交汇，从而提供真正的IOC功能。</p> 
+<p>本系列将沿着两条脉络逐步解析，来完成对SpringIOC源码的分析，从而了解Spring的设计思想。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/5ff304d9e49e4b0b9d19dc2be8a05bbd/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【C&#43;&#43;11】——右值引用、移动语义</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/fd6fa15f6fd85cf6866cbc7e4a15c5f9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Linux network 重启报错：Failed to start LSB: Bring up/dow....</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

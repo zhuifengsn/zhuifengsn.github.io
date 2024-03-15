@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>OpenCV图像处理（四） -边缘检测 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="OpenCV图像处理（四） -边缘检测" />
+<meta property="og:description" content="边缘检测 目录
+边缘检测
+形态学-腐蚀、膨胀操作
+开运算与闭运算
+梯度运算
+礼帽与黑帽
+图像梯度-Sobel算子（右减左，下减上）
+图像梯度-Scharr算子
+图像梯度-laplacian算子
+Canny边缘检测
+形态学-腐蚀、膨胀操作 形态学-腐蚀操作，去毛刺儿，腐蚀边界
+# 腐蚀核大小 kernel = np.ones((3,3),np.uint8) # 腐蚀操作： # img输入图片 # kernel腐蚀核 # iterations迭代次数 erosion = cv2.erode(img,kernel,iterations = 1) 形态学-膨胀操作，膨胀和腐蚀操作作为逆运算
+kernel = np.ones((3,3),np.uint8) dige_dilate = cv2.dilate(dige_erosion,kernel,iterations = 1) 开运算与闭运算 开运算：先腐蚀、后膨胀
+kernel = np.ones((5,5),np.uint8) # cv2.MORPH_OPEN开运算参数 opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel) 闭运算：先膨胀、后腐蚀
+kernel = np.ones((5,5),np.uint8) # cv2.MORPH_CLOSE闭运算参数 closing = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel) 梯度运算 梯度=膨胀-腐蚀（留轮廓）
+# cv2.MORPH_GRADIENT梯度运算参数 gradient = cv2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/9846e6eb5e6f406eadba087997a3012c/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-12-28T21:27:12+08:00" />
+<meta property="article:modified_time" content="2020-12-28T21:27:12+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">OpenCV图像处理（四） -边缘检测</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h3 id="%E8%BE%B9%E7%BC%98%E6%A3%80%E6%B5%8B">边缘检测</h3> 
+<p id="main-toc"><strong>目录</strong></p> 
+<p id="%E8%BE%B9%E7%BC%98%E6%A3%80%E6%B5%8B-toc" style="margin-left:40px;"><a href="#%E8%BE%B9%E7%BC%98%E6%A3%80%E6%B5%8B" rel="nofollow">边缘检测</a></p> 
+<p id="%E5%BD%A2%E6%80%81%E5%AD%A6-%E8%85%90%E8%9A%80%E6%93%8D%E4%BD%9C-toc" style="margin-left:80px;"><a href="#%E5%BD%A2%E6%80%81%E5%AD%A6-%E8%85%90%E8%9A%80%E6%93%8D%E4%BD%9C" rel="nofollow">形态学-腐蚀、膨胀操作</a></p> 
+<p id="%E5%BC%80%E8%BF%90%E7%AE%97%E4%B8%8E%E9%97%AD%E8%BF%90%E7%AE%97-toc" style="margin-left:80px;"><a href="#%E5%BC%80%E8%BF%90%E7%AE%97%E4%B8%8E%E9%97%AD%E8%BF%90%E7%AE%97" rel="nofollow">开运算与闭运算</a></p> 
+<p id="%E6%A2%AF%E5%BA%A6%E8%BF%90%E7%AE%97-toc" style="margin-left:80px;"><a href="#%E6%A2%AF%E5%BA%A6%E8%BF%90%E7%AE%97" rel="nofollow">梯度运算</a></p> 
+<p id="%E7%A4%BC%E5%B8%BD%E4%B8%8E%E9%BB%91%E5%B8%BD-toc" style="margin-left:80px;"><a href="#%E7%A4%BC%E5%B8%BD%E4%B8%8E%E9%BB%91%E5%B8%BD" rel="nofollow">礼帽与黑帽</a></p> 
+<p id="%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-Sobel%E7%AE%97%E5%AD%90%EF%BC%88%E5%8F%B3%E5%87%8F%E5%B7%A6%EF%BC%8C%E4%B8%8B%E5%87%8F%E4%B8%8A%EF%BC%89-toc" style="margin-left:80px;"><a href="#%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-Sobel%E7%AE%97%E5%AD%90%EF%BC%88%E5%8F%B3%E5%87%8F%E5%B7%A6%EF%BC%8C%E4%B8%8B%E5%87%8F%E4%B8%8A%EF%BC%89" rel="nofollow">图像梯度-Sobel算子（右减左，下减上）</a></p> 
+<p id="%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-Scharr%E7%AE%97%E5%AD%90-toc" style="margin-left:80px;"><a href="#%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-Scharr%E7%AE%97%E5%AD%90" rel="nofollow">图像梯度-Scharr算子</a></p> 
+<p id="%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-laplacian%E7%AE%97%E5%AD%90-toc" style="margin-left:80px;"><a href="#%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-laplacian%E7%AE%97%E5%AD%90" rel="nofollow">图像梯度-laplacian算子</a></p> 
+<p id="Canny%E8%BE%B9%E7%BC%98%E6%A3%80%E6%B5%8B-toc" style="margin-left:80px;"><a href="#Canny%E8%BE%B9%E7%BC%98%E6%A3%80%E6%B5%8B" rel="nofollow">Canny边缘检测</a></p> 
+<hr id="hr-toc"> 
+<blockquote> 
+ <ul><li> <h4 id="%E5%BD%A2%E6%80%81%E5%AD%A6-%E8%85%90%E8%9A%80%E6%93%8D%E4%BD%9C">形态学-腐蚀、膨胀操作</h4> </li></ul> 
+ <p>形态学-腐蚀操作，去毛刺儿，腐蚀边界</p> 
+ <pre><code class="language-python"># 腐蚀核大小
+kernel = np.ones((3,3),np.uint8)
+# 腐蚀操作：
+# img输入图片
+# kernel腐蚀核
+# iterations迭代次数
+erosion = cv2.erode(img,kernel,iterations = 1)</code></pre> 
+ <p id="%E5%BD%A2%E6%80%81%E5%AD%A6-%E8%86%A8%E8%83%80%E6%93%8D%E4%BD%9C%C2%A0">形态学-膨胀操作，膨胀和腐蚀操作作为逆运算</p> 
+ <pre><code class="language-python">kernel = np.ones((3,3),np.uint8) 
+dige_dilate = cv2.dilate(dige_erosion,kernel,iterations = 1)</code></pre> 
+</blockquote> 
+<blockquote> 
+ <ul><li> <h4 id="%E5%BC%80%E8%BF%90%E7%AE%97%E4%B8%8E%E9%97%AD%E8%BF%90%E7%AE%97">开运算与闭运算</h4> </li></ul> 
+ <p>开运算：先腐蚀、后膨胀</p> 
+ <pre><code class="language-python">kernel = np.ones((5,5),np.uint8) 
+# cv2.MORPH_OPEN开运算参数
+opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)</code></pre> 
+ <p>闭运算：先膨胀、后腐蚀</p> 
+ <pre><code class="language-python">kernel = np.ones((5,5),np.uint8) 
+# cv2.MORPH_CLOSE闭运算参数
+closing = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)</code></pre> 
+</blockquote> 
+<p> </p> 
+<blockquote> 
+ <ul><li> <h4 id="%E6%A2%AF%E5%BA%A6%E8%BF%90%E7%AE%97">梯度运算</h4> </li></ul> 
+ <p>梯度=膨胀-腐蚀（留轮廓）</p> 
+ <pre><code class="language-python"># cv2.MORPH_GRADIENT梯度运算参数
+gradient = cv2.morphologyEx(img, cv2.MORPH_GRADIENT, kernel)</code></pre> 
+</blockquote> 
+<blockquote> 
+ <ul><li> <h4 id="%E7%A4%BC%E5%B8%BD%E4%B8%8E%E9%BB%91%E5%B8%BD">礼帽与黑帽</h4> </li></ul> 
+ <p>礼帽 = 原始输入-开运算结果（留毛刺儿）白色更清楚</p> 
+ <pre><code class="language-python"># cv2.MORPH_TOPHAT礼帽参数
+tophat = cv2.morphologyEx(img, cv2.MORPH_TOPHAT, kernel)</code></pre> 
+ <p>黑帽 = 闭运算-原始输入（留原始小轮廓）黑色更清楚</p> 
+ <pre><code class="language-python"># cv2.MORPH_BLACKHAT黑帽参数
+blackhat  = cv2.morphologyEx(img,cv2.MORPH_BLACKHAT, kernel)</code></pre> 
+</blockquote> 
+<blockquote> 
+ <ul><li> <h4 id="%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-Sobel%E7%AE%97%E5%AD%90%EF%BC%88%E5%8F%B3%E5%87%8F%E5%B7%A6%EF%BC%8C%E4%B8%8B%E5%87%8F%E4%B8%8A%EF%BC%89">图像梯度-Sobel算子（右减左，下减上）</h4> </li></ul> 
+ <p><img alt="" height="111" src="https://images2.imgbox.com/68/2d/MrJrCe5v_o.png" width="696"> ​</p> 
+ <p><img alt="" height="374" src="https://images2.imgbox.com/37/dd/bC6imXPg_o.png" width="697"></p> 
+ <p>dst = cv2.Sobel(src, ddepth, dx, dy, ksize)</p> 
+ <p>Sobel算子函数</p> src 图像 ddepth 图像深度 dx、dy 水平和竖直方向 ksize Sobel算子的大小 
+ <p> 图像深度：是指存储每个像素值所用的位数，例如cv2.CV_8U，指的是8位无符号数，取值范围为0~255，超出范围则会被截断（截断指的是，当数值大于255保留为255，当数值小于0保留为0，其余不变），CV_16S（16位无符号数），CV_16U（16位有符号数），CV_32F（32位浮点数），CV_64F（64位浮点数）</p> 
+ <pre><code class="language-python"># cv2.CV_64F转换成可带负数的64位浮点数字符格式，便于取绝对值
+# dx=1,dy=0计算竖直方向
+# 白到黑是正数，黑到白就是负数了，所有的负数会被截断成0，所以要取绝对值
+sobelx = cv2.Sobel(img,cv2.CV_64F,1,0,ksize=3)
+# 取绝对值
+sobelx = cv2.convertScaleAbs(sobelx)
+
+# dx=0,dy=1计算水平方向
+sobely = cv2.Sobel(img,cv2.CV_64F,0,1,ksize=3)
+sobely = cv2.convertScaleAbs(sobely) 
+
+#垂直+水平
+sobelxy = cv2.addWeighted(sobelx,0.5,sobely,0.5,0)
+</code></pre> 
+ <p> 分开算垂直和水平，再进行相加；不建议直接同时计算垂直和水平dx=1，dy=1，会造成上下左右的缺失，和重影。</p> 
+</blockquote> 
+<blockquote> 
+ <ul><li> <h4 id="%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-Scharr%E7%AE%97%E5%AD%90">图像梯度-Scharr算子</h4> </li></ul> 
+ <p>边缘两测差异扩大，对图像差异更加敏感</p> 
+ <p><img alt="" height="115" src="https://images2.imgbox.com/d2/6d/o8grSATD_o.png" width="651"> ​</p> 
+ <pre><code class="language-python">scharrx = cv2.Scharr(img,cv2.CV_64F,1,0)
+scharry = cv2.Scharr(img,cv2.CV_64F,0,1)
+scharrx = cv2.convertScaleAbs(scharrx)   
+scharry = cv2.convertScaleAbs(scharry)  
+scharrxy =  cv2.addWeighted(scharrx,0.5,scharry,0.5,0) </code></pre> 
+</blockquote> 
+<blockquote> 
+ <ul><li> <h4 id="%E5%9B%BE%E5%83%8F%E6%A2%AF%E5%BA%A6-laplacian%E7%AE%97%E5%AD%90">图像梯度-laplacian算子</h4> </li></ul> 
+ <p><img alt="" height="141" src="https://images2.imgbox.com/70/56/eev7StJZ_o.png" width="307"></p> 
+ <pre><code class="language-python">laplacian = cv2.Laplacian(img,cv2.CV_64F)
+laplacian = cv2.convertScaleAbs(laplacian) </code></pre> 
+ <p>中间点与边缘的差值，对噪声敏感。不建议单独使用</p> 
+</blockquote> 
+<blockquote> 
+ <ul><li> <h4 id="Canny%E8%BE%B9%E7%BC%98%E6%A3%80%E6%B5%8B">Canny边缘检测</h4> </li></ul> 
+ <p>1) 使用高斯滤波器，以平滑图像，滤除噪声。（高斯滤波）</p> 
+ <p>2) 计算图像中每个像素点的梯度强度和方向。（Sobel算子）</p> 
+ <p>3) 应用非极大值（Non-Maximum Suppression）抑制（取最大值），以消除边缘检测带来的杂散响应。</p> 
+ <p>4) 应用双阈值（Double-Threshold）检测来确定真实的和潜在的边缘。</p> 
+ <p>5) 通过抑制孤立的弱边缘最终完成边缘检测。</p> 
+ <ul><li>非极大值抑制（与切线方向上相邻点比较，若不是最大值舍去）</li></ul> 
+ <p>线性插值</p> 
+ <p><img alt="" height="207" src="https://images2.imgbox.com/ea/85/Xocg1rSJ_o.png" width="703"> ​</p> 
+ <p>简单化</p> 
+ <p><img alt="" height="234" src="https://images2.imgbox.com/32/f5/nRzLd4P2_o.png" width="709"> ​</p> 
+ <ul><li>双阈值检测（判断最大值和最小值之间的数值是否连有边界决定是否舍弃）</li></ul> 
+ <p><img alt="" height="203" src="https://images2.imgbox.com/79/f4/7HIUr5ZF_o.png" width="706"> ​</p> 
+ <pre><code class="language-python"># maxVal=150,minVal=80
+v1=cv2.Canny(img,80,150)
+</code></pre> 
+ <p>阈值越大检测的边界越少，阈值越小检测到的边界越多</p> 
+</blockquote> 
+<p> </p> 
+<p> </p> 
+<p> </p> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/da86f43917557b3d550e2b957dc1f9d0/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">推荐一个在Windows下可以查看文件夹大小的工具TreeSize Free</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/82b7cd5b3c3443ad033ff4b9bf28634e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">计算机领域16个含金量高的竞赛经验分享，80%的大学生都收藏了！</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

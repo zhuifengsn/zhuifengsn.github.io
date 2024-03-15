@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>SpringIOC的三级缓存原理分析 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="SpringIOC的三级缓存原理分析" />
+<meta property="og:description" content="前言 看本篇文章之前需要了解SpringIOC的基本流程，不了解的可以看我的这篇SpringIOC源码详解
+一. 什么是SpringIOC的三级缓存 类与类之间的依赖关系形成了闭环，就会导致循环依赖问题的产生。
+如下图是三个类之间的循环依赖
+Spring 的依赖注入方式有三种：构造方法注入、setter 方法注入、接口注入
+setter 方法注入的方式，是在对象实例化完成之后，再通过反射调用对象的 setter 方法完成属性的赋值，能够处理循环依赖的问题，也是本文要讲的构造方法注入的方式，将实例化与初始化并在一起完成，能够快速创建一个可直接使用的对象，但它没法处理循环依赖的问题，类似先有鸡还是先有蛋的问题接口注入的方式太灵活，易用性比较差，所以并未广泛应用起来 二. 跟着栗子看源码 下面这个栗子是两个类的相互依赖，同样能看出来三级缓存的流程
+Animal类：
+public class Animal { private String name; private Fruits fruits; public Fruits getFruits() { return fruits; } public void setFruits(Fruits fruits) { this.fruits = fruits; } public String getName() { return name; } public void setName(String name) { this.name = name; } } Fruits类：
+public class Fruits { private String name; private Animal animal; public Animal getAnimal() { return animal; } public void setAnimal(Animal animal) { this." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/5a110d850fddfc9172751dd84287760d/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-04-06T17:27:41+08:00" />
+<meta property="article:modified_time" content="2022-04-06T17:27:41+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">SpringIOC的三级缓存原理分析</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="_0"></a>前言</h3> 
+<p>看本篇文章之前需要了解SpringIOC的基本流程，不了解的可以看我的这篇<a href="https://blog.csdn.net/qq_34203492/article/details/83865450">SpringIOC源码详解</a></p> 
+<h2><a id="_SpringIOC_2"></a>一. 什么是SpringIOC的三级缓存</h2> 
+<p>类与类之间的依赖关系形成了闭环，就会导致循环依赖问题的产生。<br> 如下图是三个类之间的循环依赖<br> <img src="https://images2.imgbox.com/6d/d8/AmraMbSE_o.png" alt="在这里插入图片描述"><br> Spring 的依赖注入方式有三种：<strong>构造方法注入</strong>、<strong>setter 方法注入</strong>、<strong>接口注入</strong></p> 
+<ul><li>setter 方法注入的方式，是在对象实例化完成之后，再通过反射调用对象的 setter 方法完成属性的赋值，能够处理循环依赖的问题，也是本文要讲的</li><li>构造方法注入的方式，将实例化与初始化并在一起完成，能够快速创建一个可直接使用的对象，但它没法处理循环依赖的问题，类似先有鸡还是先有蛋的问题</li><li>接口注入的方式太灵活，易用性比较差，所以并未广泛应用起来</li></ul> 
+<h2><a id="__11"></a>二. 跟着栗子看源码</h2> 
+<p>下面这个栗子是两个类的相互依赖，同样能看出来三级缓存的流程<br> Animal类：</p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Animal</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> name<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">Fruits</span> fruits<span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">Fruits</span> <span class="token function">getFruits</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> fruits<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setFruits</span><span class="token punctuation">(</span><span class="token class-name">Fruits</span> fruits<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>fruits <span class="token operator">=</span> fruits<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> name<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setName</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>name <span class="token operator">=</span> name<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>Fruits类：</p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Fruits</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">private</span> <span class="token class-name">String</span> name<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token class-name">Animal</span> animal<span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">Animal</span> <span class="token function">getAnimal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> animal<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setAnimal</span><span class="token punctuation">(</span><span class="token class-name">Animal</span> animal<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>animal <span class="token operator">=</span> animal<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token class-name">String</span> <span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">return</span> name<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setName</span><span class="token punctuation">(</span><span class="token class-name">String</span> name<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>name <span class="token operator">=</span> name<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>SpringBean的XML配置文件</p> 
+<pre><code class="prism language-xml"><span class="token prolog">&lt;?xml version="1.0" encoding="UTF-8"?&gt;</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>beans</span> <span class="token attr-name"><span class="token namespace">xmlns:</span>xsi</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.w3.org/2001/XMLSchema-instance<span class="token punctuation">"</span></span> <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xsi:</span>schemaLocation</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.2.xsd<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>fruits<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.jingchuan.model.Fruits<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>property</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>name<span class="token punctuation">"</span></span> <span class="token attr-name">value</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>banana<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>property</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>property</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>animal<span class="token punctuation">"</span></span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>animal<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>property</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>bean</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>animal<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.jingchuan.model.Animal<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>property</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>name<span class="token punctuation">"</span></span> <span class="token attr-name">value</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>monkey<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>property</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>property</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>fruits<span class="token punctuation">"</span></span> <span class="token attr-name">ref</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>fruits<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>property</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>bean</span><span class="token punctuation">&gt;</span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>beans</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<p>测试：</p> 
+<pre><code class="prism language-java"><span class="token keyword">import</span> <span class="token namespace">com<span class="token punctuation">.</span>jingchuan<span class="token punctuation">.</span>model<span class="token punctuation">.</span></span><span class="token class-name">Fruits</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span></span><span class="token class-name">ApplicationContext</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token namespace">org<span class="token punctuation">.</span>springframework<span class="token punctuation">.</span>context<span class="token punctuation">.</span>support<span class="token punctuation">.</span></span><span class="token class-name">ClassPathXmlApplicationContext</span><span class="token punctuation">;</span>
+
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">TestIoc</span> <span class="token punctuation">{<!-- --></span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        <span class="token class-name">ApplicationContext</span> context <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ClassPathXmlApplicationContext</span><span class="token punctuation">(</span><span class="token string">"classpath:applicationIoc.xml"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">Fruits</span> fruits <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">Fruits</span><span class="token punctuation">)</span> context<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span><span class="token string">"fruits"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token class-name">System</span><span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>fruits<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>上面的测试代码配了两个Bean：<code>Fruits</code>和<code>Animal</code>，他们相互依赖对方</p> 
+<h2><a id="__98"></a>三. 源码分析</h2> 
+<p>三级缓存分别是啥：</p> 
+<pre><code class="prism language-java"><span class="token comment">/** Cache of singleton objects: bean name to bean instance. */</span>
+<span class="token comment">// 一级缓存   存的是完整的对象 已经解决了循环依赖和属性赋值等问题的最终对象</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">&gt;</span></span> singletonObjects <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ConcurrentHashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">/** Cache of singleton factories: bean name to ObjectFactory. */</span>
+<span class="token comment">// 三级缓存   存的是通过ObjectFactory对象来存储单例模式下提前暴露的Bean实例的引用（正在创建中） </span>
+<span class="token comment">// 其中ObjectFactory包含了对象的一系列包装的功能，比如代理</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">ObjectFactory</span><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span><span class="token punctuation">&gt;</span></span> singletonFactories <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">/** Cache of early singleton objects: bean name to bean instance. */</span>
+<span class="token comment">// 二级缓存  存的是单例模式下创建的Bean实例，该Bean被提前暴露的引用，该Bean还在创建中</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">,</span> <span class="token class-name">Object</span><span class="token punctuation">&gt;</span></span> earlySingletonObjects <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ConcurrentHashMap</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>通过之前对<a href="https://blog.csdn.net/qq_34203492/article/details/83865450">SpringIOC源码详解</a>的了解之后，应该知道在<code>org.springframework.context.support.AbstractApplicationContext#refresh</code>方法中对bean对象进行了注册和实例化。本篇我们直接从实例化开始讲，直接来到<code>org.springframework.beans.factory.support.AbstractBeanFactory#doGetBean</code>方法，我们跟着上面的例子跟源码：</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> <span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> <span class="token class-name">T</span> <span class="token function">doGetBean</span><span class="token punctuation">(</span>
+			<span class="token class-name">String</span> name<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> <span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">T</span><span class="token punctuation">&gt;</span></span> requiredType<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> <span class="token class-name">Object</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">,</span> <span class="token keyword">boolean</span> typeCheckOnly<span class="token punctuation">)</span>
+			<span class="token keyword">throws</span> <span class="token class-name">BeansException</span> <span class="token punctuation">{<!-- --></span>
+
+	<span class="token class-name">String</span> beanName <span class="token operator">=</span> <span class="token function">transformedBeanName</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token class-name">Object</span> beanInstance<span class="token punctuation">;</span>
+	
+	<span class="token comment">// Eagerly check singleton cache for manually registered singletons.</span>
+	<span class="token comment">// 从缓存中取对象  这里面就是根据参数从三级缓存中依次取对象</span>
+	<span class="token class-name">Object</span> sharedInstance <span class="token operator">=</span> <span class="token function">getSingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>sharedInstance <span class="token operator">!=</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> args <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>logger<span class="token punctuation">.</span><span class="token function">isTraceEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">isSingletonCurrentlyInCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				logger<span class="token punctuation">.</span><span class="token function">trace</span><span class="token punctuation">(</span><span class="token string">"Returning eagerly cached instance of singleton bean '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span>
+						<span class="token string">"' that is not fully initialized yet - a consequence of a circular reference"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				logger<span class="token punctuation">.</span><span class="token function">trace</span><span class="token punctuation">(</span><span class="token string">"Returning cached instance of singleton bean '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"'"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		beanInstance <span class="token operator">=</span> <span class="token function">getObjectForBeanInstance</span><span class="token punctuation">(</span>sharedInstance<span class="token punctuation">,</span> name<span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// Fail if we're already creating this bean instance:</span>
+		<span class="token comment">// We're assumably within a circular reference.</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">isPrototypeCurrentlyInCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCurrentlyInCreationException</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+
+		<span class="token comment">// Check if bean definition exists in this factory.</span>
+		<span class="token class-name">BeanFactory</span> parentBeanFactory <span class="token operator">=</span> <span class="token function">getParentBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>parentBeanFactory <span class="token operator">!=</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span><span class="token function">containsBeanDefinition</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token comment">// Not found -&gt; check parent.</span>
+			<span class="token class-name">String</span> nameToLookup <span class="token operator">=</span> <span class="token function">originalBeanName</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>parentBeanFactory <span class="token keyword">instanceof</span> <span class="token class-name">AbstractBeanFactory</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">AbstractBeanFactory</span><span class="token punctuation">)</span> parentBeanFactory<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">doGetBean</span><span class="token punctuation">(</span>
+						nameToLookup<span class="token punctuation">,</span> requiredType<span class="token punctuation">,</span> args<span class="token punctuation">,</span> typeCheckOnly<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>args <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token comment">// Delegation to parent with explicit args.</span>
+				<span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token class-name">T</span><span class="token punctuation">)</span> parentBeanFactory<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span>nameToLookup<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>requiredType <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token comment">// No args -&gt; delegate to standard getBean method.</span>
+				<span class="token keyword">return</span> parentBeanFactory<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span>nameToLookup<span class="token punctuation">,</span> requiredType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token class-name">T</span><span class="token punctuation">)</span> parentBeanFactory<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span>nameToLookup<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+
+		<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>typeCheckOnly<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token function">markBeanAsCreated</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+
+		<span class="token class-name">StartupStep</span> beanCreation <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>applicationStartup<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token string">"spring.beans.instantiate"</span><span class="token punctuation">)</span>
+				<span class="token punctuation">.</span><span class="token function">tag</span><span class="token punctuation">(</span><span class="token string">"beanName"</span><span class="token punctuation">,</span> name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>requiredType <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				beanCreation<span class="token punctuation">.</span><span class="token function">tag</span><span class="token punctuation">(</span><span class="token string">"beanType"</span><span class="token punctuation">,</span> requiredType<span class="token operator">::</span><span class="token function">toString</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token class-name">RootBeanDefinition</span> mbd <span class="token operator">=</span> <span class="token function">getMergedLocalBeanDefinition</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token function">checkMergedBeanDefinition</span><span class="token punctuation">(</span>mbd<span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+			<span class="token comment">// Guarantee initialization of beans that the current bean depends on.</span>
+			<span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> dependsOn <span class="token operator">=</span> mbd<span class="token punctuation">.</span><span class="token function">getDependsOn</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>dependsOn <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> dep <span class="token operator">:</span> dependsOn<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">isDependent</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> dep<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span>
+								<span class="token string">"Circular depends-on relationship between '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"' and '"</span> <span class="token operator">+</span> dep <span class="token operator">+</span> <span class="token string">"'"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+					<span class="token function">registerDependentBean</span><span class="token punctuation">(</span>dep<span class="token punctuation">,</span> beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token function">getBean</span><span class="token punctuation">(</span>dep<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+					<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">NoSuchBeanDefinitionException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span>
+								<span class="token string">"'"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"' depends on missing bean '"</span> <span class="token operator">+</span> dep <span class="token operator">+</span> <span class="token string">"'"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+
+			<span class="token comment">// Create bean instance.</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">isSingleton</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token comment">// 如果是单例的   普通我们的用到的都是单例</span>
+				sharedInstance <span class="token operator">=</span> <span class="token function">getSingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token comment">//创建对象实例</span>
+						<span class="token keyword">return</span> <span class="token function">createBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+					<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeansException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token comment">// Explicitly remove instance from singleton cache: It might have been put there</span>
+						<span class="token comment">// eagerly by the creation process, to allow for circular reference resolution.</span>
+						<span class="token comment">// Also remove any beans that received a temporary reference to the bean.</span>
+						<span class="token function">destroySingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token keyword">throw</span> ex<span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				beanInstance <span class="token operator">=</span> <span class="token function">getObjectForBeanInstance</span><span class="token punctuation">(</span>sharedInstance<span class="token punctuation">,</span> name<span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+
+			<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">isPrototype</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token comment">// It's a prototype -&gt; create a new instance.</span>
+				<span class="token class-name">Object</span> prototypeInstance <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+				<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token function">beforePrototypeCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					prototypeInstance <span class="token operator">=</span> <span class="token function">createBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">finally</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token function">afterPrototypeCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				beanInstance <span class="token operator">=</span> <span class="token function">getObjectForBeanInstance</span><span class="token punctuation">(</span>prototypeInstance<span class="token punctuation">,</span> name<span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token class-name">String</span> scopeName <span class="token operator">=</span> mbd<span class="token punctuation">.</span><span class="token function">getScope</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token class-name">StringUtils</span><span class="token punctuation">.</span><span class="token function">hasLength</span><span class="token punctuation">(</span>scopeName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">IllegalStateException</span><span class="token punctuation">(</span><span class="token string">"No scope name defined for bean ´"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"'"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token class-name">Scope</span> scope <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>scopes<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>scopeName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>scope <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">IllegalStateException</span><span class="token punctuation">(</span><span class="token string">"No Scope registered for scope name '"</span> <span class="token operator">+</span> scopeName <span class="token operator">+</span> <span class="token string">"'"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token class-name">Object</span> scopedInstance <span class="token operator">=</span> scope<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token function">beforePrototypeCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+							<span class="token keyword">return</span> <span class="token function">createBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token punctuation">}</span>
+						<span class="token keyword">finally</span> <span class="token punctuation">{<!-- --></span>
+							<span class="token function">afterPrototypeCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token punctuation">}</span>
+					<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					beanInstance <span class="token operator">=</span> <span class="token function">getObjectForBeanInstance</span><span class="token punctuation">(</span>scopedInstance<span class="token punctuation">,</span> name<span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IllegalStateException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ScopeNotActiveException</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> scopeName<span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeansException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			beanCreation<span class="token punctuation">.</span><span class="token function">tag</span><span class="token punctuation">(</span><span class="token string">"exception"</span><span class="token punctuation">,</span> ex<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			beanCreation<span class="token punctuation">.</span><span class="token function">tag</span><span class="token punctuation">(</span><span class="token string">"message"</span><span class="token punctuation">,</span> <span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span>ex<span class="token punctuation">.</span><span class="token function">getMessage</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token function">cleanupAfterBeanCreationFailure</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">throw</span> ex<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">finally</span> <span class="token punctuation">{<!-- --></span>
+			beanCreation<span class="token punctuation">.</span><span class="token function">end</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">return</span> <span class="token function">adaptBeanInstance</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> beanInstance<span class="token punctuation">,</span> requiredType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>我们上面例子中有两个相互依赖的对象<code>fruits</code>和<code>animal</code>，当实例化<code>fruits</code>对象时，第一步会走到<code>Object sharedInstance = getSingleton(beanName);</code>，这里取出来肯定是空的，因为我们的对象从来没有实例化过，然后继续往下跟代码经过一系列的判断会走到单例对象的创建。</p> 
+<pre><code class="prism language-java"><span class="token comment">// Create bean instance.</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">isSingleton</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	sharedInstance <span class="token operator">=</span> <span class="token function">getSingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token comment">// 创建bean实例</span>
+			<span class="token keyword">return</span> <span class="token function">createBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeansException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token comment">// Explicitly remove instance from singleton cache: It might have been put there</span>
+			<span class="token comment">// eagerly by the creation process, to allow for circular reference resolution.</span>
+			<span class="token comment">// Also remove any beans that received a temporary reference to the bean.</span>
+			<span class="token function">destroySingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">throw</span> ex<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	beanInstance <span class="token operator">=</span> <span class="token function">getObjectForBeanInstance</span><span class="token punctuation">(</span>sharedInstance<span class="token punctuation">,</span> name<span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>在这个if里面可以看到先执行<code>getSingleton</code>这个方法，参数是类名和一个lambda表达式的函数参数<code>ObjectFactory&lt;?&gt; singletonFactory</code>，在<code>getSingleton</code>里面经过调用最终还是会来到这个lambda表达式的函数执行<code>createBean(beanName, mbd, args)</code>，继续跟进回来到：</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> <span class="token class-name">Object</span> <span class="token function">createBean</span><span class="token punctuation">(</span><span class="token class-name">String</span> beanName<span class="token punctuation">,</span> <span class="token class-name">RootBeanDefinition</span> mbd<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> <span class="token class-name">Object</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span>
+			<span class="token keyword">throws</span> <span class="token class-name">BeanCreationException</span> <span class="token punctuation">{<!-- --></span>
+
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>logger<span class="token punctuation">.</span><span class="token function">isTraceEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		logger<span class="token punctuation">.</span><span class="token function">trace</span><span class="token punctuation">(</span><span class="token string">"Creating instance of bean '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"'"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token class-name">RootBeanDefinition</span> mbdToUse <span class="token operator">=</span> mbd<span class="token punctuation">;</span>
+
+	<span class="token comment">// Make sure bean class is actually resolved at this point, and</span>
+	<span class="token comment">// clone the bean definition in case of a dynamically resolved Class</span>
+	<span class="token comment">// which cannot be stored in the shared merged bean definition.</span>
+	<span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> resolvedClass <span class="token operator">=</span> <span class="token function">resolveBeanClass</span><span class="token punctuation">(</span>mbd<span class="token punctuation">,</span> beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>resolvedClass <span class="token operator">!=</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>mbd<span class="token punctuation">.</span><span class="token function">hasBeanClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> mbd<span class="token punctuation">.</span><span class="token function">getBeanClassName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		mbdToUse <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RootBeanDefinition</span><span class="token punctuation">(</span>mbd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		mbdToUse<span class="token punctuation">.</span><span class="token function">setBeanClass</span><span class="token punctuation">(</span>resolvedClass<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Prepare method overrides.</span>
+	<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+		mbdToUse<span class="token punctuation">.</span><span class="token function">prepareMethodOverrides</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeanDefinitionValidationException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanDefinitionStoreException</span><span class="token punctuation">(</span>mbdToUse<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+				beanName<span class="token punctuation">,</span> <span class="token string">"Validation of method overrides failed"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// Give BeanPostProcessors a chance to return a proxy instead of the target bean instance.</span>
+		<span class="token comment">// 这里是创建接口等对象的，类似mybatis的Mapper接口 直接略过</span>
+		<span class="token class-name">Object</span> bean <span class="token operator">=</span> <span class="token function">resolveBeforeInstantiation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbdToUse<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>bean <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">return</span> bean<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>mbdToUse<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span>
+				<span class="token string">"BeanPostProcessor before instantiation of bean failed"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 执行这里创建实例</span>
+		<span class="token class-name">Object</span> beanInstance <span class="token operator">=</span> <span class="token function">doCreateBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbdToUse<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>logger<span class="token punctuation">.</span><span class="token function">isTraceEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			logger<span class="token punctuation">.</span><span class="token function">trace</span><span class="token punctuation">(</span><span class="token string">"Finished creating instance of bean '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"'"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> beanInstance<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeanCreationException</span> <span class="token operator">|</span> <span class="token class-name">ImplicitlyAppearedSingletonException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// A previously detected exception with proper bean creation context already,</span>
+		<span class="token comment">// or illegal singleton state to be communicated up to DefaultSingletonBeanRegistry.</span>
+		<span class="token keyword">throw</span> ex<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+				mbdToUse<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> <span class="token string">"Unexpected exception during bean creation"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>在这个方法中继续跟进到<code>Object beanInstance = doCreateBean(beanName, mbdToUse, args);</code>：</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> <span class="token class-name">Object</span> <span class="token function">doCreateBean</span><span class="token punctuation">(</span><span class="token class-name">String</span> beanName<span class="token punctuation">,</span> <span class="token class-name">RootBeanDefinition</span> mbd<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> <span class="token class-name">Object</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span>
+			<span class="token keyword">throws</span> <span class="token class-name">BeanCreationException</span> <span class="token punctuation">{<!-- --></span>
+
+	<span class="token comment">// Instantiate the bean.</span>
+	<span class="token class-name">BeanWrapper</span> instanceWrapper <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">isSingleton</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		instanceWrapper <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>factoryBeanInstanceCache<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>instanceWrapper <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 实例化bean对象  这里实例化出来的是空对象   只有实例没有设置属性的</span>
+		instanceWrapper <span class="token operator">=</span> <span class="token function">createBeanInstance</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token class-name">Object</span> bean <span class="token operator">=</span> instanceWrapper<span class="token punctuation">.</span><span class="token function">getWrappedInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> beanType <span class="token operator">=</span> instanceWrapper<span class="token punctuation">.</span><span class="token function">getWrappedClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>beanType <span class="token operator">!=</span> <span class="token class-name">NullBean</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		mbd<span class="token punctuation">.</span>resolvedTargetType <span class="token operator">=</span> beanType<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Allow post-processors to modify the merged bean definition.</span>
+	<span class="token keyword">synchronized</span> <span class="token punctuation">(</span>mbd<span class="token punctuation">.</span>postProcessingLock<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>mbd<span class="token punctuation">.</span>postProcessed<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token function">applyMergedBeanDefinitionPostProcessors</span><span class="token punctuation">(</span>mbd<span class="token punctuation">,</span> beanType<span class="token punctuation">,</span> beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span>
+						<span class="token string">"Post-processing of merged bean definition failed"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			mbd<span class="token punctuation">.</span>postProcessed <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Eagerly cache singletons to be able to resolve circular references</span>
+	<span class="token comment">// even when triggered by lifecycle interfaces like BeanFactoryAware.</span>
+	<span class="token keyword">boolean</span> earlySingletonExposure <span class="token operator">=</span> <span class="token punctuation">(</span>mbd<span class="token punctuation">.</span><span class="token function">isSingleton</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token keyword">this</span><span class="token punctuation">.</span>allowCircularReferences <span class="token operator">&amp;&amp;</span>
+			<span class="token function">isSingletonCurrentlyInCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>earlySingletonExposure<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>logger<span class="token punctuation">.</span><span class="token function">isTraceEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			logger<span class="token punctuation">.</span><span class="token function">trace</span><span class="token punctuation">(</span><span class="token string">"Eagerly caching bean '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span>
+					<span class="token string">"' to allow for resolving potential circular references"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token comment">// 处理循环依赖问题  这里是先把这个bean名称和bean的ObjectFactory&lt;?&gt;存入三级缓存</span>
+		<span class="token function">addSingletonFactory</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token function">getEarlyBeanReference</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> bean<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Initialize the bean instance.</span>
+	<span class="token class-name">Object</span> exposedObject <span class="token operator">=</span> bean<span class="token punctuation">;</span>
+	<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 开始处理bean的属性赋值</span>
+		<span class="token function">populateBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> instanceWrapper<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token comment">// 赋值完成后开始回调init方法和处理bean后置处理器</span>
+		exposedObject <span class="token operator">=</span> <span class="token function">initializeBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> exposedObject<span class="token punctuation">,</span> mbd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>ex <span class="token keyword">instanceof</span> <span class="token class-name">BeanCreationException</span> <span class="token operator">&amp;&amp;</span> beanName<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">BeanCreationException</span><span class="token punctuation">)</span> ex<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">throw</span> <span class="token punctuation">(</span><span class="token class-name">BeanCreationException</span><span class="token punctuation">)</span> ex<span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+					mbd<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> <span class="token string">"Initialization of bean failed"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>earlySingletonExposure<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">Object</span> earlySingletonReference <span class="token operator">=</span> <span class="token function">getSingleton</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>earlySingletonReference <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>exposedObject <span class="token operator">==</span> bean<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				exposedObject <span class="token operator">=</span> earlySingletonReference<span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token keyword">this</span><span class="token punctuation">.</span>allowRawInjectionDespiteWrapping <span class="token operator">&amp;&amp;</span> <span class="token function">hasDependentBean</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> dependentBeans <span class="token operator">=</span> <span class="token function">getDependentBeans</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token class-name">Set</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> actualDependentBeans <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LinkedHashSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span>dependentBeans<span class="token punctuation">.</span>length<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> dependentBean <span class="token operator">:</span> dependentBeans<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">removeSingletonIfCreatedForTypeCheckOnly</span><span class="token punctuation">(</span>dependentBean<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						actualDependentBeans<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>dependentBean<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>actualDependentBeans<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCurrentlyInCreationException</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span>
+							<span class="token string">"Bean with name '"</span> <span class="token operator">+</span> beanName <span class="token operator">+</span> <span class="token string">"' has been injected into other beans ["</span> <span class="token operator">+</span>
+							<span class="token class-name">StringUtils</span><span class="token punctuation">.</span><span class="token function">collectionToCommaDelimitedString</span><span class="token punctuation">(</span>actualDependentBeans<span class="token punctuation">)</span> <span class="token operator">+</span>
+							<span class="token string">"] in its raw version as part of a circular reference, but has eventually been "</span> <span class="token operator">+</span>
+							<span class="token string">"wrapped. This means that said other beans do not use the final version of the "</span> <span class="token operator">+</span>
+							<span class="token string">"bean. This is often the result of over-eager type matching - consider using "</span> <span class="token operator">+</span>
+							<span class="token string">"'getBeanNamesForType' with the 'allowEagerInit' flag turned off, for example."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Register bean as disposable.</span>
+	<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token function">registerDisposableBeanIfNecessary</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> bean<span class="token punctuation">,</span> mbd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeanDefinitionValidationException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+				mbd<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> <span class="token string">"Invalid destruction signature"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">return</span> exposedObject<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>上面这个方法中，我们简要来看重点步骤：</p> 
+<ol><li>第一步：<code>instanceWrapper = createBeanInstance(beanName, mbd, args);</code>反射创建bean实例，</li><li>第二步：<code>addSingletonFactory(beanName, () -&gt; getEarlyBeanReference(beanName, mbd, bean));</code>把这个bean加入三级缓存，三级缓存中缓存的是bean名称对应的<code>ObjectFactory</code>，</li><li>第三步：<code>populateBean(beanName, mbd, instanceWrapper);</code>给bean的属性赋值，这一步的过程中遇到对其他对象的引用时，就会进入循环引用的问题</li></ol> 
+<p>现在我们跟进看<code>populateBean(beanName, mbd, instanceWrapper);</code>，然后这个方法中获取到一个<code>PropertyValues</code>，这个<code>PropertyValues</code>包含当前对象的所有属性信息。<br> 然后进入<code>org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#applyPropertyValues</code>方法：</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">applyPropertyValues</span><span class="token punctuation">(</span><span class="token class-name">String</span> beanName<span class="token punctuation">,</span> <span class="token class-name">BeanDefinition</span> mbd<span class="token punctuation">,</span> <span class="token class-name">BeanWrapper</span> bw<span class="token punctuation">,</span> <span class="token class-name">PropertyValues</span> pvs<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>pvs<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">getSecurityManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> bw <span class="token keyword">instanceof</span> <span class="token class-name">BeanWrapperImpl</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">BeanWrapperImpl</span><span class="token punctuation">)</span> bw<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setSecurityContext</span><span class="token punctuation">(</span><span class="token function">getAccessControlContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token class-name">MutablePropertyValues</span> mpvs <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+	<span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">PropertyValue</span><span class="token punctuation">&gt;</span></span> original<span class="token punctuation">;</span>
+
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>pvs <span class="token keyword">instanceof</span> <span class="token class-name">MutablePropertyValues</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		mpvs <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">MutablePropertyValues</span><span class="token punctuation">)</span> pvs<span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>mpvs<span class="token punctuation">.</span><span class="token function">isConverted</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token comment">// Shortcut: use the pre-converted values as-is.</span>
+			<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+				bw<span class="token punctuation">.</span><span class="token function">setPropertyValues</span><span class="token punctuation">(</span>mpvs<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">return</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeansException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+						mbd<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> <span class="token string">"Error setting property values"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token comment">// 把当前对象的属性信息赋值给original </span>
+		original <span class="token operator">=</span> mpvs<span class="token punctuation">.</span><span class="token function">getPropertyValueList</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		original <span class="token operator">=</span> <span class="token class-name">Arrays</span><span class="token punctuation">.</span><span class="token function">asList</span><span class="token punctuation">(</span>pvs<span class="token punctuation">.</span><span class="token function">getPropertyValues</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token class-name">TypeConverter</span> converter <span class="token operator">=</span> <span class="token function">getCustomTypeConverter</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>converter <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		converter <span class="token operator">=</span> bw<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token class-name">BeanDefinitionValueResolver</span> valueResolver <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BeanDefinitionValueResolver</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> mbd<span class="token punctuation">,</span> converter<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+	<span class="token comment">// Create a deep copy, resolving any references for values.</span>
+	<span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">PropertyValue</span><span class="token punctuation">&gt;</span></span> deepCopy <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span>original<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token keyword">boolean</span> resolveNecessary <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+	<span class="token comment">// 循环当前对象的属性，进行赋值处理</span>
+	<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">PropertyValue</span> pv <span class="token operator">:</span> original<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>pv<span class="token punctuation">.</span><span class="token function">isConverted</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			deepCopy<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>pv<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token class-name">String</span> propertyName <span class="token operator">=</span> pv<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token class-name">Object</span> originalValue <span class="token operator">=</span> pv<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>originalValue <span class="token operator">==</span> <span class="token class-name">AutowiredPropertyMarker</span><span class="token punctuation">.</span>INSTANCE<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token class-name">Method</span> writeMethod <span class="token operator">=</span> bw<span class="token punctuation">.</span><span class="token function">getPropertyDescriptor</span><span class="token punctuation">(</span>propertyName<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getWriteMethod</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>writeMethod <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">IllegalArgumentException</span><span class="token punctuation">(</span><span class="token string">"Autowire marker for property without write method: "</span> <span class="token operator">+</span> pv<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				originalValue <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">DependencyDescriptor</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">MethodParameter</span><span class="token punctuation">(</span>writeMethod<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token comment">// 根据属性的信息和值经过处理返回实际的value  这个下面会详细说</span>
+			<span class="token class-name">Object</span> resolvedValue <span class="token operator">=</span> valueResolver<span class="token punctuation">.</span><span class="token function">resolveValueIfNecessary</span><span class="token punctuation">(</span>pv<span class="token punctuation">,</span> originalValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token class-name">Object</span> convertedValue <span class="token operator">=</span> resolvedValue<span class="token punctuation">;</span>
+			<span class="token keyword">boolean</span> convertible <span class="token operator">=</span> bw<span class="token punctuation">.</span><span class="token function">isWritableProperty</span><span class="token punctuation">(</span>propertyName<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+					<span class="token operator">!</span><span class="token class-name">PropertyAccessorUtils</span><span class="token punctuation">.</span><span class="token function">isNestedOrIndexedProperty</span><span class="token punctuation">(</span>propertyName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>convertible<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				convertedValue <span class="token operator">=</span> <span class="token function">convertForProperty</span><span class="token punctuation">(</span>resolvedValue<span class="token punctuation">,</span> propertyName<span class="token punctuation">,</span> bw<span class="token punctuation">,</span> converter<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token comment">// Possibly store converted value in merged bean definition,</span>
+			<span class="token comment">// in order to avoid re-conversion for every created bean instance.</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>resolvedValue <span class="token operator">==</span> originalValue<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>convertible<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					pv<span class="token punctuation">.</span><span class="token function">setConvertedValue</span><span class="token punctuation">(</span>convertedValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				deepCopy<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>pv<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>convertible <span class="token operator">&amp;&amp;</span> originalValue <span class="token keyword">instanceof</span> <span class="token class-name">TypedStringValue</span> <span class="token operator">&amp;&amp;</span>
+					<span class="token operator">!</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">TypedStringValue</span><span class="token punctuation">)</span> originalValue<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isDynamic</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+					<span class="token operator">!</span><span class="token punctuation">(</span>convertedValue <span class="token keyword">instanceof</span> <span class="token class-name">Collection</span> <span class="token operator">||</span> <span class="token class-name">ObjectUtils</span><span class="token punctuation">.</span><span class="token function">isArray</span><span class="token punctuation">(</span>convertedValue<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				pv<span class="token punctuation">.</span><span class="token function">setConvertedValue</span><span class="token punctuation">(</span>convertedValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				deepCopy<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>pv<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				resolveNecessary <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+				deepCopy<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">PropertyValue</span><span class="token punctuation">(</span>pv<span class="token punctuation">,</span> convertedValue<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>mpvs <span class="token operator">!=</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>resolveNecessary<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		mpvs<span class="token punctuation">.</span><span class="token function">setConverted</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+
+	<span class="token comment">// Set our (possibly massaged) deep copy.</span>
+	<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 经过上面循环获取对象所有属性的值之后，一次把所有属性set进去</span>
+		bw<span class="token punctuation">.</span><span class="token function">setPropertyValues</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">MutablePropertyValues</span><span class="token punctuation">(</span>deepCopy<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeansException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+				mbd<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> <span class="token string">"Error setting property values"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>上面这个方法里中，先拿到当前对象的所有属性，然后循环处理获取每个属性的值<br> 那么在我们上面的IOC例子中，<code>fruits</code>对象有两个属性，一个是<code>String</code>类型的<code>name</code>，一个是依赖的其他对象<code>animal</code>，对于这两个属性的真实值获取，是在<code>Object resolvedValue = valueResolver.resolveValueIfNecessary(pv, originalValue);</code>这行代码中处理的：</p> 
+<pre><code class="prism language-java"><span class="token keyword">public</span> <span class="token class-name">Object</span> <span class="token function">resolveValueIfNecessary</span><span class="token punctuation">(</span><span class="token class-name">Object</span> argName<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> <span class="token class-name">Object</span> value<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token comment">// We must check each value to see whether it requires a runtime reference</span>
+	<span class="token comment">// to another bean to be resolved.</span>
+	<span class="token comment">// 处理运行时对象引用</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">RuntimeBeanReference</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">RuntimeBeanReference</span> ref <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">RuntimeBeanReference</span><span class="token punctuation">)</span> value<span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token function">resolveReference</span><span class="token punctuation">(</span>argName<span class="token punctuation">,</span> ref<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">RuntimeBeanNameReference</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">String</span> refName <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">RuntimeBeanNameReference</span><span class="token punctuation">)</span> value<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		refName <span class="token operator">=</span> <span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span><span class="token function">doEvaluate</span><span class="token punctuation">(</span>refName<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">containsBean</span><span class="token punctuation">(</span>refName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanDefinitionStoreException</span><span class="token punctuation">(</span>
+					<span class="token string">"Invalid bean name '"</span> <span class="token operator">+</span> refName <span class="token operator">+</span> <span class="token string">"' in bean reference for "</span> <span class="token operator">+</span> argName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> refName<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">BeanDefinitionHolder</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// Resolve BeanDefinitionHolder: contains BeanDefinition with name and aliases.</span>
+		<span class="token class-name">BeanDefinitionHolder</span> bdHolder <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">BeanDefinitionHolder</span><span class="token punctuation">)</span> value<span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token function">resolveInnerBean</span><span class="token punctuation">(</span>argName<span class="token punctuation">,</span> bdHolder<span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> bdHolder<span class="token punctuation">.</span><span class="token function">getBeanDefinition</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">BeanDefinition</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// Resolve plain BeanDefinition, without contained name: use dummy name.</span>
+		<span class="token class-name">BeanDefinition</span> bd <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">BeanDefinition</span><span class="token punctuation">)</span> value<span class="token punctuation">;</span>
+		<span class="token class-name">String</span> innerBeanName <span class="token operator">=</span> <span class="token string">"(inner bean)"</span> <span class="token operator">+</span> <span class="token class-name">BeanFactoryUtils</span><span class="token punctuation">.</span>GENERATED_BEAN_NAME_SEPARATOR <span class="token operator">+</span>
+				<span class="token class-name">ObjectUtils</span><span class="token punctuation">.</span><span class="token function">getIdentityHexString</span><span class="token punctuation">(</span>bd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> <span class="token function">resolveInnerBean</span><span class="token punctuation">(</span>argName<span class="token punctuation">,</span> innerBeanName<span class="token punctuation">,</span> bd<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">DependencyDescriptor</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">Set</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">String</span><span class="token punctuation">&gt;</span></span> autowiredBeanNames <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LinkedHashSet</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token number">4</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token class-name">Object</span> result <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">resolveDependency</span><span class="token punctuation">(</span>
+				<span class="token punctuation">(</span><span class="token class-name">DependencyDescriptor</span><span class="token punctuation">)</span> value<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">,</span> autowiredBeanNames<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>typeConverter<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token class-name">String</span> autowiredBeanName <span class="token operator">:</span> autowiredBeanNames<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">containsBean</span><span class="token punctuation">(</span>autowiredBeanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">registerDependentBean</span><span class="token punctuation">(</span>autowiredBeanName<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> result<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">ManagedArray</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// May need to resolve contained runtime references.</span>
+		<span class="token class-name">ManagedArray</span> array <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">ManagedArray</span><span class="token punctuation">)</span> value<span class="token punctuation">;</span>
+		<span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> elementType <span class="token operator">=</span> array<span class="token punctuation">.</span>resolvedElementType<span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>elementType <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token class-name">String</span> elementTypeName <span class="token operator">=</span> array<span class="token punctuation">.</span><span class="token function">getElementTypeName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StringUtils</span><span class="token punctuation">.</span><span class="token function">hasText</span><span class="token punctuation">(</span>elementTypeName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+					elementType <span class="token operator">=</span> <span class="token class-name">ClassUtils</span><span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span>elementTypeName<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">getBeanClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+					array<span class="token punctuation">.</span>resolvedElementType <span class="token operator">=</span> elementType<span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+				<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token comment">// Improve the message by showing the context.</span>
+					<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+							<span class="token keyword">this</span><span class="token punctuation">.</span>beanDefinition<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">,</span>
+							<span class="token string">"Error resolving array type for "</span> <span class="token operator">+</span> argName<span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				elementType <span class="token operator">=</span> <span class="token class-name">Object</span><span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> <span class="token function">resolveManagedArray</span><span class="token punctuation">(</span>argName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">)</span> value<span class="token punctuation">,</span> elementType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">ManagedList</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// May need to resolve contained runtime references.</span>
+		<span class="token keyword">return</span> <span class="token function">resolveManagedList</span><span class="token punctuation">(</span>argName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">List</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">)</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">ManagedSet</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// May need to resolve contained runtime references.</span>
+		<span class="token keyword">return</span> <span class="token function">resolveManagedSet</span><span class="token punctuation">(</span>argName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">Set</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">)</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">ManagedMap</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// May need to resolve contained runtime references.</span>
+		<span class="token keyword">return</span> <span class="token function">resolveManagedMap</span><span class="token punctuation">(</span>argName<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token class-name">Map</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">,</span> <span class="token operator">?</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">)</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">ManagedProperties</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">Properties</span> original <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">Properties</span><span class="token punctuation">)</span> value<span class="token punctuation">;</span>
+		<span class="token class-name">Properties</span> copy <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Properties</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		original<span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span><span class="token punctuation">(</span>propKey<span class="token punctuation">,</span> propValue<span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>propKey <span class="token keyword">instanceof</span> <span class="token class-name">TypedStringValue</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				propKey <span class="token operator">=</span> <span class="token function">evaluate</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">TypedStringValue</span><span class="token punctuation">)</span> propKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>propValue <span class="token keyword">instanceof</span> <span class="token class-name">TypedStringValue</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				propValue <span class="token operator">=</span> <span class="token function">evaluate</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">TypedStringValue</span><span class="token punctuation">)</span> propValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>propKey <span class="token operator">==</span> <span class="token keyword">null</span> <span class="token operator">||</span> propValue <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+						<span class="token keyword">this</span><span class="token punctuation">.</span>beanDefinition<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">,</span>
+						<span class="token string">"Error converting Properties key/value pair for "</span> <span class="token operator">+</span> argName <span class="token operator">+</span> <span class="token string">": resolved to null"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			copy<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>propKey<span class="token punctuation">,</span> propValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">return</span> copy<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">TypedStringValue</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// Convert value to target type here.</span>
+		<span class="token comment">// 处理String类型的值</span>
+		<span class="token class-name">TypedStringValue</span> typedStringValue <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token class-name">TypedStringValue</span><span class="token punctuation">)</span> value<span class="token punctuation">;</span>
+		<span class="token class-name">Object</span> valueObject <span class="token operator">=</span> <span class="token function">evaluate</span><span class="token punctuation">(</span>typedStringValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> resolvedTargetType <span class="token operator">=</span> <span class="token function">resolveTargetType</span><span class="token punctuation">(</span>typedStringValue<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>resolvedTargetType <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>typeConverter<span class="token punctuation">.</span><span class="token function">convertIfNecessary</span><span class="token punctuation">(</span>valueObject<span class="token punctuation">,</span> resolvedTargetType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">return</span> valueObject<span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token comment">// Improve the message by showing the context.</span>
+			<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+					<span class="token keyword">this</span><span class="token punctuation">.</span>beanDefinition<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">,</span>
+					<span class="token string">"Error converting typed String value for "</span> <span class="token operator">+</span> argName<span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token keyword">instanceof</span> <span class="token class-name">NullBean</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">return</span> <span class="token function">evaluate</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>对于上面这个方法，就是一系列的if else判断循环中每个属性分别是那种类型，对应做不同的处理。而我们上面例子中<code>fruits</code>对象两个属性<code>name</code>和<code>animal</code>:</p> 
+<ul><li><code>name</code>是个String类型的，所以会走到<code>TypedStringValue</code>这个else if中，最终返回String类型的value</li><li><code>animal</code>属于引用其他的对象，所以会走到第一个<code>RuntimeBeanReference</code>的if判断中<br> 所以我们重点跟 <code>animal</code>属性的处理：<code>resolveReference(argName, ref)</code></li></ul> 
+<pre><code class="prism language-java"><span class="token keyword">private</span> <span class="token class-name">Object</span> <span class="token function">resolveReference</span><span class="token punctuation">(</span><span class="token class-name">Object</span> argName<span class="token punctuation">,</span> <span class="token class-name">RuntimeBeanReference</span> ref<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token keyword">try</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token class-name">Object</span> bean<span class="token punctuation">;</span>
+		<span class="token class-name">Class</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> beanType <span class="token operator">=</span> ref<span class="token punctuation">.</span><span class="token function">getBeanType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>ref<span class="token punctuation">.</span><span class="token function">isToParent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token class-name">BeanFactory</span> parent <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">getParentBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>parent <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+						<span class="token keyword">this</span><span class="token punctuation">.</span>beanDefinition<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">,</span>
+						<span class="token string">"Cannot resolve reference to bean "</span> <span class="token operator">+</span> ref <span class="token operator">+</span>
+								<span class="token string">" in parent factory: no parent factory available"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>beanType <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				bean <span class="token operator">=</span> parent<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span>beanType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				bean <span class="token operator">=</span> parent<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span><span class="token function">doEvaluate</span><span class="token punctuation">(</span>ref<span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token class-name">String</span> resolvedName<span class="token punctuation">;</span>
+			<span class="token keyword">if</span> <span class="token punctuation">(</span>beanType <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token class-name">NamedBeanHolder</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> namedBean <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">resolveNamedBean</span><span class="token punctuation">(</span>beanType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				bean <span class="token operator">=</span> namedBean<span class="token punctuation">.</span><span class="token function">getBeanInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				resolvedName <span class="token operator">=</span> namedBean<span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">else</span> <span class="token punctuation">{<!-- --></span>
+				resolvedName <span class="token operator">=</span> <span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span><span class="token function">doEvaluate</span><span class="token punctuation">(</span>ref<span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+				bean <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span>resolvedName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+			<span class="token punctuation">}</span>
+			<span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">registerDependentBean</span><span class="token punctuation">(</span>resolvedName<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>bean <span class="token keyword">instanceof</span> <span class="token class-name">NullBean</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			bean <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">return</span> bean<span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeansException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">BeanCreationException</span><span class="token punctuation">(</span>
+				<span class="token keyword">this</span><span class="token punctuation">.</span>beanDefinition<span class="token punctuation">.</span><span class="token function">getResourceDescription</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanName<span class="token punctuation">,</span>
+				<span class="token string">"Cannot resolve reference to bean '"</span> <span class="token operator">+</span> ref<span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"' while setting "</span> <span class="token operator">+</span> argName<span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>在这个方法中，由于我们的配置中没有BeanType等属性，所以会走到</p> 
+<pre><code class="prism language-java">resolvedName <span class="token operator">=</span> <span class="token class-name">String</span><span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span><span class="token function">doEvaluate</span><span class="token punctuation">(</span>ref<span class="token punctuation">.</span><span class="token function">getBeanName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+bean <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>beanFactory<span class="token punctuation">.</span><span class="token function">getBean</span><span class="token punctuation">(</span>resolvedName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre> 
+<p>那么了解IOC的同学应该就知道这个代码其实就是从Spring的Bean工厂中获取一个bean，所以看到这里，大家应该明白<strong>目前在我们的例子中，我们是在实例化<code>fruits</code>这个对象之后（<code>fruits</code>对象已经已<code>ObjectFactory</code>的形式被加入三级缓存中了），现在是在填充他的属性值，这个时候他有一个属性<code>animal</code>是另一个我们配置的Spring中的对象，所以在上面这里又去工厂中找<code>animal</code>对象了</strong>。<br> 那么这个时候肯定是继续跟着<code>this.beanFactory.getBean(resolvedName)</code>加载下一个<code>animal</code>对象了，这里就不一个一个继续跟了，否则又得跟一遍IOC的getBean的流程，我们简单文字描述一下吧：<br> <strong>在加载<code>fruits</code>对象依赖的<code>animal</code>属性时，发现<code>animal</code>是一个对象就去spring工厂中找这个对象发现这个对象还没被实例化，然后就开始实例化<code>animal</code>对象，在实例化之后还是会把<code>animal</code>对象和<code>fruits</code>一样已<code>ObjectFactory</code>加入三级缓存中，然后再设置<code>animal</code>的属性，当发现<code>animal</code>对象里面有个<code>fruits</code>属性之后就和上面的流程一样又开始去工厂里面找<code>fruits</code>对象。<br> 这个时候会发现<code>fruits</code>对象在工厂的三级缓存中存在的，然后就会从三级缓存中拿出<code>ObjectFactory</code>，并调用<code>getObject()</code>方法获取之前的实例，然后把这个实例存在二级缓存中并从三级缓存中删除</strong>。这个从三级缓存中取的代码在：<code>org.springframework.beans.factory.support.AbstractBeanFactory#doGetBean</code>的开始位置的<code>Object sharedInstance = getSingleton(beanName);</code>这个方法里面调用的：</p> 
+<pre><code class="prism language-java"><span class="token keyword">protected</span> <span class="token class-name">Object</span> <span class="token function">getSingleton</span><span class="token punctuation">(</span><span class="token class-name">String</span> beanName<span class="token punctuation">,</span> <span class="token keyword">boolean</span> allowEarlyReference<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+	<span class="token comment">// Quick check for existing instance without full singleton lock</span>
+	<span class="token class-name">Object</span> singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>singletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+	<span class="token comment">// 先从一级缓存中取，没取到但是这个对象正在创建中的话</span>
+	<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> <span class="token function">isSingletonCurrentlyInCreation</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+		<span class="token comment">// 在二级缓存中取</span>
+		singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>earlySingletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+		<span class="token comment">//还没取到 并且allowEarlyReference为true的话</span>
+		<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> <span class="token keyword">null</span> <span class="token operator">&amp;&amp;</span> allowEarlyReference<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+			<span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>singletonObjects<span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+				<span class="token comment">// Consistent creation of early reference within full singleton lock</span>
+				<span class="token comment">// 再从一级缓存中取 但是这里是加锁的，保证单例</span>
+				singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>singletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+				<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+					<span class="token comment">//再从二级中取</span>
+					singletonObject <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>earlySingletonObjects<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+					<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonObject <span class="token operator">==</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+						<span class="token comment">// 然后最后从三级中取，取出来ObjectFactory</span>
+						<span class="token class-name">ObjectFactory</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token operator">?</span><span class="token punctuation">&gt;</span></span> singletonFactory <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>singletonFactories<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token keyword">if</span> <span class="token punctuation">(</span>singletonFactory <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+							<span class="token comment">// 调用getObject从工厂中获取单例对象实例</span>
+							singletonObject <span class="token operator">=</span> singletonFactory<span class="token punctuation">.</span><span class="token function">getObject</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+							<span class="token comment">// 加入二级缓存</span>
+							<span class="token keyword">this</span><span class="token punctuation">.</span>earlySingletonObjects<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>beanName<span class="token punctuation">,</span> singletonObject<span class="token punctuation">)</span><span class="token punctuation">;</span>
+							<span class="token comment">// 从三级缓存中移除</span>
+							<span class="token keyword">this</span><span class="token punctuation">.</span>singletonFactories<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+						<span class="token punctuation">}</span>
+					<span class="token punctuation">}</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">return</span> singletonObject<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>上面这个代码中从三级缓存中取出来<code>ObjectFactory</code>并调用了<code>getObject()</code>方法，这个方法就是<code>org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#doCreateBean</code>方法中：<code>addSingletonFactory(beanName, () -&gt; getEarlyBeanReference(beanName, mbd, bean));</code>里面加入的这个的<code>() -&gt; getEarlyBeanReference(beanName, mbd, bean)</code>，这是一个函数式的写法。这里不理解的可以跟着断点走一遍就明白了</p> 
+<p>然后我们就<strong>获取到了<code>fruits</code>对象的实例，只不过这个对象是个没有创建完成的对象，他只有实例，里面的属性都是空的，然后把这个<code>fruits</code>对象的引用返回到创建<code>animal</code>对象过程中的<code>org.springframework.beans.factory.support.BeanDefinitionValueResolver#resolveReference</code>，再返回到<code>org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#applyPropertyValues</code> 的 <code>Object resolvedValue = valueResolver.resolveValueIfNecessary(pv, originalValue);</code>这一步，这个时候<code>animal</code>对象的<code>fruits</code>属性的值就获取到了，只不过这个<code>fruits</code>是个正在创建过程中的对象，但是<code>animal</code>只需要<code>fruits</code>的引用，所以不影响后续的使用，再接着把这个引用set到属性里就可以了。</strong></p> 
+<p>然后在继续完成<code>animal</code>对象的创建，代码会一步一步回到<code>org.springframework.beans.factory.support.DefaultSingletonBeanRegistry#getSingleton(java.lang.String, org.springframework.beans.factory.ObjectFactory&lt;?&gt;)</code>这个方法里面，在这个方法里面之前我们讲到了<code>singletonObject = singletonFactory.getObject();</code>这一步是通过工厂获取<code>fruits</code>对象实例，那么现在我们获取到实例之后继续往下走：</p> 
+<ul><li>在方法的尾部有一步<code>afterSingletonCreation(beanName);</code>，这个实际上是标记这个<code>animal</code>对象已经创建完成，就是从正在创建的对象集合中把刚才已经创建完成的这个对象移除掉。</li><li>在方法的最后会有一步：<code>addSingleton(beanName, singletonObject);</code>，这一步是在<code>animal</code>实例已经获取到并且属性已完成设置之后，那么这时候这个<code>animal</code>对象就已经算是创建完成了，所以把这个<code>fruits</code>放入一级缓存，并从二级和三级中删除。</li></ul> 
+<p>到这里<code>animal</code>对象就算创建完成了，并且已经放到了一级缓存中</p> 
+<p>然后接下来就回到了<code>fruits</code>对象创建过程中，我们目前创建完了<code>fruits</code>的<code>animal</code>属性，然后把<code>animal</code>属性set到<code>fruits</code>对象里面，那这个时候<code>fruits</code>对象也创建完成了，然后一步一步返回再次来到<code>org.springframework.beans.factory.support.DefaultSingletonBeanRegistry#getSingleton(java.lang.String, org.springframework.beans.factory.ObjectFactory&lt;?&gt;)</code>方法里面，和上面创建<code>animal</code>对象完成之后一样，这次是把<code>fruits</code>对象通过<code>afterSingletonCreation(beanName);</code>标记为已创建完成，再通过<code>addSingleton(beanName, singletonObject);</code>把<code>fruits</code>对象加入到一级缓存并从二级三级里面删除。<br> 至此，<code>fruits</code>对象也创建完成。</p> 
+<p>然后代码会继续去根据配置文件加载<code>animal</code>对象，但是这个时候<code>animal</code>对象已经实例化完成了，所以直接从一级缓存中拿出已经创建好的实例返回就完成了。</p> 
+<p>好了！至此<code>animal</code>和 <code>fruits</code>相互依赖的循环依赖场景就分析完成了，再来个小的步骤总结：</p> 
+<ol><li>根据配置文件加载<code>fruits</code>，实例化<code>fruits</code>对象完成并通过<code>ObjectFactory</code>加入三级缓存，后开始设置<code>fruits</code>对象的属性，发现有引用其他对象<code>animal</code></li><li>因为<code>fruits</code>实例化时引用了<code>animal</code>对象，所以开始实例化<code>animal</code>对象，实例化完成后把<code>animal</code>对象加入三级缓存并开始设置<code>animal</code>的属性，在设置属性时发现他引用了已经在三级缓存中的<code>fruits</code>对象对应的<code>ObjectFactory</code>，所以从三级缓存中取出<code>ObjectFactory</code>并获取到<code>fruits</code>的引用，然后把<code>fruits</code>加入二级缓存并从三级缓存中删除，最后把<code>fruits</code>这个半对象(未实例化完成)设置给<code>animal</code>的属性</li><li>由于<code>animal</code>对象已经实例化完成并设置完成属性， 所以把<code>animal</code>对象加入一级缓存</li><li><code>animal</code>创建完成回到<code>fruits</code>获取属性并设值的阶段，把创建好的<code>animal</code>对象设置到<code>fruits</code>的属性中，完成<code>fruits</code>的创建</li><li>把<code>fruits</code>对象加入一级缓存</li><li>再次根据配置文件加载<code>animal</code>对象发现已经存在与一级缓存</li></ol> 
+<p>这个过程有点绕，大家主要还是要多理解IOC的过程，然后自己跟着断点多走几遍就理解了。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/8b76998b367e3fbd88db99468c3b742b/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">因子分析全流程汇总</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ead02d0920b73bccda1aaae09fdeee53/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">笔记本Win11连接WiFi后显示无Internet访问权限怎么办</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

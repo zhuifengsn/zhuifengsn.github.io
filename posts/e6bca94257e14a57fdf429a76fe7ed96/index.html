@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>六.聚合函数 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="六.聚合函数" />
+<meta property="og:description" content="聚合函数 1.什么是聚合函数1.1AVG和SUM函数1.2MIN和MAX函数1.3COUNT函数 2.GROUP BY2.1基本使用2.2使用多个列分组2.3GROUP BY中使用WITH ROLLUP 3.HAVING3.1基本使用3.2WHERE和HAVING的区别 4.SELECT的执行过程4.1查询的结构4.2SELECT执行顺序4.3SQL执行原理 1.什么是聚合函数 聚合函数作用于一组数据，并对一组数据返回一个值。
+聚合函数类型 AVG()SUM()MAX()MIN()COUNT() 聚合函数语法
+聚合函数不能嵌套调用。比如不能出现类似AVG(SUM(字段名称))形式的调用。 1.1AVG和SUM函数 可以对数值型数据使用AVG和SUM函数
+SELECT AVG(salary), MAX(salary),MIN(salary), SUM(salary) FROM employees WHERE job_id LIKE &#39;%REP%&#39;; 1.2MIN和MAX函数 可以对任意数据类型的数据使用MIN和MAX函数
+SELECT MIN(hire_date), MAX(hire_date) FROM employees; 1.3COUNT函数 COUNT(*)返回表中记录总数，适用于任意数据类型 SELECT COUNT(*) FROM employees WHERE department_id = 50; COUNT(expr)返回expr不为空的记录总数 SELECT COUNT(commission_pct) FROM employees WHERE department_id = 50; 问题：用count(*)，count(1)，count(列名)谁好呢？
+其实，对于MyISAM引擎的表是没有区别的。这种引擎内部有一计数器在维护着行数。
+Innodb引擎的表用count(*),count(1)直接读行数，复杂度是O(n)，因为innodb真的要去数一遍。但好于具体的count(列名)。问题：能不能使用count(列名)替换count(*)？
+不要使用 count(列名)来替代 count() ， count() 是 SQL92 定义的标准统计行数的语法，跟数据库无关，跟 NULL 和非 NULL 无关。
+说明：count(*)会统计值为 NULL 的行，而 count(列名)不会统计此列为 NULL 值的行。 2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e6bca94257e14a57fdf429a76fe7ed96/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-12-13T18:15:36+08:00" />
+<meta property="article:modified_time" content="2023-12-13T18:15:36+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">六.聚合函数</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>聚合函数</h4> 
+ <ul><li><a href="#1_1" rel="nofollow">1.什么是聚合函数</a></li><li><ul><li><a href="#11AVGSUM_14" rel="nofollow">1.1AVG和SUM函数</a></li><li><a href="#12MINMAX_22" rel="nofollow">1.2MIN和MAX函数</a></li><li><a href="#13COUNT_29" rel="nofollow">1.3COUNT函数</a></li></ul> 
+  </li><li><a href="#2GROUP_BY_48" rel="nofollow">2.GROUP BY</a></li><li><ul><li><a href="#21_49" rel="nofollow">2.1基本使用</a></li><li><a href="#22_76" rel="nofollow">2.2使用多个列分组</a></li><li><a href="#23GROUP_BYWITH_ROLLUP_85" rel="nofollow">2.3GROUP BY中使用WITH ROLLUP</a></li></ul> 
+  </li><li><a href="#3HAVING_98" rel="nofollow">3.HAVING</a></li><li><ul><li><a href="#31_99" rel="nofollow">3.1基本使用</a></li><li><a href="#32WHEREHAVING_122" rel="nofollow">3.2WHERE和HAVING的区别</a></li></ul> 
+  </li><li><a href="#4SELECT_131" rel="nofollow">4.SELECT的执行过程</a></li><li><ul><li><a href="#41_132" rel="nofollow">4.1查询的结构</a></li><li><a href="#42SELECT_164" rel="nofollow">4.2SELECT执行顺序</a></li><li><a href="#43SQL_186" rel="nofollow">4.3SQL执行原理</a></li></ul> 
+ </li></ul> 
+</div> 
+<p></p> 
+<h2><a id="1_1"></a>1.什么是聚合函数</h2> 
+<ul><li>聚合函数作用于一组数据，并对一组数据返回一个值。<br> <img src="https://images2.imgbox.com/10/8e/LHen2ZNU_o.png" alt="在这里插入图片描述"></li><li><strong>聚合函数类型</strong> 
+  <ul><li>AVG()</li><li>SUM()</li><li>MAX()</li><li>MIN()</li><li>COUNT()</li></ul> </li><li>聚合函数语法<br> <img src="https://images2.imgbox.com/b7/f5/cHfYZdum_o.png" alt="在这里插入图片描述"><br> <code>聚合函数不能嵌套调用。比如不能出现类似AVG(SUM(字段名称))形式的调用</code>。</li></ul> 
+<h3><a id="11AVGSUM_14"></a>1.1AVG和SUM函数</h3> 
+<p>可以对<code>数值型数据</code>使用AVG和SUM函数</p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">MAX</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">SUM</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">WHERE</span> job_id <span class="token operator">LIKE</span> <span class="token string">'%REP%'</span><span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/38/d0/tKZinnjZ_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="12MINMAX_22"></a>1.2MIN和MAX函数</h3> 
+<p>可以对<code>任意数据类型</code>的数据使用MIN和MAX函数</p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> <span class="token function">MIN</span><span class="token punctuation">(</span>hire_date<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">MAX</span><span class="token punctuation">(</span>hire_date<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees<span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/c2/4e/JQklCmoV_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="13COUNT_29"></a>1.3COUNT函数</h3> 
+<ul><li>COUNT(*)返回表中记录总数，适用于任意数据类型</li></ul> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> <span class="token function">COUNT</span><span class="token punctuation">(</span><span class="token operator">*</span><span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">WHERE</span> department_id <span class="token operator">=</span> <span class="token number">50</span><span class="token punctuation">;</span>
+</code></pre> 
+<ul><li>COUNT(expr)返回expr不为空的记录总数</li></ul> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> <span class="token function">COUNT</span><span class="token punctuation">(</span>commission_pct<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">WHERE</span> department_id <span class="token operator">=</span> <span class="token number">50</span><span class="token punctuation">;</span>
+</code></pre> 
+<ul><li><code>问题：用count(*)，count(1)，count(列名)谁好呢？</code><br> 其实，对于MyISAM引擎的表是没有区别的。这种引擎内部有一计数器在维护着行数。<br> Innodb引擎的表用count(*),count(1)直接读行数，复杂度是O(n)，因为innodb真的要去数一遍。但好于具体的count(列名)。</li><li><code>问题：能不能使用count(列名)替换count(*)？</code><br> 不要使用 count(列名)来替代 count(<em>) ， count(</em>) 是 SQL92 定义的标准统计行数的语法，跟数据库无关，跟 NULL 和非 NULL 无关。<br> 说明：<code>count(*)会统计值为 NULL 的行，而 count(列名)不会统计此列为 NULL 值的行</code>。</li></ul> 
+<h2><a id="2GROUP_BY_48"></a>2.GROUP BY</h2> 
+<h3><a id="21_49"></a>2.1基本使用</h3> 
+<p><img src="https://images2.imgbox.com/7c/db/Uiu2ggZc_o.png" alt="在这里插入图片描述"><br> 可以使用GROUP BY子句将表中的数据分成若干组</p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> <span class="token keyword">column</span><span class="token punctuation">,</span> group_function<span class="token punctuation">(</span><span class="token keyword">column</span><span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> <span class="token keyword">table</span>
+<span class="token punctuation">[</span><span class="token keyword">WHERE</span> condition<span class="token punctuation">]</span>
+<span class="token punctuation">[</span><span class="token keyword">GROUP</span> <span class="token keyword">BY</span> group_by_expression<span class="token punctuation">]</span>
+<span class="token punctuation">[</span><span class="token keyword">ORDER</span> <span class="token keyword">BY</span> <span class="token keyword">column</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+</code></pre> 
+<p><code>WHERE一定放在FROM的后面</code><br> <font color="red">在SELECT列表中所有未包含在组函数中的列都应该包含在GROUP BY子句中</font></p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> department_id<span class="token punctuation">,</span> <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_id <span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/51/12/58Y8NPmT_o.png" alt="在这里插入图片描述"></p> 
+<p><font color="red">包含在GROUP BY子句中的列不必包含在SELECT列表中</font></p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span>   <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span>     employees
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_id <span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/d1/61/O3AlieGb_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="22_76"></a>2.2使用多个列分组</h3> 
+<p><img src="https://images2.imgbox.com/d5/10/nuljU9eT_o.png" alt="在这里插入图片描述"></p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span>   department_id dept_id<span class="token punctuation">,</span> job_id<span class="token punctuation">,</span> <span class="token function">SUM</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span>     employees
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_id<span class="token punctuation">,</span> job_id <span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/4d/17/20Ei2RXg_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="23GROUP_BYWITH_ROLLUP_85"></a>2.3GROUP BY中使用WITH ROLLUP</h3> 
+<p>使用<code>WITH GROUP</code>关键字之后，在所有查询出的分组记录之后增加一条记录，该记录计算查询出的所有记录的综合，即统计记录数量。</p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> department_id<span class="token punctuation">,</span><span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">WHERE</span> department_id <span class="token operator">&gt;</span> <span class="token number">80</span>
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_id <span class="token keyword">WITH ROLLUP</span><span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/14/da/VrMOw61p_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/ab/42/JQ4YZFIY_o.png" alt="在这里插入图片描述"></p> 
+<p><code>注意：当使用ROLLUP时，不能同时使用ORDER BY子句进行结果排序，即ROLLUP和ORDER BY是相互排斥的。</code></p> 
+<h2><a id="3HAVING_98"></a>3.HAVING</h2> 
+<h3><a id="31_99"></a>3.1基本使用</h3> 
+<p><img src="https://images2.imgbox.com/11/2e/byPoSaBm_o.png" alt="在这里插入图片描述"><br> <strong>过滤分组：HAVING子句</strong></p> 
+<ol><li>行已经被分组</li><li>使用了聚合函数</li><li>满足HAVING子句中条件的分组将被显示</li><li>HAVING不能单独使用，必须要跟GROUP BY一起使用。<br> <img src="https://images2.imgbox.com/5d/d2/BYiHcBdu_o.png" alt="在这里插入图片描述"></li></ol> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span>   department_id<span class="token punctuation">,</span> <span class="token function">MAX</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span>     employees
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_id
+<span class="token keyword">HAVING</span>   <span class="token function">MAX</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token operator">&gt;</span><span class="token number">10000</span> <span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/7d/a3/8ok5m2FH_o.png" alt="在这里插入图片描述"></p> 
+<ul><li><code>非法使用聚合函数：不能在WHERE子句中使用聚合函数</code></li></ul> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> department_id<span class="token punctuation">,</span> <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">WHERE</span> <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">8000</span>
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_id<span class="token punctuation">;</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/63/a0/pBi4BtIa_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="32WHEREHAVING_122"></a>3.2WHERE和HAVING的区别</h3> 
+<p><font color="red">区别1：WHERE可以直接使用表中的字段作为筛选，但不能使用分组中的计算函数作为筛选条件；HAVING必须要与GROUP BY配合使用，可以把分组计算的函数和分组字段作为筛选条件。</font><br> 这决定了，在需要对数据进行分组统计的时候，HAVING 可以完成 WHERE 不能完成的任务。这是因为，在查询语法结构中，WHERE 在 GROUP BY 之前，所以无法对分组结果进行筛选。HAVING 在 GROUP BY 之后，可以使用分组字段和分组中的计算函数，对分组的结果集进行筛选，这个功能是 WHERE 无法完成的。另外，WHERE排除的记录不再包括在分组中。<br> <font color="red">区别2：如果需要通过连接从关联表中获取需要的数据，WHERE是先筛选后连接的，而HAVING是线连接后筛选的。</font>这一点，就决定了在关联查询中，WHERE 比 HAVING 更高效。因为 WHERE 可以先筛选，用一个筛选后的较小数据集和关联表进行连接，这样占用的资源比较少，执行效率也比较高。HAVING 则需要先把结果集准备好，也就是用未被筛选的数据集进行关联，然后对这个大的数据集进行筛选，这样占用的资源就比较多，执行效率也较低。<br> <code>小结如下</code></p> 
+<table><thead><tr><th></th><th>优点</th><th>缺点</th></tr></thead><tbody><tr><td>WHERE</td><td>先筛选数据在关联，执行效率高</td><td>不能使用分组中的计算函数进行筛选</td></tr><tr><td>HAVING</td><td>可以使用分组中的计算函数</td><td>在最后的结果中进行筛选，执行效率低</td></tr></tbody></table> 
+<h2><a id="4SELECT_131"></a>4.SELECT的执行过程</h2> 
+<h3><a id="41_132"></a>4.1查询的结构</h3> 
+<pre><code class="prism language-sql"><span class="token comment">#方式1：</span>
+<span class="token keyword">SELECT</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">FROM</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">WHERE</span> 多表的连接条件
+<span class="token operator">AND</span> 不包含组函数的过滤条件
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">HAVING</span> 包含组函数的过滤条件
+<span class="token keyword">ORDER</span> <span class="token keyword">BY</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">ASC</span><span class="token operator">/</span><span class="token keyword">DESC</span>
+<span class="token keyword">LIMIT</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token comment">#方式2：</span>
+<span class="token keyword">SELECT</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">FROM</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">JOIN</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">ON</span> 多表的连接条件
+<span class="token keyword">JOIN</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">ON</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">WHERE</span> 不包含组函数的过滤条件
+<span class="token operator">AND</span><span class="token operator">/</span><span class="token operator">OR</span> 不包含组函数的过滤条件
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token keyword">HAVING</span> 包含组函数的过滤条件
+<span class="token keyword">ORDER</span> <span class="token keyword">BY</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">ASC</span><span class="token operator">/</span><span class="token keyword">DESC</span>
+<span class="token keyword">LIMIT</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">,</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+<span class="token comment">#其中：</span>
+<span class="token comment">#（1）from：从哪些表中筛选</span>
+<span class="token comment">#（2）on：关联多表查询时，去除笛卡尔积</span>
+<span class="token comment">#（3）where：从表中筛选的条件</span>
+<span class="token comment">#（4）group by：分组依据</span>
+<span class="token comment">#（5）having：在统计结果中再次筛选</span>
+<span class="token comment">#（6）order by：排序</span>
+<span class="token comment">#（7）limit：分页</span>
+</code></pre> 
+<h3><a id="42SELECT_164"></a>4.2SELECT执行顺序</h3> 
+<p><strong>你需要记住 SELECT 查询时的两个顺序：</strong><br> <code>1.关键字的舒徐是不能颠倒的</code></p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">FROM</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">WHERE</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">GROUP</span> <span class="token keyword">BY</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">HAVING</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">ORDER</span> <span class="token keyword">BY</span> <span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> <span class="token keyword">LIMIT</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span>
+</code></pre> 
+<p><code>2.SELECT语句执行顺序</code>（MySQL和Oracle中，SELECT执行顺序基本相同）：</p> 
+<pre><code class="prism language-sql"><span class="token keyword">FROM</span> <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token keyword">WHERE</span> <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token keyword">GROUP</span> <span class="token keyword">BY</span> <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token keyword">HAVING</span> <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token keyword">SELECT</span> 的字段 <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token keyword">DISTINCT</span> <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token keyword">ORDER</span> <span class="token keyword">BY</span> <span class="token operator">-</span><span class="token operator">&gt;</span> <span class="token keyword">LIMIT</span>
+</code></pre> 
+<p><img src="https://images2.imgbox.com/4e/4e/ioJrQ4kp_o.png" alt="在这里插入图片描述"><br> 比如你写了一个 SQL 语句，那么它的关键字顺序和执行顺序是下面这样的：</p> 
+<pre><code class="prism language-sql"><span class="token keyword">SELECT</span> <span class="token keyword">DISTINCT</span> player_id<span class="token punctuation">,</span> player_name<span class="token punctuation">,</span> <span class="token function">count</span><span class="token punctuation">(</span><span class="token operator">*</span><span class="token punctuation">)</span> <span class="token keyword">as</span> num <span class="token comment"># 顺序 5</span>
+<span class="token keyword">FROM</span> player <span class="token keyword">JOIN</span> team <span class="token keyword">ON</span> player<span class="token punctuation">.</span>team_id <span class="token operator">=</span> team<span class="token punctuation">.</span>team_id <span class="token comment"># 顺序 1</span>
+<span class="token keyword">WHERE</span> height <span class="token operator">&gt;</span> <span class="token number">1.80</span> <span class="token comment"># 顺序 2</span>
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> player<span class="token punctuation">.</span>team_id <span class="token comment"># 顺序 3</span>
+<span class="token keyword">HAVING</span> num <span class="token operator">&gt;</span> <span class="token number">2</span> <span class="token comment"># 顺序 4</span>
+<span class="token keyword">ORDER</span> <span class="token keyword">BY</span> num <span class="token keyword">DESC</span> <span class="token comment"># 顺序 6</span>
+<span class="token keyword">LIMIT</span> <span class="token number">2</span> <span class="token comment"># 顺序 7</span>
+</code></pre> 
+<p>在 SELECT 语句执行这些步骤的时候，每个步骤都会产生一个 <code>虚拟表</code> ，然后将这个虚拟表传入下一个步骤中作为输入。需要注意的是，这些<code>步骤隐含在 SQL 的执行过程中</code>，对于我们来说是<code>不可见</code>的。</p> 
+<h3><a id="43SQL_186"></a>4.3SQL执行原理</h3> 
+<p>SELECT 是先执行 FROM 这一步的。在这个阶段，如果是多张表联查，还会经历下面的几个步骤：</p> 
+<ol><li>首先先通过 CROSS JOIN 求笛卡尔积，相当于得到虚拟表 vt（virtual table）1-1；</li><li>通过 ON 进行筛选，在虚拟表 vt1-1 的基础上进行筛选，得到虚拟表 vt1-2；</li><li>添加外部行。如果我们使用的是左连接、右链接或者全连接，就会涉及到外部行，也就是在虚拟表 vt1-2 的基础上增加外部行，得到虚拟表 vt1-3。<br> 当然如果我们操作的是两张以上的表，还会重复上面的步骤，直到所有表都被处理完为止。这个过程得到是我们的原始数据。</li></ol> 
+<p>当我们拿到了查询数据表的原始数据，也就是最终的虚拟表 <code>vt1</code>，就可以在此基础上再进行 <code>WHERE 阶段</code>。在这个阶段中，会根据 <code>vt1</code> 表的结果进行筛选过滤，得到虚拟表 <code>vt2</code>。</p> 
+<p>然后进入第三步和第四步，也就是 <code>GROUP</code> 和 <code>HAVING阶段</code>。在这个阶段中，实际上是在虚拟表 <code>vt2</code> 的基础上进行分组和分组过滤，得到中间的虚拟表 <code>vt3</code> 和 <code>vt4</code>。</p> 
+<p>当我们完成了条件筛选部分之后，就可以筛选表中提取的字段，也就是进入到 <code>SELECT</code> 和 <code>DISTINCT阶段</code>。</p> 
+<p>首先在 <code>SELECT 阶段</code>会提取想要的字段，然后在 <code>DISTINCT 阶段</code>过滤掉重复的行，分别得到中间的虚拟表 <code>vt5-1</code> 和 <code>vt5-2</code>。</p> 
+<p>当我们提取了想要的字段数据之后，就可以按照指定的字段进行排序，也就是 <code>ORDER BY 阶段</code>，得到虚拟表 <code>vt6</code>。</p> 
+<p>最后在 <code>vt6</code> 的基础上，取出指定行的记录，也就是 <code>LIMIT 阶段</code>，得到最终的结果，对应的是虚拟表 <code>vt7</code>。</p> 
+<p>当然我们在写 SELECT 语句的时候，不一定存在所有的关键字，相应的阶段就会省略。</p> 
+<p>同时因为 SQL 是一门类似英语的结构化查询语言，所以我们在写 SELECT 语句的时候，还要注意相应的关键字顺序，<strong>所谓底层运行的原理，就是我们刚才讲到的执行顺序</strong>。<br> <strong>练习</strong></p> 
+<ol><li>where子句可否使用组函数进行过滤?</li><li>查询公司员工工资的最大值，最小值，平均值，总和</li><li>查询各job_id的员工工资的最大值，最小值，平均值，总和</li><li>选择具有各个job_id的员工人数</li><li>查询员工最高工资和最低工资的差距（DIFFERENCE）</li><li>查询各个管理者手下员工的最低工资，其中最低工资不能低于6000，没有管理者的员工不计算在内</li><li>查询所有部门的名字，location_id，员工数量和平均工资，并按平均工资降序</li><li>查询每个工种、每个部门的部门名、工种名和最低工资</li></ol> 
+<pre><code class="prism language-sql"><span class="token number">1.</span><span class="token keyword">where</span>子句可否使用组函数进行过滤?
+<span class="token keyword">NO</span>
+<span class="token number">2.</span>查询公司员工工资的最大值，最小值，平均值，总和
+<span class="token keyword">SELECT</span> <span class="token function">MAX</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">SUM</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees<span class="token punctuation">;</span>
+<span class="token number">3.</span>查询各job_id的员工工资的最大值，最小值，平均值，总和
+<span class="token keyword">SELECT</span> job_id<span class="token punctuation">,</span> <span class="token function">MAX</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">SUM</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> job_id<span class="token punctuation">;</span>
+<span class="token number">4.</span>选择具有各个job_id的员工人数
+<span class="token keyword">SELECT</span> job_id<span class="token punctuation">,</span> <span class="token function">COUNT</span><span class="token punctuation">(</span><span class="token operator">*</span><span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> job_id<span class="token punctuation">;</span>
+<span class="token number">5.</span>查询员工最高工资和最低工资的差距（DIFFERENCE）
+<span class="token keyword">SELECT</span> <span class="token function">MAX</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">MAX</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span> DIFFERENCE
+<span class="token keyword">FROM</span> employees<span class="token punctuation">;</span>
+<span class="token number">6.</span>查询各个管理者手下员工的最低工资，其中最低工资不能低于<span class="token number">6000</span>，没有管理者的员工不计算在内
+<span class="token keyword">SELECT</span> manager_id<span class="token punctuation">,</span> <span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> employees
+<span class="token keyword">WHERE</span> manager_id <span class="token operator">IS</span> <span class="token operator">NOT</span> <span class="token boolean">NULL</span>
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> manager_id
+<span class="token keyword">HAVING</span> <span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">6000</span><span class="token punctuation">;</span>
+<span class="token number">7.</span>查询所有部门的名字，location_id，员工数量和平均工资，并按平均工资降序
+<span class="token keyword">SELECT</span> department_name<span class="token punctuation">,</span> location_id<span class="token punctuation">,</span> <span class="token function">COUNT</span><span class="token punctuation">(</span>employee_id<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">AVG</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span> avg_sal
+<span class="token keyword">FROM</span> employees e <span class="token keyword">RIGHT</span> <span class="token keyword">JOIN</span> departments d
+<span class="token keyword">ON</span> e<span class="token punctuation">.</span><span class="token identifier"><span class="token punctuation">`</span>department_id<span class="token punctuation">`</span></span> <span class="token operator">=</span> d<span class="token punctuation">.</span><span class="token identifier"><span class="token punctuation">`</span>department_id<span class="token punctuation">`</span></span>
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_name<span class="token punctuation">,</span> location_id
+<span class="token keyword">ORDER</span> <span class="token keyword">BY</span> avg_sal <span class="token keyword">DESC</span><span class="token punctuation">;</span>
+<span class="token number">8.</span>查询每个工种、每个部门的部门名、工种名和最低工资
+<span class="token keyword">SELECT</span> department_name<span class="token punctuation">,</span>job_id<span class="token punctuation">,</span><span class="token function">MIN</span><span class="token punctuation">(</span>salary<span class="token punctuation">)</span>
+<span class="token keyword">FROM</span> departments d <span class="token keyword">LEFT</span> <span class="token keyword">JOIN</span> employees e
+<span class="token keyword">ON</span> e<span class="token punctuation">.</span><span class="token identifier"><span class="token punctuation">`</span>department_id<span class="token punctuation">`</span></span> <span class="token operator">=</span> d<span class="token punctuation">.</span><span class="token identifier"><span class="token punctuation">`</span>department_id<span class="token punctuation">`</span></span>
+<span class="token keyword">GROUP</span> <span class="token keyword">BY</span> department_name<span class="token punctuation">,</span>job_id
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/7d3219d2ab6dc744f6da5dd8e79e7788/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">12月编程榜新鲜出炉！是谁笑到最后？</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/1451b9b2603c574c1f414362cfa9c6d1/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">如何下载 CT Image Storage 的.dcm数据集</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>group by与order by的区别 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="group by与order by的区别" />
+<meta property="og:description" content="1. order by order by比较简单，作用就是排序
+asc 从上到下慢慢升序
+desc 从上到下慢慢降序
+默认为升序(就是你sql后面不写order by 它就是升序)
+order by后面跟多个字段时，排序按就近原则依次而来
+2. group by group by我的理解是：聚合分组，值相等即为一组
+聚合的意思就是聚合函数：例如 sum()、avg()、count()、max()等等
+直接上个栗子：
+看到这，能明白GROUP BY把重复的元素(三个蛮王)分为了一组。
+所谓对NAME进行GROUP BY，其实就是对NAME进行了分组聚合, 值相等的为一组。
+继续往下走
+单独查询一个name时，对name进行GROUP BY是🆗的
+但是这里查询中多了一个money字段，再对name进行GROUP BY 就会报错
+继续往下
+看到这里，应该就明白：在对NAME字段进行GROUP BY 聚合的条件下，如果还要查询MONEY字段，就应该也用聚合函数对MONEY进行操作，否则这样查出来的MONEY是没有意义的（money前面的name都被分组聚合了，你还要查这一个个单独的money有什么用？誰是誰的誰？）。
+接着往下，如果我在此基础上，还要查询sum(money)大于100的人呢？
+会报错，原因是：聚合函数是针对结果集进行的，但是where条件并不是在查询出结果集之后运行，所以主函数放在where语句中，会出现错误。
+归根结底就一句话：聚合函数操作的是已查出的数据，where后面是查询条件，数据还没有，又怎么能当条件放到where里？
+解决方法：having关键字
+注意：
+1.having只能用在group by之后，对分组后的结果进行筛选(即：要使用having，你必须先用group by分组)。
+2.如果还要使用where，那么where要放在group by 之前。
+3.where后的条件表达式里不允许使用聚合函数，但having可以。
+再来个大总结：
+首先 ，是这样的：
+接着，是这样的：
+最后，是这样的：
+附：下面是另一个sql例子，看不看无所谓，大家可以无视。
+CREATE TABLE `comment` ( `id` int(10) unsigned NOT NULL AUTO_INCREMENT, `user_id` int(10) unsigned NOT NULL, `content` varchar(200) NOT NULL, `addtime` datetime NOT NULL, `lastmodify` datetime NOT NULL, PRIMARY KEY (`id`), KEY `user_id` (`user_id`), KEY `addtime` (`addtime`), KEY `uid_addtime` (`user_id`,`addtime`) ) ENGINE=InnoDB DEFAULT CHARSET=utf8; INSERT INTO `comment` (`id`, `user_id`, `content`, `addtime`, `lastmodify`) VALUES (1, 1, &#39;评论1&#39;, &#39;2017-05-17 00:00:00&#39;, &#39;2017-05-17 00:00:00&#39;), (2, 1, &#39;评论2&#39;, &#39;2017-05-17 00:00:01&#39;, &#39;2017-05-17 00:00:01&#39;), (3, 2, &#39;评论1&#39;, &#39;2017-05-17 00:00:02&#39;, &#39;2017-05-17 00:00:02&#39;), (4, 2, &#39;评论2&#39;, &#39;2017-05-17 00:00:03&#39;, &#39;2017-05-17 00:00:03&#39;), (5, 3, &#39;评论1&#39;, &#39;2017-05-17 00:00:04&#39;, &#39;2017-05-17 00:00:04&#39;), (6, 1, &#39;评论3&#39;, &#39;2017-05-17 00:00:05&#39;, &#39;2017-05-17 00:00:05&#39;), (7, 4, &#39;评论1&#39;, &#39;2017-05-17 00:00:06&#39;, &#39;2017-05-17 00:00:06&#39;), (8, 4, &#39;评论2&#39;, &#39;2017-05-17 00:00:07&#39;, &#39;2017-05-17 00:00:07&#39;), (9, 4, &#39;评论3&#39;, &#39;2017-05-17 00:00:08&#39;, &#39;2017-05-17 00:00:08&#39;), (10, 4, &#39;评论4&#39;, &#39;2017-05-17 00:00:09&#39;, &#39;2017-05-17 00:00:09&#39;), (11, 3, &#39;评论2&#39;, &#39;2017-05-17 00:00:10&#39;, &#39;2017-05-17 00:00:10&#39;); select * from comment; &#43;----&#43;---------&#43;---------&#43;---------------------&#43;---------------------&#43; | id | user_id | content | addtime | lastmodify | &#43;----&#43;---------&#43;---------&#43;---------------------&#43;---------------------&#43; | 1 | 1 | 评论1 | 2017-05-17 00:00:00 | 2017-05-17 00:00:00 | | 2 | 1 | 评论2 | 2017-05-17 00:00:01 | 2017-05-17 00:00:01 | | 3 | 2 | 评论1 | 2017-05-17 00:00:02 | 2017-05-17 00:00:02 | | 4 | 2 | 评论2 | 2017-05-17 00:00:03 | 2017-05-17 00:00:03 | | 5 | 3 | 评论1 | 2017-05-17 00:00:04 | 2017-05-17 00:00:04 | | 6 | 1 | 评论3 | 2017-05-17 00:00:05 | 2017-05-17 00:00:05 | | 7 | 4 | 评论1 | 2017-05-17 00:00:06 | 2017-05-17 00:00:06 | | 8 | 4 | 评论2 | 2017-05-17 00:00:07 | 2017-05-17 00:00:07 | | 9 | 4 | 评论3 | 2017-05-17 00:00:08 | 2017-05-17 00:00:08 | | 10 | 4 | 评论4 | 2017-05-17 00:00:09 | 2017-05-17 00:00:09 | | 11 | 3 | 评论2 | 2017-05-17 00:00:10 | 2017-05-17 00:00:10 | &#43;----&#43;---------&#43;---------&#43;---------------------&#43;---------------------&#43; 在comment表中，每个用户最后评论的内容就是id为6,4,11,10的记录。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/0481a205a5d69d58b1c7e91bc355cdbb/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-07-08T14:11:33+08:00" />
+<meta property="article:modified_time" content="2020-07-08T14:11:33+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">group by与order by的区别</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-tomorrow-night">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h3><a id="1%09order_by_0"></a>1. order by</h3> 
+<p>order by比较简单，<strong>作用就是排序</strong><br> <strong>asc</strong> <strong>从上到下</strong>慢慢<strong>升序</strong><br> <strong>desc</strong> <strong>从上到下</strong>慢慢<strong>降序</strong><br> <strong>默认为升序</strong>(就是你sql后面不写order by 它就是升序)<br> order by后面跟多个字段时，排序按就近原则依次而来</p> 
+<h3><a id="2%09group_by_6"></a>2. group by</h3> 
+<p>group by我的理解是：<strong>聚合分组，值相等即为一组</strong></p> 
+<blockquote> 
+ <p>聚合的意思就是聚合函数：例如 sum()、avg()、count()、max()等等</p> 
+</blockquote> 
+<p>直接上个栗子：<br> <img src="https://images2.imgbox.com/f2/aa/ljuLGOXa_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/cc/db/HQmGIzBe_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/1c/26/V9ykgeeN_o.png" alt="在这里插入图片描述"><br> 看到这，能明白GROUP BY把重复的元素(三个蛮王)分为了一组。<br> <strong>所谓对NAME进行GROUP BY，其实就是对NAME进行了分组聚合, 值相等的为一组。</strong><br> 继续往下走<br> <img src="https://images2.imgbox.com/df/7e/nRTWmQjv_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/46/aa/sXJW7z1c_o.png" alt="在这里插入图片描述"><br> 单独查询一个name时，对name进行GROUP BY是🆗的<br> 但是这里查询中多了一个money字段，再对name进行GROUP BY 就会报错<br> 继续往下<br> <img src="https://images2.imgbox.com/69/cb/UYWz3RoI_o.png" alt="在这里插入图片描述"><br> 看到这里，应该就明白：在对NAME字段进行GROUP BY 聚合的条件下，如果还要查询MONEY字段，就应该也用聚合函数对MONEY进行操作，否则这样查出来的MONEY是没有意义的（<strong>money前面的name都被分组聚合了，你还要查这一个个单独的money有什么用？誰是誰的誰？</strong>）。<br> 接着往下，如果我在此基础上，还要查询sum(money)大于100的人呢？<br> <img src="https://images2.imgbox.com/5b/fc/bTj2PHjq_o.png" alt="在这里插入图片描述"><br> 会报错，原因是：<strong>聚合函数是针对结果集进行的，但是where条件并不是在查询出结果集之后运行，所以主函数放在where语句中，会出现错误。</strong><br> 归根结底就一句话：聚合函数操作的是已查出的数据，where后面是查询条件，数据还没有，又怎么能当条件放到where里？<br> <strong>解决方法：having关键字</strong><br> <img src="https://images2.imgbox.com/17/cd/4nY9QPTd_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>注意：<br> 1.<strong>having只能用在group by之后</strong>，对分组后的结果进行筛选(即：要使用having，你必须先用group by分组)。<br> 2.如果还要使用where，那么<strong>where要放在group by 之前</strong>。<br> 3.<strong>where后的条件表达式里不允许使用聚合函数，但having可以</strong>。</p> 
+</blockquote> 
+<p><strong>再来个大总结：</strong><br> <strong>首先</strong> ，是这样的：<br> <img src="https://images2.imgbox.com/cb/c7/zfRpQqEU_o.png" alt="在这里插入图片描述"><br> <strong>接着</strong>，是这样的：<br> <img src="https://images2.imgbox.com/91/a5/CuzSopcd_o.png" alt="在这里插入图片描述"><br> <strong>最后</strong>，是这样的：<br> <img src="https://images2.imgbox.com/43/ab/c6bXXskx_o.png" alt="在这里插入图片描述"><br> <strong>附</strong>：下面是另一个sql例子，看不看无所谓，<strong>大家可以无视。</strong></p> 
+<pre><code class="prism language-sql"><span class="token keyword">CREATE</span> <span class="token keyword">TABLE</span> <span class="token punctuation">`</span><span class="token keyword">comment</span><span class="token punctuation">`</span> <span class="token punctuation">(</span>
+  <span class="token punctuation">`</span>id<span class="token punctuation">`</span> <span class="token keyword">int</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span> <span class="token keyword">unsigned</span> <span class="token operator">NOT</span> <span class="token boolean">NULL</span> <span class="token keyword">AUTO_INCREMENT</span><span class="token punctuation">,</span>
+  <span class="token punctuation">`</span>user_id<span class="token punctuation">`</span> <span class="token keyword">int</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span> <span class="token keyword">unsigned</span> <span class="token operator">NOT</span> <span class="token boolean">NULL</span><span class="token punctuation">,</span>
+  <span class="token punctuation">`</span>content<span class="token punctuation">`</span> <span class="token keyword">varchar</span><span class="token punctuation">(</span><span class="token number">200</span><span class="token punctuation">)</span> <span class="token operator">NOT</span> <span class="token boolean">NULL</span><span class="token punctuation">,</span>
+  <span class="token punctuation">`</span>addtime<span class="token punctuation">`</span> <span class="token keyword">datetime</span> <span class="token operator">NOT</span> <span class="token boolean">NULL</span><span class="token punctuation">,</span>
+  <span class="token punctuation">`</span>lastmodify<span class="token punctuation">`</span> <span class="token keyword">datetime</span> <span class="token operator">NOT</span> <span class="token boolean">NULL</span><span class="token punctuation">,</span>
+  <span class="token keyword">PRIMARY</span> <span class="token keyword">KEY</span> <span class="token punctuation">(</span><span class="token punctuation">`</span>id<span class="token punctuation">`</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token keyword">KEY</span> <span class="token punctuation">`</span>user_id<span class="token punctuation">`</span> <span class="token punctuation">(</span><span class="token punctuation">`</span>user_id<span class="token punctuation">`</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token keyword">KEY</span> <span class="token punctuation">`</span>addtime<span class="token punctuation">`</span> <span class="token punctuation">(</span><span class="token punctuation">`</span>addtime<span class="token punctuation">`</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token keyword">KEY</span> <span class="token punctuation">`</span>uid_addtime<span class="token punctuation">`</span> <span class="token punctuation">(</span><span class="token punctuation">`</span>user_id<span class="token punctuation">`</span><span class="token punctuation">,</span><span class="token punctuation">`</span>addtime<span class="token punctuation">`</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span> <span class="token keyword">ENGINE</span><span class="token operator">=</span><span class="token keyword">InnoDB</span> <span class="token keyword">DEFAULT</span> <span class="token keyword">CHARSET</span><span class="token operator">=</span>utf8<span class="token punctuation">;</span>
+
+<span class="token keyword">INSERT</span> <span class="token keyword">INTO</span> <span class="token punctuation">`</span><span class="token keyword">comment</span><span class="token punctuation">`</span> <span class="token punctuation">(</span><span class="token punctuation">`</span>id<span class="token punctuation">`</span><span class="token punctuation">,</span> <span class="token punctuation">`</span>user_id<span class="token punctuation">`</span><span class="token punctuation">,</span> <span class="token punctuation">`</span>content<span class="token punctuation">`</span><span class="token punctuation">,</span> <span class="token punctuation">`</span>addtime<span class="token punctuation">`</span><span class="token punctuation">,</span> <span class="token punctuation">`</span>lastmodify<span class="token punctuation">`</span><span class="token punctuation">)</span> <span class="token keyword">VALUES</span>
+<span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">'评论1'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:00'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:00'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">'评论2'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:01'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:01'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token string">'评论1'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:02'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:02'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">4</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token string">'评论2'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:03'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:03'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">,</span> <span class="token string">'评论1'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:04'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:04'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">6</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token string">'评论3'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:05'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:05'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">7</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token string">'评论1'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:06'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:06'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">8</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token string">'评论2'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:07'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:07'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">9</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token string">'评论3'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:08'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:08'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">,</span> <span class="token string">'评论4'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:09'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:09'</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">(</span><span class="token number">11</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">,</span> <span class="token string">'评论2'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:10'</span><span class="token punctuation">,</span> <span class="token string">'2017-05-17 00:00:10'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">select</span> <span class="token operator">*</span> <span class="token keyword">from</span> <span class="token keyword">comment</span><span class="token punctuation">;</span>
+<span class="token operator">+</span><span class="token comment">----+---------+---------+---------------------+---------------------+</span>
+<span class="token operator">|</span> id <span class="token operator">|</span> user_id <span class="token operator">|</span> content <span class="token operator">|</span> addtime             <span class="token operator">|</span> lastmodify          <span class="token operator">|</span>
+<span class="token operator">+</span><span class="token comment">----+---------+---------+---------------------+---------------------+</span>
+<span class="token operator">|</span>  <span class="token number">1</span> <span class="token operator">|</span>       <span class="token number">1</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">00</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">00</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">2</span> <span class="token operator">|</span>       <span class="token number">1</span> <span class="token operator">|</span> 评论<span class="token number">2</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">01</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">01</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">3</span> <span class="token operator">|</span>       <span class="token number">2</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">02</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">02</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">4</span> <span class="token operator">|</span>       <span class="token number">2</span> <span class="token operator">|</span> 评论<span class="token number">2</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">03</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">03</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">5</span> <span class="token operator">|</span>       <span class="token number">3</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">04</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">04</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">6</span> <span class="token operator">|</span>       <span class="token number">1</span> <span class="token operator">|</span> 评论<span class="token number">3</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">05</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">05</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">7</span> <span class="token operator">|</span>       <span class="token number">4</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">06</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">06</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">8</span> <span class="token operator">|</span>       <span class="token number">4</span> <span class="token operator">|</span> 评论<span class="token number">2</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">07</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">07</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">9</span> <span class="token operator">|</span>       <span class="token number">4</span> <span class="token operator">|</span> 评论<span class="token number">3</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">08</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">08</span> <span class="token operator">|</span>
+<span class="token operator">|</span> <span class="token number">10</span> <span class="token operator">|</span>       <span class="token number">4</span> <span class="token operator">|</span> 评论<span class="token number">4</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">09</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">09</span> <span class="token operator">|</span>
+<span class="token operator">|</span> <span class="token number">11</span> <span class="token operator">|</span>       <span class="token number">3</span> <span class="token operator">|</span> 评论<span class="token number">2</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">10</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">10</span> <span class="token operator">|</span>
+<span class="token operator">+</span><span class="token comment">----+---------+---------+---------------------+---------------------+</span>
+</code></pre> 
+<p>在comment表中，每个用户最后评论的内容就是id为6,4,11,10的记录。<br> <strong>使用group by查询：</strong></p> 
+<pre><code class="prism language-sql"><span class="token keyword">select</span> <span class="token operator">*</span> <span class="token keyword">from</span> <span class="token keyword">comment</span> <span class="token keyword">group</span> <span class="token keyword">by</span> user_id<span class="token punctuation">;</span>
+<span class="token operator">+</span><span class="token comment">----+---------+---------+---------------------+---------------------+</span>
+<span class="token operator">|</span> id <span class="token operator">|</span> user_id <span class="token operator">|</span> content <span class="token operator">|</span> addtime             <span class="token operator">|</span> lastmodify          <span class="token operator">|</span>
+<span class="token operator">+</span><span class="token comment">----+---------+---------+---------------------+---------------------+</span>
+<span class="token operator">|</span>  <span class="token number">1</span> <span class="token operator">|</span>       <span class="token number">1</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">00</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">00</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">3</span> <span class="token operator">|</span>       <span class="token number">2</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">02</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">02</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">5</span> <span class="token operator">|</span>       <span class="token number">3</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">04</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">04</span> <span class="token operator">|</span>
+<span class="token operator">|</span>  <span class="token number">7</span> <span class="token operator">|</span>       <span class="token number">4</span> <span class="token operator">|</span> 评论<span class="token number">1</span>   <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">06</span> <span class="token operator">|</span> <span class="token number">2017</span><span class="token operator">-</span><span class="token number">05</span><span class="token operator">-</span><span class="token number">17</span> <span class="token number">00</span>:<span class="token number">00</span>:<span class="token number">06</span> <span class="token operator">|</span>
+<span class="token operator">+</span><span class="token comment">----+---------+---------+---------------------+---------------------+</span>
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/0ae99670d4a626bffd78e99f01be19db/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Docker镜像与容器常用命令图文详解</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/bf3b6eb0cf041b2bb2ea7c57da7cbdb9/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">弱网测试工具-qnet</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

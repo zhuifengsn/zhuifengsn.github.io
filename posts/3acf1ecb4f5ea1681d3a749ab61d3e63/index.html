@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>基于图像分割与颜色量化的 k 均值聚类算法 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="基于图像分割与颜色量化的 k 均值聚类算法" />
+<meta property="og:description" content="基于图像分割与颜色量化的 k 均值聚类算法 将演示如何对 Astronaut图像执行像素矢量量化（Vector Quantization，VQ），将显示图像所需的颜色数量从 250 种减少到 4 种，同时保持整体外观质量。在本例中，像素在三维空间中表示，使用 k 均值查找 4 个颜色簇。在图像处理文献中，码本是从 k 均值（簇群中心）获得的，称为调色板。在调色板中，使用 1 个字节最多可寻址 256 种颜色，而 RGB 编码要求每个像素 3 个字节。GIF 文件格式使用的就是这样的调色板。为了进行比较，我们还将使用随机码本（随机选取颜色）的量化图像。在使用 k 均值聚类算法对图像进行分割前，加载所需的库和输入图像，如下面的代码所示：
+#Kmens 图像分割颜色聚类 import numpy as np import matplotlib.pyplot as plt from sklearn.cluster import KMeans from sklearn.metrics import pairwise_distances_argmin from skimage.io import imread from sklearn.utils import shuffle from skimage import img_as_float from time import time pepper = data.astronaut() # Display the original image plt." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3acf1ecb4f5ea1681d3a749ab61d3e63/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-09-04T21:16:54+08:00" />
+<meta property="article:modified_time" content="2022-09-04T21:16:54+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">基于图像分割与颜色量化的 k 均值聚类算法</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="_k__0"></a>基于图像分割与颜色量化的 k 均值聚类算法</h2> 
+<p>将演示如何对 Astronaut图像执行像素矢量量化（Vector Quantization，VQ），将显示图像所需的颜色数量从 250 种减少到 4 种，同时保持整体外观质量。在本例中，像素在三维空间中表示，使用 k 均值查找 4 个颜色簇。在图像处理文献中，码本是从 k 均值（簇群中心）获得的，称为调色板。在调色板中，使用 1 个字节最多可寻址 256 种颜色，而 RGB 编码要求每个像素 3 个字节。GIF 文件格式使用的就是这样的调色板。为了进行比较，我们还将使用随机码本（随机选取颜色）的量化图像。在使用 k 均值聚类算法对图像进行分割前，加载所需的库和输入图像，如下面的代码所示：</p> 
+<pre><code class="prism language-python"><span class="token comment">#Kmens 图像分割颜色聚类</span>
+<span class="token keyword">import</span> numpy <span class="token keyword">as</span> np 
+<span class="token keyword">import</span> matplotlib<span class="token punctuation">.</span>pyplot <span class="token keyword">as</span> plt 
+<span class="token keyword">from</span> sklearn<span class="token punctuation">.</span>cluster <span class="token keyword">import</span> KMeans 
+<span class="token keyword">from</span> sklearn<span class="token punctuation">.</span>metrics <span class="token keyword">import</span> pairwise_distances_argmin 
+<span class="token keyword">from</span> skimage<span class="token punctuation">.</span>io <span class="token keyword">import</span> imread 
+<span class="token keyword">from</span> sklearn<span class="token punctuation">.</span>utils <span class="token keyword">import</span> shuffle 
+<span class="token keyword">from</span> skimage <span class="token keyword">import</span> img_as_float 
+<span class="token keyword">from</span> time <span class="token keyword">import</span> time 
+pepper <span class="token operator">=</span> data<span class="token punctuation">.</span>astronaut<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+<span class="token comment"># Display the original image </span>
+plt<span class="token punctuation">.</span>figure<span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> plt<span class="token punctuation">.</span>clf<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+ax <span class="token operator">=</span> plt<span class="token punctuation">.</span>axes<span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>axis<span class="token punctuation">(</span><span class="token string">'off'</span><span class="token punctuation">)</span><span class="token punctuation">,</span> plt<span class="token punctuation">.</span>title<span class="token punctuation">(</span><span class="token string">'Original image (%d colors)'</span> <span class="token operator">%</span><span class="token punctuation">(</span><span class="token builtin">len</span><span class="token punctuation">(</span>np<span class="token punctuation">.</span>unique<span class="token punctuation">(</span>pepper<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span> plt<span class="token punctuation">.</span>imshow<span class="token punctuation">(</span>pepper<span class="token punctuation">)</span> 
+n_colors <span class="token operator">=</span> <span class="token number">64</span> 
+<span class="token comment"># Convert to floats instead of the default 8 bits integer coding. Dividing by </span>
+<span class="token comment"># 255 is important so that plt.imshow behaves works well on float data (need to </span>
+<span class="token comment"># be in the range [0-1]) </span>
+pepper <span class="token operator">=</span> np<span class="token punctuation">.</span>array<span class="token punctuation">(</span>pepper<span class="token punctuation">,</span> dtype<span class="token operator">=</span>np<span class="token punctuation">.</span>float64<span class="token punctuation">)</span> <span class="token operator">/</span> <span class="token number">255</span> 
+<span class="token comment"># Load Image and transform to a 2D numpy array. </span>
+w<span class="token punctuation">,</span> h<span class="token punctuation">,</span> d <span class="token operator">=</span> original_shape <span class="token operator">=</span> <span class="token builtin">tuple</span><span class="token punctuation">(</span>pepper<span class="token punctuation">.</span>shape<span class="token punctuation">)</span> 
+<span class="token comment"># assert d == 3 </span>
+image_array <span class="token operator">=</span> np<span class="token punctuation">.</span>reshape<span class="token punctuation">(</span>pepper<span class="token punctuation">,</span> <span class="token punctuation">(</span>np<span class="token punctuation">.</span>multiply<span class="token punctuation">(</span>pepper<span class="token punctuation">.</span>shape<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token punctuation">,</span> pepper<span class="token punctuation">.</span>shape<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span> pepper<span class="token punctuation">.</span>shape<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span> 
+<span class="token comment"># image_gray=np.reshape(pepper,(np.multiply(w,h),d)</span>
+<span class="token comment"># image_gray.shape</span>
+<span class="token keyword">def</span> <span class="token function">recreate_image</span><span class="token punctuation">(</span>codebook<span class="token punctuation">,</span> labels<span class="token punctuation">,</span> w<span class="token punctuation">,</span> h<span class="token punctuation">)</span><span class="token punctuation">:</span> 
+     <span class="token triple-quoted-string string">"""Recreate the (compressed) image from the code book &amp; labels"""</span> 
+     d <span class="token operator">=</span> codebook<span class="token punctuation">.</span>shape<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> 
+     image <span class="token operator">=</span> np<span class="token punctuation">.</span>zeros<span class="token punctuation">(</span><span class="token punctuation">(</span>w<span class="token punctuation">,</span> h<span class="token punctuation">,</span> d<span class="token punctuation">)</span><span class="token punctuation">)</span> 
+     label_idx <span class="token operator">=</span> <span class="token number">0</span> 
+     <span class="token keyword">for</span> i <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span>w<span class="token punctuation">)</span><span class="token punctuation">:</span> 
+         <span class="token keyword">for</span> j <span class="token keyword">in</span> <span class="token builtin">range</span><span class="token punctuation">(</span>h<span class="token punctuation">)</span><span class="token punctuation">:</span> 
+             image<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">[</span>j<span class="token punctuation">]</span> <span class="token operator">=</span> codebook<span class="token punctuation">[</span>labels<span class="token punctuation">[</span>label_idx<span class="token punctuation">]</span><span class="token punctuation">]</span> 
+             label_idx <span class="token operator">+=</span> <span class="token number">1</span> 
+     <span class="token keyword">return</span> image 
+    <span class="token comment"># Display all results, alongside original image </span>
+plt<span class="token punctuation">.</span>figure<span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>clf<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+ax <span class="token operator">=</span> plt<span class="token punctuation">.</span>axes<span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>axis<span class="token punctuation">(</span><span class="token string">'off'</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>title<span class="token punctuation">(</span><span class="token string">'Original image (96,615 colors)'</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>imshow<span class="token punctuation">(</span>pepper<span class="token punctuation">)</span>
+plt<span class="token punctuation">.</span>figure<span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> figsize<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">,</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>clf<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+i <span class="token operator">=</span> <span class="token number">1</span> 
+<span class="token keyword">for</span> k <span class="token keyword">in</span> <span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">,</span> <span class="token number">32</span><span class="token punctuation">,</span> <span class="token number">16</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">]</span><span class="token punctuation">:</span> 
+     t0 <span class="token operator">=</span> time<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>subplot<span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">,</span>i<span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>axis<span class="token punctuation">(</span><span class="token string">'off'</span><span class="token punctuation">)</span> 
+     image_array_sample <span class="token operator">=</span> shuffle<span class="token punctuation">(</span>image_array<span class="token punctuation">,</span> random_state<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token punctuation">:</span><span class="token number">1000</span><span class="token punctuation">,</span><span class="token punctuation">:</span><span class="token punctuation">]</span> 
+
+     kmeans <span class="token operator">=</span> KMeans<span class="token punctuation">(</span>n_clusters<span class="token operator">=</span>k<span class="token punctuation">,</span> random_state<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">.</span>fit<span class="token punctuation">(</span>image_array_sample<span class="token punctuation">)</span> 
+     <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"done in %0.3fs."</span> <span class="token operator">%</span> <span class="token punctuation">(</span>time<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> t0<span class="token punctuation">)</span><span class="token punctuation">)</span> 
+     <span class="token comment"># Get labels for all points </span>
+     <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"Predicting color indices on the full image (k-means)"</span><span class="token punctuation">)</span> 
+     t0 <span class="token operator">=</span> time<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+     labels <span class="token operator">=</span> kmeans<span class="token punctuation">.</span>predict<span class="token punctuation">(</span>image_array<span class="token punctuation">)</span> 
+     <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"done in %0.3fs."</span> <span class="token operator">%</span> <span class="token punctuation">(</span>time<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> t0<span class="token punctuation">)</span><span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>title<span class="token punctuation">(</span><span class="token string">'Quantized image ('</span> <span class="token operator">+</span> <span class="token builtin">str</span><span class="token punctuation">(</span>k<span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">' colors, K-Means)'</span><span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>imshow<span class="token punctuation">(</span>recreate_image<span class="token punctuation">(</span>kmeans<span class="token punctuation">.</span>cluster_centers_<span class="token punctuation">,</span> labels<span class="token punctuation">,</span> w<span class="token punctuation">,</span> h<span class="token punctuation">)</span><span class="token punctuation">)</span> 
+     i <span class="token operator">+=</span> <span class="token number">1</span> 
+plt<span class="token punctuation">.</span>show<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>figure<span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> figsize<span class="token operator">=</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">,</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">)</span> 
+plt<span class="token punctuation">.</span>clf<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+i <span class="token operator">=</span> <span class="token number">1</span> 
+<span class="token keyword">for</span> k <span class="token keyword">in</span> <span class="token punctuation">[</span><span class="token number">64</span><span class="token punctuation">,</span> <span class="token number">32</span><span class="token punctuation">,</span> <span class="token number">16</span><span class="token punctuation">,</span> <span class="token number">4</span><span class="token punctuation">]</span><span class="token punctuation">:</span> 
+     t0 <span class="token operator">=</span> time<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>subplot<span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">,</span>i<span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>axis<span class="token punctuation">(</span><span class="token string">'off'</span><span class="token punctuation">)</span> 
+     codebook_random <span class="token operator">=</span> shuffle<span class="token punctuation">(</span>image_array<span class="token punctuation">,</span> random_state<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token punctuation">:</span>k <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">]</span> 
+     <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"Predicting color indices on the full image (random)"</span><span class="token punctuation">)</span> 
+     t0 <span class="token operator">=</span> time<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+     labels_random <span class="token operator">=</span> pairwise_distances_argmin<span class="token punctuation">(</span>codebook_random<span class="token punctuation">,</span>image_array<span class="token punctuation">,</span>axis<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">)</span> 
+     <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"done in %0.3fs."</span> <span class="token operator">%</span> <span class="token punctuation">(</span>time<span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> t0<span class="token punctuation">)</span><span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>title<span class="token punctuation">(</span><span class="token string">'Quantized image ('</span> <span class="token operator">+</span> <span class="token builtin">str</span><span class="token punctuation">(</span>k<span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">' colors, Random)'</span><span class="token punctuation">)</span> 
+     plt<span class="token punctuation">.</span>imshow<span class="token punctuation">(</span>recreate_image<span class="token punctuation">(</span>codebook_random<span class="token punctuation">,</span> labels_random<span class="token punctuation">,</span> w<span class="token punctuation">,</span> h<span class="token punctuation">)</span><span class="token punctuation">)</span> 
+     i <span class="token operator">+=</span> <span class="token number">1</span> 
+plt<span class="token punctuation">.</span>show<span class="token punctuation">(</span><span class="token punctuation">)</span> 
+
+</code></pre> 
+<p>运行上述代码，输出结果上图 所示。可以看到，在保留的图像质量方面，k 均值聚类算法对于颜色量化的效果总是比使用随机码本要好。<br> <img src="https://images2.imgbox.com/64/3e/KwY690lq_o.jpg" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/24/23/0tCFWO7D_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/35/b3/VgNve0HW_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/1ff1014ae860950fffa250141c8cf1cb/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">监督机器学习——基于手写数字数据集的图像分类</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/3329ba80d5b6718dc4a07f865b0143aa/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">c语言 指针</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

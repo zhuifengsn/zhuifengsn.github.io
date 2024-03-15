@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>互联网公司mysql采用读已提交的隔离级别原因(详细) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="互联网公司mysql采用读已提交的隔离级别原因(详细)" />
+<meta property="og:description" content="4开始我们的内容，相信大家一定遇到过下面的一个面试场景：
+面试官：“讲讲mysql有几个事务隔离级别？”
+你：“读未提交，读已提交，可重复读，串行化四个！默认是可重复读”
+面试官：“为什么mysql选可重复读作为默认的隔离级别？”
+(你面露苦色，不知如何回答！)
+面试官:&#34;你们项目中选了哪个隔离级别？为什么？&#34;
+你：“当然是默认的可重复读，至于原因。。呃。。。”
+(然后你就可以回去等通知了！)
+对于这个问题 我是用ChatGPT3.5版本的进行咨询了一下:
+得到的回复是：
+互联网公司采用“读已提交”（read committed）隔离级别的原因有以下几点：
+1：保证数据一致性和可靠性：在多用户并发访问数据库时，不同用户可能会同时对同一条数据进行读写操作。如果隔离级别过低，会导致脏读、不可重复读或幻读等数据不一致问题。而“读已提交”隔离级别可以避免这些问题的发生，保证数据的一致性和可靠性。
+2：提高并发性能：互联网公司通常面临高并发的情况，如果采用较高的隔离级别（如可重复读或串行化），则会限制并发性能。而“读已提交”隔离级别相对较低，可以提高并发性能。
+3：支持实时性要求高的业务场景：互联网公司往往需要支持实时性要求高的业务场景，比如在线支付等。采用“读已提交”隔离级别可以保证事务的及时提交和读取，实现实时性要求高的业务场景。
+4：减少锁竞争：采用“读已提交”隔离级别可以减少锁的竞争，提高查询效率。
+综上所述，“读已提交”隔离级别可以满足互联网公司高并发、实时性要求高以及数据一致性和可靠性等多重需求，因此被广泛采用。
+当然这也只是一个很官方的回答，下面是我查询到的一些解答！！！ 这个是有历史原因的，当然要从我们的主从复制开始讲起了！
+主从复制，是基于什么复制的？
+是基于binlog复制的！这里不想去搬binlog的概念了，就简单理解为binlog是一个记录数据库更改的文件吧～
+binlog有几种格式？
+OK，三种，分别是
+statement:记录的是修改SQL语句row：记录的是每行实际数据的变更mixed：statement和row模式的混合 那Mysql在5.0这个版本以前，binlog只支持STATEMENT这种格式！而这种格式在读已提交(Read Commited)这个隔离级别下主从复制是有bug的，因此Mysql将可重复读(Repeatable Read)作为默认的隔离级别！
+接下来，就要说说当binlog为STATEMENT格式，且隔离级别为读已提交(Read Commited)时，有什么bug呢？如下图所示，在主(master)上执行如下事务
+此时在主(master)上执行下列语句
+select * from test； 输出如下:
+&#43;---&#43; | b | &#43;---&#43; | 3 | &#43;---&#43; 1 row in set 但是，你在此时在从(slave)上执行该语句，得出输出如下:
+Empty set 这样，你就出现了主从不一致性的问题！原因其实很简单，就是在master上执行的顺序为先删后插！而此时binlog为STATEMENT格式，它记录的顺序为先插后删！从(slave)同步的是binglog，因此从机执行的顺序和主机不一致！就会出现主从不一致！
+如何解决 解决方案有两种！
+(1)隔离级别设为可重复读(Repeatable Read),在该隔离级别下引入间隙锁。当Session 1执行delete语句时，会锁住间隙。那么，Ssession 2执行插入语句就会阻塞住！
+(2)将binglog的格式修改为row格式，此时是基于行的复制，自然就不会出现sql执行顺序不一样的问题！奈何这个格式在mysql5.1版本开始才引入。因此由于历史原因，mysql将默认的隔离级别设为可重复读(Repeatable Read)，保证主从复制不出问题！
+那么，当我们了解完mysql选可重复读(Repeatable Read)作为默认隔离级别的原因后，接下来我们将其和读已提交(Read Commited)进行对比，来说明为什么在互联网项目为什么将隔离级别设为读已提交(Read Commited)！
+对比 ok，我们先明白一点！项目中是不用读未提交(Read UnCommitted)和串行化(Serializable)两个隔离级别，原因有二
+采用读未提交(Read UnCommitted),一个事务读到另一个事务未提交读数据，这个不用多说吧，从逻辑上都说不过去！采用串行化(Serializable)，每个次读操作都会加锁，快照读失效，一般是使用mysql自带分布式事务功能时才使用该隔离级别！(笔者从未用过mysql自带的这个功能，因为这是XA事务，是强一致性事务，性能不佳！互联网的分布式方案，多采用最终一致性的事务解决方案！) 也就是说，我们该纠结都只有一个问题，究竟隔离级别是用读已经提交呢还是可重复读？" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/e449277236cdc396970867888150fba4/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-05-16T10:06:46+08:00" />
+<meta property="article:modified_time" content="2023-05-16T10:06:46+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">互联网公司mysql采用读已提交的隔离级别原因(详细)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p></p> 
+<p>4开始我们的内容，相信大家一定遇到过下面的一个面试场景：</p> 
+<p><strong>面试官：“讲讲mysql有几个事务隔离级别？”<br> 你：“读未提交，读已提交，可重复读，串行化四个！默认是可重复读”<br> 面试官：“为什么mysql选可重复读作为默认的隔离级别？”<br> (你面露苦色，不知如何回答！)<br> 面试官:"你们项目中选了哪个隔离级别？为什么？"<br> 你：“当然是默认的可重复读，至于原因。。呃。。。”<br> (然后你就可以回去等通知了！)</strong></p> 
+<p></p> 
+<p><strong>对于这个问题 我是用</strong><span style="color:#fe2c24;">ChatGPT3.5版本</span><strong>的进行咨询了一下:</strong></p> 
+<p><span style="color:#0d0016;">得到的回复是：</span></p> 
+<p>互联网公司采用“读已提交”（read committed）隔离级别的原因有以下几点：</p> 
+<p>1：<strong>保证数据一致性和可靠性</strong>：在多用户并发访问数据库时，不同用户可能会同时对同一条数据进行读写操作。如果隔离级别过低，会导致脏读、不可重复读或幻读等数据不一致问题。而“读已提交”隔离级别可以避免这些问题的发生，保证数据的一致性和可靠性。</p> 
+<p>2：<strong>提高并发性能</strong>：互联网公司通常面临高并发的情况，如果采用较高的隔离级别（如可重复读或串行化），则会限制并发性能。而“读已提交”隔离级别相对较低，可以提高并发性能。</p> 
+<p>3：<strong>支持实时性要求高的业务场景</strong>：互联网公司往往需要支持实时性要求高的业务场景，比如在线支付等。采用“读已提交”隔离级别可以保证事务的及时提交和读取，实现实时性要求高的业务场景。</p> 
+<p>4：<strong>减少锁竞争</strong>：采用“读已提交”隔离级别可以减少锁的竞争，提高查询效率。</p> 
+<p>综上所述，“读已提交”隔离级别可以满足互联网公司高并发、实时性要求高以及数据一致性和可靠性等多重需求，因此被广泛采用。</p> 
+<h3>当然这也只是一个很官方的回答，下面是我查询到的一些解答！！！</h3> 
+<p>这个是有历史原因的，当然要从我们的主从复制开始讲起了！</p> 
+<p><em>主从复制，是基于什么复制的？</em><br> 是基于binlog复制的！这里不想去搬binlog的概念了，就简单理解为binlog是一个记录数据库更改的文件吧～<br><em>binlog有几种格式？</em><br> OK，三种，分别是</p> 
+<ul><li>statement:记录的是修改SQL语句</li><li>row：记录的是每行实际数据的变更</li><li>mixed：statement和row模式的混合</li></ul> 
+<p>那Mysql在5.0这个版本以前，binlog只支持<code>STATEMENT</code>这种格式！而这种格式在<strong>读已提交(Read Commited)</strong>这个隔离级别下主从复制是有bug的，因此Mysql将<strong>可重复读(Repeatable Read)</strong>作为默认的隔离级别！<br> 接下来，就要说说当binlog为<code>STATEMENT</code>格式，且隔离级别为<strong>读已提交(Read Commited)</strong>时，有什么bug呢？如下图所示，在主(master)上执行如下事务</p> 
+<p><img alt="" height="654" src="https://images2.imgbox.com/25/c5/oWkoAyVa_o.png" width="516"></p> 
+<p> 此时在主(master)上执行下列语句</p> 
+<pre><code class="language-java">select * from test；</code></pre> 
+<p>输出如下:</p> 
+<pre><code class="language-java">+---+
+| b |
++---+
+| 3 |
++---+
+1 row in set</code></pre> 
+<p>但是，你在此时在从(slave)上执行该语句，得出输出如下:</p> 
+<pre><code class="language-java">Empty set</code></pre> 
+<p>这样，你就出现了主从不一致性的问题！原因其实很简单，就是在master上执行的顺序为先删后插！而此时binlog为STATEMENT格式，它记录的顺序为先插后删！从(slave)同步的是binglog，因此从机执行的顺序和主机不一致！就会出现主从不一致！</p> 
+<h3>如何解决</h3> 
+<p>解决方案有两种！<br> (1)隔离级别设为<strong>可重复读(Repeatable Read)</strong>,在该隔离级别下引入间隙锁。当<code>Session 1</code>执行delete语句时，会锁住间隙。那么，<code>Ssession 2</code>执行插入语句就会阻塞住！<br> (2)将binglog的格式修改为row格式，此时是基于行的复制，自然就不会出现sql执行顺序不一样的问题！奈何这个格式在mysql5.1版本开始才引入。因此由于历史原因，mysql将默认的隔离级别设为<strong>可重复读(Repeatable Read)</strong>，保证主从复制不出问题！</p> 
+<p>那么，当我们了解完mysql选<strong>可重复读(Repeatable Read)</strong>作为默认隔离级别的原因后，接下来我们将其和<strong>读已提交(Read Commited)</strong>进行对比，来说明为什么在互联网项目为什么将隔离级别设为<strong>读已提交(Read Commited)</strong>！</p> 
+<h4 id="对比">对比</h4> 
+<p>ok，我们先明白一点！项目中是不用<strong>读未提交(Read UnCommitted)</strong>和<strong>串行化(Serializable)</strong>两个隔离级别，原因有二</p> 
+<ul><li>采用<strong>读未提交(Read UnCommitted)</strong>,一个事务读到另一个事务未提交读数据，这个不用多说吧，从逻辑上都说不过去！</li><li>采用<strong>串行化(Serializable)</strong>，每个次读操作都会加锁，快照读失效，一般是使用mysql自带分布式事务功能时才使用该隔离级别！(笔者从未用过mysql自带的这个功能，因为这是XA事务，是强一致性事务，性能不佳！互联网的分布式方案，多采用最终一致性的事务解决方案！)</li></ul> 
+<p>也就是说，我们该纠结都只有一个问题，究竟隔离级别是用读已经提交呢还是可重复读？<br> 接下来对这两种级别进行对比，讲讲我们为什么选<strong>读已提交(Read Commited)</strong>作为事务隔离级别！<br> 假设表结构如下：</p> 
+<pre><code class="language-java"> CREATE TABLE `test` (
+`id` int(11) NOT NULL,
+`color` varchar(20) NOT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB</code></pre> 
+<p>数据如下:</p> 
+<pre><code class="language-java">+----+-------+
+| id | color |
++----+-------+
+|  1 |  red  |
+|  2 | white |
+|  5 |  red  |
+|  7 | white |
++----+-------+</code></pre> 
+<p>为了便于描述，下面将</p> 
+<ul><li><strong>可重复读(Repeatable Read)</strong>，简称为RR；</li><li><strong>读已提交(Read Commited)</strong>，简称为RC；</li></ul> 
+<p><em>缘由一：在RR隔离级别下，存在间隙锁，导致出现死锁的几率比RC大的多！</em><br> 此时执行语句:</p> 
+<pre><code class="language-sql">select * from test where id &lt;3 for update;</code></pre> 
+<p>在RR隔离级别下，存在间隙锁，可以锁住(2,5)这个间隙，防止其他事务插入数据！<br> 而在RC隔离级别下，不存在间隙锁，其他事务是可以插入数据！</p> 
+<p><code>ps</code>:在RC隔离级别下并不是不会出现死锁，只是出现几率比RR低而已！</p> 
+<p><em>缘由二：在RR隔离级别下，条件列未命中索引会锁表！而在RC隔离级别下，只锁行</em><br> 此时执行语句:</p> 
+<pre><code class="language-sql">update test set color = 'blue' where color = 'white'; 
+</code></pre> 
+<p>在RC隔离级别下，其先走聚簇索引，进行全部扫描。加锁如下：</p> 
+<p><img alt="" height="227" src="https://images2.imgbox.com/50/dc/kECdNs1P_o.png" width="397"></p> 
+<p> 但在实际中，MySQL做了优化，在MySQL Server过滤条件，发现不满足后，会调用unlock_row方法，把不满足条件的记录放锁。<br> 实际加锁如下:</p> 
+<p><img alt="" height="254" src="https://images2.imgbox.com/fd/68/cugrUqmF_o.png" width="507"></p> 
+<p> 然而，在RR隔离级别下，走聚簇索引，进行全部扫描，最后会将整个表锁上，如下所示:</p> 
+<p><img alt="" height="378" src="https://images2.imgbox.com/cc/69/LQsH7jo7_o.png" width="554"></p> 
+<p> <em>缘由三：在RC隔离级别下，半一致性读(semi-consistent)特性增加了update操作的并发性！</em><br> 在5.1.15的时候，innodb引入了一个概念叫做“semi-consistent”，减少了更新同一行记录时的冲突，减少锁等待。<br> 所谓半一致性读就是，一个update语句，如果读到一行已经加锁的记录，此时InnoDB返回记录最近提交的版本，由MySQL上层判断此版本是否满足update的where条件。若满足(需要更新)，则MySQL会重新发起一次读操作，此时会读取行的最新版本(并加锁)！<br> 具体表现如下:<br> 此时有两个Session，Session1和Session2！<br> Session1执行:</p> 
+<pre><code class="language-sql">update test set color = 'blue' where color = 'red'; </code></pre> 
+<p>先不Commit事务！<br> 与此同时Ssession2执行:</p> 
+<pre><code class="language-sql">update test set color = 'blue' where color = 'white'; </code></pre> 
+<p>session 2尝试加锁的时候，发现行上已经存在锁，InnoDB会开启semi-consistent read，返回最新的committed版本(1,red),(2，white),(5,red),(7,white)。MySQL会重新发起一次读操作，此时会读取行的最新版本(并加锁)!<br> 而在RR隔离级别下，Session2只能等待！</p> 
+<h4 id="两个疑问">两个疑问</h4> 
+<p><em>在RC级别下，不可重复读问题需要解决么？</em><br> 不用解决，这个问题是可以接受的！毕竟你数据都已经提交了，读出来本身就没有太大问题！Oracle的默认隔离级别就是RC，你们改过Oracle的默认隔离级别么？</p> 
+<p><em>在RC级别下，主从复制用什么binlog格式？</em><br> OK,在该隔离级别下，用的binlog为row格式，是基于行的复制！Innodb的创始人也是建议binlog使用该格式。</p> 
+<p></p> 
+<p>当然，这也是一位大佬的思想，本人也是搬运只为让更多人看到。</p> 
+<p>原文链接：<a href="https://www.ngui.cc/el/530591.html" rel="nofollow" title="互联网公司MySQL数据库采用读已提交的隔离级别原因">互联网公司MySQL数据库采用读已提交的隔离级别原因</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/bbf27157ba3e471741260af501ef72d5/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">MacOS中Notion挂代理</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/abac7b32cd2e0e01c55aa48c79ec7714/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">2023年Redis面试题（持续更新）</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

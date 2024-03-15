@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux使用脚本启动jar/war包（springboot&#43;maven工程jar包） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux使用脚本启动jar/war包（springboot&#43;maven工程jar包）" />
+<meta property="og:description" content="Linux（CentOS7）使用脚本启动java jar/war包 本文以jar包为例（war包是同样的操作流程）。
+开始之前，先准备一个jar包 以springboot工程为例。
+我打包用的maven。
+在pom文件中可以约束最终的jar包名称：
+mvn clear 再然后 mvn install 这些都没什么好说的。
+建议以下文件全部放在一个目录下 1、部署jar包 通过xftp或别的方式，将jar包放入服务器某个目录：
+2、准备application.yml（springboot工程，如果是别的框架请略过此节） yml文件放入jar包的同一个目录，内容是常规的springboot-yml文件内容，注意yml格式：
+一会儿启动的时候会以服务器这个yml文件配置的内容为准👆👆👆
+而不是项目中的yml文件👇👇👇
+3、准备jvm_opt文件（.file文件） 此文件内容为java虚拟机启动时的参数：
+配置jvm内存：一般只改abc这三个地方：
+a = b 并且 c = a*(2/3)
+单位：g 或者 m
+如果你怕这么配置有啥问题，你可以临时恶补一下java虚拟机的知识，反正我这儿好几个工具jar包这么配没啥问题。
+VM_OPTIONS=&#34;-Xms512m -Xmx512m -Xss256K -Xmn384m -XX:&#43;UseG1GC -XX:G1HeapRegionSize=16m -XX:G1ReservePercent=25 -XX:InitiatingHeapOccupancyPercent=30 -XX:-OmitStackTraceInFastThrow -XX:&#43;AlwaysPreTouch -XX:-UseLargePages -XX:-UseBiasedLocking&#34; -Xss根据你的接口或者定时任务的每次调度的数据大小，可以适当增大一些。
+4、准备脚本 我这儿命名为boot.sh
+先上脚本，文章后面会介绍：怎么用？脚本内容的含义？
+#!/bin/bash APP_NAME=$1 YUM_FILE_PATH=$2 [ -r jvm_opt ] &amp;&amp; source jvm_opt ##检查配置文件存在且可读，则将其souce VM_OPT=${VM_OPTIONS:-Xms1g -Xmx1g -Xss256K -Xmn600m -XX:&#43;UseG1GC -XX:G1HeapRegionSize=16m -XX:G1ReservePercent=25 -XX:InitiatingHeapOccupancyPercent=30 -XX:-OmitStackTraceInFastThrow -XX:&#43;AlwaysPreTouch -XX:-UseLargePages -XX:-UseBiasedLocking} # 提示输入参数 usage() { echo app_name=$APP_NAME vm_opt=$VM_OPT yum=$YUM_FILE_PATH echo &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/0c63c09575833d2da6b1c85d4fb749fb/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-07-07T15:26:58+08:00" />
+<meta property="article:modified_time" content="2023-07-07T15:26:58+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux使用脚本启动jar/war包（springboot&#43;maven工程jar包）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="LinuxCentOS7java_jarwar_0"></a>Linux（CentOS7）使用脚本启动java jar/war包</h2> 
+<hr> 
+<p>本文以<strong>jar包</strong>为例（war包是同样的操作流程）。</p> 
+<hr> 
+<h3><a id="jar_7"></a>开始之前，先准备一个jar包</h3> 
+<p>以springboot工程为例。</p> 
+<p>我打包用的maven。</p> 
+<p>在pom文件中可以约束最终的jar包名称：<br> <img src="https://images2.imgbox.com/7e/e6/DCxPQHFc_o.png" alt="在这里插入图片描述"><br> mvn clear 再然后 mvn install 这些都没什么好说的。</p> 
+<hr> 
+<h2><a id="_17"></a>建议以下文件全部放在一个目录下</h2> 
+<h3><a id="1jar_18"></a>1、部署jar包</h3> 
+<p>通过xftp或别的方式，<strong>将jar包放入服务器某个目录</strong>：<br> <img src="https://images2.imgbox.com/06/da/1n5nwp8W_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="2applicationymlspringboot_23"></a>2、准备application.yml（springboot工程，如果是别的框架请略过此节）</h3> 
+<p>yml文件放入jar包的同一个目录，内容是常规的springboot-yml文件内容，注意yml格式：<br> <img src="https://images2.imgbox.com/c6/a1/pJdDN4NP_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>一会儿启动的时候会以服务器这个yml文件配置的内容为准👆👆👆<br> 而不是项目中的yml文件👇👇👇</p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/70/38/l85kfLWS_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="3jvm_optfile_31"></a>3、准备jvm_opt文件（.file文件）</h3> 
+<p><img src="https://images2.imgbox.com/6f/17/n4o2nEiU_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p>此文件内容为java虚拟机启动时的参数：<br> <img src="https://images2.imgbox.com/93/75/7qilu0Dx_o.png" alt="在这里插入图片描述"></p> 
+ <blockquote> 
+  <p>配置jvm内存：一般只改abc这三个地方：<br> a = b 并且 c = a*(2/3)<br> 单位：g 或者 m<br> 如果你怕这么配置有啥问题，你可以临时恶补一下java虚拟机的知识，反正我这儿好几个工具jar包这么配没啥问题。</p> 
+ </blockquote> 
+ <pre><code class="prism language-file">VM_OPTIONS="-Xms512m -Xmx512m -Xss256K -Xmn384m -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:G1ReservePercent=25 -XX:InitiatingHeapOccupancyPercent=30 -XX:-OmitStackTraceInFastThrow -XX:+AlwaysPreTouch -XX:-UseLargePages -XX:-UseBiasedLocking"
+</code></pre> 
+ <p>-Xss根据你的接口或者定时任务的每次调度的数据大小，可以适当增大一些。</p> 
+</blockquote> 
+<h3><a id="4_43"></a>4、准备脚本</h3> 
+<blockquote> 
+ <p>我这儿命名为boot.sh</p> 
+</blockquote> 
+<p>先上脚本，文章后面会介绍：怎么用？脚本内容的含义？</p> 
+<pre><code class="prism language-sh"><span class="token shebang important">#!/bin/bash</span>
+<span class="token assign-left variable">APP_NAME</span><span class="token operator">=</span><span class="token variable">$1</span>
+<span class="token assign-left variable">YUM_FILE_PATH</span><span class="token operator">=</span><span class="token variable">$2</span>
+
+<span class="token punctuation">[</span> <span class="token parameter variable">-r</span> jvm_opt <span class="token punctuation">]</span> <span class="token operator">&amp;&amp;</span> <span class="token builtin class-name">source</span> jvm_opt   <span class="token comment">##检查配置文件存在且可读，则将其souce</span>
+<span class="token assign-left variable">VM_OPT</span><span class="token operator">=</span><span class="token variable">${VM_OPTIONS<span class="token operator">:-</span>Xms1g -Xmx1g -Xss256K -Xmn600m -XX<span class="token operator">:+</span>UseG1GC -XX<span class="token operator">:</span>G1HeapRegionSize=16m -XX<span class="token operator">:</span>G1ReservePercent=25 -XX<span class="token operator">:</span>InitiatingHeapOccupancyPercent=30 -XX<span class="token operator">:-</span>OmitStackTraceInFastThrow -XX<span class="token operator">:+</span>AlwaysPreTouch -XX<span class="token operator">:-</span>UseLargePages -XX<span class="token operator">:-</span>UseBiasedLocking}</span>
+
+<span class="token comment"># 提示输入参数</span>
+<span class="token function-name function">usage</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+    <span class="token builtin class-name">echo</span> <span class="token assign-left variable">app_name</span><span class="token operator">=</span><span class="token variable">$APP_NAME</span> <span class="token assign-left variable">vm_opt</span><span class="token operator">=</span><span class="token variable">$VM_OPT</span> <span class="token assign-left variable">yum</span><span class="token operator">=</span><span class="token variable">$YUM_FILE_PATH</span>
+    <span class="token builtin class-name">echo</span> <span class="token string">"Usage: ./boot.sh [APP_NAME] [YML_NAME] [start|stop|restart|status]"</span>
+    <span class="token builtin class-name">exit</span> <span class="token number">1</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment"># 检查程序是否在运行</span>
+<span class="token function-name function">is_exist</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+    <span class="token comment"># 获取PID</span>
+    <span class="token assign-left variable">PID</span><span class="token operator">=</span><span class="token variable"><span class="token variable">$(</span><span class="token function">ps</span> <span class="token parameter variable">-ef</span> <span class="token operator">|</span><span class="token function">grep</span> $<span class="token punctuation">{<!-- --></span>APP_NAME<span class="token punctuation">}</span> <span class="token operator">|</span> <span class="token function">grep</span> <span class="token parameter variable">-v</span> $0 <span class="token operator">|</span><span class="token function">grep</span> <span class="token parameter variable">-v</span> <span class="token function">grep</span> <span class="token operator">|</span><span class="token function">awk</span> <span class="token string">'{print $2}'</span><span class="token variable">)</span></span>
+    <span class="token comment"># -z "${pid}"判断pid是否存在，如果不存在返回1，存在返回0</span>
+    <span class="token keyword">if</span> <span class="token punctuation">[</span><span class="token punctuation">[</span> <span class="token parameter variable">-z</span> <span class="token string">"<span class="token variable">${PID}</span>"</span> <span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token punctuation">;</span> <span class="token keyword">then</span>
+        <span class="token comment"># 如果进程不存在返回1</span>
+	<span class="token builtin class-name">echo</span> <span class="token string">"进程不存在"</span>
+        <span class="token builtin class-name">return</span> <span class="token number">1</span>
+    <span class="token keyword">else</span>
+        <span class="token comment"># 进程存在返回0</span>
+	<span class="token builtin class-name">echo</span> <span class="token string">"进程存在"</span>
+        <span class="token builtin class-name">return</span> <span class="token number">0</span>
+    <span class="token keyword">fi</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment"># 启动方法</span>
+<span class="token function-name function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+    is_exist
+    <span class="token keyword">if</span> <span class="token punctuation">[</span><span class="token punctuation">[</span> <span class="token variable">$?</span> <span class="token parameter variable">-eq</span> <span class="token string">"0"</span> <span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token punctuation">;</span> <span class="token keyword">then</span>
+        <span class="token builtin class-name">echo</span> <span class="token string">"<span class="token variable">${APP_NAME}</span> is already running, PID=<span class="token variable">${pid}</span>"</span>
+    <span class="token keyword">else</span>
+        <span class="token function">nohup</span> <span class="token function">java</span> <span class="token parameter variable">-jar</span> <span class="token variable">$VM_OPT</span> <span class="token parameter variable">-Dspring.config.location</span><span class="token operator">=</span><span class="token variable">$YUM_FILE_PATH</span> <span class="token variable">$APP_NAME</span> <span class="token operator">&gt;</span>log <span class="token operator"><span class="token file-descriptor important">2</span>&gt;</span><span class="token file-descriptor important">&amp;1</span> <span class="token operator">&amp;</span>
+		<span class="token assign-left variable">PID</span><span class="token operator">=</span><span class="token variable"><span class="token variable">$(</span><span class="token builtin class-name">echo</span> $<span class="token operator">!</span><span class="token variable">)</span></span>
+        <span class="token builtin class-name">echo</span> <span class="token string">"<span class="token variable">${APP_NAME}</span> start success, PID=<span class="token variable">$!</span> YUM_FILE_PATH=<span class="token variable">${YUM_FILE_PATH}</span>"</span>
+    <span class="token keyword">fi</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment"># 停止方法</span>
+<span class="token function-name function">stop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+    is_exist
+    <span class="token keyword">if</span> <span class="token punctuation">[</span><span class="token punctuation">[</span> <span class="token variable">$?</span> <span class="token parameter variable">-eq</span> <span class="token string">"0"</span> <span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token punctuation">;</span> <span class="token keyword">then</span>
+        <span class="token function">kill</span> <span class="token parameter variable">-9</span> <span class="token variable">${PID}</span>
+        <span class="token builtin class-name">echo</span> <span class="token string">"<span class="token variable">${APP_NAME}</span> process stop, PID=<span class="token variable">${PID}</span>"</span>
+    <span class="token keyword">else</span>
+        <span class="token builtin class-name">echo</span> <span class="token string">"There is not the process of <span class="token variable">${APP_NAME}</span>"</span>
+    <span class="token keyword">fi</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment"># 重启进程函数</span>
+<span class="token function-name function">restart</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+    stop
+	<span class="token builtin class-name">echo</span> <span class="token string">"<span class="token variable">${APP_NAME}</span> 准备重启..."</span>
+	<span class="token function">sleep</span> <span class="token number">5</span>
+    start
+<span class="token punctuation">}</span>
+
+<span class="token comment"># 查看进程状态</span>
+<span class="token function-name function">status</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{<!-- --></span>
+    is_exist
+    <span class="token keyword">if</span> <span class="token punctuation">[</span><span class="token punctuation">[</span> <span class="token variable">$?</span> <span class="token parameter variable">-eq</span> <span class="token string">"0"</span> <span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token punctuation">;</span> <span class="token keyword">then</span>
+        <span class="token builtin class-name">echo</span> <span class="token string">"<span class="token variable">${APP_NAME}</span> is running, PID=<span class="token variable">${PID}</span>"</span>
+    <span class="token keyword">else</span>
+        <span class="token builtin class-name">echo</span> <span class="token string">"There is not the process of <span class="token variable">${APP_NAME}</span>"</span>
+    <span class="token keyword">fi</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">case</span> <span class="token variable">$3</span> <span class="token keyword">in</span>
+<span class="token string">"start"</span><span class="token punctuation">)</span>
+        start
+        <span class="token punctuation">;</span><span class="token punctuation">;</span>
+<span class="token string">"stop"</span><span class="token punctuation">)</span>
+        stop
+        <span class="token punctuation">;</span><span class="token punctuation">;</span>
+<span class="token string">"restart"</span><span class="token punctuation">)</span>
+        restart
+        <span class="token punctuation">;</span><span class="token punctuation">;</span>
+<span class="token string">"status"</span><span class="token punctuation">)</span>
+       status
+        <span class="token punctuation">;</span><span class="token punctuation">;</span>
+	*<span class="token punctuation">)</span>
+	usage
+	<span class="token punctuation">;</span><span class="token punctuation">;</span>
+<span class="token keyword">esac</span>
+<span class="token builtin class-name">exit</span> <span class="token number">0</span>
+</code></pre> 
+<h3><a id="_139"></a>使用脚本</h3> 
+<h4><a id="1_140"></a>1、先来到你这几个文件的目录</h4> 
+<pre><code class="prism language-sh"><span class="token builtin class-name">cd</span> /opt/tools/es-tasks
+</code></pre> 
+<h4><a id="2bootsh_145"></a>2、给脚本boot.sh赋予可执行权限：</h4> 
+<pre><code class="prism language-sh"> <span class="token function">chmod</span> <span class="token number">777</span> boot.sh
+</code></pre> 
+<blockquote> 
+ <p><strong>777是什么意思？</strong></p> 
+ <blockquote> 
+  <p>linux中权限是用二进制表示的。</p> 
+ </blockquote> 
+ <blockquote> 
+  <p>先看一个控制台的例子：<br> <img src="https://images2.imgbox.com/bf/4d/jOvKEIRS_o.png" alt="在这里插入图片描述"><br> 看看这一列，第一个位置的 - 或者 d 这种文件描述符咱们先不用看，先从第二个位置的r开始看：<br> 一共有9个位置 rwxrwxrwx 共三组 rwx，分别对应了 三个角色（拥有者、群组、其他人） 对这个文件或文件目录的权限。<br> “r - -” 就是只有【读】权限，对应二进制的 100<br> “- w -” 就是只有【写】权限，对应二进制的 010<br> “- -x” 就是只有【执行】权限，对应二进制的 001<br> 分别翻译成十进制，“r - -” 就是400，"- w -“就是020，”- - x"就是001<br> 那么：</p> 
+  <blockquote> 
+   <p>如果是"rw-“就是有【读、写】权限，没有【执行】权限，对应的就是420<br> 如果是"r-x"就是有【读、执行】权限，没有【写】权限，就是401<br> 如果是”-wx"就是有【写、执行】权限，没有【读】权限，对应的就是021（这种设计一般不存在，都能改能执行了，就不能读吗），这里只是说明权限逻辑举例需要。</p> 
+  </blockquote> 
+  <p>所以 “rwx” 就是421，而4+2+1=7（<strong>777就是从这来的</strong>），那么 “chmod 777 file” 这个指令的含义就是：将此文件的【读、写、执行】权限赋予给【拥有者、群组、其他人】这些角色。<br> 当然：<br> 1、如果你只想将此文件的【读、写、执行】权限赋予给【自己】或【自己的群组】，只需要 “chmod 700 file” 或者 “chmod 770 file” 就行。<br> 2、 如果你只想将此文件的【读、写】权限赋予给自己或自己的群组，只需要"chmod 600 file"或者"chmod 660 file"就行了。<br> 3、如果你想让【自己和自己组】拥有【读、写、执行】权限，而【其他人】只能【读】，只需要"chmod 774 file"。</p> 
+ </blockquote> 
+ <p>所谓 linux权限，就这么简单。至于用户和用户组，也很简单，阁下可自行查阅其他资料学习，我就不赘述了。</p> 
+</blockquote> 
+<p>请跟随我回到主题（这篇文章讲啥来着？看看标题，咱们继续）</p> 
+<h4><a id="3_176"></a>3、执行命令</h4> 
+<p>启动</p> 
+<blockquote> 
+ <p>./boot.sh xxx.jar application.yml start</p> 
+</blockquote> 
+<p>停止</p> 
+<blockquote> 
+ <p>./boot.sh xxx.jar application.yml stop</p> 
+</blockquote> 
+<p>重启</p> 
+<blockquote> 
+ <p>./boot.sh xxx.jar application.yml restart</p> 
+</blockquote> 
+<p>查看是否在运行</p> 
+<blockquote> 
+ <p>./boot.sh xxx.jar application.yml status</p> 
+</blockquote> 
+<h3><a id="_190"></a>脚本说明（老鸟可以略过这一节）</h3> 
+<h4><a id="1_191"></a>1、第一句</h4> 
+<pre><code>#!/bin/bash
+</code></pre> 
+<p>写在 .sh 脚本文件最开头第一行。<br> 这个是必须要写的，linux系统不同的话，写法上可能会有一丢丢区别，我这里是CentOS7。</p> 
+<h4><a id="2_197"></a>2、第二句</h4> 
+<pre><code>APP_NAME=$1
+YUM_FILE_PATH=$2
+</code></pre> 
+<p>声明了两个变量，指向 $1 和 $2。<br> $1 对应的是咱们启动命令的：</p> 
+<blockquote> 
+ <p>./boot.sh xxx.jar application.yml start/stop/restart/status</p> 
+</blockquote> 
+<p>其中的xxx.jar这一部分。<br> bash解释器是按照空格进行命令的切割，而 xxx.jar 在第【1】位置，所以是$1 （第【0】位置是 ./boot）。<br> $2同理。<br> 这两句话的意思就是，声明这俩变量，并且让APP_NAME=xxx.jar，让YUM_FILE_PATH=application.yml</p> 
+<h4><a id="3_211"></a>3、第三句和第四句</h4> 
+<pre><code>[ -r jvm_opt ] &amp;&amp; source jvm_opt
+</code></pre> 
+<p>检查这个jvm_opt文件，如果存在并且可读，就把它的内容加载进来。</p> 
+<pre><code>VM_OPT=${VM_OPTIONS:-Xms1g -Xmx1g -Xss256K -Xmn600m -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:G1ReservePercent=25 -XX:InitiatingHeapOccupancyPercent=30 -XX:-OmitStackTraceInFastThrow -XX:+AlwaysPreTouch -XX:-UseLargePages -XX:-UseBiasedLocking}
+</code></pre> 
+<p>声明一个VM_OPT变量，让它等于后面这个${VM_OPTIONS : …}，这里面的VM_OPTIONS就是从jvm_opt文件中取出来的变量。<br> 意思是：如果取到了，就让VM_OPT=VM_OPTIONS，如果没取到，就让VM_OPT等于冒号后面的这一长串值。</p> 
+<h4><a id="4_223"></a>4、接下来就是六个自定义方法（也叫函数）</h4> 
+<h5><a id="_225"></a>第一个方法，用于提示</h5> 
+<pre><code>usage() {
+    echo app_name=$APP_NAME vm_opt=$VM_OPT yum=$YUM_FILE_PATH
+    echo "Usage: ./boot.sh [APP_NAME] [YML_NAME] [start|stop|restart|status]"
+    exit 1
+}
+</code></pre> 
+<p>此方法在脚本被非正常执行时触发，比如说你./boot.sh start就想执行，xxx.jar也不写<br> 那它就提示你 “Usage: ./boot.sh [APP_NAME] [YML_NAME] [start|stop|restart|status]” 一个正常命令格式是什么。</p> 
+<h5><a id="_236"></a>第二个方法，用于判断是否已经在运行</h5> 
+<pre><code>is_exist(){
+    # 获取PID
+    PID=$(ps -ef |grep ${APP_NAME} | grep -v $0 |grep -v grep |awk '{print $2}')
+    # -z "${pid}"判断pid是否存在，如果不存在返回1，存在返回0
+    if [[ -z "${PID}" ]]; then
+        # 如果进程不存在返回1
+        echo "进程不存在"
+        return 1
+    else
+        # 进程存在返回0
+        echo "进程存在"
+        return 0
+    fi
+}
+</code></pre> 
+<h5><a id="jar_254"></a>第三个方法，用于启动jar包</h5> 
+<pre><code>start(){
+    is_exist
+    if [[ $? -eq "0" ]]; then
+        echo "${APP_NAME} is already running, PID=${pid}"
+    else
+        nohup java -jar $VM_OPT -Dspring.config.location=$YUM_FILE_PATH $APP_NAME &gt;log 2&gt;&amp;1 &amp;
+                PID=$(echo $!)
+        echo "${APP_NAME} start success, PID=$! YUM_FILE_PATH=${YUM_FILE_PATH}"
+    fi
+}
+</code></pre> 
+<p>其中，"is_exist"是调用了上面讲的第二个方法。<br> 然后拿着 is_exist() 方法运行的结果（0或者1）来决定要不要启动。<br> 这一段脚本总体意思也很简单，判断进程是否已经存在，如果存在就提示；不存在就静默启动，启动完了提示success。</p> 
+<p>其中：</p> 
+<pre><code>nohup java -jar $VM_OPT -Dspring.config.location=$YUM_FILE_PATH $APP_NAME &gt;log 2&gt;&amp;1 &amp;
+</code></pre> 
+<p>这一段就是在启动了。 “&gt;” 代表输出，log代表同级目录下的日志文件log.file，如果启动后log文件不存在则会自动创建。<br> "&gt;log"意思是把程序的输出内容写到log这个文件中去。</p> 
+<blockquote> 
+ <p>顺便提一嘴奥</p> 
+ <blockquote> 
+  <p>一个 &gt; 号 “&gt;”<br> 会把之前的覆盖掉，也就是说，每次重启jar包，之前log中的内容就没了。<br> 好处也很明显，不会造成文件膨胀，排查本次启动后问题时也会很方便。</p> 
+ </blockquote> 
+ <blockquote> 
+  <p>两个 &gt; 号 “&gt;&gt;”<br> 在之前的文件内容的基础上，不断追加新的内容。</p> 
+ </blockquote> 
+ <p>我springboot工程一般都用到日志框架，这些框架会把日志，按日期写入某个文件夹内的一个个文件中去，所以我一般脚本这个位置写 一个"&gt;“符号，也就是”&gt;log"</p> 
+</blockquote> 
+<p>继续看这段脚本：</p> 
+<pre><code>nohup java -jar $VM_OPT -Dspring.config.location=$YUM_FILE_PATH $APP_NAME &gt;log 2&gt;&amp;1 &amp;
+</code></pre> 
+<p>“2&gt;&amp;1” 意思是 把程序的 标准错误输出 也重定向到 标准输出。</p> 
+<blockquote> 
+ <p>在linux中，标准输入用0表示，标准输出用1表示，标准错误输出用2表示。</p> 
+</blockquote> 
+<p>最后一个 “&amp;” 代表静默启动，“别占用我控制台一直打印” 就这个意思。</p> 
+<h5><a id="jar_296"></a>第四个方法，用于停止jar包</h5> 
+<pre><code>stop(){
+    is_exist
+    if [[ $? -eq "0" ]]; then
+        kill -9 ${PID}
+        echo "${APP_NAME} process stop, PID=${PID}"
+    else
+        echo "There is not the process of ${APP_NAME}"
+    fi
+}
+</code></pre> 
+<p>非常好理解：进程存在否？存在就杀掉进程然后提示；不存在就直接提示。</p> 
+<h5><a id="jar_310"></a>第五个方法，用于重启jar包</h5> 
+<pre><code>restart(){
+    stop
+        echo "${APP_NAME} 准备重启..."
+        sleep 5
+    start
+}
+</code></pre> 
+<p>也很好理解：先停止，睡5秒，再启动。</p> 
+<h5><a id="_321"></a>第六个方法，查看运行状态</h5> 
+<pre><code>status(){
+    is_exist
+    if [[ $? -eq "0" ]]; then
+        echo "${APP_NAME} is running, PID=${PID}"
+    else
+        echo "There is not the process of ${APP_NAME}"
+    fi
+}
+</code></pre> 
+<p>这个就不用说了，只是调用了一下 is_exist() 方法然后根据0或1的返回，给我们提示运行状态而已。</p> 
+<h4><a id="_334"></a>脚本的最后一段</h4> 
+<pre><code>case $3 in
+"start")
+        start
+        ;;
+"stop")
+        stop
+        ;;
+"restart")
+        restart
+        ;;
+"status")
+       status
+        ;;
+        *)
+        usage
+        ;;
+esac
+exit 0
+</code></pre> 
+<p>前面讲过，$3就是咱们启动命令：</p> 
+<blockquote> 
+ <p>./boot.sh xxx.jar application start/stop/restart/status</p> 
+</blockquote> 
+<p>其中的 start / stop / restart / status 这个部分。</p> 
+<p>脚本根据我们输入的其中一个选项，执行不同的方法。</p> 
+<p>" *）usage ;; " 的意思是我们输入的东西不在【start / stop / restart / status】这个范围内，就会走 usage() 方法，也就是提示我们正常的格式。</p> 
+<p>“esac” 就是 “case” 反过来写，是脚本中的一种语法，类似于【 " if " 与 " fi "】。</p> 
+<p>“exit 0” 意思是运行正常退出脚本程序。</p> 
+<h3><a id="jarlog_368"></a>jar包运行后的log日志怎么看？</h3> 
+<p>我一般用这几个命令</p> 
+<p>1、实时查看100行日志</p> 
+<pre><code class="prism language-sh"><span class="token function">tail</span> <span class="token parameter variable">-100f</span> log
+</code></pre> 
+<p>2、搜索日志中内容</p> 
+<pre><code class="prism language-sh"><span class="token function">more</span> log
+</code></pre> 
+<p>然后敲 “/”<br> 再然后输入你要搜索的内容，回车。<br> 如果输入错了，按 ctrl + backspace(退格) 往前删。</p> 
+<h3><a id="_383"></a>写在最后</h3> 
+<p>简单好用，相当于一个雏形，支持高度diy。<br> <strong>但是要小心，别在脚本中写自己拿不准的指令。</strong></p> 
+<h4><a id="diy_387"></a>diy举例</h4> 
+<p>比如说你就想用springboot工程resources下的那个yml配置，不愿意把它提取出来，脚本改起来也很简单，只要找到 $， 把 $ 后面的数字改成你命令中对应的位置就ok。<br> 比如：</p> 
+<pre><code class="prism language-sh"><span class="token function">vi</span> boot.sh
+</code></pre> 
+<p>先删掉 YUM_FILE_PATH=$2 这个变量（所有引用到这个变量的地方也给改改好奥）<br> 把脚本最后的</p> 
+<blockquote> 
+ <p>case $3 in …</p> 
+</blockquote> 
+<p>其中的$3</p> 
+<p>改成你 start/stop/restart/status 这个指令的位置</p> 
+<p>假如说你指令是这么写的：</p> 
+<blockquote> 
+ <p>./boot.sh xxx.jar start</p> 
+</blockquote> 
+<p>那就把./boot.sh脚本中的所有 $3 改成 $2。<br> 很明显嘛，你变短了，数字也就变少了。</p> 
+<p>…</p> 
+<p>话说回来，稍微有点规模的项目一般也用不着这玩意，docker、k8s集群部署会更省心。<br> 就有时候一些工具类的小玩意用一下还是蛮不错的。</p> 
+<hr> 
+<p>ok，完活！</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/eed8e9228ed5de2e12278c47b7c23633/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Mysql数据库比较工具类(2.0版本)</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/bdd706d9e0d1a8e6b89f40c913208238/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">LabVIEW开发X射线图像增强</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

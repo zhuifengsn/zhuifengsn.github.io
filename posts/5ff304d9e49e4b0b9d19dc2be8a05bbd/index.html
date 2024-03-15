@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>【C&#43;&#43;11】——右值引用、移动语义 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="【C&#43;&#43;11】——右值引用、移动语义" />
+<meta property="og:description" content="目录
+1. 基本概念
+1.1 左值与左值引用
+1.2 右值和右值引用
+1.3 左值引用与右值引用
+2. 右值引用实用场景和意义
+2.1 左值引用的使用场景
+2.2 左值引用的短板
+2.3 右值引用和移动语义
+2.3.1 移动构造
+2.3.2 移动赋值
+2.3.3 编译器做的优化
+2.3.4 总结
+2.4 右值引用引用左值
+2.5 右值引用的其他场景（插入接口）
+3. 完美转发
+3.1 万能引用&amp;&amp;
+3.2 forward完美转发在传参的过程中保留对象原生类型属性
+3.3 完美转发的使用场景
+1. 基本概念 传统的C&#43;&#43;语法中就有引用的语法，而C&#43;&#43;11中新增了的右值引用语法特性，所以从现在开始我们之前学习的引用就叫做左值引用。无论左值引用还是右值引用，都是给对象取别名。
+1.1 左值与左值引用 左值：
+左值是一个表示数据的表达式(如变量名或解引用的指针)，有如下特性：
+我们可以获取它的地址&#43;可以对它赋值（不一定能赋值，但一定能取地址）；左值可以出现赋值符号的左边，右值不能出现在赋值符号左边；定义时const修饰符后的左值，不能给他赋值，但是可以取它的地址。 左值引用：
+左值引用就是给左值的引用，给左值取别名。 int main() { // 以下的p、b、c、*p都是左值 int* p = new int(0); int b = 1; const int c = 2; // 以下几个是对上面左值的左值引用 int*&amp; rp = p; int&amp; rb = b; const int&amp; rc = c; int&amp; pvalue = *p; return 0; } 1." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/5ff304d9e49e4b0b9d19dc2be8a05bbd/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-07-28T16:17:09+08:00" />
+<meta property="article:modified_time" content="2023-07-28T16:17:09+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">【C&#43;&#43;11】——右值引用、移动语义</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p><strong>目录</strong></p> 
+<p id="1.%20%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5-toc" style="margin-left:0px;"><a href="#1.%20%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5" rel="nofollow">1. 基本概念</a></p> 
+<p id="1.1%20%E5%B7%A6%E5%80%BC%E4%B8%8E%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8-toc" style="margin-left:40px;"><a href="#1.1%20%E5%B7%A6%E5%80%BC%E4%B8%8E%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8" rel="nofollow">1.1 左值与左值引用</a></p> 
+<p id="1.2%C2%A0%E5%8F%B3%E5%80%BC%E5%92%8C%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8-toc" style="margin-left:40px;"><a href="#1.2%C2%A0%E5%8F%B3%E5%80%BC%E5%92%8C%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8" rel="nofollow">1.2 右值和右值引用</a></p> 
+<p id="1.3%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E4%B8%8E%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8-toc" style="margin-left:40px;"><a href="#1.3%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E4%B8%8E%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8" rel="nofollow">1.3 左值引用与右值引用</a></p> 
+<p id="2.%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%AE%9E%E7%94%A8%E5%9C%BA%E6%99%AF%E5%92%8C%E6%84%8F%E4%B9%89-toc" style="margin-left:0px;"><a href="#2.%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%AE%9E%E7%94%A8%E5%9C%BA%E6%99%AF%E5%92%8C%E6%84%8F%E4%B9%89" rel="nofollow">2. 右值引用实用场景和意义</a></p> 
+<p id="2.1%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF-toc" style="margin-left:40px;"><a href="#2.1%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF" rel="nofollow">2.1 左值引用的使用场景</a></p> 
+<p id="2.2%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E7%9F%AD%E6%9D%BF-toc" style="margin-left:40px;"><a href="#2.2%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E7%9F%AD%E6%9D%BF" rel="nofollow">2.2 左值引用的短板</a></p> 
+<p id="2.3%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%92%8C%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89-toc" style="margin-left:40px;"><a href="#2.3%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%92%8C%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89" rel="nofollow">2.3 右值引用和移动语义</a></p> 
+<p id="2.3.1%C2%A0%C2%A0%E7%A7%BB%E5%8A%A8%E6%9E%84%E9%80%A0-toc" style="margin-left:80px;"><a href="#2.3.1%C2%A0%C2%A0%E7%A7%BB%E5%8A%A8%E6%9E%84%E9%80%A0" rel="nofollow">2.3.1  移动构造</a></p> 
+<p id="2.3.2%20%E7%A7%BB%E5%8A%A8%E8%B5%8B%E5%80%BC-toc" style="margin-left:80px;"><a href="#2.3.2%20%E7%A7%BB%E5%8A%A8%E8%B5%8B%E5%80%BC" rel="nofollow">2.3.2 移动赋值</a></p> 
+<p id="2.3.3%20%E7%BC%96%E8%AF%91%E5%99%A8%E5%81%9A%E7%9A%84%E4%BC%98%E5%8C%96-toc" style="margin-left:80px;"><a href="#2.3.3%20%E7%BC%96%E8%AF%91%E5%99%A8%E5%81%9A%E7%9A%84%E4%BC%98%E5%8C%96" rel="nofollow">2.3.3 编译器做的优化</a></p> 
+<p id="2.3.4%20%E6%80%BB%E7%BB%93-toc" style="margin-left:80px;"><a href="#2.3.4%20%E6%80%BB%E7%BB%93" rel="nofollow">2.3.4 总结</a></p> 
+<p id="2.4%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%BC%95%E7%94%A8%E5%B7%A6%E5%80%BC-toc" style="margin-left:40px;"><a href="#2.4%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%BC%95%E7%94%A8%E5%B7%A6%E5%80%BC" rel="nofollow">2.4 右值引用引用左值</a></p> 
+<p id="2.5%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E5%85%B6%E4%BB%96%E5%9C%BA%E6%99%AF%EF%BC%88%E6%8F%92%E5%85%A5%E6%8E%A5%E5%8F%A3%EF%BC%89-toc" style="margin-left:40px;"><a href="#2.5%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E5%85%B6%E4%BB%96%E5%9C%BA%E6%99%AF%EF%BC%88%E6%8F%92%E5%85%A5%E6%8E%A5%E5%8F%A3%EF%BC%89" rel="nofollow">2.5 右值引用的其他场景（插入接口）</a></p> 
+<p id="3.%20%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91-toc" style="margin-left:0px;"><a href="#3.%20%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91" rel="nofollow">3. 完美转发</a></p> 
+<p id="3.1%20%E4%B8%87%E8%83%BD%E5%BC%95%E7%94%A8%26%26-toc" style="margin-left:40px;"><a href="#3.1%20%E4%B8%87%E8%83%BD%E5%BC%95%E7%94%A8%26%26" rel="nofollow">3.1 万能引用&amp;&amp;</a></p> 
+<p id="3.2%20forward%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91%E5%9C%A8%E4%BC%A0%E5%8F%82%E7%9A%84%E8%BF%87%E7%A8%8B%E4%B8%AD%E4%BF%9D%E7%95%99%E5%AF%B9%E8%B1%A1%E5%8E%9F%E7%94%9F%E7%B1%BB%E5%9E%8B%E5%B1%9E%E6%80%A7-toc" style="margin-left:40px;"><a href="#3.2%20forward%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91%E5%9C%A8%E4%BC%A0%E5%8F%82%E7%9A%84%E8%BF%87%E7%A8%8B%E4%B8%AD%E4%BF%9D%E7%95%99%E5%AF%B9%E8%B1%A1%E5%8E%9F%E7%94%9F%E7%B1%BB%E5%9E%8B%E5%B1%9E%E6%80%A7" rel="nofollow">3.2 forward完美转发在传参的过程中保留对象原生类型属性</a></p> 
+<p id="3.3%20%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91%E7%9A%84%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF-toc" style="margin-left:40px;"><a href="#3.3%20%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91%E7%9A%84%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF" rel="nofollow">3.3 完美转发的使用场景</a></p> 
+<h2 id="1.%20%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5" style="background-color:transparent;">1. 基本概念</h2> 
+<p>传统的C++语法中就有引用的语法，而C++11中新增了的右值引用语法特性，所以从现在开始我们之前学习的引用就叫做左值引用。无论左值引用还是右值引用，都是给对象取别名。</p> 
+<h3 id="1.1%20%E5%B7%A6%E5%80%BC%E4%B8%8E%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8">1.1 左值与左值引用</h3> 
+<blockquote> 
+ <p><strong>左值：</strong></p> 
+ <p>左值是一个表示数据的表达式(如<span style="color:#fe2c24;">变量名或解引用的指针</span>)，有如下特性：</p> 
+ <ol><li>我们可以<span style="color:#956fe7;">获取它的地址+可以对它赋值</span>（<span style="color:#fe2c24;">不一定能赋值，但一定能取地址</span>）；</li><li>左值可以出现赋值符号的左边，右值不能出现在赋值符号左边；</li><li>定义时<span style="color:#fe2c24;">const修饰符后的左值，不能给他赋值，但是可以取它的地址</span>。</li></ol> 
+ <p><strong>左值引用：</strong></p> 
+ <ul><li>左值引用就是给左值的引用，<span style="color:#956fe7;">给左值取别名</span>。</li></ul> 
+ <pre><code class="language-cpp">int main()
+{
+	// 以下的p、b、c、*p都是左值
+	int* p = new int(0);
+	int b = 1;
+	const int c = 2;
+	// 以下几个是对上面左值的左值引用
+	int*&amp; rp = p;
+	int&amp; rb = b;
+	const int&amp; rc = c;
+	int&amp; pvalue = *p;
+	return 0;
+}</code></pre> 
+</blockquote> 
+<h3 id="1.2%C2%A0%E5%8F%B3%E5%80%BC%E5%92%8C%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8" style="background-color:transparent;">1.2 右值和右值引用</h3> 
+<blockquote> 
+ <p><strong><span style="color:#0d0016;">右值：</span></strong></p> 
+ <p>右值也是一个表示数据的表达式，如<span style="color:#fe2c24;">临时变量</span>：<span style="color:#956fe7;">字面常量、表达式返回值，函数返回值</span>(这个不能是左值引用返回，要是传值返回)等等，有如下特性：</p> 
+ <ol><li>右值可以出现在赋值符号的右边，但是不能出现出现在赋值符号的左边，</li><li><span style="color:#956fe7;">右值不能取地址</span>。</li><li>综上左值和右值最大区别在于左值可以取地址，右值不可以取地址（因为<span style="color:#956fe7;">右值是临时变量，没有实际被存储起来</span>）。</li></ol> 
+ <p><strong>补充：</strong></p> 
+ <p>C++里又把右值分为两类（纯右值和将亡值）：</p> 
+ <ol><li><span style="color:#fe2c24;">纯右值</span>（<span style="color:#956fe7;">内置类型的对象</span>）：10、a + b……</li><li><span style="color:#fe2c24;">将亡值</span>（<span style="color:#956fe7;">自定义类型的对象</span>）：</li></ol> 
+ <p>          <span style="color:#0d0016;">传值返回生成的拷贝：to_string(1234)、匿名对象：string("11111")、s1 + "hello"</span></p> 
+ <p><strong>右值引用：</strong></p> 
+ <ul><li>右值引用就是对右值的引用，给右值取别名。</li></ul> 
+ <pre><code class="language-cpp">int main()
+{
+	double x = 1.1, y = 2.2;
+	// 以下几个都是常见的右值
+	10;//字面常量
+	x + y;//表达式返回值
+	fmin(x, y);//函数返回值（传值返回）
+ 
+	// 以下几个都是对右值的右值引用
+	int&amp;&amp; rr1 = 10;
+	double&amp;&amp; rr2 = x + y;
+	double&amp;&amp; rr3 = fmin(x, y);
+ 
+	/*
+	这里编译会报错：error C2106: “=”: 左操作数必须为左值
+	10 = 1; 
+	x + y = 1; 
+	fmin(x, y) = 1;
+	*/
+ 
+	/*
+	这里编译会报错，右值不能取地址
+	cout &lt;&lt; &amp;10 &lt;&lt; endl;
+	cout &lt;&lt; &amp;(x + y) &lt;&lt; endl;
+	cout &lt;&lt; &amp;fmin(x, y) &lt;&lt; endl;
+	*/
+	return 0;
+}</code></pre> 
+ <ul><li>右值是不能取地址的，但是<span style="color:#956fe7;">给右值取别名后，会导致右值被存储到特定位置，且可以取到该位置的地</span>址，也就是说例如：不能取字面量10的地址，但是rr1引用后，可以对rr1取地址，也可以修改rr1。如果不想rr1被修改，可以用const int&amp;&amp; rr1 去引用，这个了解一下实际中右值引用的使用场景并不在于此，这个特性也不重要。</li></ul> 
+ <pre><code class="language-cpp">int main()
+{
+	double x = 1.1, y = 2.2;
+	int&amp;&amp; rr1 = 10;
+	const double&amp;&amp; rr2 = x + y;
+	rr1 = 20;
+	rr2 = 5.5; // 报错
+	return 0;
+}</code></pre> 
+</blockquote> 
+<h3 id="1.3%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E4%B8%8E%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8">1.3 左值引用与右值引用</h3> 
+<blockquote> 
+ <p><strong>左值引用总结：</strong></p> 
+ <ol><li>左值引用只能引用左值，不能引用右值；</li><li>但是<span style="color:#956fe7;">const左值引用既可以应用左值，也可以引用右值；</span></li></ol> 
+ <pre><code class="language-cpp">int main()
+{
+	// 左值引用只能引用左值，不能引用右值。
+	int a = 10;
+	int&amp; ra1 = a; // ra为a的别名
+	//int&amp; ra2 = 10; // 编译失败，因为10是右值
+	// const左值引用既可引用左值，也可引用右值。
+	const int&amp; ra3 = 10;
+	const int&amp; ra4 = a;
+	return 0;
+}</code></pre> 
+ <p><strong>右值引用总结：</strong></p> 
+ <ol><li>右值引用只能引用右值，不能引用左值；</li><li>但是右值引用可以引用move以后的左值；</li></ol> 
+ <pre><code class="language-cpp">int main()
+{
+	// 右值引用只能引用右值，不能引用左值。
+	int&amp;&amp; r1 = 10;
+	int a = 10;
+	/*
+	error C2440: “初始化”: 无法从“int”转换为“int &amp;&amp;”
+	message : 无法将左值绑定到右值引用
+	int&amp;&amp; r2 = a;
+	*/
+	// 右值引用可以引用move以后的左值
+	int&amp;&amp; r3 = move(a);
+	return 0;
+}</code></pre> 
+ <p><strong>总结：</strong></p> 
+ <ol><li>左值引用只能引用左值，不能引用右值；</li><li>但是<span style="color:#956fe7;">const左值引用既可以引用左值，也可以引用右值</span>；</li><li>右值引用只能引用右值，不能引用左值；</li><li>但是<span style="color:#956fe7;">右值引用可以引用move以后的左值</span>。</li></ol> 
+ <p>右值引用是通过移动构造和移动赋值来极大提高深拷贝的效率，详情见下文：</p> 
+</blockquote> 
+<h2 id="2.%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%AE%9E%E7%94%A8%E5%9C%BA%E6%99%AF%E5%92%8C%E6%84%8F%E4%B9%89">2. 右值引用实用场景和意义</h2> 
+<h3 id="2.1%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF">2.1 左值引用的使用场景</h3> 
+<blockquote> 
+ <p>左值引用解决的是拷贝构造引发的深拷贝而带来的开销过大、效率低的问题：</p> 
+ <ul><li>左值引用做参数，防止传值传参引发的拷贝构造问题（导致效率低）</li><li>左值引用做返回值，防止返回对象发生拷贝构造的操作（导致效率低）</li></ul> 
+ <pre><code class="language-cpp">void func1(cpp::string s)
+{}
+void func2(const cpp::string&amp; s)
+{}
+int main()
+{
+	cpp::string s1("hello");
+	func1(s1);//值传参
+	func2(s1);//传引用传参
+ 
+    // string operator+=(char ch) 传值返回存在深拷贝
+    // string&amp; operator+=(char ch) 传左值引用没有拷贝提高了效率
+	s1 += 'a';//左值引用作为返回值
+	return 0;
+}</code></pre> 
+ <p><strong>总结：</strong></p> 
+ <p>我们都清楚string类的+=运算符是左值引用作为返回值，这样做避免了传值返回引发的拷贝构造，而这样做的原因在于string类的拷贝构造为深拷贝，要经历开空间等操作，<span style="color:#956fe7;">开销太大了</span>，导致效率低，传值传参同样也是会发生拷贝构造（深拷贝）这个问题，为了避免如此之大的开销，使用左值引用可以很好的解决此问题，因为<span style="color:#956fe7;">左值引用就是取别名，无开销，提高了效率。</span></p> 
+</blockquote> 
+<h3 id="2.2%20%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E7%9F%AD%E6%9D%BF">2.2 左值引用的短板</h3> 
+<blockquote> 
+ <p> 左值引用可以避免一些不必要的拷贝构造操作，但是并不是所有情况都是可以避免的：</p> 
+ <ul><li>左值引用做参数，能够完全避免传参时不必要的拷贝操作；</li><li><span style="color:#956fe7;">左值引用做返回值</span>，<span style="color:#956fe7;">并不能完全避免函数返回对象时不必要的拷贝操作</span>。</li></ul> 
+ <p>当函数返回的是一个临时对象时，不能使用引用返回，因为<span style="color:#956fe7;">临时对象出了函数作用域就销毁了</span>，<span style="color:#956fe7;">只能使用传值返回，而传值返回难免会引发拷贝构造带来的深拷贝问题，但是无法避免，这就是左值引用的短板</span>，示例：</p> 
+ <pre><code class="language-cpp">namesapce cpp
+{
+	cpp::string to_string(int value)
+	{
+		bool flag = true;
+		if (value &lt; 0)
+		{
+			flag = false;
+			value = 0 - value;
+		}
+		cpp::string str;
+		while (value &gt; 0)
+		{
+			int x = value % 10;
+			value /= 10;
+			str += ('0' + x);
+		}
+		if (flag == false)
+		{
+			str += '-';
+		}
+		std::reverse(str.begin(), str.end());
+		return str;
+	}
+}</code></pre> 
+ <p>因为这里的to_string是传值返回，所以在调用to_string的时候一定会调用拷贝构造，而拷贝构造实现的又是一个深拷贝，效率低：</p> 
+ <pre><code class="language-cpp">int main()
+{
+	cpp::string ret = cpp::to_string(1234);//string(const string&amp; s) -- 深拷贝
+	return 0;
+}</code></pre> 
+ <ul><li>如果强硬的把上面的to_string实现成左值引用返回，那么又会出现一个问题，我str是临时对象，因为是左值引用返回，所以返回的是str的别名，把别名作为返回值再区拷贝构造ret对象，但是<span style="color:#956fe7;">临时对象str出了作用域就调用析构函数销毁了，即使能够访问对象的值，但是空间已经不存在了，此时就发生了内存错误。（</span><span style="color:#fe2c24;">不能返回局部变量的引用！</span><span style="color:#956fe7;">）</span></li></ul> 
+ <p>综上所述，<span style="color:#956fe7;">为了解决左值引用的短板，C++11引出了右值引用</span>，但并不是简单的把右值引用作为返回值，要对string进行改造，详情见下文：</p> 
+</blockquote> 
+<h3 id="2.3%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%92%8C%E7%A7%BB%E5%8A%A8%E8%AF%AD%E4%B9%89" style="background-color:transparent;">2.3 右值引用和移动语义</h3> 
+<blockquote> 
+ <p><span style="color:#fe2c24;"><strong>移动构造：</strong></span></p> 
+ <p>string拷贝构造的const左值引用会接收左值和右值，但是编译器遵循<span style="color:#956fe7;">最匹配原则</span>，如果我们单独增加一个右值引用版本的拷贝构造函数，使其只能接收右值，根据最匹配原则，遇到右值，传入右值引用版本的拷贝构造函数，遇到左值传入左值引用版本的拷贝构造函数，这样就能解决了左值引用带来的弊端，而上述单独增加的函数就是我们的移动构造！！！</p> 
+ <p><span style="color:#fe2c24;"><strong>移动赋值：</strong></span></p> 
+ <p>operator=函数采用的是const左值引用接收参数，因此无论赋值时传入的是左值还是右值，都会调用原有的operator=函数。增加移动赋值之后，由于移动赋值采用的是右值引用接收参数，因此如果赋值时传入的是右值，那么就会调用移动赋值函数（最匹配原则）。string原有的operator=函数做的是深拷贝，而移动赋值函数中只需要调用swap函数进行资源的转移，因此调用移动赋值的代价比调用原有operator=的代价小。</p> 
+</blockquote> 
+<h4 id="2.3.1%C2%A0%C2%A0%E7%A7%BB%E5%8A%A8%E6%9E%84%E9%80%A0" style="background-color:transparent;">2.3.1  移动构造</h4> 
+<blockquote> 
+ <p>为了解决左值引用的短板，我们需要在cpp::string中增加移动构造，<span style="color:#fe2c24;">移动构造的本质是将参数右值（将亡值）的资源窃取过来，占位已有，那么就不用做深拷贝了</span>，所以它叫做移动构造，就是窃取别人的资源来构造自己。因为将亡值的特点就是很快就要被销毁了，在你销毁之前还不如把你的资源通过移动构造传给别人。</p> 
+ <ul><li>该移动构造函数要做的就是调用swap函数将传入右值的资源窃取过来，为了能够更好的得知移动构造函数是否被调用，可以在该函数当中打印一条提示语句。</li></ul> 
+ <pre><code class="language-cpp">namespace cpp
+{
+	class string
+	{
+	public:
+		//移动构造
+		string(string&amp;&amp; s)
+			:_str(nullptr)
+			, _size(0)
+			, _capacity(0)
+		{
+			cout &lt;&lt; "string(string&amp;&amp; s) -- 移动构造，资源转移" &lt;&lt; endl;
+			swap(s);
+		}
+	private:
+		char* _str;
+		size_t _size;
+		size_t _capacity;
+	};
+}</code></pre> 
+ <pre><code class="language-cpp">int main()
+{
+	cpp::string ret = cpp::to_string(1234);//转移将亡值的资源
+	cpp::string s1("hello");
+	cpp::string s2(s1);//深拷贝，左值拷贝时不会被资源转移
+	cpp::string s3(move(s1));//转移将亡值的资源
+	return 0;
+}</code></pre> 
+ <p><strong>移动构造与拷贝构造的区别：</strong></p> 
+ <ol><li>在没有添加移动构造之前，拷贝构造采用的是const左值引用接收参数，所以无论左值还是右值都会被传进去，势必会引发一系列左值引用的短板</li><li>添加移动构造后，由于移动构造采用右值引用接收参数，只能接收右值</li><li>根据编译器的最匹配原则，左值传入左值引用的拷贝构造，右值传入右值引用的移动构造</li></ol> 
+</blockquote> 
+<h4 id="2.3.2%20%E7%A7%BB%E5%8A%A8%E8%B5%8B%E5%80%BC">2.3.2 移动赋值</h4> 
+<blockquote> 
+ <p><span style="color:#956fe7;">移动赋值是一个赋值运算符重载函数，</span>该函数的参数是右值引用类型的，移动赋值也是将传入右值的资源窃取过来，占为己有，这样就避免了深拷贝，所以它叫移动赋值，就是窃取别人的资源来赋值给自己的意思。</p> 
+ <ul><li>在当前的string类中增加一个移动赋值函数，该函数要做的就是调用swap函数将传入右值的资源窃取过来，为了能够更好的得知移动赋值函数是否被调用，可以在该函数中打印一条提示语句。</li></ul> 
+ <pre><code class="language-cpp">namespace cpp
+{
+	class string
+	{
+	public:
+		// 移动赋值
+		string&amp; operator=(string&amp;&amp; s)
+		{
+			cout &lt;&lt; "string&amp; operator=(string&amp;&amp; s) -- 移动赋值" &lt;&lt; endl;
+			swap(s);
+			return *this;
+		}
+	private:
+		char* _str;
+		size_t _size;
+		size_t _capacity;
+	};
+}</code></pre> 
+ <pre><code class="language-cpp">int main()
+{
+	cpp::string ret;//string(string&amp;&amp; s) -- 移动构造，资源转移
+	ret = cpp::to_string(1234);//string&amp; operator=(string&amp;&amp; s) -- 移动赋值，资源转换
+	return 0;
+}</code></pre> 
+ <p><strong>来区分下移动赋值和operator=：</strong></p> 
+ <ol><li>在没有增加移动赋值之前，由于原有operator=函数采用的是const左值引用接收参数，因此无论赋值时传入的是左值还是右值，都会调用原有的operator=函数。</li><li>增加移动赋值之后，由于移动赋值采用的是右值引用接收参数，因此如果赋值时传入的是右值，那么就会调用移动赋值函数（最匹配原则）。</li><li>string原有的operator=函数做的是深拷贝，而移动赋值函数中只需要调用swap函数进行资源的转移，因此调用移动赋值的代价比调用原有operator=的代价小。</li></ol> 
+ <p><strong>总结：</strong></p> 
+ <ul><li>这里运行后，我们看到调用了一次移动构造和一次移动赋值。因为如果是用一个已经存在的对象接收，编译器就没办法优化了。cpp::to_string函数中会先用str生成构造生成一个临时对象，但是我们可以看到，编译器很聪明的在这里把str识别成了右值，调用了移动构造。然后在把这个临时对象做为cpp::to_string函数调用的返回值赋值给ret1，这里调用的移动赋值。</li><li>这里虽然调用两次函数，但都只是资源的移动，不需要进行深拷贝，大大提高了效率</li></ul> 
+</blockquote> 
+<h4 id="2.3.3%20%E7%BC%96%E8%AF%91%E5%99%A8%E5%81%9A%E7%9A%84%E4%BC%98%E5%8C%96">2.3.3 编译器做的优化</h4> 
+<blockquote> 
+ <pre><code class="language-cpp">int main()
+{
+	cpp::string s = cpp::to_string(1234);
+	return 0;
+}</code></pre> 
+ <p><strong>1、先来看下没有移动构造编译器做的优化：</strong></p> 
+ <p>不优化：</p> 
+ <ul><li>如果没有移动构造，那我们先前实现的to_string只能够传值返回，传值返回会先拷贝构造出一个临时对象，再用这个临时对象再拷贝构造我们接收返回值的对象。如图所示：</li></ul> 
+ <p><img alt="" height="376" src="https://images2.imgbox.com/f9/c8/4jwoTndI_o.png" width="573"></p> 
+ <p> 优化：</p> 
+ <ul><li>C++11标准出来之前，也就是C++98的情况，本来应该是两次拷贝构造，但是编译器对其进行了优化，连续两次的拷贝构造函数最终被优化成一次，直接拿str拷贝构造s。</li></ul> 
+ <p><img alt="" height="386" src="https://images2.imgbox.com/41/12/ZE7i9sms_o.png" width="566"></p> 
+ <p><strong> 2、再来看看有移动构造编译器做的优化：</strong></p> 
+ <p>不优化：</p> 
+ <ul><li>C++11出来后，我们假设它不优化，根据先前的了解，不优化的话，<strong>左值str会拷贝构造给一个临时对象</strong>，这个临时对象就是一个<strong>右值</strong>（<strong>将亡值</strong>），随后进行移动构造，也就是先拷贝构造再移动构造：</li></ul> 
+ <p><img alt="" height="393" src="https://images2.imgbox.com/60/0b/5RCgAbNE_o.png" width="614"></p> 
+ <p> 优化：</p> 
+ <ul><li>C++11这里编译器进行优化后，<span style="color:#956fe7;">左值str会被优化成右值</span>（通过move把左值变为右值），<span style="color:#956fe7;">再移动构造</span>给一个临时对象，此临时对象再移动构造给s，但是编译器还会再进行一次优化，把左值str识别出右值后直接移动构造给s。也就是<span style="color:#fe2c24;">只进行一次移动构造</span>：</li></ul> 
+ <p><img alt="" height="380" src="https://images2.imgbox.com/83/af/Bge5BYNL_o.png" width="608"></p> 
+ <p><strong> 3、来看看编译器对移动赋值的处理：</strong></p> 
+ <ul><li>当我们不是用函数的返回值来构造一个对象，而是用一个之前已经定义出来的对象来接收函数的返回值，测试代码如下：</li></ul> 
+ <pre><code class="language-cpp">int main()
+{
+	cpp::string ret;
+	ret = cpp::to_string(1234);
+	return 0;
+}</code></pre> 
+ <p>此时编译器会把左值str会被优化成右值（通过move把左值变为右值），再移动构造给一个临时对象，此临时对象再通过移动赋值传给之前已经定义出来的对象。</p> 
+ <p><img alt="" height="443" src="https://images2.imgbox.com/f9/fd/VdRMFNGW_o.png" width="661"></p> 
+ <p>这里编译器并没有对这种情况进行优化，因为如果是用一个已经存在的对象接收，编译器就没办法优化了。cpp::to_string函数中会先用str生成构造生成一个临时对象，但是我们可以看到，编译器很聪明的在这里把str识别成了右值，调用了移动构造。然后在把这个临时对象做为cpp::to_string函数调用的返回值赋值给ret1，这里调用的移动赋值。</p> 
+</blockquote> 
+<h4 id="2.3.4%20%E6%80%BB%E7%BB%93">2.3.4 总结</h4> 
+<blockquote> 
+ <ol><li>左值引用的深拷贝 -- 拷贝构造 / 拷贝赋值</li><li>右值引用的深拷贝 -- 移动构造 / 移动赋值</li></ol> 
+ <p>C++11后STL中的容器都是增加了移动构造和移动赋值。</p> 
+</blockquote> 
+<h3 id="2.4%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E5%BC%95%E7%94%A8%E5%B7%A6%E5%80%BC">2.4 右值引用引用左值</h3> 
+<blockquote> 
+ <p><strong><span style="background-color:#fbd4d0;">move函数</span></strong></p> 
+ <p>按照语法，右值引用只能引用右值，但右值引用一定不能引用左值吗？因为：有些场景下，可能真的需要用右值去引用左值实现移动语义。当需要用右值引用引用一个左值时，可以通过move函数将左值转化为右值。C++11中，std::move()函数位于&lt;utility&gt;头文件中，该函数名字具有迷惑性，它并不搬移任何东西，唯一的功能就是将一个左值强制转化为右值引用，然后实现<span style="color:#956fe7;">移动语义</span>。<br><span style="background-color:#fbd4d0;">move函数的定义：</span></p> 
+ <pre><code class="language-cpp">template&lt;class _Ty&gt;
+inline typename remove_reference&lt;_Ty&gt;::type&amp;&amp; move(_Ty&amp;&amp; _Arg) _NOEXCEPT
+{
+	// forward _Arg as movable
+	return ((typename remove_reference&lt;_Ty&gt;::type&amp;&amp;)_Arg);
+}</code></pre> 
+ <p><span style="background-color:#fbd4d0;">注意：</span></p> 
+ <ul><li>move函数中_Arg参数的类型不是右值引用，而是万能引用。万能引用跟右值引用的形式一样，但是右值引用需要是确定的类型。</li><li>一个左值被move以后，它的资源可能就被转移给别人了，因此要慎用一个被move后的左值。</li></ul> 
+ <p><span style="background-color:#fbd4d0;">测试如下：</span></p> 
+ <pre><code class="language-cpp">int main()
+{
+	cpp::string s1("hello world");
+	// 这里s1是左值，调用的是拷贝构造
+	cpp::string s2(s1);//string(const string&amp; s) -- 深拷贝
+	// 这里我们把s1 move处理以后, 会被当成右值，调用移动构造
+	// 但是这里要注意，一般是不要这样用的，因为我们会发现s1的
+	// 资源被转移给了s3，s1被置空了。
+	cpp::string s3(std::move(s1));//string(string&amp;&amp; s) -- 移动构造
+	return 0;
+}</code></pre> 
+</blockquote> 
+<h3 id="2.5%20%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8%E7%9A%84%E5%85%B6%E4%BB%96%E5%9C%BA%E6%99%AF%EF%BC%88%E6%8F%92%E5%85%A5%E6%8E%A5%E5%8F%A3%EF%BC%89" style="background-color:transparent;">2.5 右值引用的其他场景（插入接口）</h3> 
+<blockquote> 
+ <p>C++11后STL容器中的插入接口函数也增加了右值引用的版本：</p> 
+ <p><img alt="" height="83" src="https://images2.imgbox.com/19/19/P3IO0QtG_o.png" width="823"></p> 
+ <p> <img alt="" height="87" src="https://images2.imgbox.com/73/21/kv8M3ofh_o.png" width="833"></p> 
+ <p>注意：</p> 
+ <ul><li>C++98的时候，push_back函数只有const左值引用版本，所以这就会导致无论是左值还是右值都会被传入这个左值引用版本的push_back，势必会引发后续的深拷贝而带来的开销过大等问题。</li><li>C++11出来后，push_back函数增加了右值引用版本，如果传入push_back函数的是一个右值，那么在push_back函数构造节点时，这个右值就可以匹配到容器的移动构造函数进行资源的转移，这样就避免了深拷贝，提高了效率。</li></ul> 
+ <pre><code class="language-cpp">int main()
+{
+	list&lt;cpp::string&gt; lt;
+	cpp::string s1("1111");
+	// 这里调用的是拷贝构造
+	lt.push_back(s1);//string(const string&amp; s) -- 深拷贝
+	// 下面调用都是移动构造5
+	lt.push_back("2222");//string(string&amp;&amp; s) -- 移动构造
+	lt.push_back(std::move(s1));//string(string&amp;&amp; s) -- 移动构造
+	return 0;
+}</code></pre> 
+ <p>上述代码中的插入第一个元素s1就会匹配到push_back的左值引用版本，在push_back函数内部就会调用string的拷贝构造函数进行深拷贝，而后面插入的两个元素时由于传入的是右值，因此会匹配到push_back的右值引用版本，此时在push_back函数内部就会调用string的移动构造函数进行资源的转移。</p> 
+</blockquote> 
+<h2 id="3.%20%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91">3. 完美转发</h2> 
+<h3 id="3.1%20%E4%B8%87%E8%83%BD%E5%BC%95%E7%94%A8%26%26">3.1 万能引用&amp;&amp;</h3> 
+<blockquote> 
+ <p>&amp;&amp;应用在模板中时，不代表右值引用，而是万能引用，万能引用既能接收左值，也能接收右值。</p> 
+ <pre><code class="language-cpp">template&lt;typename T&gt;
+void PerfectForward(T&amp;&amp; t)//万能引用
+{
+	//……
+}</code></pre> 
+ <p><strong>万能引用的作用：</strong></p> 
+ <ol><li>模板中的<span style="color:#956fe7;">&amp;&amp;不代表右值引用，而是万能引用</span>，其既能接收左值又能接收右值。</li><li>模板的万能引用只是提供了能够接收同时接收左值引用和右值引用的能力，</li><li>但是<span style="color:#956fe7;">引用类型的唯一作用就是限制了接收的类型，后续使用中都退化成了左值</span>。</li></ol> 
+ <p>示例：</p> 
+ <pre><code class="language-cpp">void Fun(int&amp; x) { cout &lt;&lt; "左值引用" &lt;&lt; endl; }
+void Fun(const int&amp; x) { cout &lt;&lt; "const 左值引用" &lt;&lt; endl; }
+void Fun(int&amp;&amp; x) { cout &lt;&lt; "右值引用" &lt;&lt; endl; }
+void Fun(const int&amp;&amp; x) { cout &lt;&lt; "const 右值引用" &lt;&lt; endl; }
+template&lt;typename T&gt;
+void PerfectForward(T&amp;&amp; t)
+{
+	Fun(t);
+}
+int main()
+{
+	PerfectForward(10);//右值
+	int a;
+	PerfectForward(a);//左值
+	PerfectForward(std::move(a));//右值
+	const int b = 8;
+	PerfectForward(b);//const左值
+	PerfectForward(std::move(b));//const右值
+	return 0;
+}</code></pre> 
+ <p><img alt="" height="140" src="https://images2.imgbox.com/c2/07/tjqqRIPC_o.png" width="284"></p> 
+ <p>注意看上面的Fun函数我写了四个，分别是左值引用、const左值引用、右值引用、const右值引用。main函数中我把左值、右值、const左值、const右值均作为参数传入了函数模板PerfectForward里头，因为其参数类型是万能引用&amp;&amp;，所以既可以接收左值也可以接收右值，可是最终的测试结果却全为左值引用了：</p> 
+ <ul><li>实际传入PerfectForward函数模板的左值和右值均匹配到了左值引用版本的Fun函数，而传入PerfectForward函数模板的const左值和const右值均匹配到了const左值引用版本的Fun函数。</li><li>造成此现象的根本原因在于<span style="color:#956fe7;">右值被引用后会导致右值被存储到特定位置</span>，这时这个<span style="color:#956fe7;">右值可以被取到地址，并且可以被修改</span>，所以在PerfectForward函数中调用Func函数时会将t识别成左值。</li></ul> 
+ <p>这也就是万能引用限制了接收的类型，在后续使用中均退化成了左值，但是我们希望能够在传递过程中保持它的左值或者右值的属性, 就需要用我们下面学习的完美转发。</p> 
+</blockquote> 
+<h3 id="3.2%20forward%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91%E5%9C%A8%E4%BC%A0%E5%8F%82%E7%9A%84%E8%BF%87%E7%A8%8B%E4%B8%AD%E4%BF%9D%E7%95%99%E5%AF%B9%E8%B1%A1%E5%8E%9F%E7%94%9F%E7%B1%BB%E5%9E%8B%E5%B1%9E%E6%80%A7">3.2 forward完美转发在传参的过程中保留对象原生类型属性</h3> 
+<blockquote> 
+ <p>我们想要在传参的过程中保留对象的原生类型属性，就需要用到forward函数：</p> 
+ <pre><code class="language-cpp">template&lt;typename T&gt;
+void PerfectForward(T&amp;&amp; t)
+{
+    //完美转发
+	Fun(std::forward&lt;T&gt;(t));
+    //std::forward&lt;T&gt;(t)在传参的过程中保持了t的原生类型属性。
+}</code></pre> 
+ <p><img alt="" height="166" src="https://images2.imgbox.com/8f/ba/pM5M1qPZ_o.png" width="319"></p> 
+ <p> 完美转发后，左值、右值、左值引用、右值引用就可以被传入到理想状态下的函数接口了。</p> 
+</blockquote> 
+<h3 id="3.3%20%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91%E7%9A%84%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF" style="background-color:transparent;">3.3 完美转发的使用场景</h3> 
+<blockquote> 
+ <p>这里把先前模拟实现的list拖过来做测试案例，先前实现的list是没有对push_back函数和insert函数写一个右值引用版本的，所以这就会导致无论数据是左值还是右值都会传入左值引用的版本，势必在构建节点的时候引发深拷贝，测试代码如下：</p> 
+ <pre><code class="language-cpp">int main()
+{
+	cpp::list&lt;cpp::string&gt; lt;
+	cpp::string s1("1111");//右值
+	lt.push_back(s1);//左值
+	lt.push_back("2222");//右值
+	lt.push_back(std::move(s1));//右值
+}</code></pre> 
+ <p>为了避免深拷贝带来的开销过大，我们对push_back和insert函数单独写一个右值引用的版本，同样也要对构造函数写一个右值引用的版本，因为创建节点需要用到节点类的构造函数：</p> 
+ <pre><code class="language-cpp">//节点类
+template&lt;class T&gt;
+struct list_node
+{
+	//……
+	//右值引用节点类构造函数
+	list_node(T&amp;&amp; val)
+		:_next(nullptr)
+		, _prev(nullptr)
+		, _data(val)
+	{}
+};
+template&lt;class T&gt;
+class list
+{
+public:
+	//……
+	//右值引用版本的push_back
+	void push_back(T&amp;&amp; xx)
+	{
+		insert(end(), xx);
+	}
+	//右值引用版本的insert
+	iterator insert(iterator pos, T&amp;&amp; xx)
+	{
+		Node* newnode = new Node(xx);//创建新的结点
+		Node* cur = pos._node; //迭代器pos处的结点指针
+		Node* prev = cur-&gt;_prev;
+		//prev newnode cur
+		//链接prev和newnode
+		prev-&gt;_next = newnode;
+		newnode-&gt;_prev = prev;
+		//链接newnode和cur
+		newnode-&gt;_next = cur;
+		cur-&gt;_prev = newnode;
+		//返回新插入元素的迭代器位置
+		return iterator(newnode);
+	}
+private:
+	Node* _head;
+}</code></pre> 
+ <p>虽然这里实现了右值引用版本，但是实际的运行结果依然是深拷贝的，和没写之前的运行结果一模一样，原因如下：</p> 
+ <ul><li>根据先前的了解我们得知：&amp;&amp;应用在模板中时，不代表右值引用，而是万能引用，万能引用既能接收左值，也能接收右值。但是在后续的使用中，会把接收的类型全部退化成左值，既然退化成左值，那么自然会进入后续的深拷贝</li></ul> 
+ <p>此情况就是典型的完美转发的使用场景，解决办法如下：</p> 
+ <ul><li>我们需要在传参的过程中保留对象的原生类型属性，就需要用到forward函数：</li></ul> 
+ <pre><code class="language-cpp">//右值引用节点类的构造函数
+list_node(T&amp;&amp; val)
+	:_next(nullptr)
+	, _prev(nullptr)
+	, _data(std::forward&lt;T&gt;(val))//完美转发
+{}
+//右值引用版本的push_back
+void push_back(T&amp;&amp; xx)
+{
+	//完美转发
+	insert(end(), std::forward&lt;T&gt;(xx));
+}
+//右值引用版本的insert
+iterator insert(iterator pos, T&amp;&amp; xx)
+{
+	//完美转发
+	Node* newnode = new Node(std::forward&lt;T&gt;(xx));
+	//……
+	return iterator(newnode);
+}</code></pre> 
+ <p><img alt="" height="108" src="https://images2.imgbox.com/b4/bd/kEhFBuAI_o.png" width="399"> </p> 
+</blockquote>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/6be1ecaf0959402dd18d4a2f7cc0d4d0/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">C&#43;&#43;444444</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/76003185cc0fcd8f22e23f2ebc533da5/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Spring之IoC源码分析及设计思想(一)——BeanFactory</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

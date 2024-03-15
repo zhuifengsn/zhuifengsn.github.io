@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>A ConvNet for the 2020s - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="A ConvNet for the 2020s" />
+<meta property="og:description" content="前言 论文名称：A ConvNet for the 2020s
+发表时间：CVPR2022
+code链接： 代码
+作者及组织： Zhuang Liu，Hanzi Mao来自Meta和UC Berkeley。
+一句话总结：仿照swin-T思想，重新设计ResNet结构，使其逼近并超过swin-T。
+1、RoadMap 网络结构：r50和swin-tiny：二者Flops相近约4.5G；
+数据集：ImageNet1K
+1.1.Macro Design 这部分包含的实验比较散，我列了个表格：
+序号改进策略具体改动性能GFlopsv0原始的r50-76.14.1v1对齐训练方式-78.84.1v2每个stage的block数目From (3, 4, 6, 3) To (3, 3, 9, 3)79.44.5v3stem层k=7，s=2的卷积 变成 k=4，s=4的卷积)79.54.4v4卷积核类型3*3 conv 替换成 3*3 DW conv76.12.4v5stem的输出通道数64变成9680.55.3v6Block内部堆叠方式，下图Fig3.©3*3用更少通道，1*1用更多通道79.94.1v7DW conv的卷积核尺寸3*3改成7*780.64.2 1.2.Micro Design 这部分主要是从细节方面对齐swin-t.
+序号改进策略具体改动性能GFlopsv8更少激活函数用GeLU替换ReLU81.34.2v9更少norm层用LN替换BN81.54.2v10下采样层替换成k=2，s=2的卷积核并增加些LN稳定训练82.04.5 经过上述设计后，最终的ConvNext模块为：
+1.3.小结 &amp;emsp；在看下那张经典图就比较清晰了：
+2、实验 最终一个模型结构为：
+在ImageNet1k上实验：
+在coco上实验：
+思考 基于有监督训练，convnextv2引入了mim的监督方式。
+参考 https://zhuanlan.zhihu.com/p/458016349" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/4dd958296fea69aeda57a6b27f517cc0/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-01-31T18:40:07+08:00" />
+<meta property="article:modified_time" content="2024-01-31T18:40:07+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">A ConvNet for the 2020s</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-tomorrow-night">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2><a id="_2"></a>前言</h2> 
+<p> 论文名称：<a href="https://arxiv.org/abs/2201.03545" rel="nofollow">A ConvNet for the 2020s</a><br>  发表时间：CVPR2022<br>  code链接： <a href="https://github.com/facebookresearch/ConvNeXt">代码</a><br>  作者及组织： Zhuang Liu，Hanzi Mao来自Meta和UC Berkeley。</p> 
+<p> 一句话总结：仿照swin-T思想，重新设计ResNet结构，使其逼近并超过swin-T。</p> 
+<h2><a id="1RoadMap_10"></a>1、RoadMap</h2> 
+<p> 网络结构：r50和swin-tiny：二者Flops相近约4.5G；<br>  数据集：ImageNet1K</p> 
+<h3><a id="11Macro_Design_14"></a>1.1.Macro Design</h3> 
+<p> 这部分包含的实验比较散，我列了个表格：</p> 
+<table><thead><tr><th align="center">序号</th><th align="center">改进策略</th><th align="center">具体改动</th><th align="center">性能</th><th align="center">GFlops</th></tr></thead><tbody><tr><td align="center">v0</td><td align="center">原始的r50</td><td align="center">-</td><td align="center">76.1</td><td align="center">4.1</td></tr><tr><td align="center">v1</td><td align="center">对齐训练方式</td><td align="center">-</td><td align="center">78.8</td><td align="center">4.1</td></tr><tr><td align="center">v2</td><td align="center">每个stage的block数目</td><td align="center">From (3, 4, 6, 3) To (3, 3, 9, 3)</td><td align="center">79.4</td><td align="center">4.5</td></tr><tr><td align="center">v3</td><td align="center">stem层</td><td align="center">k=7，s=2的卷积 变成 k=4，s=4的卷积)</td><td align="center">79.5</td><td align="center">4.4</td></tr><tr><td align="center">v4</td><td align="center">卷积核类型</td><td align="center">3*3 conv 替换成 3*3 DW conv</td><td align="center"><mark>76.1</mark></td><td align="center">2.4</td></tr><tr><td align="center">v5</td><td align="center">stem的输出通道数</td><td align="center">64变成96</td><td align="center">80.5</td><td align="center"><mark>5.3</mark></td></tr><tr><td align="center">v6</td><td align="center">Block内部堆叠方式，下图<mark>Fig3.©</mark></td><td align="center">3*3用更少通道，1*1用更多通道</td><td align="center">79.9</td><td align="center">4.1</td></tr><tr><td align="center">v7</td><td align="center">DW conv的卷积核尺寸</td><td align="center">3*3改成7*7</td><td align="center">80.6</td><td align="center">4.2</td></tr></tbody></table> 
+<p><img src="https://images2.imgbox.com/2c/6a/s9XPlebv_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="12Micro_Design_29"></a>1.2.Micro Design</h3> 
+<p> 这部分主要是从细节方面对齐swin-t.</p> 
+<table><thead><tr><th align="center">序号</th><th align="center">改进策略</th><th align="center">具体改动</th><th align="center">性能</th><th align="center">GFlops</th></tr></thead><tbody><tr><td align="center">v8</td><td align="center">更少激活函数</td><td align="center">用GeLU替换ReLU</td><td align="center">81.3</td><td align="center">4.2</td></tr><tr><td align="center">v9</td><td align="center">更少norm层</td><td align="center">用LN替换BN</td><td align="center">81.5</td><td align="center">4.2</td></tr><tr><td align="center">v10</td><td align="center">下采样层</td><td align="center">替换成k=2，s=2的卷积核并<mark>增加些LN稳定训练</mark></td><td align="center">82.0</td><td align="center">4.5</td></tr></tbody></table> 
+<p> 经过上述设计后，最终的ConvNext模块为：<br> <img src="https://images2.imgbox.com/ed/2e/Pq98ui5B_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="13_40"></a>1.3.小结</h3> 
+<p>&amp;emsp；在看下那张经典图就比较清晰了：<br> <img src="https://images2.imgbox.com/ec/c2/qLSShlzZ_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="2_45"></a>2、实验</h2> 
+<p> 最终一个模型结构为：<br> <img src="https://images2.imgbox.com/29/6b/RPWrvxvt_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/d5/ca/xvHmpTpU_o.png" alt="在这里插入图片描述"></p> 
+<p> 在ImageNet1k上实验：<br> <img src="https://images2.imgbox.com/66/af/lvA0UOLe_o.png" alt="在这里插入图片描述"></p> 
+<p> 在coco上实验：<br> <img src="https://images2.imgbox.com/7a/65/z0uTczKg_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_61"></a>思考</h2> 
+<p> 基于有监督训练，convnextv2引入了mim的监督方式。</p> 
+<h2><a id="_64"></a>参考</h2> 
+<p><a href="https://zhuanlan.zhihu.com/p/458016349" rel="nofollow">https://zhuanlan.zhihu.com/p/458016349</a></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/40c326aacb37d416a32fad2b1d0331cc/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">VMWare安装Ubuntu</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/8b5a95d26ef9fcf39cee0d6425dd887d/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">【每日一题】6.LeetCode——轮转数组</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

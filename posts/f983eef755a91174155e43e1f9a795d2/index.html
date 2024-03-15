@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>ConvNeXt V2：用MAE训练CNN - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="ConvNeXt V2：用MAE训练CNN" />
+<meta property="og:description" content="论文名称：ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders
+发表时间：CVPR2023
+code链接：代码
+作者及组织: Sanghyun Woo，Shoubhik Debnath来自KAIST和Meta AI。
+前言 ConvNextV2是借助MAE的思想来训练ConvnextV1。关于ConvnextV1可参考：
+A ConvNet for the 2020s
+1、Fully Convolutional Masked Autoencoder 本文借助MAE的思想，设计了一套基于CNN的自监督学习网络结构。
+如上图所示，首先随机mask住2D图像的patch区域，为了防止Conv在训练过程中“看到“被遮挡区域的信息，于是Encoder部分采用了Sparse Conv(简单来说就是仅卷有像素值的区域)；而Decoder则是一层Convnext Block；最终类似SIMMIM，仅用MSE Loss计算被遮挡部分的损失函数。
+这里值得注意一个点：在Pretraining Stage用SparseCNN，在Finetuning Stage又将SparseCNN转变成常规卷积。
+最终取得实验结果：发现还是比不上有监督训练。
+2、Global Response Normalization（GRN） 在上节中，发现FCMAE效果还是差点儿，于是作者可视化特征图的每个channel：发现有好多失活的，这跟MAE训练的ViT效果相反：不同channel均有激活且多样性丰富。
+为了增加channel的多样性，作者设计了GRU的归一化方式：
+简单说下上述代码含义：算法的输入和输出的维度相同 R H × W × C \mathbb{R}^{H \times W \times C} RH×W×C 。首先对X的每个channel执行L2正则得到 g x ∈ R C gx \in \mathbb{R}^{ C} gx∈RC ；然后对gx的每个channel的值除以gx的均值得到权重 n x ∈ R C nx \in \mathbb{R}^{ C} nx∈RC , n x nx nx 保留了每个channel相对于其余channel的重要性。 最后返回 X ⋅ n x ∈ R H × W × C X \cdot nx \in \mathbb{R}^{ H \times W \times C} X⋅nx∈RH×W×C 。另外设计了两个可学习的缩放系数 γ \gamma γ 和 β \beta β 。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f983eef755a91174155e43e1f9a795d2/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-26T21:31:14+08:00" />
+<meta property="article:modified_time" content="2024-02-26T21:31:14+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">ConvNeXt V2：用MAE训练CNN</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-tomorrow-night">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>论文名称：<a href="https://arxiv.org/abs/2301.00808" rel="nofollow">ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders</a><br> 发表时间：CVPR2023<br> code链接：<a href="https://github.com/facebookresearch/ConvNeXt-V2">代码</a><br> 作者及组织: Sanghyun Woo，Shoubhik Debnath来自KAIST和Meta AI。</p> 
+<h2><a id="_5"></a>前言</h2> 
+<p>  ConvNextV2是借助MAE的思想来训练ConvnextV1。关于ConvnextV1可参考：<br>   <a href="https://blog.csdn.net/wulele2/article/details/135960097?spm=1001.2014.3001.5502">A ConvNet for the 2020s</a></p> 
+<h2><a id="1Fully_Convolutional_Masked_Autoencoder_8"></a>1、Fully Convolutional Masked Autoencoder</h2> 
+<p> 本文借助MAE的思想，设计了一套基于CNN的自监督学习网络结构。<br> <img src="https://images2.imgbox.com/5d/e7/rrWJD5Ry_o.jpg" alt="在这里插入图片描述"></p> 
+<p> 如上图所示，首先随机mask住2D图像的patch区域，<mark>为了防止Conv在训练过程中“看到“被遮挡区域的信息</mark>，于是Encoder部分采用了Sparse Conv(简单来说就是仅卷有像素值的区域)；而Decoder则是一层Convnext Block；最终类似SIMMIM，仅用MSE Loss计算被遮挡部分的损失函数。<br>  这里值得注意一个点：在Pretraining Stage用SparseCNN，在Finetuning Stage又将SparseCNN转变成常规卷积。<br>  最终取得实验结果：发现还是比不上有监督训练。</p> 
+<p><img src="https://images2.imgbox.com/04/fb/UuIHTOCL_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="2Global_Response_NormalizationGRN_19"></a>2、Global Response Normalization（GRN）</h2> 
+<p> 在上节中，发现FCMAE效果还是差点儿，于是作者可视化特征图的每个channel：发现有好多失活的，这跟MAE训练的ViT效果相反：不同channel均有激活且多样性丰富。<br> <img src="https://images2.imgbox.com/f2/ba/P04W7YAK_o.jpg" alt="在这里插入图片描述"></p> 
+<p> 为了增加channel的多样性，作者设计了GRU的归一化方式：</p> 
+<p><img src="https://images2.imgbox.com/3a/45/y6cBEbu4_o.png" alt="在这里插入图片描述"></p> 
+<p> 简单说下上述代码含义：算法的输入和输出的维度相同 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+        
+        
+          R 
+         
+         
+         
+           H 
+          
+         
+           × 
+          
+         
+           W 
+          
+         
+           × 
+          
+         
+           C 
+          
+         
+        
+       
+      
+        \mathbb{R}^{H \times W \times C} 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.8413em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height: 0.8413em;"><span class="" style="top: -3.063em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right: 0.0813em;">H</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right: 0.1389em;">W</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right: 0.0715em;">C</span></span></span></span></span></span></span></span></span></span></span></span></span> 。首先对X的每个channel执行L2正则得到 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         g 
+        
+       
+         x 
+        
+       
+         ∈ 
+        
+        
+        
+          R 
+         
+        
+          C 
+         
+        
+       
+      
+        gx \in \mathbb{R}^{ C} 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.7335em; vertical-align: -0.1944em;"></span><span class="mord mathnormal">gx</span><span class="mspace" style="margin-right: 0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right: 0.2778em;"></span></span><span class="base"><span class="strut" style="height: 0.8413em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height: 0.8413em;"><span class="" style="top: -3.063em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right: 0.0715em;">C</span></span></span></span></span></span></span></span></span></span></span></span></span> ；然后对gx的每个channel的值除以gx的均值得到权重 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         n 
+        
+       
+         x 
+        
+       
+         ∈ 
+        
+        
+        
+          R 
+         
+        
+          C 
+         
+        
+       
+      
+        nx \in \mathbb{R}^{ C} 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.5782em; vertical-align: -0.0391em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right: 0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right: 0.2778em;"></span></span><span class="base"><span class="strut" style="height: 0.8413em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height: 0.8413em;"><span class="" style="top: -3.063em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right: 0.0715em;">C</span></span></span></span></span></span></span></span></span></span></span></span></span> , <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         n 
+        
+       
+         x 
+        
+       
+      
+        nx 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">x</span></span></span></span></span> 保留了每个channel相对于其余channel的重要性。 最后返回 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         X 
+        
+       
+         ⋅ 
+        
+       
+         n 
+        
+       
+         x 
+        
+       
+         ∈ 
+        
+        
+        
+          R 
+         
+         
+         
+           H 
+          
+         
+           × 
+          
+         
+           W 
+          
+         
+           × 
+          
+         
+           C 
+          
+         
+        
+       
+      
+        X \cdot nx \in \mathbb{R}^{ H \times W \times C} 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.6833em;"></span><span class="mord mathnormal" style="margin-right: 0.0785em;">X</span><span class="mspace" style="margin-right: 0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right: 0.2222em;"></span></span><span class="base"><span class="strut" style="height: 0.5782em; vertical-align: -0.0391em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right: 0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right: 0.2778em;"></span></span><span class="base"><span class="strut" style="height: 0.8413em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height: 0.8413em;"><span class="" style="top: -3.063em; margin-right: 0.05em;"><span class="pstrut" style="height: 2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right: 0.0813em;">H</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right: 0.1389em;">W</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right: 0.0715em;">C</span></span></span></span></span></span></span></span></span></span></span></span></span> 。另外设计了两个可学习的缩放系数 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         γ 
+        
+       
+      
+        \gamma 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.625em; vertical-align: -0.1944em;"></span><span class="mord mathnormal" style="margin-right: 0.0556em;">γ</span></span></span></span></span> 和 <span class="katex--inline"><span class="katex"><span class="katex-mathml"> 
+     
+      
+       
+       
+         β 
+        
+       
+      
+        \beta 
+       
+      
+    </span><span class="katex-html"><span class="base"><span class="strut" style="height: 0.8889em; vertical-align: -0.1944em;"></span><span class="mord mathnormal" style="margin-right: 0.0528em;">β</span></span></span></span></span> 。</p> 
+<p> 由于GRN跟LayerScale有重复，故最终Block样式如下图所示：<br> <img src="https://images2.imgbox.com/1d/d4/DiWi6izk_o.png" alt="在这里插入图片描述"></p> 
+<p> 最终特征图的cos相似度图为：在+了GRN之后，cos距离从红线变成了蓝线，说明特征图之间的多样性提升明显。</p> 
+<p><img src="https://images2.imgbox.com/cb/60/fFhIHNAo_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="3_41"></a>3、实验</h2> 
+<h3><a id="31__42"></a>3.1. 模型结构</h3> 
+<p>  总共缩放7种模型，最小的Flops=0.55g。<br> <img src="https://images2.imgbox.com/b2/d1/YQBrkiEC_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="32Finetune_47"></a>3.2.Finetune实验</h3> 
+<p> 在小模型ConvnextV2效果较其余预训练方法更好，在ViT-H差点儿。<br> <img src="https://images2.imgbox.com/2b/df/WXl57LCj_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="33Transfer_learning_51"></a>3.3.Transfer learning实验</h3> 
+<p> 在检测任务上ConvnextV2较SimMIM更好。<br> <img src="https://images2.imgbox.com/87/bf/eki5SKTx_o.png" alt="在这里插入图片描述"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/7822874758284b0e429b19bd41edb33e/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">单片机51 定时器</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/1df200e6b9c95ea7a17b4fea1b907282/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">c语言经典例题</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

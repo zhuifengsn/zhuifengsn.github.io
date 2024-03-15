@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>springboot实现黑名单和白名单功能 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="springboot实现黑名单和白名单功能" />
+<meta property="og:description" content="题外话 关于黑名单和白名单功能，我觉得可以直接用linux服务器的iptables或nftables来实现黑名单和白名单功能。这两个工具都是Linux系统上用于配置防火墙规则的命令行工具。
+iptables：
+描述： iptables 是一个用于配置IPv4数据包过滤规则的工具。它是Linux系统上最常用的防火墙工具之一。命令示例： 添加黑名单规则：sudo iptables -A INPUT -s &lt;黑名单IP地址&gt; -j DROP添加白名单规则：sudo iptables -A INPUT -s &lt;白名单IP地址&gt; -j ACCEPT nftables：
+描述： nftables 是一个用于配置网络过滤和分类规则的框架，可以替代iptables。它支持IPv4和IPv6，并提供更灵活的语法。命令示例： 添加黑名单规则：sudo nft add rule ip filter input ip saddr &lt;黑名单IP地址&gt; drop添加白名单规则：sudo nft add rule ip filter input ip saddr &lt;白名单IP地址&gt; accept 在选择使用哪个工具时，您可以根据您的偏好以及系统是否已经采用nftables来进行选择。新er版本的Linux系统通常更倾向于使用nftables。请注意，上述命令中的&lt;黑名单IP地址&gt;和&lt;白名单IP地址&gt;需要替换为实际的IP地址。
+无论您选择使用iptables还是nftables，都需要小心配置规则，以确保不会阻止您访问服务器。在配置之前，请确保您了解防火墙规则的工作原理和影响。
+或者像openai一样使用cf防护也就是CloudFlare作为其服务的安全防护层。
+这里就不讲那么多题外话，开始我们的springboot实现黑名单和白名单功能
+先讲一下springboot实现黑白名单的原理，很简单，就是单纯的实现filter,然后注册到springboot里面，在filter里面进行黑白名单的筛选
+第一步：创建一个springboot项目 pom文件的依赖：
+&lt;dependencies&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt; &lt;scope&gt;test&lt;/scope&gt; &lt;/dependency&gt; &lt;/dependencies&gt; 注意：由于我使用的是springboot3，它内置的tomcat是10及其以上的。所以引入的依赖是jakarta，可能你们版本比较低的，可以使用javax
+第二步：创建一个过滤器类 package org.cyl.test.fliter; import jakarta." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/a313c8a23d6d7e49e927674862d24eb8/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-01-13T11:37:31+08:00" />
+<meta property="article:modified_time" content="2024-01-13T11:37:31+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">springboot实现黑名单和白名单功能</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>题外话</h2> 
+<p>       关于黑名单和白名单功能，我觉得可以直接用linux服务器的iptables或nftables来实现黑名单和白名单功能。这两个工具都是Linux系统上用于配置防火墙规则的命令行工具。</p> 
+<ol><li> <p><strong>iptables：</strong></p> 
+  <ul><li><strong>描述：</strong> iptables 是一个用于配置IPv4数据包过滤规则的工具。它是Linux系统上最常用的防火墙工具之一。</li><li><strong>命令示例：</strong> 
+    <ul><li>添加黑名单规则：<code>sudo iptables -A INPUT -s &lt;黑名单IP地址&gt; -j DROP</code></li><li>添加白名单规则：<code>sudo iptables -A INPUT -s &lt;白名单IP地址&gt; -j ACCEPT</code></li></ul></li></ul></li><li> <p><strong>nftables：</strong></p> 
+  <ul><li><strong>描述：</strong> nftables 是一个用于配置网络过滤和分类规则的框架，可以替代iptables。它支持IPv4和IPv6，并提供更灵活的语法。</li><li><strong>命令示例：</strong> 
+    <ul><li>添加黑名单规则：<code>sudo nft add rule ip filter input ip saddr &lt;黑名单IP地址&gt; drop</code></li><li>添加白名单规则：<code>sudo nft add rule ip filter input ip saddr &lt;白名单IP地址&gt; accept</code></li></ul></li></ul></li></ol> 
+<p>       在选择使用哪个工具时，您可以根据您的偏好以及系统是否已经采用nftables来进行选择。新er版本的Linux系统通常更倾向于使用nftables。请注意，上述命令中的<code>&lt;黑名单IP地址&gt;</code>和<code>&lt;白名单IP地址&gt;</code>需要替换为实际的IP地址。</p> 
+<p>       无论您选择使用iptables还是nftables，都需要小心配置规则，以确保不会阻止您访问服务器。在配置之前，请确保您了解防火墙规则的工作原理和影响。</p> 
+<p>       或者像openai一样使用cf防护也就是CloudFlare作为其服务的安全防护层。</p> 
+<p><strong>这里就不讲那么多题外话，开始我们的springboot实现黑名单和白名单功能</strong></p> 
+<p><strong>先讲一下</strong>springboot实现黑白名单的原理，很简单，就是单纯的实现filter,然后注册到springboot里面，在filter里面进行黑白名单的筛选</p> 
+<h2>第一步：创建一个springboot项目</h2> 
+<p><img alt="" height="803" src="https://images2.imgbox.com/ee/62/qa1cieM8_o.png" width="1200"></p> 
+<p>pom文件的依赖：</p> 
+<pre><code class="hljs">&lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+        &lt;/dependency&gt;
+
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+            &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
+            &lt;scope&gt;test&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;</code></pre> 
+<p><strong>注意</strong>：由于我使用的是springboot3，它内置的tomcat是10及其以上的。所以引入的依赖是jakarta，可能你们版本比较低的，可以使用javax</p> 
+<h2>第二步：<strong>创建一个过滤器类</strong></h2> 
+<pre><code class="hljs">package org.cyl.test.fliter;
+import jakarta.servlet.*;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+
+public class BlackWhiteListFilter implements Filter {
+
+    private List&lt;String&gt; blackList = Arrays.asList("blocked-ip1", "blocked-ip2");
+    private List&lt;String&gt; whiteList = Arrays.asList("127.0.0.1", "0:0:0:0:0:0:0:1");
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        String clientIP = request.getRemoteAddr();
+
+        // 检查黑名单
+        if (blackList.contains(clientIP)) {
+            response.getWriter().write("Your IP is blacklisted.");
+            return;
+        }
+
+        // 检查白名单
+        if (!whiteList.contains(clientIP)) {
+            response.getWriter().write("Your IP is not whitelisted.");
+            return;
+        }
+
+        chain.doFilter(request, response);
+    }
+
+    // 可以实现 init 和 destroy 方法，根据需要进行处理
+}
+</code></pre> 
+<h2>第三步：<strong>注册config类：</strong></h2> 
+<pre><code class="hljs">package org.cyl.test.config;
+import org.cyl.test.fliter.BlackWhiteListFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class WebConfig {
+
+    @Bean
+    public FilterRegistrationBean&lt;BlackWhiteListFilter&gt; myFilter() {
+        FilterRegistrationBean&lt;BlackWhiteListFilter&gt; registrationBean = new FilterRegistrationBean&lt;&gt;();
+        registrationBean.setFilter(new BlackWhiteListFilter());
+        registrationBean.addUrlPatterns("/*");
+        return registrationBean;
+    }
+}
+</code></pre> 
+<h2>第四步：开始测试</h2> 
+<p><img alt="" height="442" src="https://images2.imgbox.com/9c/e9/TzimkPhQ_o.png" width="1200"></p> 
+<p>在这里面编写白名单和黑名单。由于每次请求都会经过Filter，所以在这里面可以实现除了我设置的127.0.0.1和0:0:0:0:0:0:0:1之外，其他ip无法访问的情况。</p> 
+<p><strong>编写controller类</strong></p> 
+<pre><code class="hljs">package org.cyl.test.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class HelloController {
+
+    @GetMapping("/allowed-endpoint")
+    public String sayHello(){
+        return "Hello";
+    }
+}
+</code></pre> 
+<p>访问<a href="http://localhost:8080/allowed-endpoint" rel="nofollow" title="localhost:8080/allowed-endpoint">localhost:8080/allowed-endpoint</a></p> 
+<p>结果如下：</p> 
+<p><img alt="" height="247" src="https://images2.imgbox.com/b8/56/bTMdNjcU_o.png" width="814"></p> 
+<h2>修改白名单</h2> 
+<p><img alt="" height="650" src="https://images2.imgbox.com/13/f4/5NdS1G97_o.png" width="1200"></p> 
+<p>再次访问：</p> 
+<p><img alt="" height="246" src="https://images2.imgbox.com/55/a8/Au6k8p7s_o.png" width="957"></p> 
+<p>很简单就成功了。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/19dbb89c229ba8aaedcb6ea60eaf7230/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">浅谈6种流行的API架构风格</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/c6c26ed2ed395edef3f6693ca1644e85/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C语言变量与函数</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

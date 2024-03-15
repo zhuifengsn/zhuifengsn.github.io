@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>GTest源码剖析（三）——TEST_F宏 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="GTest源码剖析（三）——TEST_F宏" />
+<meta property="og:description" content="GTest源码剖析——TEST_F宏 GTest源码剖析TEST_F宏 TEST_F宏与TEST宏的区别 1 TEST_F宏定义2 TEST宏定义3 对比分析 31 拼接类对比32 调用MakeAndRegisterTestInfo传参对比 TEST_F宏作用 1 TestCase级扩展2 Test级扩展 参考 1 TEST_F宏与TEST宏的区别 TEST_F宏和TEST宏的实现非常接近，只是TEST_F宏的封装更加开放一些，所以对TEST宏的功能多了一些扩展。 详细见GTest源码剖析——TEST宏
+1.1 TEST_F宏定义 #define TEST_F(test_fixture, test_name) GTEST_TEST_(test_fixture, test_name, test_fixture, ::testing::internal::GetTypeId&lt;test_fixture&gt;()) 1.2 TEST宏定义 //step1 #if !GTEST_DONT_DEFINE_TEST # define TEST(test_case_name, test_name) GTEST_TEST(test_case_name, test_name) #endif //step2 #define GTEST_TEST(test_case_name, test_name) GTEST_TEST_(test_case_name, test_name,::testing::Test, ::testing::internal::GetTestTypeId()) 1.3 对比分析 eg:
+TEST(Call,makeCall); TEST_F(Call,makeCall); 1.3.1 拼接类对比 区别在于： TEST宏中的拼接类Call_makeCall_Test继承于Test类； TEST_F宏中的拼接类Call_makeCall_Test继承于Call类；
+即相对于TEST宏，TEST_F可以覆盖Test类中的虚函数SetUp()和TearDown()。
+TEST宏:
+class Call_makeCall_Test : public ::testing::Test { public: Call_makeCall_Test(); private: virtual void TestBody(); static ::testing::TestInfo* const test_info_ ; Call_makeCall_Test(Call_makeCall_Test const &amp;); void operator=(Call_makeCall_Test const &amp;); }; TEST_F宏：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/ab7e0f5be189b8e3987390bf98346ba5/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2017-09-17T23:13:02+08:00" />
+<meta property="article:modified_time" content="2017-09-17T23:13:02+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">GTest源码剖析（三）——TEST_F宏</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h2 id="gtest源码剖析testf宏">GTest源码剖析——TEST_F宏</h2> 
+<p></p> 
+<div class="toc"> 
+ <ul><li><a href="#gtest%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90testf%E5%AE%8F" rel="nofollow noopener noreferrer" target="_blank">GTest源码剖析TEST_F宏</a> 
+   <ul><li><a href="#1-testf%E5%AE%8F%E4%B8%8Etest%E5%AE%8F%E7%9A%84%E5%8C%BA%E5%88%AB" rel="nofollow noopener noreferrer" target="_blank">TEST_F宏与TEST宏的区别</a> 
+     <ul><li><a href="#11-testf%E5%AE%8F%E5%AE%9A%E4%B9%89" rel="nofollow noopener noreferrer" target="_blank">1 TEST_F宏定义</a></li><li><a href="#12-test%E5%AE%8F%E5%AE%9A%E4%B9%89" rel="nofollow noopener noreferrer" target="_blank">2 TEST宏定义</a></li><li><a href="#13-%E5%AF%B9%E6%AF%94%E5%88%86%E6%9E%90" rel="nofollow noopener noreferrer" target="_blank">3 对比分析</a> 
+       <ul><li><a href="#131-%E6%8B%BC%E6%8E%A5%E7%B1%BB%E5%AF%B9%E6%AF%94" rel="nofollow noopener noreferrer" target="_blank">31 拼接类对比</a></li><li><a href="#132-%E8%B0%83%E7%94%A8makeandregistertestinfo%E4%BC%A0%E5%8F%82%E5%AF%B9%E6%AF%94" rel="nofollow noopener noreferrer" target="_blank">32 调用MakeAndRegisterTestInfo传参对比</a></li></ul> </li></ul> </li><li><a href="#2-testf%E5%AE%8F%E4%BD%9C%E7%94%A8" rel="nofollow noopener noreferrer" target="_blank">TEST_F宏作用</a> 
+     <ul><li><a href="#21-testcase%E7%BA%A7%E6%89%A9%E5%B1%95" rel="nofollow noopener noreferrer" target="_blank">1 TestCase级扩展</a></li><li><a href="#22-test%E7%BA%A7%E6%89%A9%E5%B1%95" rel="nofollow noopener noreferrer" target="_blank">2 Test级扩展</a></li></ul> </li><li><a href="#3-%E5%8F%82%E8%80%83" rel="nofollow noopener noreferrer" target="_blank">参考</a></li></ul> </li></ul> 
+</div> 
+<p></p> 
+<h3 id="1-testf宏与test宏的区别">1 TEST_F宏与TEST宏的区别</h3> 
+<p>TEST_F宏和TEST宏的实现非常接近，只是TEST_F宏的封装更加开放一些，所以对TEST宏的功能多了一些扩展。 <br> 详细见<a href="TODO" rel="nofollow noopener noreferrer" target="_blank">GTest源码剖析——TEST宏</a></p> 
+<h4 id="11-testf宏定义">1.1 TEST_F宏定义</h4> 
+<pre class="prettyprint"><code class="language-C++ hljs css"><span class="hljs-id">#define</span> <span class="hljs-tag">TEST_F</span>(<span class="hljs-tag">test_fixture</span>, <span class="hljs-tag">test_name</span>)
+  <span class="hljs-tag">GTEST_TEST_</span>(<span class="hljs-tag">test_fixture</span>, <span class="hljs-tag">test_name</span>, <span class="hljs-tag">test_fixture</span>, 
+              <span class="hljs-pseudo">::testing</span><span class="hljs-pseudo">::internal</span><span class="hljs-pseudo">::GetTypeId</span>&lt;<span class="hljs-tag">test_fixture</span>&gt;())</code></pre> 
+<h4 id="12-test宏定义">1.2 TEST宏定义</h4> 
+<pre class="prettyprint"><code class="language-C++ hljs cs"><span class="hljs-comment">//step1</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">if</span> !GTEST_DONT_DEFINE_TEST</span>
+<span class="hljs-preprocessor"># <span class="hljs-keyword">define</span> TEST(test_case_name, test_name) GTEST_TEST(test_case_name, test_name)</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">endif</span></span>
+
+<span class="hljs-comment">//step2</span>
+<span class="hljs-preprocessor">#<span class="hljs-keyword">define</span> GTEST_TEST(test_case_name, test_name)</span>
+  GTEST_TEST_(test_case_name, test_name,::testing::Test, ::testing::<span class="hljs-keyword">internal</span>::<span class="hljs-title">GetTestTypeId</span>())
+</code></pre> 
+<h4 id="13-对比分析">1.3 对比分析</h4> 
+<p>eg:</p> 
+<pre class="prettyprint"><code class="language-C++ hljs sql">TEST(<span class="hljs-operator"><span class="hljs-keyword">Call</span>,makeCall);</span>
+TEST_F(<span class="hljs-operator"><span class="hljs-keyword">Call</span>,makeCall);</span></code></pre> 
+<h5 id="131-拼接类对比">1.3.1 拼接类对比</h5> 
+<p>区别在于： <br> TEST宏中的拼接类Call_makeCall_Test继承于<strong>Test</strong>类； <br> TEST_F宏中的拼接类Call_makeCall_Test继承于<strong>Call</strong>类；</p> 
+<p>即相对于TEST宏，TEST_F可以覆盖Test类中的虚函数SetUp()和TearDown()。</p> 
+<p>TEST宏:</p> 
+<pre class="prettyprint"><code class="language-C++ hljs cs">class Call_makeCall_Test : <span class="hljs-keyword">public</span> ::testing::Test    
+{    
+<span class="hljs-keyword">public</span>:    
+    <span class="hljs-title">Call_makeCall_Test</span>();    
+
+<span class="hljs-keyword">private</span>:    
+    <span class="hljs-keyword">virtual</span> <span class="hljs-keyword">void</span> <span class="hljs-title">TestBody</span>();
+    <span class="hljs-keyword">static</span> ::testing::TestInfo* <span class="hljs-keyword">const</span> test_info_ ; 
+
+    Call_makeCall_Test(Call_makeCall_Test <span class="hljs-keyword">const</span> &amp;);
+    <span class="hljs-keyword">void</span> <span class="hljs-keyword">operator</span>=(Call_makeCall_Test <span class="hljs-keyword">const</span> &amp;);
+};  </code></pre> 
+<p>TEST_F宏：</p> 
+<pre class="prettyprint"><code class="language-C++ hljs cs">class Call_makeCall_Test : <span class="hljs-keyword">public</span> ::testing::Call    
+{    
+<span class="hljs-keyword">public</span>:    
+    <span class="hljs-title">Call_makeCall_Test</span>();    
+
+<span class="hljs-keyword">private</span>:    
+    <span class="hljs-keyword">virtual</span> <span class="hljs-keyword">void</span> <span class="hljs-title">TestBody</span>();
+    <span class="hljs-keyword">static</span> ::testing::TestInfo* <span class="hljs-keyword">const</span> test_info_ ; 
+
+    Call_makeCall_Test(Call_makeCall_Test <span class="hljs-keyword">const</span> &amp;);
+    <span class="hljs-keyword">void</span> <span class="hljs-keyword">operator</span>=(Call_makeCall_Test <span class="hljs-keyword">const</span> &amp;);
+};  </code></pre> 
+<h5 id="132-调用makeandregistertestinfo传参对比">1.3.2 调用MakeAndRegisterTestInfo()传参对比</h5> 
+<p>区别在于： <br> TEST宏: 传入MakeAndRegisterTestInfo()的参数为::testing::Test::SetUpTestCase和::testing::Test::TearDownTestCase。 <br> TEST_F宏: 传入MakeAndRegisterTestInfo()的参数为Call::SetUpTestCase和Call::TearDownTestCase。</p> 
+<p>即相对于TEST宏，TEST_F可以定义自己的SetUpTestCase和TearDownTestCase。</p> 
+<p>TEST宏:</p> 
+<pre class="prettyprint"><code class="language-C++ hljs lasso"><span class="hljs-tag">::testing</span><span class="hljs-tag">::TestInfo</span><span class="hljs-subst">*</span> const Call_makeCall_Test<span class="hljs-tag">::test_info_</span> <span class="hljs-subst">=</span>   
+    <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::MakeAndRegisterTestInfo</span>(  
+        <span class="hljs-string">"Call"</span>,   
+        <span class="hljs-string">"makeCall"</span>,   
+        <span class="hljs-built_in">NULL</span>,   
+        <span class="hljs-built_in">NULL</span>,   
+        <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::CodeLocation</span>(__FILE__, __LINE__), 
+        <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::GetTestTypeId</span>()，
+        <span class="hljs-tag">::testing</span><span class="hljs-tag">::Test</span><span class="hljs-tag">::SetUpTestCase</span>,   
+        <span class="hljs-tag">::testing</span><span class="hljs-tag">::Test</span><span class="hljs-tag">::TearDownTestCase</span>,   
+        <span class="hljs-literal">new</span> <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::TestFactoryImpl</span><span class="hljs-subst">&lt;</span>Call_makeCall_Test<span class="hljs-subst">&gt;</span>);   </code></pre> 
+<p>TEST_F宏：</p> 
+<pre class="prettyprint"><code class="language-C++ hljs lasso"><span class="hljs-tag">::testing</span><span class="hljs-tag">::TestInfo</span><span class="hljs-subst">*</span> const Call_makeCall_Test<span class="hljs-tag">::test_info_</span> <span class="hljs-subst">=</span>   
+    <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::MakeAndRegisterTestInfo</span>(  
+        <span class="hljs-string">"Call"</span>,   
+        <span class="hljs-string">"makeCall"</span>,   
+        <span class="hljs-built_in">NULL</span>,   
+        <span class="hljs-built_in">NULL</span>,   
+        <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::CodeLocation</span>(__FILE__, __LINE__), 
+        <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::GetTestTypeId</span>()，
+        Call<span class="hljs-tag">::SetUpTestCase</span>,   
+        Call<span class="hljs-tag">::TearDownTestCase</span>,   
+        <span class="hljs-literal">new</span> <span class="hljs-tag">::testing</span><span class="hljs-tag">::internal</span><span class="hljs-tag">::TestFactoryImpl</span><span class="hljs-subst">&lt;</span>Call_makeCall_Test<span class="hljs-subst">&gt;</span>);   </code></pre> 
+<h3 id="2-testf宏作用">2 TEST_F宏作用：</h3> 
+<h4 id="21-testcase级扩展">2.1 TestCase级扩展</h4> 
+<ol><li>SetUpTestCase()方法在TestCase的第一个test之前执行.</li><li>TearDownTestCase()方法在TestCase的最后一个test之后执行.</li><li>在TestCase为Call的测试用例中，可以共享_callServer，可以跨越多个test。</li></ol> 
+<pre class="prettyprint"><code class="language-C++ hljs cs">class Call : <span class="hljs-keyword">public</span> testing::Test 
+{
+<span class="hljs-keyword">protected</span>:
+  <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title">SetUpTestCase</span>() 
+  {
+    CallServer *_callServer = <span class="hljs-keyword">new</span> CallServer;
+  }
+
+  <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> TearDownTestCase() 
+  {
+    delete _callServer;
+    _callServer = NULL;
+  }
+
+  <span class="hljs-keyword">static</span> CallServer* _callServer;
+};</code></pre> 
+<h4 id="22-test级扩展">2.2 Test级扩展</h4> 
+<ol><li>SetUp()方法在每个Test之前执行</li><li>TearDown()方法在每个Test之后执行</li><li>在TestCase为Call的测试用例中，可以共享_callInfo,SetUp会在下一个test重新调用，所以逐个对每一个test生效。</li></ol> 
+<pre class="prettyprint"><code class="language-C++ hljs cs">class Call : <span class="hljs-keyword">public</span> testing::Test 
+{
+<span class="hljs-keyword">protected</span>:
+    <span class="hljs-keyword">virtual</span> <span class="hljs-keyword">void</span> <span class="hljs-title">SetUp</span>()
+    {
+        CallInfo *_callInfo = <span class="hljs-keyword">new</span> CallInfo;
+    }
+    <span class="hljs-keyword">virtual</span> <span class="hljs-keyword">void</span> TearDown()
+    {
+        delete _callInfo;
+        _callInfo = NULL;
+    }
+
+    CallInfo* _callInfo;
+};</code></pre> 
+<h3 id="3-参考">3 参考</h3> 
+<p><a href="https://github.com/google/googletest" target="_blank" rel="noopener noreferrer">github: googletest</a></p> 
+<hr> 
+<p>ZhaiPillar <br> 2017-09-16</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/ee05f4ba7e9a139c85415a145c12ef42/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">理解：回归与拟合、归一化与标准化</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/f426e1581ede47ba893d83c1a1ce245e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">GTest源码剖析（七）——断言</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>GTest基础学习-06-第6个单元测试-接口测试(类型参数驱动) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="GTest基础学习-06-第6个单元测试-接口测试(类型参数驱动)" />
+<meta property="og:description" content="前面的文章学习了使用gtest进行函数级的测试和类级的测试，这篇来学习如何通过gtest来测试接口。这个接口我们在prime_table.h中，接口的头和实现部分都放置同一个文件，这个文件也在sample文件夹下。这篇学习第6个单元测试，介绍如何测试一个接口有多种实现，而且没种实现都要单元测试，做到测试代码不重复。本篇新引入了几个宏，有一些模板函数的思想，加上新的测试宏，看起来有费劲，不易理解和掌握。这个知识点比前面学习都要高级的特性和复杂。
+1.代码准备
+prime_table.h代码
+#ifndef GTEST_SAMPLES_PRIME_TABLES_H_ #define GTEST_SAMPLES_PRIME_TABLES_H_ #include &lt;algorithm&gt; // prime table 接口 class PrimeTable { public: virtual ~PrimeTable() {} // 只有n是素数返回true virtual bool IsPrime(int n) const = 0; // 返回比P大的最小的素数 // 如果下一个素数超出表的容量，就返回-1 virtual int GetNextPrime(int p) const = 0; }; // 实现 #1 实时计算素数 class OnTheFlyPrimeTable : public PrimeTable { public: bool IsPrime(int n) const override { if (n &lt;= 1) return false; for (int i = 2; i*i &lt;= n; i&#43;&#43;) { if ((n % i) == 0) return false; } return true; } int GetNextPrime(int p) const override { for (int n = p &#43; 1; n &gt; 0; n&#43;&#43;) { if (IsPrime(n)) return n; } return -1; } }; // 实现 #2 预计算素数并存储结果到一个数组 class PreCalculatedPrimeTable : public PrimeTable { public: // max用来指定素数表最大数 explicit PreCalculatedPrimeTable(int max) : is_prime_size_(max &#43; 1), is_prime_(new bool[max &#43; 1]) { CalculatePrimesUpTo(max); } ~PreCalculatedPrimeTable() override { delete[] is_prime_; } bool IsPrime(int n) const override { return 0 &lt;= n &amp;&amp; n &lt; is_prime_size_ &amp;&amp; is_prime_[n]; } int GetNextPrime(int p) const override { for (int n = p &#43; 1; n &lt; is_prime_size_; n&#43;&#43;) { if (is_prime_[n]) return n; } return -1; } private: void CalculatePrimesUpTo(int max) { ::std::fill(is_prime_, is_prime_ &#43; is_prime_size_, true); is_prime_[0] = is_prime_[1] = false; // 检查每一个候选的素数 (我们知道2是素数中唯一的偶数 for (int i = 2; i*i &lt;= max; i &#43;= i % 2 &#43; 1) { if (!" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/620a2869095a1a6dead0d806edff6b7e/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2020-08-30T23:00:12+08:00" />
+<meta property="article:modified_time" content="2020-08-30T23:00:12+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">GTest基础学习-06-第6个单元测试-接口测试(类型参数驱动)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>       前面的文章学习了使用gtest进行函数级的测试和类级的测试，这篇来学习如何通过gtest来测试接口。这个接口我们在prime_table.h中，接口的头和实现部分都放置同一个文件，这个文件也在sample文件夹下。这篇学习第6个单元测试，介绍如何测试一个接口有多种实现，而且没种实现都要单元测试，做到测试代码不重复。本篇新引入了几个宏，有一些模板函数的思想，加上新的测试宏，看起来有费劲，不易理解和掌握。这个知识点比前面学习都要高级的特性和复杂。</p> 
+<p> </p> 
+<p><strong>1.代码准备</strong></p> 
+<p>prime_table.h代码</p> 
+<pre><code class="language-cpp">#ifndef GTEST_SAMPLES_PRIME_TABLES_H_
+#define GTEST_SAMPLES_PRIME_TABLES_H_
+
+#include &lt;algorithm&gt;
+
+// prime table 接口
+class PrimeTable {
+public:
+	virtual ~PrimeTable() {}
+
+	// 只有n是素数返回true
+	virtual bool IsPrime(int n) const = 0;
+
+	// 返回比P大的最小的素数
+	// 如果下一个素数超出表的容量，就返回-1
+	virtual int GetNextPrime(int p) const = 0;
+};
+
+// 实现 #1 实时计算素数
+class OnTheFlyPrimeTable : public PrimeTable {
+public:
+	bool IsPrime(int n) const override {
+		if (n &lt;= 1) return false;
+
+		for (int i = 2; i*i &lt;= n; i++) {
+			if ((n % i) == 0) return false;
+		}
+
+		return true;
+	}
+
+	int GetNextPrime(int p) const override {
+		for (int n = p + 1; n &gt; 0; n++) {
+			if (IsPrime(n)) return n;
+		}
+
+		return -1;
+	}
+};
+
+// 实现 #2 预计算素数并存储结果到一个数组
+class PreCalculatedPrimeTable : public PrimeTable {
+public:
+	// max用来指定素数表最大数
+	explicit PreCalculatedPrimeTable(int max)
+		: is_prime_size_(max + 1), is_prime_(new bool[max + 1]) {
+		CalculatePrimesUpTo(max);
+	}
+	~PreCalculatedPrimeTable() override { delete[] is_prime_; }
+
+	bool IsPrime(int n) const override {
+		return 0 &lt;= n &amp;&amp; n &lt; is_prime_size_ &amp;&amp; is_prime_[n];
+	}
+
+	int GetNextPrime(int p) const override {
+		for (int n = p + 1; n &lt; is_prime_size_; n++) {
+			if (is_prime_[n]) return n;
+		}
+
+		return -1;
+	}
+
+private:
+	void CalculatePrimesUpTo(int max) {
+		::std::fill(is_prime_, is_prime_ + is_prime_size_, true);
+		is_prime_[0] = is_prime_[1] = false;
+
+		// 检查每一个候选的素数 (我们知道2是素数中唯一的偶数
+		for (int i = 2; i*i &lt;= max; i += i % 2 + 1) {
+			if (!is_prime_[i]) continue;
+
+			// 标记i不是素数
+			// 我们从第i个乘数开始，因为所有较小的复数均已标记。
+			for (int j = i*i; j &lt;= max; j += i) {
+				is_prime_[j] = false;
+			}
+		}
+	}
+
+	const int is_prime_size_;
+	bool* const is_prime_;
+
+	// 关闭编译器警告 "assignment operator could not be generated."
+	void operator=(const PreCalculatedPrimeTable&amp; rhs);
+};
+
+#endif  // GTEST_SAMPLES_PRIME_TABLES_H_
+</code></pre> 
+<p>一个类下有两个接口，isPrime()判断是否是素数，GetNextPrime(int p)求比p要打且是素数中最新的数。这两个接口，给出两个实现方式。</p> 
+<p>TestSample06.cpp</p> 
+<pre><code class="language-cpp">//这示例展示了如何测试多个相同接口的实现，也叫接口测试
+
+#include "prime_tables.h"
+#include "gtest/gtest.h"
+namespace {
+	//首先，我们定义一些模板函数来创建实例实现。 
+	//如果可以用相同的方式构造实现，你可跳过此步骤
+
+	template &lt;class T&gt;
+	PrimeTable* CreatePrimeTable();
+
+	template &lt;&gt;
+	// 这个时候，T就是实现OnTheFlyPrimeTable
+	PrimeTable* CreatePrimeTable&lt;OnTheFlyPrimeTable&gt;() {
+		return new OnTheFlyPrimeTable;
+	}
+
+	template &lt;&gt;
+	// 这个时候，T就是实现PreCalculatedPrimeTable
+	PrimeTable* CreatePrimeTable&lt;PreCalculatedPrimeTable&gt;() {
+		return new PreCalculatedPrimeTable(10000);
+	}
+
+	// 定义一个测试夹具类模板
+	template &lt;class T&gt;
+	class PrimeTableTest : public testing::Test {
+	protected:
+		// 构造函数去调用模板函数去创建素数表
+		PrimeTableTest() : table_(CreatePrimeTable&lt;T&gt;()) {}
+
+		~PrimeTableTest() override { delete table_; }
+
+		// 注意到我们测试一个实现是通过基本接口，而不是通过具体的实现类。
+		// 这很重要使测试保持接近真实的场景，当通过基本接口调用实现
+		PrimeTable* const table_;
+	};
+
+#if GTEST_HAS_TYPED_TEST
+
+	using testing::Types;
+
+	// Google Test 对于不同类型(Type)提供了两种方式去复用测试
+	// 第一种叫 "typed tests".  
+	//使用场景：如果你已经全部知道编写测试时要使用的参数类型
+
+	// 为了编写类型化的测试用例，需要使用以下宏
+	//   TYPED_TEST_SUITE(TestCaseName, TypeList); 去声明并指定参数类型
+	// 如果使用 TEST_F宏, 参数TestCaseName必须和测试夹具类名称匹配
+
+	// 我们想要测试的types列表
+	typedef Types&lt;OnTheFlyPrimeTable, PreCalculatedPrimeTable&gt; Implementations;
+
+	TYPED_TEST_SUITE(PrimeTableTest, Implementations);
+
+	// 然后使用 TYPED_TEST(TestCaseName, TestName) 去定义一个typed 测试,和TEST_F相似
+	TYPED_TEST(PrimeTableTest, ReturnsFalseForNonPrimes) {
+		// 在test正文内部，你可以通过TypeParam去引用类型参数
+		// 通过TestFixture引用测试夹具类，这个例子中我们不需要这样做
+		
+		// 由于我们处在模板类的世界中，因此C++明确要求
+		//在引用测试类夹具成员是编写"this-&gt;"
+		// 这是我们必须学习和遵守的东西
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(-5));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(0));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(1));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(4));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(6));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(100));
+	}
+
+	TYPED_TEST(PrimeTableTest, ReturnsTrueForPrimes) {
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(2));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(3));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(5));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(7));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(11));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(131));
+	}
+
+	TYPED_TEST(PrimeTableTest, CanGetNextPrime) {
+		EXPECT_EQ(2, this-&gt;table_-&gt;GetNextPrime(0));
+		EXPECT_EQ(3, this-&gt;table_-&gt;GetNextPrime(2));
+		EXPECT_EQ(5, this-&gt;table_-&gt;GetNextPrime(3));
+		EXPECT_EQ(7, this-&gt;table_-&gt;GetNextPrime(5));
+		EXPECT_EQ(11, this-&gt;table_-&gt;GetNextPrime(7));
+		EXPECT_EQ(131, this-&gt;table_-&gt;GetNextPrime(128));
+	}
+
+	//  gtest框架在TYPED_TEST_SUITE中指定的类型列表中将针对每种类型重复每个TYPED_TEST
+	//  很高兴我们不用多次重复定义这些
+
+#endif  // GTEST_HAS_TYPED_TEST
+
+#if GTEST_HAS_TYPED_TEST_P
+
+	using testing::Types;
+
+	// 然而在一些时候，当你在写测试的时候你不知道全部的类型
+	// 例如, 你是一个接口的作者，但是这个接口是由他人去写实现
+	// 你可能会想写一组测试去确保每个实现都基本满足了需求
+	// 但是你不知道这个接口的将来别人是怎么去写实现
+	//
+	// 没有知道的类型参数，你怎么去写测试用例呢
+	// 这就是"type-parameterized tests"能够帮你做到的事情
+	// 它比类型测试要复杂得多，但是作为回报，你会得到可以在许多情况下重用的测试模式
+	// 接下来教你怎么做
+
+	// 第一, 定义一个测试夹具类模板.  这里我们只需复用PrimeTableTest定义的夹具
+	
+	template &lt;class T&gt;
+	class PrimeTableTest2 : public PrimeTableTest&lt;T&gt; {
+	};
+
+	// 第二, 声明这个测试用例.  参数名称就是测试夹具类名称
+	// 通常也有测试名称这个参数.  这里 _P这个后缀代表 "parameterized" 或 "pattern"
+	TYPED_TEST_SUITE_P(PrimeTableTest2);
+
+	// 第三, 使用 TYPED_TEST_P(TestCaseName, TestName) 去定义一个测试
+	// 和你在TEST_F做的差不多.
+	TYPED_TEST_P(PrimeTableTest2, ReturnsFalseForNonPrimes) {
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(-5));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(0));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(1));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(4));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(6));
+		EXPECT_FALSE(this-&gt;table_-&gt;IsPrime(100));
+	}
+
+	TYPED_TEST_P(PrimeTableTest2, ReturnsTrueForPrimes) {
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(2));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(3));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(5));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(7));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(11));
+		EXPECT_TRUE(this-&gt;table_-&gt;IsPrime(131));
+	}
+
+	TYPED_TEST_P(PrimeTableTest2, CanGetNextPrime) {
+		EXPECT_EQ(2, this-&gt;table_-&gt;GetNextPrime(0));
+		EXPECT_EQ(3, this-&gt;table_-&gt;GetNextPrime(2));
+		EXPECT_EQ(5, this-&gt;table_-&gt;GetNextPrime(3));
+		EXPECT_EQ(7, this-&gt;table_-&gt;GetNextPrime(5));
+		EXPECT_EQ(11, this-&gt;table_-&gt;GetNextPrime(7));
+		EXPECT_EQ(131, this-&gt;table_-&gt;GetNextPrime(128));
+	}
+
+	// 类型参数化测试涉及一个额外的步骤：必须列举你定义的测试：
+	REGISTER_TYPED_TEST_SUITE_P(
+		PrimeTableTest2,  // 第一个参数是测试用例名称.
+		// 其余的参数是测试名称，以下有3个测试名
+		ReturnsFalseForNonPrimes, ReturnsTrueForPrimes, CanGetNextPrime);
+
+	// 到这里测试模型完成.  然而， 你没有任何真正的测试，因为您还没有说出要运行的类型。
+	// 要把抽象测试模型转换为真实的测试
+	// 你需要用带有类型列表实例化
+	// 通常测试模型都是在一个.h的头文件中定义，任何人可以通过#include包含进来和进行实例化
+	// 你甚至可以在同一程序中序列化多次这个对象。
+	// 为了区分不同的实例，请给每个实例起一个名称，成为测试用例名称的一部分，可以在测试过滤器中使用。
+
+	//我们要测试的类型列表。 请注意，它不是在我们编写 TYPED_TEST_P()s.
+	typedef Types&lt;OnTheFlyPrimeTable, PreCalculatedPrimeTable&gt;
+		PrimeTableImplementations;
+	INSTANTIATE_TYPED_TEST_SUITE_P(OnTheFlyAndPreCalculated,    // 实例名称
+		PrimeTableTest2,             // 测试用例名称
+		PrimeTableImplementations);  // 类型列表
+
+#endif  // GTEST_HAS_TYPED_TEST_P
+}  // namespace
+</code></pre> 
+<p>建议大家先跟着注释读一篇代码或者多边代码。这个地方真的有点抽象和复杂，如果C++学习不是很好，理解起来会费劲，我确实没有完全理解，只看出了一个大概。</p> 
+<p>先看运行结果</p> 
+<p><img alt="" height="658" src="https://images2.imgbox.com/5d/dd/0su58XMX_o.png" width="973"></p> 
+<p>结合输出看看有没有帮助理解类型参数测试的真谛。</p> 
+<p> </p> 
+<p><strong>3.新出现的宏</strong></p> 
+<p>这里的类型参数宏测试的引入</p> 
+<pre><code class="language-cpp">// 我们想要测试的types列表
+typedef Types&lt;OnTheFlyPrimeTable, PreCalculatedPrimeTable&gt; Implementations;
+
+TYPED_TEST_SUITE(PrimeTableTest, Implementations);
+TYPED_TEST(PrimeTableTest, ReturnsFalseForNonPrimes)</code></pre> 
+<p>先定义一个Types，这种方式参数包含接口的两种全部实现，添加添加到宏TYPED_TEST_SUITE，有了类型参数之后，调用一个新的宏TYPED_TEST，和TEST宏类似</p> 
+<pre><code class="language-cpp">TYPED_TEST_SUITE_P(PrimeTableTest2);
+TYPED_TEST_P(PrimeTableTest2, ReturnsFalseForNonPrimes)
+REGISTER_TYPED_TEST_SUITE_P(
+		PrimeTableTest2,  // 第一个参数是测试用例名称.
+		// 其余的参数是测试名称，以下有3个测试名
+		ReturnsFalseForNonPrimes, ReturnsTrueForPrimes, CanGetNextPrime);
+INSTANTIATE_TYPED_TEST_SUITE_P(OnTheFlyAndPreCalculated,    // 实例名称
+		PrimeTableTest2,             // 测试用例名称
+		PrimeTableImplementations);  // 类型列表</code></pre> 
+<p>这里没有整明白，待以后理解，再回来补充。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/0c6c3f47047088d8f61d2fc42b324404/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">hdu 2074 叠框（排版题）</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/4e8b9cb5ee7bc21004491f4186944cc3/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">VMware虚拟化客户机安装vmtools软件提示需要安装补丁KB2919335</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

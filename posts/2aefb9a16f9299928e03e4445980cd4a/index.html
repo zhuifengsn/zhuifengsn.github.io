@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>WPF下多线程的使用方法 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="WPF下多线程的使用方法" />
+<meta property="og:description" content="一、WPF的线程
+对于初学wpf的人来说，一般会把所有的程序都在一个线程中运行，当数据量较大，需要频繁刷新界面时，界面会出现卡顿的情况。
+1、当我们打开一个WPF应用程序即开启了一个进程，该进程中都会加载两个重要的线程：一个用于呈现用户界面，另一个用于管理用户界面。呈现线程是一个在后台运行的隐藏线程，因此您通常面对的唯一线程 就是 UI线程。WPF 要求将其大多数对象与 UI 线程进行关联,这称之为线程关联，意味着要使用一个 WPF 对象，只能在创建它的线程上使用,在其他线程上使用它会导致引发运行时异常。
+一个线程用于处理呈现：隐藏在后台运行一个线程用于管理用户界面：接收输入、处理事件、绘制屏幕以及运行应用程序代码,即UI线程。不管是WinForm应用程序还是WPF应用程序，实际上都是一个进程，一个进程可以包含多个线程，其中有一个是主线程，其余的是子线程。 2、在 WPF 中绝大部分控件都继承自 DispatcherObject，甚至包括 Application。这些继承自 DispatcherObject 的对象具有线程关联特征，也就意味着只有创建这些对象实例，且包含了 Dispatcher 的线程(通常指默认 UI 线程)才能直接对其进行更新操作。
+在 WPF 中，DispatcherObject 只能通过与它关联的 Dispatcher 进行访问。 例如，后台线程不能更新由 UI 线程创建的 Label的内容。
+二、 Dispatcher类
+1、在UI线程中有一个Dispatcher对象，管理每一个需要执行的工作项。Dispatcher会根据每个工作项的优先级排队。向Dispatcher列队中添加工作项时可指定10个不同的级别。那么问题来了，如果遇到耗时操作的时候，该操作如果依旧发生在UI线程中，Dispatcher 列队中其他的需要执行的工作项都要等待，从而造成界面假死的现象。为了加快响应速度，提高用户体验，我们应该尽量保证Dispatcher 列队中工作项要小。所以，对于耗时操作，我们应该开辟一个新的子线程去处理，在操作完成后，通过向UI线程的Dispatcher列队注册工作项，来通知UI线程更新结果。
+Dispatcher类详细介绍
+2、Dispatcher提供两个注册工作项的方法：Invoke 和 BeginInvoke。
+这两个方法均调度一个委托来执行。Invoke 是同步调用，也就是说，直到 UI 线程实际执行完该委托它才返回。BeginInvoke是异步的，将立即返回。
+Dispatcher实际上并不是多线程子线程不能直接修改UI线程，必须通过向UI线程中的Dispatcher注册工作项来完成Dispatcher 是单例模式，暴露了一个静态的CurrentDispatcher方法用于获得当前线程的Dispatcher每一个UI线程都至少有一个Dispatcher，一个Dispatcher只能在一个线程中执行工作。 3、UI线程中创建的对象，如何在非UI线程中更新
+参考：https://www.cnblogs.com/chillsrc/p/4482691.html
+（1）前台，创建对象
+&lt;Window x:Class=&#34;WpfApp1.WindowThd&#34; xmlns=&#34;http://schemas.microsoft.com/winfx/2006/xaml/presentation&#34; xmlns:x=&#34;http://schemas.microsoft.com/winfx/2006/xaml&#34; Title=&#34;WindowThd&#34; Height=&#34;300&#34; Width=&#34;400&#34;&gt; &lt;Grid&gt; &lt;StackPanel&gt; &lt;Label x:Name=&#34;lblHello&#34;&gt;欢迎你光临WPF的世界!&lt;/Label&gt; &lt;Button Name=&#34;btnThd&#34; Click=&#34;btnThd_Click&#34; &gt;多线程同步调用&lt;/Button&gt; &lt;Button Name=&#34;btnAppBeginInvoke&#34; Click=&#34;btnAppBeginInvoke_Click&#34; &gt;BeginInvoke 异步调用&lt;/Button&gt; &lt;/StackPanel&gt; &lt;/Grid&gt; &lt;/Window&gt; （2）后台创建非UI线程，若直接更新UI线程的对象就会报错" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/2aefb9a16f9299928e03e4445980cd4a/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2018-11-07T10:46:14+08:00" />
+<meta property="article:modified_time" content="2018-11-07T10:46:14+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">WPF下多线程的使用方法</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <p>一、WPF的线程</p> 
+<p>对于初学wpf的人来说，一般会把所有的程序都在一个线程中运行，当数据量较大，需要频繁刷新界面时，界面会出现卡顿的情况。</p> 
+<p> 1、当我们打开一个WPF应用程序即开启了一个进程，该进程中都会加载两个重要的线程：一个用于呈现用户界面，另一个用于管理用户界面。呈现线程是一个在后台运行的隐藏线程，因此您通常面对的唯一线程 就是 UI线程。WPF 要求将其大多数对象与 UI 线程进行关联,这称之为<span style="color:#f33b45;">线程关联</span>，意味着要使用一个 WPF 对象，<span style="color:#f33b45;">只能在创建它的线程上使用,</span>在其他线程上使用它会导致引发运行时异常。</p> 
+<ul><li>一个线程用于处理呈现：隐藏在后台运行</li><li>一个线程用于管理用户界面：接收输入、处理事件、绘制屏幕以及运行应用程序代码,即UI线程。</li><li>不管是WinForm应用程序还是WPF应用程序，实际上都是一个进程，一个进程可以包含多个线程，其中有一个是主线程，其余的是子线程。</li></ul> 
+<p>2、在 WPF 中绝大部分控件都继承自 DispatcherObject，甚至包括 Application。这些继承自 DispatcherObject 的对象具有线程关联特征，也就意味着只有创建这些对象实例，且包含了 Dispatcher 的线程(通常指默认 UI 线程)才能直接对其进行更新操作。</p> 
+<p>在 WPF 中，DispatcherObject 只能通过与它关联的 Dispatcher 进行访问。 例如，后台线程不能更新由 UI 线程创建的 Label的内容。</p> 
+<p>   二、 Dispatcher类</p> 
+<p>1、在UI线程中有一个Dispatcher对象，管理每一个需要执行的工作项。Dispatcher会根据每个工作项的优先级排队。向Dispatcher列队中添加工作项时可指定10个不同的级别。那么问题来了，如果遇到耗时操作的时候，该操作如果依旧发生在UI线程中，Dispatcher 列队中其他的需要执行的工作项都要等待，从而造成界面假死的现象。为了加快响应速度，提高用户体验，我们应该尽量保证Dispatcher 列队中工作项要<strong>小</strong>。所以，对于耗时操作，我们应该开辟一个新的子线程去处理，在操作完成后，通过向UI线程的Dispatcher列队注册工作项，来通知UI线程更新结果。</p> 
+<p><a href="https://docs.microsoft.com/zh-cn/dotnet/api/system.windows.threading.dispatcher?view=netframework-4.7.2" rel="nofollow"> Dispatcher类详细介绍</a></p> 
+<p>2、Dispatcher提供两个注册工作项的方法：Invoke 和 BeginInvoke。</p> 
+<p>这两个方法均调度一个委托来执行。Invoke 是同步调用，也就是说，直到 UI 线程实际执行完该委托它才返回。BeginInvoke是异步的，将立即返回。</p> 
+<ul><li>Dispatcher实际上并不是多线程</li><li>子线程不能直接修改UI线程，必须通过向UI线程中的Dispatcher注册工作项来完成</li><li>Dispatcher 是单例模式，暴露了一个静态的CurrentDispatcher方法用于获得当前线程的Dispatcher</li><li>每一个UI线程都至少有一个Dispatcher，一个Dispatcher只能在一个线程中执行工作。</li></ul> 
+<p>3、UI线程中创建的对象，如何在非UI线程中更新</p> 
+<p>参考：<a href="https://www.cnblogs.com/chillsrc/p/4482691.html" rel="nofollow">https://www.cnblogs.com/chillsrc/p/4482691.html</a></p> 
+<p>（1）前台，创建对象</p> 
+<pre class="has"><code class="language-cs">&lt;Window x:Class="WpfApp1.WindowThd"
+
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+
+        Title="WindowThd" Height="300" Width="400"&gt;
+
+    &lt;Grid&gt;
+
+        &lt;StackPanel&gt;
+
+            &lt;Label x:Name="lblHello"&gt;欢迎你光临WPF的世界!&lt;/Label&gt;
+
+            &lt;Button Name="btnThd" Click="btnThd_Click" &gt;多线程同步调用&lt;/Button&gt;
+
+            &lt;Button Name="btnAppBeginInvoke" Click="btnAppBeginInvoke_Click" &gt;BeginInvoke 异步调用&lt;/Button&gt;
+
+        &lt;/StackPanel&gt;
+
+    &lt;/Grid&gt;
+ 
+&lt;/Window&gt;</code></pre> 
+<p>（2）后台创建非UI线程，若直接更新UI线程的对象就会报错</p> 
+<pre class="has"><code class="language-cs">
+namespace WpfApp1
+
+{
+
+    /// &lt;summary&gt;
+
+    /// WindowThd.xaml 的交互逻辑
+
+    /// &lt;/summary&gt;
+
+    public partial class WindowThd : Window
+
+    {
+
+        public WindowThd()
+
+        {
+
+            InitializeComponent();     
+
+    }
+
+    //更新UI线程创建的对象
+    private void ModifyUI()
+
+    {
+
+        // 模拟一些工作正在进行
+
+        Thread.Sleep(TimeSpan.FromSeconds(2));
+
+        lblHello.Content = "欢迎你光临WPF的世界,Dispatcher";
+
+    }
+
+  //开启非UI线程
+    private void btnThd_Click(object sender, RoutedEventArgs e)
+
+    {
+
+        Thread thread = new Thread(ModifyUI);
+
+        thread.Start();
+
+    }
+
+    }
+
+}</code></pre> 
+<p>程序报错：</p> 
+<p><img alt="" class="has" height="160" src="https://images2.imgbox.com/a0/77/xP9mpI3U_o.png" width="557"></p> 
+<p>正确方法：</p> 
+<p>修改上面的ModifyUI()函数</p> 
+<p>方法一：使用Invoke</p> 
+<pre class="has"><code class="language-cs">private void ModifyUI()
+
+    {
+
+        // 模拟一些工作正在进行
+
+        Thread.Sleep(TimeSpan.FromSeconds(2));
+
+        //lblHello.Content = "欢迎你光临WPF的世界,Dispatcher";
+
+        this.Dispatcher.Invoke(DispatcherPriority.Normal, (ThreadStart)delegate()
+
+        {
+
+            lblHello.Content = "欢迎你光临WPF的世界,Dispatche  同步方法 ！！";
+
+        });
+
+}</code></pre> 
+<p>方法二：使用 BeginInvoke</p> 
+<pre class="has"><code class="language-cs">private void btnAppBeginInvoke_Click(object sender, RoutedEventArgs e)
+
+    {
+
+               new Thread(() =&gt;
+
+        {
+
+            Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Normal,
+
+                new Action(() =&gt;
+
+                {
+
+                    Thread.Sleep(TimeSpan.FromSeconds(2));
+
+                    this.lblHello.Content = "欢迎你光临WPF的世界,Dispatche 异步方法！！"+ DateTime.Now.ToString();
+
+                }));
+
+        }).Start();
+
+    }</code></pre> 
+<p>三、实验测试</p> 
+<p>1、简单测试</p> 
+<p>       做了一个上位机，接收光谱仪的数据，并将线阵CMOS的数据绘制成图，一直存在界面卡顿的问题。</p> 
+<p>ShowCCD()函数用来将串口接收的数据绘制成图。在串口接收处理事件中，接收完一帧数据后再调用ShowCCD()函数绘图。</p> 
+<p>方式一：</p> 
+<p>直接调用：</p> 
+<pre class="has"><code class="language-cs">   ShowCCD();</code></pre> 
+<p>测试效果：</p> 
+<p>整个界面非常卡顿，CPU占到了61%。</p> 
+<p><img alt="" class="has" height="237" src="https://images2.imgbox.com/dc/36/ddBrvIcS_o.png" width="386"></p> 
+<p><img alt="" class="has" height="317" src="https://images2.imgbox.com/ca/7a/HM80MJQ7_o.png" width="399"></p> 
+<p>方法二：使用Dispatcher.Invoke</p> 
+<pre class="has"><code class="language-cs">  this.Dispatcher.Invoke(ShowCCD);</code></pre> 
+<p> 测试效果：</p> 
+<p>页面相对较为卡顿，CPU占用42%.</p> 
+<p><img alt="" class="has" height="265" src="https://images2.imgbox.com/83/8d/7eaL21Vh_o.png" width="451"></p> 
+<p><img alt="" class="has" height="322" src="https://images2.imgbox.com/22/17/gK4PZjC8_o.png" width="406"></p> 
+<p>方法三：</p> 
+<p>使用Dispatcher.BeginInvoke</p> 
+<pre class="has"><code class="language-cs">this.Dispatcher.BeginInvoke((Action)delegate(){ShowCCD();});</code></pre> 
+<p>出现报错。</p> 
+<p>降低发送的帧数后，可以显示。</p> 
+<p>通过以上分析程序卡顿的原因的我在UI线程上接收数据，并使用Dispatcher类显示数据，实际上还是运行在UI线程上，造成卡顿。</p> 
+<p>四、优化方案</p> 
+<p>1、原来的主窗口还是用来进行数据的接收及数据的运算处理，即数据处理过程还是运行在UI线程。</p> 
+<p>2、新建一个wpf窗口，这个窗口使用zedgraph控件出图，开启一个Timer定时器线程定时刷新界面，定时20ms，即刷新频率为50HZ,若刷新的速率和接收数据的速率设置为一样快，我认为也没有必要，太快的刷新速率人眼也分辨不出来。</p> 
+<p><a href="https://blog.csdn.net/kenjianqi1647/article/details/83216313">WPF下使用ZedGraph控件</a></p> 
+<pre class="has"><code class="language-cs"> private void Window_Loaded(object sender, RoutedEventArgs e)
+        {           
+          // savepicture_th = new Thread(new ThreadStart(savepicture));
+          // savepicture_th.Start();         //启动线程
+          //  savepicture();
+            //这种定时器不是工作在UI线程
+            System.Timers.Timer timer = new System.Timers.Timer(20);//实例化Timer类，设置间隔时间为20毫秒；  
+            timer.Elapsed += new System.Timers.ElapsedEventHandler(theout); //注册中断事件
+            timer.Start();//启动定时器
+
+        }
+
+
+        //时间中断事件  以50Hz的频率刷新界面
+        public void theout(object source, System.Timers.ElapsedEventArgs e)
+        {
+            showChart1(MainWindow.aveccdData0);
+        }
+
+        PointPairList list2 = new PointPairList();
+        private void showChart1(double[] value)
+        {
+            list2.Clear();//清空数组
+            zedGraphControl.GraphPane.Title.Text = "";
+            zedGraphControl.GraphPane.XAxis.Title.Text = "";
+            zedGraphControl.GraphPane.YAxis.Title.Text = "";
+            zedGraphControl.GraphPane.XAxis.Scale.Min = 0;        //X轴最小值0
+            //zedGraphControl1.GraphPane.XAxis.Scale.MaxAuto = true;    //X轴最大30
+            zedGraphControl.GraphPane.XAxis.Scale.Max = 520;
+            zedGraphControl.GraphPane.XAxis.Scale.MinorStep = 10;
+            zedGraphControl.GraphPane.XAxis.Scale.MajorStep = 100;
+            zedGraphControl.GraphPane.YAxis.Scale.Min = 0;
+            zedGraphControl.GraphPane.YAxis.Scale.Max = 2000;
+            zedGraphControl.GraphPane.YAxis.Scale.MinorStep = 20;
+            zedGraphControl.GraphPane.YAxis.Scale.MajorStep = 500;
+            zedGraphControl.AxisChange();
+
+            for (int j = 0; j &lt; value.Length; j++)
+                list2.Add(j, value[j]);
+
+           this.Dispatcher.Invoke(RefreshInterface);//切换到UI线程更新界面
+           
+        }
+
+        //刷新界面
+        private void RefreshInterface()
+        {
+          
+            zedGraphControl.GraphPane.CurveList.Clear();
+            zedGraphControl.GraphPane.AddCurve("", list2, System.Drawing.Color.Red, SymbolType.None);//绘制图表
+           // zedGraphControl.AxisChange();//刷新界面
+            zedGraphControl.Refresh();
+        }</code></pre> 
+<p> Timer定时器线程里刷新界面时，必须使用Dispatcher类，若在Timer定时器线程里直接刷新界面就会报错，这违反了WPF下用其他线程刷新界面的规则。</p> 
+<p>如果使用定时器DispatcherTimer则不需要使用Dispatcher类，因为DispatcherTimer就是在UI线程中，仅是猜测未经实验。</p> 
+<p><img alt="" class="has" height="312" src="https://images2.imgbox.com/f1/e4/FAabri4G_o.png" width="554"></p> 
+<p>测试效果：界面完全不卡顿，CPU占用率10%。</p> 
+<p><img alt="" class="has" height="275" src="https://images2.imgbox.com/4c/78/nSWL8itj_o.png" width="409"></p> 
+<p><img alt="" class="has" height="324" src="https://images2.imgbox.com/24/16/8C6ubowz_o.png" width="408"></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/d0d3e5a1232ec71a0fd5e3cd11bdf3d6/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Android WebView嵌套H5下载失效</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/411ea7ff5dcea5b9851dcf01adffbd90/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">RAID 0, RAID 1, RAID 5, RAID 10图解</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

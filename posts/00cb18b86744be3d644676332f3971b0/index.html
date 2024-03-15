@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>内核参数module_param的有关操作 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="内核参数module_param的有关操作" />
+<meta property="og:description" content="内核参数module_param的有关操作 定义一个内核参数比较简单
+module_param（参数变量名字，类型，访问权限）
+MODULE_PARM_DESC（参数变量名字，“参数说明描述”）
+如果需要限制或者检查用户输入的参数的值，比如说限制输入的整型数是 256～512的某个范围等等，输入的一定是某个特定字符串等。那么可以用这个宏。这个支持你传进去一个参数处理的回调函数。
+module_param_call 2.6.35 以下
+module_param_cb 2.6.38 这里我只针对module_param_cb 做一下说明，module_param_call 用法类似，看内核中的定义：
+/** * module_param_cb - general callback for a module/cmdline parameter * @name: a valid C identifier which is the parameter name. * @ops: the set &amp; get operations for this parameter. * @perm: visibility in sysfs. * * The ops can have NULL set or get functions. */ #define module_param_cb(name, ops, arg, perm)	\ __module_param_call(MODULE_PARAM_PREFIX,	\ name, ops, arg, __same_type((arg), bool *), perm) 1、name是你要定义的变量的名字" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/00cb18b86744be3d644676332f3971b0/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2013-07-01T10:10:42+08:00" />
+<meta property="article:modified_time" content="2013-07-01T10:10:42+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">内核参数module_param的有关操作</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2 style="text-align:center"><span style="color:#006600">内核参数module_param的有关操作</span></h2> 
+<p>定义一个内核参数比较简单</p> 
+<p>module_param（参数变量名字，类型，访问权限）</p> 
+<p>MODULE_PARM_DESC（参数变量名字，“参数说明描述”）</p> 
+<p>如果需要限制或者检查用户输入的参数的值，比如说限制输入的整型数是 256～512的某个范围等等，输入的一定是某个特定字符串等。那么可以用这个宏。这个支持你传进去一个参数处理的回调函数。</p> 
+<p>module_param_call 2.6.35 以下</p> 
+<p>module_param_cb 2.6.38 </p> 
+<p>这里我只针对module_param_cb 做一下说明，module_param_call 用法类似，看内核中的定义：</p> 
+<p></p> 
+<pre><code class="language-html">/**
+ * module_param_cb - general callback for a module/cmdline parameter
+ * @name: a valid C identifier which is the parameter name.
+ * @ops: the set &amp; get operations for this parameter.
+ * @perm: visibility in sysfs.
+ *
+ * The ops can have NULL set or get functions.
+ */
+#define module_param_cb(name, ops, arg, perm)				      \
+	__module_param_call(MODULE_PARAM_PREFIX,			      \
+			    name, ops, arg, __same_type((arg), bool *), perm)</code></pre> 
+<p></p> 
+<p>1、name是你要定义的变量的名字</p> 
+<p>2、ops中指定你要用于set和get这个变量value的方法</p> 
+<p>3、arg是你在你的code中默认初始化的这个变量名</p> 
+<p>4、perm是系统读写等权限的设置</p> 看一个实例你就全明白了 
+<p></p> 
+<pre><code class="language-html">static int set_enabled(const char *val, const struct kernel_param *kp)
+{
+	int rv = param_set_bool(val, kp);
+
+	if (rv)
+		return rv;
+
+	if (otgwl_xceiv)
+		otgwl_handle_event(otgwl_xceiv-&gt;last_event);
+
+	return 0;
+}
+
+static struct kernel_param_ops enabled_param_ops = {
+	.set = set_enabled,
+	.get = param_get_bool,
+};
+
+module_param_cb(enabled, &amp;enabled_param_ops, &amp;enabled, 0644);
+MODULE_PARM_DESC(enabled, "enable wakelock when VBUS present");</code></pre>我也懒得自己去写code 了，这是内核中的code，也许更有说服力，这个code的路径，感兴趣可以自己去看看：kernel/drivers/usb/otg/otg-wakelock.c 
+<p></p> 
+<p>这样一来，这段code会在开发板的sys/module/otg_wakelock/parameters/目录下创建一个名字叫enable的文件，你可以通过这个文件set和get变量enable的数据</p> 
+<p><strong><span style="color:#cc0000">read value：cat enable</span></strong></p> 
+<p><strong><span style="color:#cc0000">write value：echo 1 &gt; enable</span></strong></p> 
+<p>当你read value的时候，上面ops中定义的方法param_get_bool会被调用，这是内核已经实现的方法，直接get bool，这里我们希望enable是一个bool类型，如果是int类型那么就是get int方法了</p> 
+<p>同样的，当你write value时，set_enabled这个自己实现的方法会被调用，这里只是进行了简单的检查</p> 
+<p>其实有些时候你完全可以没有必要这么麻烦，为什么这么说呢？？</p> 
+<p>我们就一点点来看一下，其实内核中module_param可以实现我们上面说的所有这一些功能，这个方法不光可以创建一个指定类型的变量的文件，同时还提供了系统默认的get和set的方法，没有必要我们自己去实现</p> 
+<p>看看module_param的定义：</p> 
+<p></p> 
+<pre><code class="language-html">/**
+ * module_param - typesafe helper for a module/cmdline parameter
+ * @value: the variable to alter, and exposed parameter name.
+ * @type: the type of the parameter
+ * @perm: visibility in sysfs.
+ *
+ * @value becomes the module parameter, or (prefixed by KBUILD_MODNAME and a
+ * ".") the kernel commandline parameter.  Note that - is changed to _, so
+ * the user can use "foo-bar=1" even for variable "foo_bar".
+ *
+ * @perm is 0 if the the variable is not to appear in sysfs, or 0444
+ * for world-readable, 0644 for root-writable, etc.  Note that if it
+ * is writable, you may need to use kparam_block_sysfs_write() around
+ * accesses (esp. charp, which can be kfreed when it changes).
+ *
+ * The @type is simply pasted to refer to a param_ops_##type and a
+ * param_check_##type: for convenience many standard types are provided but
+ * you can create your own by defining those variables.
+ *
+ * Standard types are:
+ *	byte, short, ushort, int, uint, long, ulong
+ *	charp: a character pointer
+ *	bool: a bool, values 0/1, y/n, Y/N.
+ *	invbool: the above, only sense-reversed (N = true).
+ */
+#define module_param(name, type, perm)				\
+	module_param_named(name, name, type, perm)</code></pre>他调用了module_param_named这个方法 
+<p></p> 
+<p></p> 
+<pre><code class="language-html">/**
+ * module_param_named - typesafe helper for a renamed module/cmdline parameter
+ * @name: a valid C identifier which is the parameter name.
+ * @value: the actual lvalue to alter.
+ * @type: the type of the parameter
+ * @perm: visibility in sysfs.
+ *
+ * Usually it's a good idea to have variable names and user-exposed names the
+ * same, but that's harder if the variable must be non-static or is inside a
+ * structure.  This allows exposure under a different name.
+ */
+#define module_param_named(name, value, type, perm)			   \
+	param_check_##type(name, &amp;(value));				   \
+	module_param_cb(name, &amp;param_ops_##type, &amp;value, perm);		   \
+	__MODULE_PARM_TYPE(name, #type)</code></pre> 
+<p></p> 
+<p>这个方法的实现是最关键的地方，我们仔细看一下他都做了些什么事情，这里为了方便分析，假定我们的变量type类型是int</p> 
+<p>1、调用param_check_##type方法，##用于连接两个字符，我在我的<a href="http://blog.csdn.net/column/details/c-daily-study.html" target="_blank" rel="noopener noreferrer">C语言每天一小步</a>专栏中说到这个问题，大家可以参考：<a href="http://blog.csdn.net/xinyuwuxian/article/details/9033627">http://blog.csdn.net/xinyuwuxian/article/details/9033627</a></p> 这里也就是执行param_check_int，检查变量是不是int 类型 
+<p>2、调用module_param_cb，这里大家应该熟悉了，上面我们已经说的很清楚这个方法了，这不过这里的ops是系统的ops，针对int类型就是param_ops_int</p> 
+<p>3、最后调用__MODULE_PARM_TYPE方法指定我们的type也就是int，#的用法在我上面提到的专栏文章中也已经说到</p> 
+<p>这样一来，可以很清楚的理解了，不过需要注意的是module_param_cb这个方法有时还是不可或缺的，就像上面我们不只是要进行参数检查，我们还想加入我们自己的功能，所以这时我们需要自己实现我们的set或者get方法，这个时候module_param_cb就是谁也替代不了的了，这就是天生我材必有用，O(∩_∩)O~</p> 
+<p><strong><span style="color:#cc0000">就到这了，O(∩_∩)O~</span></strong></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/c3a1bc354c5fdccff02a85e72147045b/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">mini2440 uboot使用nfs方式引导内核，文件系统</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/3573a43b7783c61ebeea5b96284f574c/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Linux设备驱动开发详解-Note(1)---设备驱动概述(1)</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

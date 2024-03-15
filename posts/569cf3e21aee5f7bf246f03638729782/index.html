@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Spring中的三级缓存及其原因 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Spring中的三级缓存及其原因" />
+<meta property="og:description" content="首先看下Spring创建一个bean的基本流程：
+创建该实例的原始对象 --&gt; 进行自动装配 --&gt; AOP代理处理 --&gt; 完成bean的创建并加入单例池(即一级缓存)
+但是当有循环依赖的时候，Spring是如何解决的呢？
+主要原理是利用三级缓存机制：
+singletonObjects： 一级缓存，也就是我们平常理解的单例池。
+singletonFactories： 二级缓存，存储的是单例工厂。
+earlySingletonObjects： 三级缓存，存储正在创建中的单例对象。
+为什么要设立三级缓存呢？
+其实当不需要实现AOP的时候，解决循环依赖不用三级缓存机制，也不用单例工厂，二级缓存就足以实现。
+第一级：singletonObjects
+第二级：earlySingletonObjects
+不需要实现AOP时Spring解决循环依赖基本流程：
+假设单例一与单例二相互依赖对方并且此时都没有加入到单例池
+1 创建单例一
+2 将单例一加入earlySingletonObjects缓存
+3 自动装配单例二
+4 判断单例二在earlySingletonObjects缓存是否存在
+5 不存在则创建单例二
+6 将单例二并且加入earlySingletonObjects缓存
+7 自动装配单例一
+8 判断单例一在earlySingletonObjects缓存是否存在
+9 明显第2步已经加入earlySingletonObjects缓存
+10 注入成功,单例2创建完成并加入singletonObjects单例池
+11 注入成功,单例1创建完成并加入singletonObjects单例池
+那为什么要设立三级缓存呢？
+这是因为当我们需要使用AOP时，将会对原始对象进行代理，因此最后的对象将是代理对象而不是原始对象！
+所以按照二级缓存的步骤进行创建的话将会造成一个问题：
+第2步加入到二级缓存中的对象是原始对象，导致第7步自动装配到到单例2中的单例1对象是原始对象，这个对象还没有完成AOP的处理。如果此时完成单例2的创建，之后在完成进行单例1的创建时，单例1对原始对象进行AOP处理，将导致最终的单例1对象不是之前自动装配到单例2中的单例1对象。
+所以Spring选择使用三级缓存来解决这个问题：singletonFactories缓存中的对象是一个单例工厂，该工厂可以将原始对象进行AOP处理。
+singletonObjects： 一级缓存，也就是我们平常理解的单例池。
+singletonFactories： 二级缓存，存储的是单例工厂。
+earlySingletonObjects： 三级缓存，存储正在创建中的单例对象。
+获取三级缓存的核心代码如下：
+getSingleton方法的大概处理过程为：
+1 判断singletonObjects单例池中是否存在，存在则返回
+2 不存在则判断earlySingletonObjects缓存中是否存在，存在则返回
+3 不存在则判断singletonFactories缓存中是否存在，不存在则返回null
+4 存在则通过该存储工厂创建出最终的bean
+5 将该bean加入earlySingletonObjects缓存并从singletonFactories缓存中中移除
+存在三级缓存机制下处理流程如下：
+假设单例1与单例2相互依赖对方并且此时都没有加入到单例池" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/569cf3e21aee5f7bf246f03638729782/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-08-10T21:10:07+08:00" />
+<meta property="article:modified_time" content="2021-08-10T21:10:07+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Spring中的三级缓存及其原因</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p>首先看下Spring创建一个bean的基本流程：</p> 
+<p>创建该实例的原始对象 --&gt; 进行自动装配 --&gt; AOP代理处理 --&gt; 完成bean的创建并加入单例池(即一级缓存)</p> 
+<p>但是当有循环依赖的时候，Spring是如何解决的呢？</p> 
+<p>主要原理是利用三级缓存机制：<br> <img src="https://images2.imgbox.com/2a/06/8kg2DGQS_o.png" alt="在这里插入图片描述"></p> 
+<p>singletonObjects： 一级缓存，也就是我们平常理解的单例池。<br> singletonFactories： 二级缓存，存储的是单例工厂。<br> earlySingletonObjects： 三级缓存，存储正在创建中的单例对象。<br> 为什么要设立三级缓存呢？</p> 
+<p>其实当不需要实现AOP的时候，解决循环依赖不用三级缓存机制，也不用单例工厂，二级缓存就足以实现。</p> 
+<p>第一级：singletonObjects<br> 第二级：earlySingletonObjects</p> 
+<p>不需要实现AOP时Spring解决循环依赖基本流程：</p> 
+<p>假设单例一与单例二相互依赖对方并且此时都没有加入到单例池<br> 1 创建单例一<br> 2 将单例一加入earlySingletonObjects缓存<br> 3 自动装配单例二<br> 4 判断单例二在earlySingletonObjects缓存是否存在<br> 5 不存在则创建单例二<br> 6 将单例二并且加入earlySingletonObjects缓存<br> 7 自动装配单例一<br> 8 判断单例一在earlySingletonObjects缓存是否存在<br> 9 明显第2步已经加入earlySingletonObjects缓存<br> 10 注入成功,单例2创建完成并加入singletonObjects单例池<br> 11 注入成功,单例1创建完成并加入singletonObjects单例池</p> 
+<p>那为什么要设立三级缓存呢？<br> 这是因为当我们需要使用AOP时，将会对原始对象进行代理，因此最后的对象将是代理对象而不是原始对象！</p> 
+<p>所以按照二级缓存的步骤进行创建的话将会造成一个问题：</p> 
+<p>第2步加入到二级缓存中的对象是原始对象，导致第7步自动装配到到单例2中的单例1对象是原始对象，这个对象还没有完成AOP的处理。如果此时完成单例2的创建，之后在完成进行单例1的创建时，单例1对原始对象进行AOP处理，将导致最终的单例1对象不是之前自动装配到单例2中的单例1对象。</p> 
+<p>所以Spring选择使用三级缓存来解决这个问题：singletonFactories缓存中的对象是一个单例工厂，该工厂可以将原始对象进行AOP处理。</p> 
+<p>singletonObjects： 一级缓存，也就是我们平常理解的单例池。<br> singletonFactories： 二级缓存，存储的是单例工厂。<br> earlySingletonObjects： 三级缓存，存储正在创建中的单例对象。</p> 
+<p>获取三级缓存的核心代码如下：</p> 
+<p>getSingleton方法的大概处理过程为：</p> 
+<p>1 判断singletonObjects单例池中是否存在，存在则返回<br> 2 不存在则判断earlySingletonObjects缓存中是否存在，存在则返回<br> 3 不存在则判断singletonFactories缓存中是否存在，不存在则返回null<br> 4 存在则通过该存储工厂创建出最终的bean<br> 5 将该bean加入earlySingletonObjects缓存并从singletonFactories缓存中中移除</p> 
+<p>存在三级缓存机制下处理流程如下：</p> 
+<p>假设单例1与单例2相互依赖对方并且此时都没有加入到单例池<br> 1 创建单例一<br> 2 创建单例一的工厂对象并且加入singletonFactories缓存<br> 3 自动装配单例二<br> 4 通过 getSingleton方法 判断单例二在三级缓存中是否存在<br> 5 明显此时单例一不存在，所以创建单例二<br> 6 创建单例二的工厂并且加入singletonFactories缓存<br> 7 自动装配单例一<br> 8 通过 getSingleton方法 判断单例一在三级缓存中是否存在<br> 9 明显第2步已经加入singletonFactories缓存<br> 10 单例二进行AOP处理<br> 11 注入单例一成功,单例二创建完成并加入singletonObjects单例池<br> 12 注入单例二成功,单例一创建完成并加入singletonObjects单例池</p> 
+<p>以上步骤Spring就完美解决了循环依赖的问题！</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/141a0f2d46eeb8d87951c7f62709b856/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">tp服务器虚拟目录,配置nginx虚拟目录配置文件支持tp的pathinfo</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/27f308eaf1450beae143d8b38e8a70d7/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">eset文件服务器,eset架设ftp更新服务器</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>WPF 【十月的寒流】学习笔记(2):MVVM中是怎么实现通知的 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="WPF 【十月的寒流】学习笔记(2):MVVM中是怎么实现通知的" />
+<meta property="og:description" content="文章目录 前言相关链接代码仓库项目配置代码初始代码ViewPersonViewModel 尝试老办法通知解决方案ObservableCollectionBindingListICollectionView 总结 前言 我们这次详细了解一下列表通知的底层是怎么实现的
+相关链接 十月的寒流
+MVVM实战技巧之：可被观测的集合（ObservableCollection &amp; BindingList）
+代码仓库 我为了方便展示源代码，我将代码提交到了代码仓库里面
+B站【十月的寒流】对应课程的代码 Github仓库
+项目配置 如何使用我这里就不展开说明了
+WPF CommunityToolkit.Mvvm
+WPF CommunityToolkit.Mvvm Messenger通讯
+WPF-UI HandyControl 简单介绍
+WPF-UI HandyControl 控件简单实战&#43;IconPacks矢量图导入
+Bogus，.NET生成批量模拟数据
+代码 初始代码 View &lt;UserControl.DataContext&gt; &lt;viewModels:DemoViewModel /&gt; &lt;/UserControl.DataContext&gt; &lt;DockPanel&gt; &lt;StackPanel DockPanel.Dock=&#34;Bottom&#34;&gt; &lt;Button Command=&#34;{Binding AddItemCommand}&#34; Content=&#34;添加数据&#34;&gt;&lt;/Button&gt; &lt;/StackPanel&gt; &lt;DataGrid ItemsSource=&#34;{Binding People}&#34;&gt;&lt;/DataGrid&gt; &lt;/DockPanel&gt; Person public class Person { public int Id { get; set; } public string FirstName { get; set; } public string LastName { get; set; } public string FullName { get; set; } public DateOnly BirthDay { get; set; } public static Person FakerOne =&gt; faker." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/bf1e781cf97be29d5d797e5947efe66c/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-27T00:10:07+08:00" />
+<meta property="article:modified_time" content="2024-02-27T00:10:07+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">WPF 【十月的寒流】学习笔记(2):MVVM中是怎么实现通知的</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#_1" rel="nofollow">前言</a></li><li><a href="#_4" rel="nofollow">相关链接</a></li><li><a href="#_11" rel="nofollow">代码仓库</a></li><li><a href="#_16" rel="nofollow">项目配置</a></li><li><a href="#_33" rel="nofollow">代码</a></li><li><ul><li><a href="#_35" rel="nofollow">初始代码</a></li><li><ul><li><a href="#View_36" rel="nofollow">View</a></li><li><a href="#Person_50" rel="nofollow">Person</a></li><li><a href="#ViewModel_78" rel="nofollow">ViewModel</a></li></ul> 
+   </li><li><a href="#_103" rel="nofollow">尝试老办法通知</a></li><li><a href="#_119" rel="nofollow">解决方案</a></li><li><ul><li><a href="#ObservableCollection_122" rel="nofollow">ObservableCollection</a></li><li><a href="#BindingList_129" rel="nofollow">BindingList</a></li><li><a href="#ICollectionView_135" rel="nofollow">ICollectionView</a></li></ul> 
+  </li></ul> 
+  </li><li><a href="#_232" rel="nofollow">总结</a></li></ul> 
+</div> 
+<p></p> 
+<h2><a id="_1"></a>前言</h2> 
+<p>我们这次详细了解一下列表通知的底层是怎么实现的</p> 
+<h2><a id="_4"></a>相关链接</h2> 
+<blockquote> 
+ <p><a href="https://space.bilibili.com/600592/channel/collectiondetail?sid=1081774" rel="nofollow">十月的寒流</a></p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/65/7b/yCDKuqUZ_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/6a/39/5TM3lMxd_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p><a href="https://www.bilibili.com/video/BV16e4y1F7Vm/?spm_id_from=333.337.search-card.all.click&amp;vd_source=17cf6a5a912b0a39a628030a5814462c" rel="nofollow">MVVM实战技巧之：可被观测的集合（ObservableCollection &amp; BindingList）</a></p> 
+</blockquote> 
+<h2><a id="_11"></a>代码仓库</h2> 
+<p>我为了方便展示源代码，我将代码提交到了代码仓库里面</p> 
+<blockquote> 
+ <p><a href="https://github.com/Gclove2000/B_Station_OctCold_Learning">B站【十月的寒流】对应课程的代码 Github仓库</a></p> 
+</blockquote> 
+<h2><a id="_16"></a>项目配置</h2> 
+<p>如何使用我这里就不展开说明了</p> 
+<blockquote> 
+ <p><a href="https://blog.csdn.net/qq_44695769/article/details/132350216?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522170886624716800215017523%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&amp;request_id=170886624716800215017523&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_ecpm_v1~rank_v31_ecpm-1-132350216-null-null.nonecase&amp;utm_term=CommunityToolkit.mvvm&amp;spm=1018.2226.3001.4450">WPF CommunityToolkit.Mvvm</a></p> 
+</blockquote> 
+<blockquote> 
+ <p><a href="https://blog.csdn.net/qq_44695769/article/details/132649962?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522170886624716800215017523%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&amp;request_id=170886624716800215017523&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_ecpm_v1~rank_v31_ecpm-2-132649962-null-null.nonecase&amp;utm_term=CommunityToolkit.mvvm&amp;spm=1018.2226.3001.4450">WPF CommunityToolkit.Mvvm Messenger通讯</a></p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/ec/ff/qvurqS8R_o.png" alt="在这里插入图片描述"></p> 
+<blockquote> 
+ <p><a href="https://blog.csdn.net/qq_44695769/article/details/135002818?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522170886629116800186553367%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&amp;request_id=170886629116800186553367&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_ecpm_v1~rank_v31_ecpm-3-135002818-null-null.nonecase&amp;utm_term=handycontrol&amp;spm=1018.2226.3001.4450">WPF-UI HandyControl 简单介绍</a></p> 
+</blockquote> 
+<blockquote> 
+ <p><a href="https://blog.csdn.net/qq_44695769/article/details/135012230?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522170886629116800186553367%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&amp;request_id=170886629116800186553367&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_ecpm_v1~rank_v31_ecpm-1-135012230-null-null.nonecase&amp;utm_term=handycontrol&amp;spm=1018.2226.3001.4450">WPF-UI HandyControl 控件简单实战+IconPacks矢量图导入</a></p> 
+</blockquote> 
+<p><img src="https://images2.imgbox.com/cd/17/PzRrvFmA_o.png" alt="在这里插入图片描述"></p> 
+<p>Bogus，.NET生成批量模拟数据<br> <img src="https://images2.imgbox.com/06/54/8xpoXrwE_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="_33"></a>代码</h2> 
+<h3><a id="_35"></a>初始代码</h3> 
+<h4><a id="View_36"></a>View</h4> 
+<pre><code class="prism language-xml"> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>UserControl.DataContext</span><span class="token punctuation">&gt;</span></span>
+     <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">viewModels:</span>DemoViewModel</span> <span class="token punctuation">/&gt;</span></span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>UserControl.DataContext</span><span class="token punctuation">&gt;</span></span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>DockPanel</span><span class="token punctuation">&gt;</span></span>
+     <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>StackPanel</span> <span class="token attr-name">DockPanel.Dock</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>Bottom<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+         <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>Button</span> <span class="token attr-name">Command</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>{Binding AddItemCommand}<span class="token punctuation">"</span></span>
+                 <span class="token attr-name">Content</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>添加数据<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>Button</span><span class="token punctuation">&gt;</span></span>
+
+     <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>StackPanel</span><span class="token punctuation">&gt;</span></span>
+     <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>DataGrid</span> <span class="token attr-name">ItemsSource</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>{Binding People}<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>DataGrid</span><span class="token punctuation">&gt;</span></span>
+ <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>DockPanel</span><span class="token punctuation">&gt;</span></span>
+</code></pre> 
+<h4><a id="Person_50"></a>Person</h4> 
+<pre><code class="prism language-csharp"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Person</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">int</span></span> Id <span class="token punctuation">{<!-- --></span> <span class="token keyword">get</span><span class="token punctuation">;</span> <span class="token keyword">set</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">string</span></span> FirstName <span class="token punctuation">{<!-- --></span> <span class="token keyword">get</span><span class="token punctuation">;</span> <span class="token keyword">set</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">string</span></span> LastName <span class="token punctuation">{<!-- --></span> <span class="token keyword">get</span><span class="token punctuation">;</span> <span class="token keyword">set</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">string</span></span> FullName <span class="token punctuation">{<!-- --></span> <span class="token keyword">get</span><span class="token punctuation">;</span> <span class="token keyword">set</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token return-type class-name">DateOnly</span> BirthDay <span class="token punctuation">{<!-- --></span> <span class="token keyword">get</span><span class="token punctuation">;</span> <span class="token keyword">set</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token return-type class-name">Person</span> FakerOne <span class="token operator">=&gt;</span> faker<span class="token punctuation">.</span><span class="token function">Generate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token return-type class-name">IEnumerable<span class="token punctuation">&lt;</span>Person<span class="token punctuation">&gt;</span></span> <span class="token function">FakerMany</span><span class="token punctuation">(</span><span class="token class-name"><span class="token keyword">int</span></span> count<span class="token punctuation">)</span><span class="token operator">=&gt;</span>faker<span class="token punctuation">.</span><span class="token function">Generate</span><span class="token punctuation">(</span>count<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">readonly</span> <span class="token class-name">Faker<span class="token punctuation">&lt;</span>Person<span class="token punctuation">&gt;</span></span> faker <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token constructor-invocation class-name">Faker<span class="token punctuation">&lt;</span>Person<span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">RuleFor</span><span class="token punctuation">(</span>t<span class="token operator">=&gt;</span>t<span class="token punctuation">.</span>Id<span class="token punctuation">,</span>f<span class="token operator">=&gt;</span>f<span class="token punctuation">.</span>IndexFaker<span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">RuleFor</span><span class="token punctuation">(</span>t<span class="token operator">=&gt;</span>t<span class="token punctuation">.</span>FirstName<span class="token punctuation">,</span>f<span class="token operator">=&gt;</span>f<span class="token punctuation">.</span>Name<span class="token punctuation">.</span><span class="token function">FirstName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">RuleFor</span><span class="token punctuation">(</span>t<span class="token operator">=&gt;</span>t<span class="token punctuation">.</span>LastName<span class="token punctuation">,</span>f<span class="token operator">=&gt;</span>f<span class="token punctuation">.</span>Name<span class="token punctuation">.</span><span class="token function">LastName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">RuleFor</span><span class="token punctuation">(</span>t<span class="token operator">=&gt;</span>t<span class="token punctuation">.</span>FullName<span class="token punctuation">,</span>f<span class="token operator">=&gt;</span>f<span class="token punctuation">.</span>Name<span class="token punctuation">.</span><span class="token function">FullName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">RuleFor</span><span class="token punctuation">(</span>t<span class="token operator">=&gt;</span>t<span class="token punctuation">.</span>BirthDay<span class="token punctuation">,</span>f<span class="token operator">=&gt;</span>f<span class="token punctuation">.</span>Date<span class="token punctuation">.</span><span class="token function">BetweenDateOnly</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token constructor-invocation class-name">DateOnly</span><span class="token punctuation">(</span><span class="token number">1990</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token keyword">new</span> <span class="token constructor-invocation class-name">DateOnly</span><span class="token punctuation">(</span><span class="token number">2010</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre> 
+<h4><a id="ViewModel_78"></a>ViewModel</h4> 
+<pre><code class="prism language-csharp"><span class="token keyword">public</span> <span class="token keyword">partial</span> <span class="token keyword">class</span> <span class="token class-name">DemoViewModel</span><span class="token punctuation">:</span><span class="token type-list"><span class="token class-name">ObservableObject</span></span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token punctuation">[</span><span class="token attribute"><span class="token class-name">ObservableProperty</span></span><span class="token punctuation">]</span>
+    <span class="token keyword">private</span> <span class="token class-name">List<span class="token punctuation">&lt;</span>Models<span class="token punctuation">.</span>Person<span class="token punctuation">&gt;</span></span> people <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token constructor-invocation class-name">List<span class="token punctuation">&lt;</span>Models<span class="token punctuation">.</span>Person<span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token punctuation">[</span><span class="token attribute"><span class="token class-name">RelayCommand</span></span><span class="token punctuation">]</span>
+    <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">void</span></span> <span class="token function">AddItem</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">{<!-- --></span>
+        People<span class="token punctuation">.</span><span class="token function">Add</span><span class="token punctuation">(</span>Models<span class="token punctuation">.</span>Person<span class="token punctuation">.</span>FakerOne<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token function">DemoViewModel</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+        People <span class="token operator">=</span> Models<span class="token punctuation">.</span>Person<span class="token punctuation">.</span><span class="token function">FakerMany</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">ToList</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+   
+<span class="token punctuation">}</span>
+</code></pre> 
+<p>现在的代码是没有实现通知，点击按钮也不会添加</p> 
+<p><img src="https://images2.imgbox.com/94/d0/7A33PH6I_o.gif" alt="在这里插入图片描述"></p> 
+<h3><a id="_103"></a>尝试老办法通知</h3> 
+<pre><code class="prism language-csharp">        <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">void</span></span> <span class="token function">AddItem</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+            People<span class="token punctuation">.</span><span class="token function">Add</span><span class="token punctuation">(</span>Models<span class="token punctuation">.</span>Person<span class="token punctuation">.</span>FakerOne<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment">//没有效果</span>
+            <span class="token comment">//OnPropertyChanged(nameof(People));</span>
+
+            <span class="token comment">//没有效果</span>
+            <span class="token comment">//SetProperty(ref people, people);</span>
+        <span class="token punctuation">}</span>
+</code></pre> 
+<p>而且在我们点击ListBox的时候，会报错。这个就说明，其实List已经修改了，但是这个通知方法不行。原因是List指向的是一个地址空间，这个地址空间并没有变化。<br> <img src="https://images2.imgbox.com/ad/97/PjKZmcge_o.png" alt="在这里插入图片描述"></p> 
+<h3><a id="_119"></a>解决方案</h3> 
+<h4><a id="ObservableCollection_122"></a>ObservableCollection</h4> 
+<p>简单的解决方案就是改成ObservableCollection，这里就不展开说明了。<br> <img src="https://images2.imgbox.com/3f/83/nXDw5HwF_o.png" alt="在这里插入图片描述"><br> 但是有一个问题，这个ObservableCollection只在Count更新的时候触发自动更新。里面的Person值修改的时候是不会触发更新的。</p> 
+<p>如果有联动更新的需求，可以直接在【CollectionChanged】添加对应的代码<br> <img src="https://images2.imgbox.com/94/4e/MVUu7uWD_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="BindingList_129"></a>BindingList</h4> 
+<p>这里我就不展开说明了，直接上视频的源代码了。</p> 
+<p><img src="https://images2.imgbox.com/8a/2d/nEVtcBW4_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/16/b3/ggkPpizs_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="ICollectionView_135"></a>ICollectionView</h4> 
+<blockquote> 
+ <p><a href="https://blog.csdn.net/qq_44695769/article/details/136287235?spm=1001.2014.3001.5501">WPF 【十月的寒流】学习笔记(1):DataGrid过滤</a></p> 
+</blockquote> 
+<p>更好的解决方案就是直接更新。我们直接刷新ItemSorce</p> 
+<pre><code class="prism language-html"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>UserControl</span> <span class="token attr-name"><span class="token namespace">x:</span>Class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>WpfMvvmDemo.Views.DemoView<span class="token punctuation">"</span></span>
+             <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://schemas.microsoft.com/winfx/2006/xaml/presentation<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">xmlns:</span>x</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://schemas.microsoft.com/winfx/2006/xaml<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">xmlns:</span>mc</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://schemas.openxmlformats.org/markup-compatibility/2006<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">xmlns:</span>d</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://schemas.microsoft.com/expression/blend/2008<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">xmlns:</span>local</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>clr-namespace:WpfMvvmDemo.Views<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">xmlns:</span>viewModels</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>clr-namespace:WpfMvvmDemo.ViewModels<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">mc:</span>Ignorable</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>d<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">d:</span>DesignHeight</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>450<span class="token punctuation">"</span></span>
+             <span class="token attr-name"><span class="token namespace">d:</span>DesignWidth</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>800<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>UserControl.DataContext</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">viewModels:</span>DemoViewModel</span> <span class="token punctuation">/&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>UserControl.DataContext</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>DockPanel</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>StackPanel</span> <span class="token attr-name">DockPanel.Dock</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>Bottom<span class="token punctuation">"</span></span>
+                    <span class="token attr-name">HorizontalAlignment</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>Left<span class="token punctuation">"</span></span>
+                    <span class="token attr-name">Orientation</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>Horizontal<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>Button</span> <span class="token attr-name">Command</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>{Binding AddItemCommand}<span class="token punctuation">"</span></span>
+                    <span class="token attr-name">Margin</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>5<span class="token punctuation">"</span></span>
+                    <span class="token attr-name">Content</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>添加数据<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>Button</span><span class="token punctuation">&gt;</span></span>
+            <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>Button</span> <span class="token attr-name">Command</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>{Binding UpIdCommand}<span class="token punctuation">"</span></span>
+                    <span class="token attr-name">Margin</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>5<span class="token punctuation">"</span></span>
+                    <span class="token attr-name">Content</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>增加Id<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>Button</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>StackPanel</span><span class="token punctuation">&gt;</span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>DataGrid</span> <span class="token attr-name">ItemsSource</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>{Binding PeopleView}<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>DataGrid</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>DockPanel</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>UserControl</span><span class="token punctuation">&gt;</span></span>
+
+</code></pre> 
+<pre><code class="prism language-csharp"><span class="token keyword">using</span> <span class="token namespace">Bogus</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">CommunityToolkit<span class="token punctuation">.</span>Mvvm<span class="token punctuation">.</span>ComponentModel</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">CommunityToolkit<span class="token punctuation">.</span>Mvvm<span class="token punctuation">.</span>Input</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System<span class="token punctuation">.</span>Collections<span class="token punctuation">.</span>Generic</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System<span class="token punctuation">.</span>Collections<span class="token punctuation">.</span>Specialized</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System<span class="token punctuation">.</span>ComponentModel</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System<span class="token punctuation">.</span>Linq</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System<span class="token punctuation">.</span>Text</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System<span class="token punctuation">.</span>Threading<span class="token punctuation">.</span>Tasks</span><span class="token punctuation">;</span>
+<span class="token keyword">using</span> <span class="token namespace">System<span class="token punctuation">.</span>Windows<span class="token punctuation">.</span>Data</span><span class="token punctuation">;</span>
+
+<span class="token keyword">namespace</span> <span class="token namespace">WpfMvvmDemo<span class="token punctuation">.</span>ViewModels</span>
+<span class="token punctuation">{<!-- --></span>
+    <span class="token keyword">public</span> <span class="token keyword">partial</span> <span class="token keyword">class</span> <span class="token class-name">DemoViewModel</span><span class="token punctuation">:</span><span class="token type-list"><span class="token class-name">ObservableObject</span></span>
+    <span class="token punctuation">{<!-- --></span>
+        <span class="token punctuation">[</span><span class="token attribute"><span class="token class-name">ObservableProperty</span></span><span class="token punctuation">]</span>
+        <span class="token keyword">private</span> <span class="token class-name">List<span class="token punctuation">&lt;</span>Models<span class="token punctuation">.</span>Person<span class="token punctuation">&gt;</span></span> people <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token constructor-invocation class-name">List<span class="token punctuation">&lt;</span>Models<span class="token punctuation">.</span>Person<span class="token punctuation">&gt;</span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token punctuation">[</span><span class="token attribute"><span class="token class-name">ObservableProperty</span></span><span class="token punctuation">]</span>
+        <span class="token keyword">private</span> <span class="token class-name">ICollectionView</span> peopleView<span class="token punctuation">;</span>
+
+        <span class="token punctuation">[</span><span class="token attribute"><span class="token class-name">RelayCommand</span></span><span class="token punctuation">]</span>
+        <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">void</span></span> <span class="token function">AddItem</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+            People<span class="token punctuation">.</span><span class="token function">Add</span><span class="token punctuation">(</span>Models<span class="token punctuation">.</span>Person<span class="token punctuation">.</span>FakerOne<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment">//没有效果</span>
+            <span class="token comment">//OnPropertyChanged(nameof(People));</span>
+
+            <span class="token comment">//没有效果</span>
+            <span class="token comment">//SetProperty(ref people, people);</span>
+
+            <span class="token comment">//直接更新整个视图源</span>
+            PeopleView<span class="token punctuation">.</span><span class="token function">Refresh</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            
+        <span class="token punctuation">}</span>
+        <span class="token punctuation">[</span><span class="token attribute"><span class="token class-name">RelayCommand</span></span><span class="token punctuation">]</span>
+        <span class="token keyword">public</span> <span class="token return-type class-name"><span class="token keyword">void</span></span> <span class="token function">UpId</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">{<!-- --></span>
+            <span class="token keyword">foreach</span> <span class="token punctuation">(</span><span class="token class-name"><span class="token keyword">var</span></span> item <span class="token keyword">in</span> People<span class="token punctuation">)</span>
+            <span class="token punctuation">{<!-- --></span>
+                item<span class="token punctuation">.</span>Id <span class="token operator">+=</span> <span class="token number">10</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            PeopleView<span class="token punctuation">.</span><span class="token function">Refresh</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">public</span> <span class="token function">DemoViewModel</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{<!-- --></span>
+            People <span class="token operator">=</span> Models<span class="token punctuation">.</span>Person<span class="token punctuation">.</span><span class="token function">FakerMany</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">ToList</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            PeopleView <span class="token operator">=</span> CollectionViewSource<span class="token punctuation">.</span><span class="token function">GetDefaultView</span><span class="token punctuation">(</span>People<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+       
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre> 
+<h2><a id="_232"></a>总结</h2> 
+<p>我觉得当时【十月的寒流】那个视频一直在想用MVVM去通知更新，当然他的主题也是使用MVVM自动更新。但是ItemSorce随时都有可能发生修改。要么就是每次事件之后修改，要么就给每个可能会触发的属性添加通知。</p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/667e1b17201ab6023d9f81a9984c199c/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">rabbitmq知识梳理</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/754ec5b32573f3ab658e35c9372eccc3/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">软件设计师软考题目解析06 --每日五题</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>.net 微服务 服务保护 自动重试 Polly - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content=".net 微服务 服务保护 自动重试 Polly" />
+<meta property="og:description" content="1. 概要 实验服务保护，自动重新连接功能。
+2.代码 2.1 重复工具 using Polly; using Polly.Retry; using System; using System.Collections.Generic; using System.Linq; using System.Net.Http; using System.Threading.Tasks; namespace WebApplication2 { public class ClientPolicy { public AsyncRetryPolicy&lt;HttpResponseMessage&gt; asyncRetryPolicy { get; set; } public ClientPolicy() { asyncRetryPolicy = Policy.HandleResult&lt;HttpResponseMessage&gt;(p=&gt;!p.IsSuccessStatusCode).WaitAndRetryAsync(5,retryAttemp=&gt;TimeSpan.FromSeconds(Math.Pow(2,retryAttemp))); } } } 2.2 调用位置
+using Microsoft.AspNetCore.Mvc; using Microsoft.Extensions.Logging; using System; using System.Collections.Generic; using System.Linq; using System.Net.Http; using System.Threading.Tasks; namespace WebApplication2.Controllers { [ApiController] [Route(&#34;[controller]&#34;)] public class WeatherForecastController : ControllerBase { private static readonly string[] Summaries = new[] { &#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/d898bb9cd6b7b9be5099d46611e2c8ba/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-20T08:23:24+08:00" />
+<meta property="article:modified_time" content="2024-02-20T08:23:24+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">.net 微服务 服务保护 自动重试 Polly</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2>1. 概要</h2> 
+<p>实验服务保护，自动重新连接功能。</p> 
+<h2>2.代码</h2> 
+<p>2.1 重复工具 </p> 
+<pre><code class="hljs">using Polly;
+using Polly.Retry;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+namespace WebApplication2
+{
+    public class ClientPolicy
+    {
+        public AsyncRetryPolicy&lt;HttpResponseMessage&gt; asyncRetryPolicy { get; set; } 
+        public ClientPolicy()
+        {
+            asyncRetryPolicy = Policy.HandleResult&lt;HttpResponseMessage&gt;(p=&gt;!p.IsSuccessStatusCode).WaitAndRetryAsync(5,retryAttemp=&gt;TimeSpan.FromSeconds(Math.Pow(2,retryAttemp)));
+        }
+    }
+}
+</code></pre> 
+<p>2.2 调用位置</p> 
+<pre><code class="hljs">using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+namespace WebApplication2.Controllers
+{
+    [ApiController]
+    [Route("[controller]")]
+    public class WeatherForecastController : ControllerBase
+    {
+        private static readonly string[] Summaries = new[]
+        {
+            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+        };
+
+        private readonly ILogger&lt;WeatherForecastController&gt; _logger;
+
+        public WeatherForecastController(ILogger&lt;WeatherForecastController&gt; logger)
+        {
+            _logger = logger;
+        }
+
+        [HttpGet]
+        public IEnumerable&lt;WeatherForecast&gt; Get()
+        {
+            var rng = new Random();
+            ClientPolicy clientPolicy = new ClientPolicy();
+            HttpClient httpClient = new HttpClient();
+            clientPolicy.asyncRetryPolicy.ExecuteAsync(() =&gt; httpClient.GetAsync($"https://localhost:44367/test"));
+
+
+            return Enumerable.Range(1, 5).Select(index =&gt; new WeatherForecast
+            {
+                Date = DateTime.Now.AddDays(index),
+                TemperatureC = rng.Next(-20, 55),
+                Summary = Summaries[rng.Next(Summaries.Length)]
+            })
+            .ToArray();
+        }
+
+        [HttpGet("/test")]
+        public IActionResult test()
+        {
+            var randomNumber = new Random().Next(1, 100);
+            if(randomNumber &gt; 20)
+            {
+                //Console.WriteLine("请求成功 200");
+                //return Ok("请求成功");
+            }
+            Console.WriteLine("请求失败");
+            return BadRequest("请求失败");
+        }
+    }
+}
+</code></pre> 
+<p>2.实验结果</p> 
+<p>如果失败下面的函数会重复调用5次</p> 
+<pre><code class="hljs">[HttpGet("/test")]
+        public IActionResult test()
+        {
+            var randomNumber = new Random().Next(1, 100);
+            if(randomNumber &gt; 20)
+            {
+                //Console.WriteLine("请求成功 200");
+                //return Ok("请求成功");
+            }
+            Console.WriteLine("请求失败");
+            return BadRequest("请求失败");
+        }</code></pre> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/fdc391c8ed1681109eac03b7b57e7f4f/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">ADO世界之THIRD</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/ef0c4fcd824eb679b760d8ea32d5f124/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Scrum管理工具-敏捷研发端到端管理流程</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>GATK-HaplotypeCaller 变异检测详解 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="GATK-HaplotypeCaller 变异检测详解" />
+<meta property="og:description" content="1.GATK-HaplotypeCaller简介 基因组变异检测是基因组学领域一个非常重要的问题，是遗传性疾病溯源，物种进化等分析的前提。而目前最主流、使用最广泛的变异检测软件当属 Broad Institute 开发的 GATK(Genome Analysis ToolKit) 组件。GATK 设计之初是用于分析人类的全外显子和全基因组数据，随着不断发展，现在也可以应用于其他的物种。GATK官网提供了一整套完整的变异检测分析流程：GATK Best Practices。如下图示：
+其中，HaplotypeCaller 是 GATK 检测变异（SNP/INDEL）的核心模块，主要通过单倍型的局部重组来实现准确的 SNP 和 INDEL 检测。
+GATK-HaplotypeCaller参考网址
+HaplotypeCaller 能够从头组装变异活跃的区域（active region）并进行 SNP/INDEL检测。即每当程序遇到显示出变异迹象的区域时，它就会丢弃现有的比对信息并完全重新组装该区域中的reads。因此 HaplotypeCaller 在一些传统方法难以检测的区域上会更加准确，也使得在检测 indel 方面比 UnifiedGenotyper(gatk旧版变异检测模块) 等基于位置的变异检测工具效果更好。
+HaplotypeCaller 能够处理非二倍体生物以及混合的实验数据，还能够正确处理可变剪切，可以适用 RNAseq数据。
+2. GATK-HaplotypeCaller的变异检测的基本原理 GATK-HaplotypeCaller 模块进行 SNP/indel 检测的基本工作流程包含四个主要步骤：
+识别活跃区域通过重组装活跃区域确定单体型确定每个read的单倍型的似然值确定基因型。
+2.1 识别活跃区域 沿着参考基因组以一定的窗口滑动，统计比对的 mismatches, indels 和 softclips等信息计算基因组每个位置的活跃得分，使用平滑算法进行，此处相当于测定该区域熵值。当熵值达到某个设定的阈值是即确定该区域为active region，用于后续组装。
+2.2 通过重组装活跃区域确定单体型 对于每个活动区域，忽略之前的read比对结果，重新利用该区域的reads构建一个类似 De Bruijn 的图来组装活跃区域并识别数据中可能存在的单倍型。然后，使用 Smith-Waterman 算法将每个单倍型与参考单倍型重新对齐，以识别潜在的变异位点。
+如下图示：最优的路径通过构图的方式进行打分，得到候选的单体型路径。
+2.3 确定每个read的单倍型的似然值 对于每个活动区域，程序使用 PairHMM 算法将每个read与每个单倍型进行成对比对, 产生一个单倍型似然值矩阵。然后将这些似然值边缘化以获得给定reads的每个潜在变异位点的等位基因可能性。
+2.4 确定基因型 将前面 PairHMM 步骤得到的候选单倍型的似然值应用贝叶斯算法转化为每个位点基因型的似然值，如下图所示：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/f5acb2e80e2fc76c2afc78b31e9ba58f/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-03-18T00:53:03+08:00" />
+<meta property="article:modified_time" content="2022-03-18T00:53:03+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">GATK-HaplotypeCaller 变异检测详解</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <h4><a id="1GATKHaplotypeCaller_1"></a>1.GATK-HaplotypeCaller简介</h4> 
+<p>基因组变异检测是基因组学领域一个非常重要的问题，是遗传性疾病溯源，物种进化等分析的前提。而目前最主流、使用最广泛的变异检测软件当属 Broad Institute 开发的 GATK(Genome Analysis ToolKit) 组件。GATK 设计之初是用于分析人类的全外显子和全基因组数据，随着不断发展，现在也可以应用于其他的物种。GATK官网提供了一整套完整的变异检测分析流程：GATK Best Practices。如下图示：<br> <img src="https://images2.imgbox.com/b8/ad/p0y3Fzqy_o.png" alt="在这里插入图片描述"></p> 
+<p>其中，HaplotypeCaller 是 GATK 检测变异（SNP/INDEL）的核心模块，主要通过单倍型的局部重组来实现准确的 SNP 和 INDEL 检测。<br> <a href="https://gatk.broadinstitute.org/hc/en-us/articles/360037225632-HaplotypeCaller" rel="nofollow">GATK-HaplotypeCaller参考网址</a><br> HaplotypeCaller 能够从头组装变异活跃的区域（active region）并进行 SNP/INDEL检测。即每当程序遇到显示出变异迹象的区域时，它就会丢弃现有的比对信息并完全重新组装该区域中的reads。因此 HaplotypeCaller 在一些传统方法难以检测的区域上会更加准确，也使得在检测 indel 方面比 UnifiedGenotyper(gatk旧版变异检测模块) 等基于位置的变异检测工具效果更好。<br> HaplotypeCaller 能够处理非二倍体生物以及混合的实验数据，还能够正确处理可变剪切，可以适用 RNAseq数据。</p> 
+<h4><a id="2_GATKHaplotypeCaller_12"></a>2. GATK-HaplotypeCaller的变异检测的基本原理</h4> 
+<p>GATK-HaplotypeCaller 模块进行 SNP/indel 检测的基本工作流程包含四个主要步骤：</p> 
+<ol><li>识别活跃区域</li><li>通过重组装活跃区域确定单体型</li><li>确定每个read的单倍型的似然值</li><li>确定基因型。<br> <img src="https://images2.imgbox.com/79/5e/XTCVqfbs_o.png" alt="在这里插入图片描述"></li></ol> 
+<h5><a id="21__19"></a>2.1 识别活跃区域</h5> 
+<p>沿着参考基因组以一定的窗口滑动，统计比对的 mismatches, indels 和 softclips等信息计算基因组每个位置的活跃得分，使用平滑算法进行，此处相当于测定该区域熵值。当熵值达到某个设定的阈值是即确定该区域为active region，用于后续组装。<br> <img src="https://images2.imgbox.com/fd/c5/IfFzEyJs_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="22__24"></a>2.2 通过重组装活跃区域确定单体型</h5> 
+<p>对于每个活动区域，忽略之前的read比对结果，重新利用该区域的reads构建一个类似 De Bruijn 的图来组装活跃区域并识别数据中可能存在的单倍型。然后，使用 Smith-Waterman 算法将每个单倍型与参考单倍型重新对齐，以识别潜在的变异位点。<br> 如下图示：最优的路径通过构图的方式进行打分，得到候选的单体型路径。<br> <img src="https://images2.imgbox.com/94/25/rAQY9r7v_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="23_read_29"></a>2.3 确定每个read的单倍型的似然值</h5> 
+<p>对于每个活动区域，程序使用 PairHMM 算法将每个read与每个单倍型进行成对比对, 产生一个单倍型似然值矩阵。然后将这些似然值边缘化以获得给定reads的每个潜在变异位点的等位基因可能性。<br> <img src="https://images2.imgbox.com/60/0a/fKxZFhWV_o.png" alt="在这里插入图片描述"></p> 
+<h5><a id="24__32"></a>2.4 确定基因型</h5> 
+<p>将前面 PairHMM 步骤得到的候选单倍型的似然值应用贝叶斯算法转化为每个位点基因型的似然值，如下图所示：<br> <img src="https://images2.imgbox.com/41/dc/KsaxXxqP_o.png" alt="在这里插入图片描述"></p> 
+<h4><a id="3_GATKHaplotypeCaller_37"></a>3. GATK-HaplotypeCaller的安装和使用</h4> 
+<p>目前GATK已更新到GATK4。和GATK3相比，GATK4在算法上进行了优化，运行速率有所提高，而且整合了picard 软件的功能。<a href="https://github.com/broadinstitute/gatk">github地址</a>.</p> 
+<h5><a id="31__39"></a>3.1. 安装</h5> 
+<p>GATK软件运行有两种方式一种是运行通过java 调用jar包运行，一种是使用gatk脚本文件，此时需要安装Python 2.6以上版本，不管是那种方式，都需要机器上安装java 8或以上版本。</p> 
+<pre><code>wget https://github.com/broadinstitute/gatk/releases/download/4.1.5.0/gatk-4.1.5.0.zip 
+unzip gatk-4.1.5.0.zip
+</code></pre> 
+<p>注意此处下载最好是直接下载gatk-**.zip包，而不要下载Source code (zip) 和 Source code (tar.gz)两个源码包，不然还需要重新build gatk。当然如果你的环境无法支持那就另说了。下载完解压即可看到可执行程序gatk, 以及对应的jar包，可以运行<code>./gatk --list</code>测试下是否可运行。</p> 
+<h5><a id="32__47"></a>3.2. 使用说明</h5> 
+<p>运行<code>./gatk HaplotypeCaller -h</code> 查看 HaplotypeCaller 的参数细节，详细说明到官网查看会更清晰一些<a href="https://gatk.broadinstitute.org/hc/en-us/articles/360040096812-HaplotypeCaller" rel="nofollow">https://gatk.broadinstitute.org/hc/en-us/articles/360040096812-HaplotypeCaller</a></p> 
+<p>尽管HaplotypeCaller官网参数非常多，但实际用上的却不多，大部分按默认参数即最佳，这里列举常用参数进行说明：</p> 
+<pre><code class="prism language-BASH">--input -I []	# BAM/SAM/CRAM file containing reads 指定输入的bam、sam、cram文件
+--output -O	null	# File to which variants should be written 指定输出vcf名字
+--reference -R	null	# Reference sequence file 指定参考序列，需要和比对时候使用的参考基因组一致
+
+--intervals -L	[]	#One or more genomic intervals over which to operate 指定变异检测的区间，可以是bed文件也可以是染色体名字
+--emit-ref-confidence -ERC	NONE	# Mode for emitting reference confidence scores 包含以下三种变异检测模式：
+    #1. NONE：只记录变异位点
+    #2. BP_RESOLUTION：记录变异和非变异位点，每个位点信息都展示
+    #3. GVCF：记录变异和非变异位点，其中非变异位点已block块展示
+
+--pcr-indel-model CONSERVATIVE	#The PCR indel model to use设置针对PCR indel的矫正模型，包含以下几种模式
+    #1. NONE：不会应用专门的 PCR 错误模型；如果存在碱基插入/删除质量，它们将被使用
+    #2. HOSTILE：将应用一个最激进的模型，该模型会牺牲真阳性以消除更多的假阳性
+    #3. AGGRESSIVE：将应用相对激进的模型，牺牲真阳性以消除更多的假阳性
+    #4. CONSERVATIVE：将应用一个不那么激进的模型，该模型试图以允许更多误报为代价来保持较高的真阳性率
+
+</code></pre> 
+<p><strong>注意</strong>：<br> 1）对于队列分析，通常会使用 <code>-ERC GVCF</code> 参数来生成gvcf文件以支持下游多样本联合分析<br> 2）对于PCR-free的样本需要使用<code>-pcr_indel_model NONE</code>取消PCR indel模型。</p> 
+<p>运行命令如下：</p> 
+<pre><code class="prism language-BASH">gatk --java-options "-Xmx4g" HaplotypeCaller  \
+   -R Homo_sapiens_assembly38.fasta \
+   -I input.bam \
+   -O output.g.vcf.gz \
+   -ERC GVCF \
+   -L chr1
+</code></pre>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/34c8325ac7d06c35b7da0f9f966cde7a/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Pandas入门知识学习</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/7a2434404e91c76cb157947534f27b98/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">C&#43;&#43;类对象进行排序</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

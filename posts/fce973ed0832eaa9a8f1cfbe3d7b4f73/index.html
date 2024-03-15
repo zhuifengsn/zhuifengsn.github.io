@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>TCP原理（全网最详细） - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="TCP原理（全网最详细）" />
+<meta property="og:description" content="一、确认应答（可靠性机制） TCP诞生的初衷就是可靠传输
+可靠传输是TCP最核心的部分，TCP内部很多机制都是在保证可靠传输（可以理解为发一条消息，上面显示已读未读，可靠传输就是发一条消息我知道对方是否收到）。
+确认应答，要针对数据进行编号，然后才能明确，应答报文实在应答那个数据，应对了网络传输的“后发先至”
+TCP就引入了“序号”
+32位序号：给发送的每一条数据，都进行了编号
+32位确认序号：如果当前报文是一个普通的报文。确认序号不生效，但是如果当前报文是一个应答报文，确认序号就表示应答的是哪个普通报文。
+报文字节：
+由于TCP是面向字节流的，编号的时候，不是按照条编号，而是按照字节来编号。 图中的主机A发送了100字节的数据（一个TCP数据报，长度是1000，序号是1）
+应答报文中的确认序号就是1001。应答报文，可以视为只有TCP报头，没有载荷。其中的确认序号字段填写的是1001，意思就是&lt;1001的数据，主机B全部都收到了，接下来A就要从1001开始往后发送。
+此时有人就会问，TCP不是传输的字节流呢？怎么传输的数据报呢？
+例如在我们的UDP中：
+B这边调用一个recv方法：
+第一次读取的是1111第二次读取的是2222第三次读取的是3333 每次调用recv方法就是从接收缓冲区中取走一个数据，UDP的接受缓冲区，相当于一个链表，里面三个节点，每次都以一个节点为单位进行读取，这就是面向数据报。
+在TCP中：
+用InputStream.read(buffer)
+byte[1] buffer 读出来的就是 1byte[3] buffer 读出来的就是 111byte[5] buffer 读出来的就是 11112byte[7] buffer 读出来的就是 1111222 TCP的接收缓冲区，就i像一个数组，若干个TCP数据报的载荷会一直追加到这个数组里，这就是面向字节流。
+如何区分，一个报文是普通报文还是应答报文呢？
+在TCP报头中有6个非常重要的比特位，其中第二个ACK就是表达的应答报文。
+ACK是0表达不是应答报文ACK是1表带是应答报文 URG（Urgent）：URG标志位占据TCP头部的第13位（最左边的位），用于指示紧急数据。如果URG标志位被设置为1，那么TCP包含的数据被标记为紧急数据，需要被尽快传送和处理。
+ACK（Acknowledgment）：ACK标志位占据TCP头部的第14位，用于确认对方已经成功接收到了之前发送的数据。当ACK标志位被设置为1时，表示这是一个包含确认信息的TCP报文。
+PSH（Push）：PSH标志位占据TCP头部的第15位，用于指示接收方应该尽快将数据交给应用程序，而不是等到缓冲区充满或等待定时器触发。
+RST（Reset）：RST标志位占据TCP头部的第16位，用于重置连接。如果RST标志位被设置为1，它表示连接出现了异常，需要立即关闭，并且后续的数据传输将被终止。
+SYN（Synchronize）：SYN标志位占据TCP头部的第17位，用于建立连接。当客户端尝试与服务器建立连接时，它会将SYN标志位设置为1，表示请求建立连接。
+FIN（Finish）：FIN标志位占据TCP头部的第18位，用于关闭连接。当一方希望关闭连接时，它会将FIN标志位设置为1，表示它已经不再发送数据，并且希望进行优雅的连接关闭。
+在确认应答的情况下，如果收到了ACK就好办，但是如果没有收到呢?还需要通过其他途径来处理。
+二、超时重传（可靠性机制） 确认应答是一种很理想的状态，但是数据开发的过程中很容易出现丢包的情况。
+发送请求丢失
+ACK丢失
+业务数据已经到了主机B，反馈的ACK没有回去，发送方等待了一会之后，就会触发重传。对于发送方来说，无法区分是发送请求丢失还是ACK丢失，因此发送方能做的就是到达一定时间超时重传。
+ACK丢失的情况下，进行超时重传，接收方会收到两份相同的数据，这个时候就会涉及到去重。根据序列号，把序列号相同的去除掉。
+丢包操作，还有一个超时时间，超时时间具体是多少，在操作系统内核是可以配置的。
+第一次丢包，超时时间是 T1
+第二次丢包，超时时间是 T2
+T2 &gt; T1 这里等待的时间间隔随着时间的推移越来越大，连续两次没发过去，意味着当前单次丢包的概率已经相当大了，很可能是网络上遇到了非常严重的事故，短期内恢复不了，发送的再频繁也没用。超时重传也不会无限制的重传下去，尝试几次之后，仍然无法传送过去，此时就会放弃重传，然后尝试断开重连，如果重连还没连上去，就彻底放弃了。
+超时的时间如何确定？
+最理想的情况下，找到一个最小的时间，保证 “确认应答一定能在这个时间内返回”。但是这个时间的长短，随着网络环境的不同，是有差异的。如果超时时间设的太长，会影响整体的重传效率；如果超时时间设的太短，有可能会频繁发送重复的包； TCP为了保证无论在任何环境下都能比较高性能的通信，因此会动态计算这个最大超时时间
+Linux中（BSD Unix和Windows也是如此），超时以500ms为一个单位进行控制，每次判定超时重发的超时时间都是500ms的整数倍。
+如果重发一次之后，仍然得不到应答，等待 2*500ms 后再进行重传。
+如果仍然得不到应答，等待 4*500ms 进行重传。依次类推，以指数形式递增。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/fce973ed0832eaa9a8f1cfbe3d7b4f73/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-09-09T22:17:56+08:00" />
+<meta property="article:modified_time" content="2023-09-09T22:17:56+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">TCP原理（全网最详细）</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h3 style="background-color:transparent;">一、确认应答（可靠性机制）</h3> 
+<p>TCP诞生的初衷就是可靠传输</p> 
+<p>可靠传输是TCP最核心的部分，TCP内部很多机制都是在保证可靠传输（可以理解为发一条消息，上面显示已读未读，可靠传输就是发一条消息我知道对方是否收到）。</p> 
+<p><strong>确认应答，</strong>要针对数据进行编号，然后才能明确，应答报文实在应答那个数据，应对了网络传输的“后发先至”</p> 
+<p>TCP就引入了“<strong>序号</strong>”</p> 
+<p><img alt="" height="347" src="https://images2.imgbox.com/23/de/w2jn0BDd_o.png" width="526"></p> 
+<blockquote> 
+ <p>32位<strong>序号：</strong>给发送的每一条数据，都进行了编号</p> 
+ <p>32位<strong>确认序号</strong>：如果当前报文是一个普通的报文。确认序号不生效，但是如果当前报文是一个<strong>应答报文，</strong>确认序号就表示应答的是哪个普通报文。</p> 
+</blockquote> 
+<p>报文字节：</p> 
+<p><img alt="" height="156" src="https://images2.imgbox.com/de/7f/qFd2ZYlD_o.png" width="478"> </p> 
+<blockquote> 
+ <p>由于TCP是面向字节流的，编号的时候，不是按照条编号，而是按照字节来编号。 </p> 
+</blockquote> 
+<p><img alt="" height="333" src="https://images2.imgbox.com/f4/76/hjjShABp_o.png" width="344"> </p> 
+<p> 图中的主机A发送了100字节的数据（一个TCP数据报，长度是1000，序号是1）</p> 
+<p>应答报文中的确认序号就是1001。<strong>应答报文，可以视为只有TCP报头，没有载荷。</strong>其中的确认序号字段填写的是1001，意思就是&lt;1001的数据，主机B全部都收到了，接下来A就要从1001开始往后发送。</p> 
+<blockquote> 
+ <p>此时有人就会问，TCP不是传输的字节流呢？怎么传输的数据报呢？</p> 
+ <p>例如在我们的UDP中：</p> 
+ <p><img alt="" height="274" src="https://images2.imgbox.com/81/53/pus3QiMq_o.png" width="823"></p> 
+ <p>B这边调用一个recv方法：</p> 
+ <ol><li>第一次读取的是1111</li><li>第二次读取的是2222</li><li>第三次读取的是3333</li></ol> 
+ <p>每次调用recv方法就是从接收缓冲区中取走一个数据，UDP的接受缓冲区，相当于一个链表，里面三个节点，每次都以一个节点为单位进行读取，这就是<strong>面向数据报。</strong></p> 
+ <hr> 
+ <p>在TCP中：</p> 
+ <p><img alt="" height="302" src="https://images2.imgbox.com/f2/ce/CrU51smn_o.png" width="819"></p> 
+ <p>用InputStream.read(buffer)</p> 
+ <ul><li>byte[1] buffer 读出来的就是 1</li><li>byte[3] buffer 读出来的就是 111</li><li>byte[5] buffer 读出来的就是 11112</li><li>byte[7] buffer 读出来的就是 1111222</li></ul> 
+ <p>TCP的接收缓冲区，就i像一个数组，若干个TCP数据报的载荷会一直追加到这个数组里，<strong>这就是面向字节流。</strong></p> 
+</blockquote> 
+<p>如何区分，一个报文是普通报文还是应答报文呢？</p> 
+<p><img alt="" height="78" src="https://images2.imgbox.com/58/c0/3dS4vSeD_o.png" width="182"></p> 
+<p>在TCP报头中有6个非常重要的比特位，其中第二个ACK就是表达的应答报文。</p> 
+<ul><li>ACK是0表达不是应答报文</li><li>ACK是1表带是应答报文 </li></ul> 
+<blockquote> 
+ <ol><li> <p><strong>URG（Urgent）</strong>：URG标志位占据TCP头部的第13位（最左边的位），用于指示紧急数据。如果URG标志位被设置为1，那么TCP包含的数据被标记为紧急数据，需要被尽快传送和处理。</p> </li><li> <p><strong>ACK（Acknowledgment）</strong>：ACK标志位占据TCP头部的第14位，用于确认对方已经成功接收到了之前发送的数据。当ACK标志位被设置为1时，表示这是一个包含确认信息的TCP报文。</p> </li><li> <p><strong>PSH（Push）</strong>：PSH标志位占据TCP头部的第15位，用于指示接收方应该尽快将数据交给应用程序，而不是等到缓冲区充满或等待定时器触发。</p> </li><li> <p><strong>RST（Reset）</strong>：RST标志位占据TCP头部的第16位，用于重置连接。如果RST标志位被设置为1，它表示连接出现了异常，需要立即关闭，并且后续的数据传输将被终止。</p> </li><li> <p><strong>SYN（Synchronize）</strong>：SYN标志位占据TCP头部的第17位，用于建立连接。当客户端尝试与服务器建立连接时，它会将SYN标志位设置为1，表示请求建立连接。</p> </li><li> <p><strong>FIN（Finish）</strong>：FIN标志位占据TCP头部的第18位，用于关闭连接。当一方希望关闭连接时，它会将FIN标志位设置为1，表示它已经不再发送数据，并且希望进行优雅的连接关闭。</p> </li></ol> 
+</blockquote> 
+<p>在确认应答的情况下，如果收到了ACK就好办，但是如果没有收到呢?还需要通过其他途径来处理。</p> 
+<hr> 
+<h3 style="background-color:transparent;">二、超时重传（可靠性机制）</h3> 
+<p>确认应答是一种很理想的状态，但是数据开发的过程中很容易出现丢包的情况。</p> 
+<p>发送请求丢失</p> 
+<p><img alt="" height="330" src="https://images2.imgbox.com/7b/9d/Be0uwIX8_o.png" width="381"></p> 
+<p>ACK丢失</p> 
+<p><img alt="" height="336" src="https://images2.imgbox.com/fc/94/sVjW9cgQ_o.png" width="360"></p> 
+<p>业务数据已经到了主机B，反馈的ACK没有回去，发送方等待了一会之后，就会触发重传。对于发送方来说，无法区分是发送请求丢失还是ACK丢失，因此发送方能做的就是到达一定时间<strong>超时重传</strong>。</p> 
+<blockquote> 
+ <p>ACK丢失的情况下，进行超时重传，接收方会收到两份相同的数据，这个时候就会涉及到去重。根据序列号，把序列号相同的去除掉。</p> 
+</blockquote> 
+<p>丢包操作，还有一个超时时间，超时时间具体是多少，在操作系统内核是可以配置的。</p> 
+<blockquote> 
+ <p>第一次丢包，超时时间是 T1<br> 第二次丢包，超时时间是 T2<br>  <br> T2 &gt; T1 这里等待的时间间隔随着时间的推移越来越大，连续两次没发过去，意味着当前单次丢包的概率已经相当大了，很可能是网络上遇到了非常严重的事故，短期内恢复不了，发送的再频繁也没用。超时重传也不会无限制的重传下去，尝试几次之后，仍然无法传送过去，此时就会放弃重传，然后尝试断开重连，如果重连还没连上去，就彻底放弃了。</p> 
+</blockquote> 
+<p>超时的时间如何确定？</p> 
+<blockquote> 
+ <ul><li>最理想的情况下，找到一个最小的时间，保证 “确认应答一定能在这个时间内返回”。</li><li>但是这个时间的长短，随着网络环境的不同，是有差异的。</li><li>如果超时时间设的太长，会影响整体的重传效率；</li><li>如果超时时间设的太短，有可能会频繁发送重复的包；</li></ul> 
+</blockquote> 
+<p>TCP为了保证无论在任何环境下都能比较高性能的通信，因此会动态计算这个最大超时时间</p> 
+<blockquote> 
+ <p>Linux中（BSD Unix和Windows也是如此），超时以500ms为一个单位进行控制，每次判定超时重发的超时时间都是500ms的整数倍。<br> 如果重发一次之后，仍然得不到应答，等待 2*500ms 后再进行重传。<br> 如果仍然得不到应答，等待 4*500ms 进行重传。依次类推，以指数形式递增。<br> 累计到一定的重传次数，TCP认为网络或者对端主机出现异常，强制关闭连接</p> 
+</blockquote> 
+<p><strong>确认应答和超时重传是保证TCP可靠性的最核心机制</strong></p> 
+<hr> 
+<h3 style="background-color:transparent;">三、连接管理（可靠性机制）</h3> 
+<p id="%E5%BB%BA%E7%AB%8B%E8%BF%9E%E6%8E%A5-%E4%B8%89%E6%AC%A1%E6%8F%A1%E6%89%8B"> <strong>建立连接-三次握手</strong></p> 
+<p>当A给B打电话的时候，打电话的时候同样要验证自己一起对方的话筒和自己的听筒是否正常</p> 
+<p> <img alt="" height="366" src="https://images2.imgbox.com/0d/f0/7Pkg1GwI_o.png" width="1129"></p> 
+<p>第一次握手： 刚开始，A 不知道自己和 B 手机的听筒和话筒是否正常，所以 A说"喂，你能听到吗?"<br> 第二次握手： B 听到后，说明 A 的话筒和 B 的听筒正常，但 B 还需进一步检查自己的话筒和 A 的听筒是否正常；同时 B 把 A 话筒正常和自己听筒正常的消息传递给 A；于是 B “我能听到，你呢？”<br> 第三次握手： A 收到 B 的消息后，就证明了 A 听筒正常，B 话筒正常</p> 
+<p>以上三次握手就保证A、B的听筒和话筒都是正常，也就保证了通话的正常，这就也是类似网络建立连接的三次握手</p> 
+<p><strong>TCP中真实的建立连接过程：</strong></p> 
+<p><img alt="" height="752" src="https://images2.imgbox.com/dd/f3/N82QRnXv_o.png" width="753"></p> 
+<p><strong>第一次握手：</strong>客户端希望与服务器建立连接，因此它首先向服务器发送一个TCP报文段，其中包含SYN（同步）标志位。这个SYN标志位表示客户端希望建立连接，并在报文段中包含一个初始序列号（ISN），该序列号用于标识客户端发送的数据。</p> 
+<p><strong>第二次握手：</strong>服务器收到客户端的SYN后，会确认客户端的请求。服务器向客户端发送一个TCP报文段，其中包含SYN和ACK（确认）标志位。服务器也会选择自己的初始序列号（ISN）。这个ACK用于确认客户端的SYN，并表示服务器已经准备好建立连接。</p> 
+<p><strong>第三次握手：</strong>客户端收到服务器的SYN-ACK后，会发送一个带有ACK标志位的TCP报文段给服务器。这个ACK用于确认服务器的SYN，并表示客户端也已经准备好建立连接。同时，客户端也会发送自己的初始序列号。</p> 
+<p>建立连接的过程，相当于通信双方各自给对方发送 SYN，在各自给对方发送给 ACK，只不过中间的 ACK 和 SYN 合二为一了，于是最后就是"三次握手"。</p> 
+<blockquote> 
+ <p>为什么要合并在一起传输？每次报文传输，都会经过一系列的封装分用！分成两个包的代价就会很大。</p> 
+</blockquote> 
+<p id="%E6%96%AD%E5%BC%80%E8%BF%9E%E6%8E%A5-%E5%9B%9B%E6%AC%A1%E6%8C%A5%E6%89%8B"><strong>断开连接-四次挥手</strong></p> 
+<p><strong>三次握手：</strong>双方各自向对方发起建立连接的请求，确保双方都明确知道对已准备好连接。</p> 
+<p><strong>四次挥手：</strong>用于确保双方在终止连接之前完成数据传输，并且都明确知道对方已经准备好关闭连接。</p> 
+<p> 以打电话为例子：</p> 
+<p><img alt="" height="337" src="https://images2.imgbox.com/f4/ea/RiVCTSpx_o.png" width="838"></p> 
+<p><strong>TCP中真实的断开连接过程：</strong></p> 
+<p><img alt="" height="721" src="https://images2.imgbox.com/44/cf/uP34AjVz_o.png" width="853"></p> 
+<p><strong>第一次挥手（客户端向服务器发送FIN）</strong></p> 
+<ul><li>客户端决定关闭连接，因此向服务器发送一个TCP报文段，其中包含FIN（Finish）标志位。则合格FIN表示客户端已经完成数据发送，并请求关闭。客户端进入FIN_WAIT1状态。</li></ul> 
+<p><strong>第二次挥手（服务器回复ACK）：</strong></p> 
+<ul><li>服务器收到客户端的FIN后，会发送一个确认ACK数据报作为响应，以确认它已经收到客户端的关闭请求，同时，服务器进入CLOSE_WAIT状态。</li></ul> 
+<p><strong>第三次挥手（服务器向客户端发送FIN）：</strong></p> 
+<ul><li>当服务器也决定关闭连接时，它会向客户端发送一个带有FIN标志位的TCP报文段，表示服务器已经完成数据发送并请求关闭连接。服务器进入LAST_ACK状态。</li></ul> 
+<p><strong>第四次挥手（客户端回复ACK）：</strong></p> 
+<ul><li>客户端收到服务器的FIN后，会回复一个确认ACK，表示客户端已收到服务器的关闭请求，此时客户端进入TIME_WAIT状态，等待一段时间（通常是两倍的最大寿命，以确保服务器收到ACK），然后才最终关闭连接。</li></ul> 
+<p>在客户端的TIME_WAIT状态结束后，连接关闭。服务器在发送FIN后等待一段时间，确认客户端收到FIN的ACK之后，连接终止。</p> 
+<p><strong>四次挥手三次挥完不行呢？</strong></p> 
+<p>通常是不可以的，即：上述2、3为什么没有合并在一起？</p> 
+<p>因为中间两次操作时机不一样，ACK是收到FIN之后立即由操作系统内核返回的数据报，告诉客户端收到了关闭的消息，而FIN是应用程序处理完接受缓冲区的数据之后，调用close方法触发的。</p> 
+<p>但是若TCP还有 延时应答和捎带应答 机制，就可以三次挥完。</p> 
+<blockquote> 
+ <p><img alt="" height="596" src="https://images2.imgbox.com/46/56/pT2JB8aE_o.png" width="888"></p> 
+ <p>图中有三部分信息：</p> 
+ <ul><li>三次握手和四次挥手中间数据传输流程</li><li>三次握手四次挥手过程中TCP状态转换</li><li>每个过程涉及到的socket.api</li></ul> 
+ <p>TCP的状态：</p> 
+ <ol><li> <p><strong>CLOSED（关闭）</strong>：初始状态，表示TCP连接未建立。在CLOSED状态下，不进行数据传输或通信。</p> </li><li> <p><strong>LISTEN（监听）</strong>：在服务器端，当服务器准备好接受客户端连接请求时，它会进入LISTEN状态。服务器等待客户端的连接请求，一旦收到连接请求，将进入ESTABLISHED状态。</p> </li><li> <p><strong>SYN_SENT（同步已发送）</strong>：客户端在尝试与服务器建立连接时，会进入SYN_SENT状态。在这个状态下，客户端已发送一个带有SYN标志的连接请求，并等待服务器的确认。</p> </li><li> <p><strong>SYN_RECEIVED（同步已接收）</strong>：服务器在收到客户端的连接请求后，会进入SYN_RECEIVED状态，表示已接收客户端的连接请求，准备好建立连接。服务器会回复一个带有SYN和ACK标志的数据包作为确认。</p> </li><li> <p><strong>ESTABLISHED（已建立）</strong>：连接已经建立，双方可以进行数据传输。在这个状态下，数据可以在客户端和服务器之间自由传输。</p> </li><li> <p><strong>FIN_WAIT_1（等待对方的结束请求第一阶段）</strong>：当一方（通常是客户端）决定关闭连接时，它会进入FIN_WAIT_1状态，并发送一个带有FIN标志的数据包，表示它不再发送数据。</p> </li><li> <p><strong>FIN_WAIT_2（等待对方的结束请求第二阶段）</strong>：在FIN_WAIT_1状态之后，如果对方（通常是服务器）也决定关闭连接，它会发送一个带有FIN标志的数据包作为确认，连接进入FIN_WAIT_2状态。</p> </li><li> <p><strong>TIME_WAIT（等待时间）</strong>：连接已经被双方关闭，但为了确保所有的数据包都被完全传递和处理，连接会进入TIME_WAIT状态一段时间。这个状态通常持续2倍的最大报文段寿命（Maximum Segment Lifetime，MSL）时间。</p> </li><li> <p><strong>CLOSING（关闭中）</strong>：表示连接的一方已经发送了FIN标志，但还没有收到对方的确认，所以连接进入CLOSING状态，等待最后的确认。</p> </li><li> <p><strong>CLOSE_WAIT（等待关闭）</strong>：表示连接的一方已经收到对方发送的FIN标志，并进入CLOSE_WAIT状态，等待应用程序处理完所有数据后进行连接关闭。</p> </li><li> <p><strong>LAST_ACK（最后确认）</strong>：在一方发送了FIN标志后，如果另一方也发送了FIN并进入CLOSING状态，那么它会进入LAST_ACK状态，等待最后的确认。</p> </li><li> <p><strong>UNKNOWN（未知）</strong>：在某些情况下，连接状态可能无法明确定义，或者出现异常情况时可能处于UNKNOWN状态。</p> </li></ol> 
+ <p></p> 
+</blockquote> 
+<h3 style="background-color:transparent;">四、滑动窗口（效率机制）</h3> 
+<p>刚才我们讨论了确认应答策略，对每一个发送的数据段，都要给ACK确认应答，收到ACK后再发下一个数据报，这样会有一个很大的缺点，没法送一个数据报就需要一次请确认应答，才能发送下一个数据报，这样会导致性能比较差，发送时间增长。</p> 
+<blockquote> 
+ <p>可靠性和效率是冲突的，保证可靠性肯定会影响到效率。</p> 
+</blockquote> 
+<p>TCP在可靠性的前提下，尽可能的提高效率</p> 
+<blockquote> 
+ <p>提高效率的机制，本质就是把等待ACK的时间重叠起来，减少等待时间，就相当提高效率</p> 
+</blockquote> 
+<p>每次传输的时候都需要等待ACk，收到ACK在发送下一条数据</p> 
+<p><img alt="" height="354" src="https://images2.imgbox.com/b2/69/HNdDAjpO_o.png" width="423"> </p> 
+<p>不再是一次发送一条等待一条，而是一次发送一批，等待一批ACK</p> 
+<p><img alt="" height="322" src="https://images2.imgbox.com/b8/7b/BXsn1bOC_o.png" width="524"></p> 
+<p>窗口大小：再不等待的前提下，最多一次发送N条数据（N就是窗口大小）</p> 
+<blockquote> 
+ <p>这里的N越大，则同时批发数量就会越多，传输效率就会越高！但是N不是越大越好</p> 
+</blockquote> 
+<blockquote> 
+ <p>发送一批数据会不会乱序？</p> 
+ <p>在传输数据的时候很有可能出现“后发先至”的问题，但是TCP就会在接收缓冲区里，按照序号进行排序，保证顺序。</p> 
+</blockquote> 
+<p><img alt="" height="332" src="https://images2.imgbox.com/7a/4f/cBilAefD_o.png" width="503"></p> 
+<p>其中灰色的一块一块的区域就是一个TCP数据报，白色的区域就是要批量发送的，图中发送了 1001-2000 2001-3000 3001-4000 4001-5000 在针对这四个数据报，等待 ACK ，当2001ACK回到A的时候，此时1001-2000这个数据就已经被对方收到了，就可以发送5001-6000这个数据了。</p> 
+<p>每次收到一个ACK，这里的窗口，都会对应向后移动（继续发后续的数据）</p> 
+<p>如果出现丢包如何进行重传？</p> 
+<p>情况一：数据报到达了，但是ACK丢了</p> 
+<p><img alt="" height="314" src="https://images2.imgbox.com/2d/7c/TNR1deJc_o.png" width="511"></p> 
+<p>如果 1001 丢了，2001 到了，此时对于 A 来说，就知道 1-1000 这个数据也是到了的，最后一个会覆盖前一个！</p> 
+<p>情况二：数据报丢了</p> 
+<p><img alt="" height="325" src="https://images2.imgbox.com/65/8d/fiQFTuXi_o.png" width="505"></p> 
+<p>数据报丢了，就需要重传，但是什么时候重传？</p> 
+<p>如上主机A发了半天之后，法案先好几个连续的1001，就明白1001-2000这个数据可能丢失了，接下来就会重传这个数据！此处的原则就是哪条丢失就重传那条数据，已经重传的数据就不需要重传，不必重复传输！快熟重传（不是重传的有多快，而是没有多余的冗余动作）</p> 
+<p>滑动窗口能提高效率，指的是相比于没有滑动窗口，普通的确认应答。但是如果和无可靠性的传输相比（UDP），效率还是要差一些。与其说它是提高效率，不如说它是在补救低效率</p> 
+<h3 style="background-color:transparent;">五、流量控制（可靠性机制）</h3> 
+<ul><li>本质就是对滑动窗口的约束</li></ul> 
+<p>滑动窗口，窗口越大，发送速率就会越快！流量控制，就是针对发送速率进行制约（维持可靠性）。</p> 
+<p>整体的传输速率 = 发送速率 &amp; 接收速率</p> 
+<blockquote> 
+ <p>如果发送速率&gt;接受速率，这个时候继续提高发送速率，就不能提高整体效率，反而会因为接收方的丢包，触发多次重传，反而降低效率。</p> 
+</blockquote> 
+<p>要做的是，让<strong>发送速率</strong>和<strong>接受速率</strong>相当</p> 
+<blockquote> 
+ <p>发送速率：发送数据的时候窗口大小，用于衡量发送速率</p> 
+</blockquote> 
+<p>接受速率如何衡量？</p> 
+<p><img alt="" height="424" src="https://images2.imgbox.com/4f/8f/c5AAiZdE_o.png" width="901"></p> 
+<p> 图中圈出来的部分操作的快慢就是衡量接收速率快慢的（和应用程序代码相关）</p> 
+<p><img alt="" height="376" src="https://images2.imgbox.com/d0/98/jsfjBC9c_o.png" width="847"></p> 
+<p> 流量控制，就是通过解说缓冲区剩余空间大小来作为下一次发送的时候窗口大小</p> 
+<p>接收方如何把接收缓冲区剩余的空间告诉发送方呢？</p> 
+<blockquote> 
+ <p>可以在ACK这个报文中带上这个信息</p> 
+</blockquote> 
+<p><img alt="" height="375" src="https://images2.imgbox.com/81/83/3JEdyDve_o.png" width="976"></p> 
+<blockquote> 
+ <p> 当前是 ACK 报文的时候会生效，这个窗口大小，就表示了接收缓冲区的剩余空间大小，根据这个大小，就可以进一步的影响到发送速率了</p> 
+</blockquote> 
+<blockquote> 
+ <p> 16位表示的最大数值 64 KB 是否意味着窗口大小最大就是 64 KB 呢？<br>  <br> 不是！我们可以有选项，也可以没有，可以有一个，也可以有多个，这里有一个特殊的字段，窗口扩大因子~，窗口扩大因子可以是2，可以是4，可以是任何数，相乘即可，如果没有窗口扩大因子，默认是1。</p> 
+</blockquote> 
+<p><img alt="" height="709" src="https://images2.imgbox.com/97/63/3EkwXzw1_o.png" width="1024"></p> 
+<h3 style="background-color:transparent;"> 六、拥塞控制（可靠性机制）</h3> 
+<ul><li>流量控制，站在接收方的角度，来控制发送速率，但是整体的传输，其实不光有发送方和接收方，还有中间一系列用来转发的设备！</li></ul> 
+<p><img alt="" height="301" src="https://images2.imgbox.com/91/1d/KGANoRYs_o.png" width="860"></p> 
+<blockquote> 
+ <p> 控制A发的快慢，不仅要考虑到B的接受能力1，也要考虑到中间设备的转发能力！</p> 
+ <p>衡量B的接受能力，是用B的接收缓冲区的剩余空间大小</p> 
+ <p>想要衡量中间的设备，咋办？</p> 
+ <ol style="margin-left:0;"><li>中间的设备都有几个？</li><li>中间的设备各个参数是啥？</li><li>两次传输，经历的中间设备是否相同？</li></ol> 
+</blockquote> 
+<p>对于拥塞控制，采取的方法就是实验，通过实验的方式，找到一个和舍得窗口大小！</p> 
+<ul><li>刚开始按照小窗口来发送</li><li>如果不丢包，说明网络中间环境比较通常，就可以提高发送窗口大小</li><li>放大到一定程度，速率已经比较快，网络上就容易出现拥堵，当发送方发现丢包之后，就减小发送的窗口。</li></ul> 
+<p>反复测试2-3次，这个过程就会达到一个动态平衡</p> 
+<ul><li>发送的速率不快不慢，接近能承载的极限</li><li>同时还可以尽量减少丢包</li><li>还能适应网络环境的动态变化</li></ul> 
+<blockquote> 
+ <p>流量控制 和 拥塞控制 都是通过控制窗口大小，来制约发送方的发送速率的，在保证可靠性的前提下，尽量提高一下发送的速度；都能影响发送方滑动窗口大小！最终的滑动窗口大小，就取决于流量控制和拥塞控制的窗口的“最小值”</p> 
+</blockquote> 
+<blockquote> 
+ <ul><li>如果是拥塞控制的窗口大，流量控制的窗口小，中间的节点转发能力强，接收端的代码，处理的慢。</li><li>如果是拥塞控制的窗口小，流量控制的窗口大，中间的节点转发能力弱，接收端的代码，处理的快。 </li></ul> 
+ <p>其中拥塞控制的窗口大小是发送方自己做实验做出来的，流量控制的窗口大小是接收方通过接收缓冲区剩余空间大小，通过 ACK 报文的报头，返回给发送方的。最终发送方下一次发送窗口的大小，就是通过这两个值的较小值来确定的。</p> 
+</blockquote> 
+<p>上述测试是定性测试，如果是定量测试呢？</p> 
+<p><img alt="" height="247" src="https://images2.imgbox.com/82/1c/rhlR5BOA_o.png" width="520"></p> 
+<p>初始时候，拥塞窗口，从一个很小的数字开始，指数增长~(慢开始)，刚开始的时候网络环境是否拥堵我们不知道！先拿一个小的速率发送，是稳健的做法！如果窗口大小到达阈值之后，就不再指数增长了，变成了线性增长。当线性增长达到一定程度之后，此时就可能丢包，这个时候直接把窗口大小回归到一个特别小的窗口，重复上述的指数增长 / 线性增长的过程，同时，会把刚才线性增长的阈值进行调整。</p> 
+<h3 style="background-color:transparent;">七、延时应答（效率机制）</h3> 
+<ul><li>让流量控制别限制太强</li></ul> 
+<p>也是一个用来提高效率的机制，延时应答则是让窗口能大一些！在流量控制中，通过ACK告知对方，窗口大小（接收缓冲区的空余空间）是多少合适</p> 
+<p><img alt="" height="296" src="https://images2.imgbox.com/28/03/NfaKbX5q_o.png" width="525"></p> 
+<p>在这个等待的时间中，应用程序不停的在消费接收缓冲区（如果立即返回ACK，可能缓冲区的剩余空间是5kb，但是稍等一会，应用程序就可能去走一些数据，缓冲区剩余的空间可能就是50kb或者更多）</p> 
+<blockquote> 
+ <p> 这种发送方式是滑动窗口来发送的，发送方是在批量发送数据，所以不会对发送方等待时间造成很大影响，整体影响不大</p> 
+</blockquote> 
+<p><img alt="" height="357" src="https://images2.imgbox.com/14/22/i8dDAFTE_o.png" width="408"></p> 
+<p>在接收缓冲区少了一个 1001 应答报文，在延时应答的机制下，ACK 不一定要和发送的数据报一一对应，少点也可以，毕竟 2001 涵盖了 1001</p> 
+<h3 style="background-color:transparent;">八、捎带应答（效率机制）</h3> 
+<p>在延迟应答的基础上，我们发现，很多情况下，客户端服务器在应用层也是“一发一收”的，意味着客户端给服务器说“How are you”，服务器也会给客户端回一个“Fine，thank you”，那么这个时候ACK就可以搭顺风车，和服务器回应的“Fine，thank you”一同发给客户端</p> 
+<p><img alt="" height="353" src="https://images2.imgbox.com/39/c8/6Ur13Mgi_o.png" width="820"> 正常情况下，ACK是收到请求之后，内核立即返回的；响应数据，则是应用程序代码发送的，所以他们是出于不同时机发生的，不同的时机，就不能把上个ACK和下一个响应报文合并。但是上面的延时应答，延时一会就可能和返回响应时间重合，一起发送。</p> 
+<blockquote> 
+ <p>所以在延时应答和捎带应答的条件下，四次挥手就可以合并，变成三次挥手</p> 
+</blockquote> 
+<h3 style="background-color:transparent;">九、面向字节流（其他）</h3> 
+<p>面向字节流，指的是读写载荷数据的时候，是按照“字节流”的方式来读取的。TCP数据报，本身仍然是一个一个数据报这样的方法来传输的。</p> 
+<p><img alt="" height="384" src="https://images2.imgbox.com/f0/a2/u1RMSZtO_o.png" width="865"></p> 
+<p>此时，应用程序，在读取数据的时候，就可以很灵活的进行，可以一次读取M个字节，分N次来读。</p> 
+<p><strong>面向字节流的最核心问题：粘包问题！</strong></p> 
+<ul><li>如果一个TCP连接，里面就只传了一个应用层数据报，这个时候就不会粘包（短连接）、</li><li>如果一个TCP连接，里面传输多个应用层数据报，这个时候就容易区分不清，从哪到哪是一个完整的应用层数据！[粘包问题]（长连接）</li></ul> 
+<blockquote> 
+ <p>上述图文中，这些数据都进入了接收缓冲区，接收方也就区分不了，这些数据是来自于几个应用层数据报，也区分不了从哪到哪是一个应用层数据报！</p> 
+</blockquote> 
+<p> 粘包问题解决方案： </p> 
+<ul><li>使用分隔符<img alt="" height="594" src="https://images2.imgbox.com/03/a5/Hfrkc4IC_o.png" width="1200"></li><li>约定长度<img alt="" height="753" src="https://images2.imgbox.com/ac/43/eDs4kk6K_o.png" width="1200"></li><li>自定义应用层协议：设计应用层协议时，可以考虑使用一些高级的协议来处理粘包问题，例如HTTP、WebSocket等。这些协议通常具有消息头和消息体的结构，以便更容易地解析消息。</li></ul> 
+<h3 style="background-color:transparent;">十、异常处理（其他）</h3> 
+<p><strong>主机关机（按照固定程序关机）</strong></p> 
+<p>按照程序关机，会先杀死所有用户进程</p> 
+<p>杀死进程=&gt;释放进程PCB=&gt;是访问文件描述表上对应的文件资源（相当于调用close）</p> 
+<p>这个时候就会触发FIN，开启四次挥手的流程。</p> 
+<p>如果挥手完成，继续关机就没有问题，但是如果挥手没有结束就直接关机，对端会重传FIN若干次，当任没有回应，也就放弃，单方面解除。</p> 
+<p><strong>程序奔溃</strong></p> 
+<p>和上面差不多的，程序正常关闭，还是异常奔溃，都会释放PCB，都会释放文件描述表</p> 
+<p>也还是会四次挥手（虽然进程没了，但是本身TCP连接也是内核负责的，内核任然会继续完成后续需的挥手操作）</p> 
+<p><strong>主机掉电（突然断电）</strong></p> 
+<p>突然断电，就会来不及挥手</p> 
+<ul><li>接收方断电，对方尝试发送数据，发现没有ACK，尝试重传，几次后，没有ACK，发送方尝试重新建立连接，如果还是建立不成功，认为当前网络出现严重问题，也自然的放弃。</li><li>发送方断电，接收方就等待发送方发送数据，由于发送方掉电，这个数据发不过来，接收方不知道是对方没发还是对方出了问题，如果接收方一段时间没有接收到数据，就会定期给发送方发送心跳包，接收方给发送方发送一个特殊的报文（ping），对方返回一个特殊的报文（pong），如果这个东西有了，就认为对方是正常的状态，如果 ping 没有回应的 pong ，就认为对方挂了。</li></ul> 
+<blockquote> 
+ <p>“心跳包” =&gt; 1. 周期性的 2. 判定对方是否存活的</p> 
+</blockquote> 
+<p><strong>网线断开</strong></p> 
+<p>和主机掉电相同</p> 
+<p><strong>扩展：什么时候使用UDP什么时候使用TCP？</strong></p> 
+<ol><li>如果需要关注可靠性传输，优先考虑 TCP</li><li>如果传输的单个数据报比较大（UDP 报文上限是 64kb）优先考虑 TCP</li><li>使用 UDP，对于可靠性传输要求不高，但是对于性能要求很高（同一个机房内部的主机之间通信，网络环境简单，宽带充裕，并且又希望主机间通信能够足够快）</li><li>如果是需要进行 “广播” ，优先考虑 UDP（一个发送方，N 个接收方）（TCP 广播就需要在应用层打开多个连接的方式来实现…）</li></ol> 
+<p></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/37ef3d08410f13801b08a46ab14cc8f2/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">【Python】关于自定义对象的Json序列化和反序列化</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/e98f1a7dc568d7f6bc02639ec4379564/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">UWP和WPF比较</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

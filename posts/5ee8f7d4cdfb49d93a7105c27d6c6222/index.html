@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>网络安全传输系统(4)—线程池优化 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="网络安全传输系统(4)—线程池优化" />
+<meta property="og:description" content="服务器单发模式 初始化-&gt;等待连接-&gt;处理请求-&gt;关闭连接-&gt;再次等待连接服务器并发模式 初始化-&gt;等待连接-&gt;交给子进程处理请求-&gt;再次等待连接单发服务器不能同时处理多个客户端请求，并发服务器则可以同时处理多个客户端请求。并发服务器一般通过创建线程来处理多个客户端请求。当处理的客户端到达上万个时，不断的创建和销毁线程对服务器是一笔很大的开销。通过线程池技术，预先创建大量线程。在使用时直接从线程池中取出，用完后放回线程池。这样就可以大大减少对线程的创建和销毁开销。 1.线程池工作原理
+线程池就是有一堆已经创建好了的线程，当有新的任务需要处理的时候，就从这个池子里面取出一个空闲等待的线程来处理该任务，当处理完成了就再次把该线程放回池中，以供后面的任务再次使用，当池子里面的线程全都处理忙碌状态时，这时新到来的任务需要稍作等待。线程的创建和销毁比之进程的创建和销毁是轻量级的，但是当我们的任务需要大量进行大量线程的创建和销毁操作时，这个消耗就会变的相当大。线程池的好处就在于线程复用，当一个任务处理完成后，当前线程可以继续处理下一个任务，而不是销毁后再创建，非常适用于连续产生大量并发任务的场合。 2.线程池的实现
+先采用一个结构体来描述线程池 /*线程池结构*/ typedef struct { pthread_mutex_t queue_lock; pthread_cond_t queue_ready; /*链表结构，线程池中所有等待任务*/ Cthread_task *queue_head; /*是否销毁线程池*/ int shutdown; /*存放线程id的指针*/ pthread_t *threadid; /*线程池中线程数目*/ int max_thread_num; /*当前等待的任务数*/ int cur_task_size; } Cthread_pool; 这里采用一个链表来保存线程池中等待的任务，当有新任务加入则唤醒一个线程，取下头结点的任务，然后开始工作。如果当前没有任务，则所有的线程都在睡觉，等待新任务加入然后被唤醒。每个任务也采用一个结构体来保存 typedef struct task { //任务需要执行的函数 void *(*process) (void *arg); //执行函数的参数 void *arg; //下一个任务的地址 struct task *next; } Cthread_task; 对线程池进行初始化，主要完成对参数的初始化和创建线程，在线程创建时需要调用下面的线程运行函数： static Cthread_pool *pool = NULL; void pool_init (int max_thread_num) { int i = 0; pool = (Cthread_pool *) malloc (sizeof (Cthread_pool)); pthread_mutex_init (&amp;(pool-&gt;queue_lock), NULL); /*初始化条件变量*/ pthread_cond_init (&amp;(pool-&gt;queue_ready), NULL); //没有任务，头结点为空 pool-&gt;queue_head = NULL; //最大线程个数 pool-&gt;max_thread_num = max_thread_num; //现在任务为0 pool-&gt;cur_task_size = 0; //线程池开始工作 pool-&gt;shutdown = 0; //申请存放线程池id的数组 pool-&gt;threadid = (pthread_t *) malloc (max_thread_num * sizeof (pthread_t)); for (i = 0; i &lt; max_thread_num; i&#43;&#43;) { //创建线程，线程属性为空，参数也设置为空 pthread_create (&amp;(pool-&gt;threadid[i]), NULL, thread_routine, NULL); } } 线程运行函数，线程运行函数编程遵循如下步骤： 如果当前没有任务，线程被阻塞，等待任务加入唤醒线程如果有任务加入，线程会被唤醒，需要取下链表的头任务并对相应的参数做修改，注意这里需要加上互斥锁，最后运行任务函数。如果线程池要销毁了，需要做相应的操作。 void * thread_routine (void *arg) { printf (&#34;" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/5ee8f7d4cdfb49d93a7105c27d6c6222/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2019-09-02T20:13:22+08:00" />
+<meta property="article:modified_time" content="2019-09-02T20:13:22+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">网络安全传输系统(4)—线程池优化</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <ul><li>服务器单发模式 
+  <ul><li>初始化-&gt;等待连接-&gt;处理请求-&gt;关闭连接-&gt;再次等待连接</li></ul></li><li>服务器并发模式 
+  <ul><li>初始化-&gt;等待连接-&gt;交给子进程处理请求-&gt;再次等待连接</li></ul></li><li>单发服务器不能同时处理多个客户端请求，并发服务器则可以同时处理多个客户端请求。<strong><span style="color:#f33b45;">并发服务器一般通过创建线程来处理多个客户端请求。</span></strong>当处理的客户端到达上万个时，不断的创建和销毁线程对服务器是一笔很大的开销。通过线程池技术，预先创建大量线程。在使用时直接从线程池中取出，用完后放回线程池。这样就可以大大减少对线程的创建和销毁开销。</li></ul> 
+<p><strong>1.线程池工作原理</strong></p> 
+<p style="text-align:center;"><img alt="" class="has" height="219" src="https://images2.imgbox.com/5c/37/Kw7nHZUo_o.png" width="210"></p> 
+<ul><li> 线程池就是有一堆已经创建好了的线程，当有新的任务需要处理的时候，就从这个池子里面取出一个空闲等待的线程来处理该任务，当处理完成了就再次把该线程放回池中，以供后面的任务再次使用，当池子里面的线程全都处理忙碌状态时，这时新到来的任务需要稍作等待。</li><li>线程的创建和销毁比之进程的创建和销毁是轻量级的，但是当我们的任务需要大量进行大量线程的创建和销毁操作时，这个消耗就会变的相当大。<span style="color:#f33b45;"><strong>线程池的好处就在于线程复用，当一个任务处理完成后，当前线程可以继续处理下一个任务，而不是销毁后再创建，非常适用于连续产生大量并发任务的场合。</strong></span></li></ul> 
+<p><strong>2.线程池的实现</strong></p> 
+<ul><li>先采用一个结构体来描述线程池</li></ul> 
+<pre class="has"><code class="language-cpp">/*线程池结构*/ 
+typedef struct 
+{ 
+    pthread_mutex_t queue_lock; 
+    pthread_cond_t queue_ready; 
+ 
+    /*链表结构，线程池中所有等待任务*/ 
+    Cthread_task *queue_head; 
+ 
+    /*是否销毁线程池*/ 
+    int shutdown; 
+    /*存放线程id的指针*/
+    pthread_t *threadid; 
+    
+    /*线程池中线程数目*/ 
+    int max_thread_num; 
+    
+    /*当前等待的任务数*/ 
+    int cur_task_size; 
+ 
+} Cthread_pool; 
+</code></pre> 
+<ul><li>这里采用一个<strong><span style="color:#f33b45;">链表</span></strong>来保存线程池中等待的任务，当有新任务加入则唤醒一个线程，取下头结点的任务，然后开始工作。如果当前没有任务，则所有的线程都在睡觉，等待新任务加入然后被唤醒。</li><li>每个任务也采用一个结构体来保存</li></ul> 
+<pre class="has"><code class="language-cpp">typedef struct task 
+{ 
+    //任务需要执行的函数
+    void *(*process) (void *arg); 
+    //执行函数的参数
+    void *arg;
+    //下一个任务的地址
+    struct task *next; 
+} Cthread_task; 
+</code></pre> 
+<ul><li>对线程池进行初始化，主要完成对参数的初始化和创建线程，在线程创建时需要调用下面的线程运行函数：</li></ul> 
+<pre class="has"><code class="language-cpp">static Cthread_pool *pool = NULL;
+void pool_init (int max_thread_num) 
+{ 
+    int i = 0;
+    
+    pool = (Cthread_pool *) malloc (sizeof (Cthread_pool)); 
+ 
+    pthread_mutex_init (&amp;(pool-&gt;queue_lock), NULL); 
+    /*初始化条件变量*/
+    pthread_cond_init (&amp;(pool-&gt;queue_ready), NULL); 
+    //没有任务，头结点为空
+    pool-&gt;queue_head = NULL; 
+    //最大线程个数
+    pool-&gt;max_thread_num = max_thread_num; 
+    //现在任务为0
+    pool-&gt;cur_task_size = 0; 
+    //线程池开始工作
+    pool-&gt;shutdown = 0; 
+    //申请存放线程池id的数组
+    pool-&gt;threadid = (pthread_t *) malloc (max_thread_num * sizeof (pthread_t)); 
+ 
+    for (i = 0; i &lt; max_thread_num; i++) 
+    {  
+    	//创建线程，线程属性为空，参数也设置为空
+        pthread_create (&amp;(pool-&gt;threadid[i]), NULL, thread_routine, NULL); 
+    } 
+} </code></pre> 
+<ul><li>线程运行函数，线程运行函数编程遵循如下步骤： 
+  <ul><li>如果当前没有任务，线程被阻塞，等待任务加入唤醒线程</li><li>如果有任务加入，线程会被唤醒，需要取下链表的头任务并对相应的参数做修改，<span style="color:#f33b45;"><strong>注意这里需要加上互斥锁</strong></span>，最后运行任务函数。</li><li>如果线程池要销毁了，需要做相应的操作。</li></ul></li></ul> 
+<pre class="has"><code class="language-cpp">void * thread_routine (void *arg) 
+{ 
+    printf ("starting thread 0x%x\n", pthread_self ()); 
+    while (1) 
+    { 
+    	//加上互斥锁
+        pthread_mutex_lock (&amp;(pool-&gt;queue_lock)); 
+	//如果没有任务，则阻塞，等待被唤醒
+        while (pool-&gt;cur_task_size == 0 &amp;&amp; !pool-&gt;shutdown) 
+        { 
+            printf ("thread 0x%x is waiting\n", pthread_self ()); 
+            pthread_cond_wait (&amp;(pool-&gt;queue_ready), &amp;(pool-&gt;queue_lock)); 
+        } 
+ 
+        /*线程池要销毁了*/ 
+        if (pool-&gt;shutdown) 
+        { 
+            /*遇到break,continue,return等跳转语句，千万不要忘记先解锁*/ 
+            pthread_mutex_unlock (&amp;(pool-&gt;queue_lock)); 
+            printf ("thread 0x%x will exit\n", pthread_self ()); 
+            pthread_exit (NULL); 
+        } 
+ 
+        printf ("thread 0x%x is starting to work\n", pthread_self ()); 
+ 
+         
+        /*待处理任务减1，并取出链表中的头元素*/ 
+        pool-&gt;cur_task_size--; 
+        Cthread_task *task = pool-&gt;queue_head; 
+        pool-&gt;queue_head = task-&gt;next; 
+        //解锁
+        pthread_mutex_unlock (&amp;(pool-&gt;queue_lock)); 
+ 
+        /*调用回调函数，执行任务*/ 
+        (*(task-&gt;process)) (task-&gt;arg); 
+        free (task); 
+        task = NULL; 
+    } 
+    /*这一句应该是不可达的*/ 
+    pthread_exit (NULL); 
+}</code></pre> 
+<ul><li>往任务列表中加入一个任务，加入任务需要对当前任务分配一个任务节点并登记，然后加入任务列表，最后唤醒一个线程：</li></ul> 
+<pre class="has"><code class="language-cpp">/*向线程池中加入任务*/ 
+int pool_add_task (void *(*process) (void *arg), void *arg) 
+{ 
+    /*构造一个新任务*/ 
+    Cthread_task *task = (Cthread_task *) malloc (sizeof (Cthread_task)); 
+    task-&gt;process = process; 
+    task-&gt;arg = arg; 
+    task-&gt;next = NULL;
+ 
+    pthread_mutex_lock (&amp;(pool-&gt;queue_lock)); 
+    /*将任务加入到等待队列中*/ 
+    Cthread_task *member = pool-&gt;queue_head; 
+    if (member != NULL) 
+    { 
+        while (member-&gt;next != NULL) 
+            member = member-&gt;next; 
+        member-&gt;next = task; 
+    } 
+    else 
+    { 
+        pool-&gt;queue_head = task; 
+    } 
+ 
+    pool-&gt;cur_task_size++; 
+    pthread_mutex_unlock (&amp;(pool-&gt;queue_lock)); 
+    //唤醒一个线程
+    //加入
+    pthread_cond_signal (&amp;(pool-&gt;queue_ready)); 
+    
+    return 0; 
+} </code></pre> 
+<ul><li>线程池销毁函数，线程池销毁时，需要等待正在运行的线程退出，然后把阻塞的线程唤醒，最后销毁线程和其他一些参数：</li></ul> 
+<pre class="has"><code class="language-cpp">/*销毁线程池，等待队列中的任务不会再被执行，但是正在运行的线程会一直 把任务运行完后再退出*/ 
+int pool_destroy () 
+{ 
+    if (pool-&gt;shutdown) 
+        return -1;/*防止两次调用*/ 
+    pool-&gt;shutdown = 1; 
+ 
+    /*唤醒所有等待线程，线程池要销毁了*/ 
+    pthread_cond_broadcast (&amp;(pool-&gt;queue_ready)); 
+ 
+    /*阻塞等待线程退出，否则就成僵尸了*/ 
+    int i; 
+    for (i = 0; i &lt; pool-&gt;max_thread_num; i++) 
+        pthread_join (pool-&gt;threadid[i], NULL); 
+    free (pool-&gt;threadid); 
+ 
+    /*销毁等待队列*/ 
+    Cthread_task *head = NULL; 
+    while (pool-&gt;queue_head != NULL) 
+    { 
+        head = pool-&gt;queue_head; 
+        pool-&gt;queue_head = pool-&gt;queue_head-&gt;next; 
+        free (head); 
+    } 
+    /*条件变量和互斥量也别忘了销毁*/ 
+    pthread_mutex_destroy(&amp;(pool-&gt;queue_lock)); 
+    pthread_cond_destroy(&amp;(pool-&gt;queue_ready)); 
+     
+    free (pool); 
+    /*销毁后指针置空是个好习惯*/ 
+    pool=NULL; 
+    return 0; 
+} </code></pre> 
+<p><strong>3.线程池编程实例</strong></p> 
+<pre class="has"><code class="language-cpp">#include &lt;stdio.h&gt; 
+#include &lt;stdlib.h&gt; 
+#include &lt;unistd.h&gt; 
+#include &lt;sys/types.h&gt; 
+#include &lt;pthread.h&gt; 
+
+typedef struct task 
+{ 
+    void *(*process) (void *arg); 
+    void *arg;
+    struct task *next; 
+} Cthread_task; 
+
+/*线程池结构*/ 
+typedef struct 
+{ 
+    pthread_mutex_t queue_lock; 
+    pthread_cond_t queue_ready; 
+
+    /*链表结构，线程池中所有等待任务*/ 
+    Cthread_task *queue_head; 
+
+    /*是否销毁线程池*/ 
+    int shutdown; 
+    pthread_t *threadid; 
+    
+    /*线程池中线程数目*/ 
+    int max_thread_num; 
+    
+    /*当前等待的任务数*/ 
+    int cur_task_size; 
+
+} Cthread_pool; 
+
+static Cthread_pool *pool = NULL;
+
+void *thread_routine(void *arg);
+
+void pool_init (int max_thread_num) 
+{ 
+    int i = 0;
+    
+	pool = (Cthread_pool *)malloc(sizeof(Cthread_pool));
+
+	pthread_mutex_init(&amp;(pool-&gt;queue_lock), NULL);
+    /*初始化条件变量*/
+	pthread_cond_init(&amp;(pool-&gt;queue_ready), NULL);
+
+    pool-&gt;queue_head = NULL; 
+
+    pool-&gt;max_thread_num = max_thread_num; 
+    pool-&gt;cur_task_size = 0; 
+
+    pool-&gt;shutdown = 0; 
+
+	pool-&gt;threadid = (pthread_t *)malloc(max_thread_num * sizeof(pthread_t));
+
+    for (i = 0; i &lt; max_thread_num; i++) 
+    {  
+		pthread_create(&amp;(pool-&gt;threadid[i]), NULL, thread_routine, NULL);
+    } 
+} 
+
+/*向线程池中加入任务*/ 
+int pool_add_task (void *(*process) (void *arg), void *arg) 
+{ 
+    /*构造一个新任务*/ 
+	Cthread_task *task = (Cthread_task *)malloc(sizeof(Cthread_task));
+    task-&gt;process = process; 
+    task-&gt;arg = arg; 
+    task-&gt;next = NULL;
+
+	pthread_mutex_lock(&amp;(pool-&gt;queue_lock));
+    /*将任务加入到等待队列中*/ 
+    Cthread_task *member = pool-&gt;queue_head; 
+    if (member != NULL) 
+    { 
+        while (member-&gt;next != NULL) 
+            member = member-&gt;next; 
+        member-&gt;next = task; 
+    } 
+    else 
+    { 
+        pool-&gt;queue_head = task; 
+    } 
+
+    pool-&gt;cur_task_size++; 
+	pthread_mutex_unlock(&amp;(pool-&gt;queue_lock));
+    
+	pthread_cond_signal(&amp;(pool-&gt;queue_ready));
+    
+    return 0; 
+} 
+
+
+/*销毁线程池，等待队列中的任务不会再被执行，但是正在运行的线程会一直 
+把任务运行完后再退出*/ 
+int pool_destroy() 
+{ 
+    if (pool-&gt;shutdown) 
+        return -1;/*防止两次调用*/ 
+    pool-&gt;shutdown = 1; 
+
+    /*唤醒所有等待线程，线程池要销毁了*/ 
+	pthread_cond_broadcast(&amp;(pool-&gt;queue_ready));
+
+    /*阻塞等待线程退出，否则就成僵尸了*/ 
+    int i; 
+	for (i = 0; i &lt; pool-&gt;max_thread_num; i++)
+		pthread_join(pool-&gt;threadid[i], NULL);
+	free(pool-&gt;threadid);
+
+    /*销毁等待队列*/ 
+    Cthread_task *head = NULL; 
+    while (pool-&gt;queue_head != NULL) 
+    { 
+        head = pool-&gt;queue_head; 
+        pool-&gt;queue_head = pool-&gt;queue_head-&gt;next; 
+		free(head);
+    } 
+    /*条件变量和互斥量也别忘了销毁*/ 
+    pthread_mutex_destroy(&amp;(pool-&gt;queue_lock)); 
+    pthread_cond_destroy(&amp;(pool-&gt;queue_ready)); 
+     
+    free (pool); 
+    /*销毁后指针置空是个好习惯*/ 
+    pool=NULL; 
+    
+	return 0; 
+} 
+
+void *thread_routine(void *arg)
+{ 
+	printf("starting thread 0x%x\n", pthread_self());
+    while (1) 
+    { 
+		pthread_mutex_lock(&amp;(pool-&gt;queue_lock));
+
+        while (pool-&gt;cur_task_size == 0 &amp;&amp; !pool-&gt;shutdown) 
+        { 
+			printf("thread 0x%x is waiting\n", pthread_self());
+			pthread_cond_wait(&amp;(pool-&gt;queue_ready), &amp;(pool-&gt;queue_lock));
+        } 
+
+        /*线程池要销毁了*/ 
+        if (pool-&gt;shutdown) 
+        { 
+            /*遇到break,continue,return等跳转语句，千万不要忘记先解锁*/ 
+			pthread_mutex_unlock(&amp;(pool-&gt;queue_lock));
+			printf("thread 0x%x will exit\n", pthread_self());
+			pthread_exit(NULL);
+        } 
+
+        printf ("thread 0x%x is starting to work\n", pthread_self()); 
+
+        /*待处理任务减1，并取出链表中的头元素*/ 
+        pool-&gt;cur_task_size--; 
+        Cthread_task *task = pool-&gt;queue_head; 
+        pool-&gt;queue_head = task-&gt;next; 
+        pthread_mutex_unlock(&amp;(pool-&gt;queue_lock)); 
+
+        /*调用回调函数，执行任务*/ 
+        (*(task-&gt;process))(task-&gt;arg); 
+        free (task); 
+        task = NULL; 
+    } 
+    
+	/*这一句应该是不可达的*/ 
+    pthread_exit(NULL); 
+}
+
+void *myprocess(void *arg) 
+{ 
+	printf("threadid is 0x%x, working on task %d\n", pthread_self(), *(int *)arg);
+    sleep(1);    /*休息一秒，延长任务的执行时间*/ 
+    
+	return NULL; 
+} 
+
+int main(int argc, char **argv) 
+{ 
+    pool_init(3);   /*线程池中最多三个活动线程*/ 
+     
+    /*连续向池中投入10个任务*/ 
+	int *workingnum = (int *)malloc(sizeof(int) * 10);
+    int i; 
+    for (i = 0; i &lt; 10; i++) 
+    { 
+        workingnum[i] = i; 
+        pool_add_task(myprocess, &amp;workingnum[i]); 
+    } 
+    /*等待所有任务完成*/ 
+	sleep(5);
+    /*销毁线程池*/ 
+    pool_destroy(); 
+
+    free(workingnum); 
+    
+    return 0; 
+}</code></pre> 
+<p> </p> 
+<ul><li>运行结果：<img alt="" class="has" height="304" src="https://images2.imgbox.com/29/74/51G1w43o_o.png" width="216"></li></ul> 
+<p><strong>​​​​​​​4.改进后的服务器代码</strong></p> 
+<pre class="has"><code class="language-cpp">#include&lt;stdio.h&gt;
+#include&lt;string.h&gt;
+#include&lt;sys/socket.h&gt;
+#include&lt;sys/types.h&gt;
+#include&lt;netinet/in.h&gt;
+#include&lt;errno.h&gt;
+#include&lt;fcntl.h&gt;
+#include&lt;unistd.h&gt;
+
+#include &lt;openssl/err.h&gt;
+#include &lt;openssl/ssl.h&gt;
+#include &lt;pthread.h&gt; 
+
+#define port 3333
+
+typedef struct task
+{
+	void *(*process) (int arg);
+	int arg;
+	struct task *next;
+} Cthread_task;
+
+/*线程池结构*/
+typedef struct
+{
+	pthread_mutex_t queue_lock;
+	pthread_cond_t queue_ready;
+
+	/*链表结构，线程池中所有等待任务*/
+	Cthread_task *queue_head;
+
+	/*是否销毁线程池*/
+	int shutdown;
+	pthread_t *threadid;
+
+	/*线程池中线程数目*/
+	int max_thread_num;
+
+	/*当前等待的任务数*/
+	int cur_task_size;
+
+} Cthread_pool;
+
+static Cthread_pool *pool = NULL;
+
+void *thread_routine(void *arg);
+
+int sockfd;
+struct sockaddr_in sockaddr;
+struct sockaddr_in client_addr;
+int sin_size;
+SSL_CTX *ctx;
+
+void pool_init(int max_thread_num)
+{
+	int i = 0;
+
+	pool = (Cthread_pool *)malloc(sizeof(Cthread_pool));
+
+	pthread_mutex_init(&amp;(pool-&gt;queue_lock), NULL);
+	/*初始化条件变量*/
+	pthread_cond_init(&amp;(pool-&gt;queue_ready), NULL);
+
+	pool-&gt;queue_head = NULL;
+
+	pool-&gt;max_thread_num = max_thread_num;
+	pool-&gt;cur_task_size = 0;
+
+	pool-&gt;shutdown = 0;
+
+	pool-&gt;threadid = (pthread_t *)malloc(max_thread_num * sizeof(pthread_t));
+
+	for (i = 0; i &lt; max_thread_num; i++)
+	{
+		pthread_create(&amp;(pool-&gt;threadid[i]), NULL, thread_routine, NULL);
+	}
+}
+
+void *thread_routine(void *arg)
+{
+	printf("starting thread 0x%x\n", pthread_self());
+	while (1)
+	{
+		pthread_mutex_lock(&amp;(pool-&gt;queue_lock));
+
+		while (pool-&gt;cur_task_size == 0 &amp;&amp; !pool-&gt;shutdown)
+		{
+			printf("thread 0x%x is waiting\n", pthread_self());
+			pthread_cond_wait(&amp;(pool-&gt;queue_ready), &amp;(pool-&gt;queue_lock));
+		}
+
+		/*线程池要销毁了*/
+		if (pool-&gt;shutdown)
+		{
+			/*遇到break,continue,return等跳转语句，千万不要忘记先解锁*/
+			pthread_mutex_unlock(&amp;(pool-&gt;queue_lock));
+			printf("thread 0x%x will exit\n", pthread_self());
+			pthread_exit(NULL);
+		}
+
+		printf("thread 0x%x is starting to work\n", pthread_self());
+
+		/*待处理任务减1，并取出链表中的头元素*/
+		pool-&gt;cur_task_size--;
+		Cthread_task *task = pool-&gt;queue_head;
+		pool-&gt;queue_head = task-&gt;next;
+		pthread_mutex_unlock(&amp;(pool-&gt;queue_lock));
+
+		/*调用回调函数，执行任务*/
+		(*(task-&gt;process)) (task-&gt;arg);
+		free(task);
+		task = NULL;
+	}
+	
+	/*这一句应该是不可达的*/
+	pthread_exit(NULL);
+}
+
+/*向线程池中加入任务*/
+int pool_add_task(void *(*process) (int arg), int arg)
+{
+	/*构造一个新任务*/
+	Cthread_task *task = (Cthread_task *)malloc(sizeof(Cthread_task));
+	task-&gt;process = process;
+	task-&gt;arg = arg;
+	task-&gt;next = NULL;
+
+	pthread_mutex_lock(&amp;(pool-&gt;queue_lock));
+	/*将任务加入到等待队列中*/
+	Cthread_task *member = pool-&gt;queue_head;
+	if (member != NULL)
+	{
+		while (member-&gt;next != NULL)
+			member = member-&gt;next;
+		member-&gt;next = task;
+	}
+	else
+	{
+		pool-&gt;queue_head = task;
+	}
+
+	pool-&gt;cur_task_size++;
+	pthread_mutex_unlock(&amp;(pool-&gt;queue_lock));
+	//唤醒一个线程
+	//加入
+	pthread_cond_signal(&amp;(pool-&gt;queue_ready));
+
+	return 0;
+}
+
+void handle(char cmd, SSL *ssl)
+{
+	char filename[30] = { 0 };
+	int FileNameSize = 0;
+	int fd;
+	int filesize = 0;
+	int count = 0, totalrecv = 0;
+	char buf[1024];
+	struct stat fstat;
+	switch (cmd)
+	{
+		case 'U':
+		{
+			//接收文件名
+			SSL_read(ssl, &amp;FileNameSize, 4);
+			SSL_read(ssl, (void *)filename, FileNameSize);
+			filename[FileNameSize] = '\0';
+			//创建文件
+			if ((fd = open(filename, O_RDWR | O_CREAT)) == -1)
+			{
+				perror("creat:");
+				_exit(0);
+			}
+			//接收文件长度
+			SSL_read(ssl, &amp;filesize, 4);
+
+			//接收文件
+			while ((count = SSL_read(ssl, (void *)buf, 1024)) &gt; 0)
+			{
+				write(fd, &amp;buf, count);
+				totalrecv += count;
+				if (totalrecv == filesize)
+					break;
+			}
+			//关闭文件
+			close(fd);
+		}
+		break;
+
+		case 'D':
+		{
+			//接收文件名
+			SSL_read(ssl, &amp;FileNameSize, 4);
+			SSL_read(ssl, filename, FileNameSize);
+			filename[FileNameSize] = '\0';
+			//打开文件
+			if ((fd = open(filename, O_RDONLY)) == -1)
+			{
+				perror("creat:");
+				_exit(0);
+			}
+			//发送文件长度和文件名
+			if ((stat(filename, &amp;fstat)) == -1)
+				return;
+			SSL_write(ssl, &amp;fstat.st_size, 4);
+
+			while ((count = read(fd, (void *)buf, 1024)) &gt; 0)
+			{
+				SSL_write(ssl, &amp;buf, count);
+			}
+			close(fd);
+		}
+		break;
+	}
+}
+
+void *myprocess(int args)
+{
+	SSL *ssl;
+	int tmp_fd = args;
+	char cmd;
+
+	//产生新的SSL
+	ssl = SSL_new(ctx);
+	SSL_set_fd(ssl, tmp_fd);
+	SSL_accept(ssl);
+	
+	//处理事件
+	while (1)
+	{
+		SSL_read(ssl, &amp;cmd, 1);
+
+		if (cmd == 'Q')
+		{
+			SSL_shutdown(ssl);
+			SSL_free(ssl);
+			close(tmp_fd);
+			break;
+		}
+		else
+		{
+			handle(cmd, ssl);
+		}
+	}
+	return NULL;
+}
+
+
+int main()
+{
+	int newfd;
+	
+	// 初始化线程池
+	pool_init(5);
+
+	//建立连接
+
+	//SSL连接
+	SSL_library_init();
+	OpenSSL_add_all_algorithms();
+	SSL_load_error_strings();
+	ctx = SSL_CTX_new(SSLv23_server_method());
+	//载入数字证书
+	SSL_CTX_use_certificate_file(ctx, "./cacert.pem", SSL_FILETYPE_PEM);
+	//载入私钥
+	SSL_CTX_use_PrivateKey_file(ctx, "./privkey.pem", SSL_FILETYPE_PEM);
+	SSL_CTX_check_private_key(ctx);
+	//创建socket
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	{
+		perror("socket:");
+		_exit(0);
+	}
+
+	memset(&amp;sockaddr, 0, sizeof(sockaddr));
+	sockaddr.sin_family = AF_INET;
+	sockaddr.sin_port = htons(port);
+	sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	// 绑定地址
+	if (bind(sockfd, (struct sockaddr *)&amp;sockaddr, sizeof(sockaddr)) == -1)
+	{
+		perror("bind:");
+		_exit(0);
+	}
+	
+	// 监听
+	if (listen(sockfd, 10) == -1)
+	{
+		perror("listen");
+	}
+
+	while (1)
+	{
+		// 连接
+		if ((newfd = accept(sockfd, (struct sockaddr *)(&amp;client_addr), &amp;sin_size)) == -1)
+		{
+			perror("accept:");
+			_exit(0);
+		}
+		
+		// 给线程池添加任务
+		pool_add_task(myprocess, newfd);
+	}
+	
+	close(sockfd);
+	SSL_CTX_free(ctx);
+	
+	return 0;
+}</code></pre> 
+<p> </p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/47f597723bad394f249ec1a5604e0ffa/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">(九) SQL CREATE 语句</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/9a5e837db6bc865c8f989b4e0567012e/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">网络安全传输系统(5)—账号管理子系统设计</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

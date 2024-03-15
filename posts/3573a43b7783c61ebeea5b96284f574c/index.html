@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Linux设备驱动开发详解-Note(1)---设备驱动概述(1) - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Linux设备驱动开发详解-Note(1)---设备驱动概述(1)" />
+<meta property="og:description" content="设备驱动概述(1) 成于坚持，败于止步
+设备驱动的作用 任何一个计算机系统的运行都是系统中软硬件协作的结果，没有硬件的软件是空中楼阁，而没有软件的硬件则只是一堆废铁。硬件是底层基础，是所有软件得以运行的平台，代码最终会落实为硬件上的组合逻辑与时序逻辑；软件则实现了具体应用，它按照各种不同的业务需求而设计，满足了用户的需求。硬件较固定，软件则很灵活，可以适应各种复杂多变的应用。可以说，计算机系统的软硬件互相成就了对方。 但是，软硬件之间同样存在着悖论，那就是软件和硬件不应该互相渗透到对方的领地。为了尽可能快速地完成设计，应用软件工程师不想也不必关心硬件，而硬件工程师也难有足够的闲暇和能力来顾及软件。例如，应用软件工程师在调用套接字发送和接收数据包的时候，不必关心网卡上的中断、寄存器、存储空间、I/O 端口、片选以及其他任何硬件词汇；在使用 printf()函数输出信息的时候，他不用知道底层究竟是怎样把相应的信息输出到屏幕或串口。 也就是说，应用软件工程师需要看到一个没有硬件的纯粹的软件世界，硬件必须被透明地呈现给他们。谁来实现硬件对应用软件工程师的隐形？这个艰巨的任务就落在了驱动工程师的头上。 对设备驱动最通俗的解释就是“驱使硬件设备行动”。设备驱动与底层硬件直接打交道，按照硬件设备的具体工作方式读写设备寄存器，完成设备的轮询、中断处理、DMA 通信，进行物理内存向虚拟内存的映射，最终使通信设备能够收发数据，使显示设备能够显示文字和画面，使存储设备能够记录文件和数据。 由此可见，设备驱动充当了硬件和应用软件之间的纽带，它使得应用软件只需要调用系统软件的应用编程接口（API）就可让硬件去完成要求的工作。在系统中没有操作系统的情况下，工程师可以根据硬件设备的特点自行定义接口，如对串口定义SerialSend()、SerialRecv()；对 LED 定义 LightOn()、LightOff()；以及对 Flash 定义FlashWrite()、FlashRead()等。而在有操作系统的情况下，设备驱动的架构则由相应的操作系统定义，驱动工程师必须按照相应的架构设计设备驱动，这样，设备驱动才能良好地整合到操作系统的内核中。 驱动程序沟通着硬件和应用软件，而驱动工程师则沟通着硬件工程师和应用软件工程师。随着通信、电子行业的迅速发展，全世界每天都会有大量的新芯片被生产，大量的新电路板被设计，因此，也会有大量设备驱动需要开发。这些设备驱动，或运行在简单的单任务环境中，或运行在 VxWorks、Linux、Windows等多任务操作系统环境中，发挥着不可替代的作用。 无操作系统时的设备驱动
+并不是任何一个计算机系统都一定要运行操作系统，在许多情况下操作系统是不必要的。对于功能比较单一、控制并不复杂的系统，如公交车刷卡机、电冰箱、微波炉、简单的手机和小灵通等，并不需要多任务调度、文件系统、内存管理等复杂功能，
+用单任务架构完全可以很好地支持它们的工作。一个无限循环中夹杂对设备中断的检测或者对设备的轮询是这种系统中软件的典型架构:
+1 int main(int argc, char* argv[]) 2 { 3 while (1) 4 { 5 if (serialInt == 1) 6 /*有串口中断*/ 7 { 8 ProcessSerialInt(); /*处理串口中断*/ 9 serialInt = 0; /*中断标志变量清零*/ 10 } 11 if (keyInt == 1) 12 /*有按键中断*/ 13 { 14 ProcessKeyInt(); /*处理按键中断*/ 15 keyInt = 0; /*中断标志变量清零*/ 16 } 17 status = CheckXXX(); 18 switch (status) 19 { 20 ." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/3573a43b7783c61ebeea5b96284f574c/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2013-07-08T14:48:31+08:00" />
+<meta property="article:modified_time" content="2013-07-08T14:48:31+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Linux设备驱动开发详解-Note(1)---设备驱动概述(1)</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="htmledit_views">
+                    <h2 style="text-align:center"><span style="color:#006600">设备驱动概述(1)</span></h2> 
+<p><strong><span style="color:#cc0000"><span style="color:rgb(204,0,0); font-family:Arial; font-size:14px; line-height:26px">成于坚持，败于止步</span><br> </span></strong></p> 
+<p><strong><span style="color:#cc0000">设备驱动的作用 </span></strong></p> 
+<p>任何一个计算机系统的运行都是系统中软硬件协作的结果，没有硬件的软件是空中楼阁，而没有软件的硬件则只是一堆废铁。硬件是底层基础，是所有软件得以运行的平台，代码最终会落实为硬件上的组合逻辑与时序逻辑；软件则实现了具体应用，它按照各种不同的业务需求而设计，满足了用户的需求。硬件较固定，软件则很灵活，可以适应各种复杂多变的应用。可以说，计算机系统的软硬件互相成就了对方。 </p> 
+<p>但是，软硬件之间同样存在着悖论，那就是软件和硬件不应该互相渗透到对方的领地。为了尽可能快速地完成设计，应用软件工程师不想也不必关心硬件，而硬件工程师也难有足够的闲暇和能力来顾及软件。例如，应用软件工程师在调用套接字发送和接收数据包的时候，不必关心网卡上的中断、寄存器、存储空间、I/O 端口、片选以及其他任何硬件词汇；在使用 printf()函数输出信息的时候，他不用知道底层究竟是怎样把相应的信息输出到屏幕或串口。 </p> 
+<p>也就是说，应用软件工程师需要看到一个没有硬件的纯粹的软件世界，硬件必须被透明地呈现给他们。谁来实现硬件对应用软件工程师的隐形？这个艰巨的任务就落在了驱动工程师的头上。 对设备驱动最通俗的解释就是“驱使硬件设备行动”。设备驱动与底层硬件直接打交道，按照硬件设备的具体工作方式读写设备寄存器，完成设备的轮询、中断处理、DMA 通信，进行物理内存向虚拟内存的映射，最终使通信设备能够收发数据，使显示设备能够显示文字和画面，使存储设备能够记录文件和数据。 </p> 
+<p>由此可见，设备驱动充当了硬件和应用软件之间的纽带，它使得应用软件只需要调用系统软件的应用编程接口（API）就可让硬件去完成要求的工作。在系统中没有操作系统的情况下，工程师可以根据硬件设备的特点自行定义接口，如对串口定义SerialSend()、SerialRecv()；对 LED 定义 LightOn()、LightOff()；以及对 Flash 定义FlashWrite()、FlashRead()等。而在有操作系统的情况下，设备驱动的架构则由相应的操作系统定义，驱动工程师必须按照相应的架构设计设备驱动，这样，设备驱动才能良好地整合到操作系统的内核中。 </p> 
+<p>驱动程序沟通着硬件和应用软件，而驱动工程师则沟通着硬件工程师和应用软件工程师。随着通信、电子行业的迅速发展，全世界每天都会有大量的新芯片被生产，大量的新电路板被设计，因此，也会有大量设备驱动需要开发。这些设备驱动，或运行在简单的单任务环境中，或运行在 VxWorks、Linux、Windows等多任务操作系统环境中，发挥着不可替代的作用。 </p> 
+<p><strong><span style="color:#cc0000">无操作系统时的设备驱动</span></strong><br> </p> 
+<p>并不是任何一个计算机系统都一定要运行操作系统，在许多情况下操作系统是不必要的。对于功能比较单一、控制并不复杂的系统，如公交车刷卡机、电冰箱、微波炉、简单的手机和小灵通等，并不需要多任务调度、文件系统、内存管理等复杂功能，<br> 用单任务架构完全可以很好地支持它们的工作。一个无限循环中夹杂对设备中断的检测或者对设备的轮询是这种系统中软件的典型架构:<br> </p> 
+<p></p> 
+<pre><code class="language-html">1  int main(int argc, char* argv[]) 
+2  { 
+3    while (1) 
+4    { 
+5      if (serialInt == 1) 
+6      /*有串口中断*/ 
+7      { 
+8        ProcessSerialInt(); /*处理串口中断*/ 
+9        serialInt = 0;        /*中断标志变量清零*/ 
+10     } 
+11     if (keyInt == 1) 
+12     /*有按键中断*/ 
+13     { 
+14       ProcessKeyInt();     /*处理按键中断*/ 
+15       keyInt = 0;        /*中断标志变量清零*/ 
+16     } 
+17     status = CheckXXX(); 
+18     switch (status) 
+19     { 
+20       ... 
+21     } 
+22     ... 
+23   } 
+24 } </code></pre> 
+<p></p> 
+<p>在这样的系统中，虽然不存在操作系统，但是设备驱动是必须存在的。一般情况下，对每一种设备驱动都会定义为一个软件模块，包含.h 文件和.c 文件，前者定义该设备驱动的数据结构并声明外部函数，后者进行设备驱动的具体实现：<br> </p> 
+<p></p> 
+<pre><code class="language-html">1  /********************** 
+2   *serial.h 文件 
+3   **********************/ 
+4  extern void SerialInit(void); 
+5  extern void SerialSend(const char buf*,int count);
+6  extern void SerialRecv(char buf*,int count); 
+7   
+8  /********************** 
+9   *serial.c 文件 
+10  **********************/ 
+11 /*初始化串口*/ 
+12 void SerialInit(void) 
+13 { 
+14  ... 
+15 } 
+16 /*串口发送*/ 
+17 void SerialSend(const char buf*,int count) 
+18 { 
+19  ... 
+20 } 
+21 /*串口接收*/ 
+22 void SerialRecv(char buf*,int count) 
+23 { 
+24  ... 
+25 } 
+26 /*串口中断处理函数*/ 
+27 void SerialIsr(void) 
+28 { 
+29  ... 
+30  serialInt = 1; 
+31 }</code></pre> 
+<p></p> 
+<p>其他模块需要使用这个设备的时候，只需要包含设备驱动的头文件 serial.h，然后调用其中的外部接口函数即可。如我们要从串口上发送字符串“Hello World”，使用函数 SerialSend( " Hello World ",11)即可。 由此可见，在没有操作系统的情况下，设备驱动的接口被直接提交给了应用软件工程师，应用软件没有跨越任何层次就直接访问了设备驱动的接口。设备驱动包含的接口函数也与硬件的功能直接吻合，没有任何附加功能。图 1.1 所示为无操作系统情况下硬件、设备驱动与应用软件的关系。<br> <img src="https://images2.imgbox.com/2c/3b/B8cCjGg5_o.png" alt=""><br> 有的工程师把单任务系统设计成了如图1.2所示的结构，即设备驱动和具体的应用软件模块处于同一层次，这显然是不合理的，不符合软件设计中高内聚低耦合的要求。 </p> 
+<p><img src="https://images2.imgbox.com/87/86/DSpd1cRM_o.png" alt=""><br> </p> 
+<p>另一种不合理的设计是直接在应用中操作硬件的寄存器，而不单独设计驱动模块，如图 1.3 所示。这种设计意味着系统中不存在或未能充分利用可被重用的驱动代码。<br> </p> 
+<img src="https://images2.imgbox.com/23/63/EeMbRWuu_o.png" alt=""> 
+<p><strong><span style="color:#cc0000">有操作系统时的设备驱动 </span></strong></p> 
+<p>上面设备驱动直接运行在硬件之上，不与任何操作系统关联。当系统中包含操作系统后，设备驱动会变得怎样？ </p> 
+<p>首先，无操作系统时设备驱动的硬件操作工作仍然是必不可少的，没有这一部分，设备驱动不可能与硬件打交道。 </p> 
+<p>其次，我们还需要将设备驱动融入内核。为了实现这种融合，必须在所有的设备驱动中设计面向操作系统内核的接口，这样的接口由操作系统规定，对一类设备而言结构一致，独立于具体的设备。 </p> 
+<p>由此可见，当系统中存在操作系统的时候，设备驱动变成了连接硬件和内核的桥梁。如图 1.4 所示</p> 
+<p><img src="https://images2.imgbox.com/40/f6/y8FYTUg8_o.png" alt=""><br> </p> 
+<p>操作系统的存在势必要求设备驱动附加更多的代码和功能，把单一的“驱使硬件设备行动”变成了操作系统内与硬件交互的模块，它对外呈现为操作系统的API，不再给应用软件工程师直接提供接口。 有了操作系统之后，设备驱动反而变得复杂，那要操作系统干什么？ </p> 
+<p>首先，一个复杂的软件系统需要处理多个并发的任务，没有操作系统，想完成多任务并发是很困难的。 </p> 
+<p>其次，操作系统给我们提供内存管理机制。一个典型的例子是，对于多数含 MMU的处理器而言，Windows、Linux 等操作系统可以让每个进程都独立地访问 4GB 的内存空间。 </p> 
+<p>上述优点似乎并没有体现在设备驱动身上，操作系统的存在给设备驱动究竟带来了什么好处呢？ </p> 
+<p>简而言之，操作系统通过给设备驱动制造麻烦来达到给上层应用提供便利的目的。如果设备驱动都按照操作系统给出的独立于设备的接口而设计，应用程序将可使用统一的系统调用接口来访问各种设备。对于类 UNIX 的 VxWorks、Linux 等操作系统而言，应用程序通过 write()、read()等函数读写文件就可以访问各种字符设备和块设备，而不用管设备的具体类型和工作方式，是非常方便的。 </p> 
+<p><strong><span style="color:#cc0000"></span></strong></p> 
+<p style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px"> <strong><span style="color:rgb(204,0,0)">就到这里了，O(∩_∩)O~</span></strong></p> 
+<p style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px"> <strong><span style="color:rgb(204,0,0)">我的专栏地址：<a href="http://blog.csdn.net/column/details/linux-driver-note.html" target="_blank" style="color:rgb(51,102,153); text-decoration:initial" rel="noopener noreferrer">http://blog.csdn.net/column/details/linux-driver-note.html</a></span></strong></p> 
+<p style="color:rgb(51,51,51); font-family:Arial; font-size:14px; line-height:26px"> <strong><span style="color:rgb(204,0,0)">待续。。。。</span></strong></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/00cb18b86744be3d644676332f3971b0/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">内核参数module_param的有关操作</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b5b1571d104c6f941be6735fd85195b0/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">聚合函数</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

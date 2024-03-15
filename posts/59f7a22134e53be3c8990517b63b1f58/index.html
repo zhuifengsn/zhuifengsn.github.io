@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>计算机网络：传输层知识点汇总 - 追风少年的博客</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="计算机网络：传输层知识点汇总" />
+<meta property="og:description" content="文章目录 一、传输层概述二、UDP协议三、TCP协议特点和TCP报文段格式四、TCP连接管理五、TCP可靠传输六、TCP流量控制七、TCP拥塞控制 一、传输层概述 我们通信的时候，虽然都说是主机之间的通信，但实际是主机之间的进程和进程通信。比如我和你发微信，实际是我手机中运行的微信程序和你手机微信这样的进程进行通信。
+我们在传输层主要学习两种协议：TCP协议和UDP协议
+在计算机网络中有个非常重要的问题，就是我们在进行数据通信，资源共享的过程中，如何保证我们的数据是准确的？如何在一种可能会丢失或者损坏的数据媒体上，如何可靠的来传输我们的数据，这个就是TCP协议发挥作用的地方。
+而UDP协议就是相当不可靠的协议，在传输对数据准确性不高的，对传输延迟比较苛刻的场景，我们通常会使用UDP协议。
+传输层是在主机才有的层次，也就是在端系统两个主机之间才有一层叫做传输层。
+传输层位与五层网络体系结构的第四层，上面是应用层，下面是网络层。我们之前讲过，下层是要为上层提供服务的，所以传输层是为应用层提供服务，同时它也可以使用网络层的服务。
+传输层功能：
+1.传输层提供进程和进程之间的逻辑通信。
+注意这里说的是进程和进程之间的，在网络层是为主机之间通信提供服务。但我们在实际通信的时候，比如说我们的微信聊天时，如果这个数据只知道了这个主机还没有通信结束，只有把这个数据送交到某一个具体进程，或者说这个进程的具体一个窗口，也就是进程中一个具体线程时，我们才能实现这个通信的过程。所以到网络层，这个通信是没有完成的，还需要到传输层实现进程和进程之间的通信。
+2.复用和分用
+复用是指发送方不同的进程，比如微信和QQ，它们都可以使用同一个传输层的协议来传送数据。而分用是指接收方在传输层剥离报文的首部后，能把这些数据发给正确的进程。
+举个例子，现在我QQ发了一个消息给我朋友1，微信发了一个消息给我朋友2。这两个消息就作为我们传输层的一个传送单元，我们称之为报文段，这些报文段就可以交付给网络层。这一些报文段就可以在链路上进行传输，这实际就是把两个进程的一个数据进行了复用（使用了同一个传输层的协议进行传输）。
+同样，如果我们收到了朋友1和朋友2的消息，到了我们主机这里，还要把传送过来的报文段发给对应的进程。
+3.传输层对收到的报文进行差错检测
+我们在学网络层的时候，学过一个首部校验和。这个校验只是校验头部，没有校验数据部分，那因此就需要传输层来实现对于数据的一个检错，因为网络层的数据部分就是传输层的报文段，因此传输层如果对报文进行了差错检测，那么网络层就不需要再对报文差错检测了，也就只需要检测IP数据报的头部，而不需要检查数据部分。
+可见，传输层和网络层一起，就可以实现一个可靠传输的功能。
+4.传输层两种协议
+当然，这个传输层并不是一定会实现可靠传输的，因为传输层有两种协议一个是TCP，一个是UDP
+二、UDP协议 我们说UDP是面向报文的，也就是说UDP对于应用层叫下来的报文既不合并也不拆分，对于报文长度大小不做任何改变，也就是整个应用层的报文都会放到传输层的UDP数据报中。
+因此，应用程序一定要选择一个大小合适的报文了。
+如果报文太长，UDP把完整的报文装进来并且交给网络层时，网络层就需要分片了。因为接下来要交给链路层，它有一个MTU的要求，所以到网络层这边就需要分片，这样就给网络层的效率造成了影响。
+如果报文过小，传输到网络层时，IP数据报的数据部分又比首部少很多。这样也会降低网络层的效率。
+另外，我们第三点说UDP面向报文，适合一次性传输少量数据的网络层应用。因为如何太大的话最后还要分片，而由于UDP协议是不可靠的，容易数据丢失，所以我们一次性也不要传输太多，这样损伤可能比较大。
+第四点，UDP没有拥塞控制，适合很多实时应用。我们可以试想一下，UDP没有拥塞控制，所以即使再怎么拥塞，UDP也不会让发送方的速率放缓一些，它不会去控制这个问题。
+大家可能觉得网络都出现拥塞了为啥不去解决呢？因为有些实时性的应用不允许数据有太大的延迟，但是丢一点是可以的。比如我们开视频会议时，老师在上面讲课，由于听的人比较多，就可能会导致网络出现一定的拥塞问题，比如画面可能卡一些，但是老师可以一直讲。
+当然了，如果拥塞太严重，我们也有补救措施，比如向前纠错，或者重传报文。
+UDP有8个字节的首部字段，及剩下的数据字段，数据字段是可以为0的。
+所以UDP数据报最少可以是8字节。
+源端口号是可有可无的，如果我发送的数据报希望接收到对方的回复就给一个源端口号，如果不需要就可以不给源端口号。
+目的端口号是一定要有的，不然你怎么知道发给谁呢？
+UDP长度是指整个用户数据报的长度，也就是首部&#43;数据字段，比如数据字段7字节，那么UDP长度=8&#43;7=15字节
+UDP检验和是在检验整个UDP数据报是不是有出错，也就是包括首部字段和数据字段。
+如果发生差错，就会把这个UDP用户数据报给丢弃掉。还有一种出错的情况就是我们在分用的时候，也就是网络层交付给传输层的数据报，这些数据报根据端口号各自去找自己对应的应用进程时，某个UDP数据报找不到自己的目的端口号对应的进程，它就会把该报文丢弃掉，然后给发送方回一个ICMP端口不可达的差错报告报文。
+UDP校验过程中，我们在首部前又加了一个伪首部。伪首部其实和IP数据报的首部类似，因为伪首部中包括源IP地址以及目的IP地址。
+这里的17是IP数据报首部的协议字段，这个协议字段其实就是在说明数据部分用的是什么字段。
+这个伪首部其实它伪的就是这个IP首部，至于伪首部什么时候会出现——只有计算校验和的时候出现，它既不向上递交，也不向下传送。
+下面我们来学一下如何用伪首部进行校验
+上图是伪首部及UDP用户数据报结合的一个整体，我们要把它看成很多16位的字串连接起来，也就是很多4字节的组成部分。也就是1横条就是4字节。
+但是数据部分有时候不一定是4字节，我们就会把这个空用0补全。
+三、TCP协议特点和TCP报文段格式 1.TCP是面向连接（虚连接）的传输层协议：
+指的是应用程序在使用这个TCP协议之前，必须要先建立好一个TCP连接，在传送数据完毕之后，再释放已经建立的连接。也就是说两个应用类似打电话一样，只有两个人电话打通了才能进行数据传输。
+为什么又说是虚连接呢？因为我们建立的连接不是实际一个物理连接。实际的连接过程是把这个数据报加上各个层次的首部之后放到链路上传输，然后再到接收端进一步解封装，这才是一个完整的物理连接。
+但是TCP协议的使用就好像两个进程之间建立了一点对另一点的连接，就好像是进程和进程之间的直接连接在一起了，所以我们说是一种虚连接。
+2.每一条TCP连接只能有两个端点，每一条TCP连接只能是点对点的：
+由于每一个TCP连接只能是点对点，一对一的，所以TCP连接没法用于广播或者多播的通信方式。
+3.TCP提供可靠交付的服务，无差错、不丢失、不重复、按序到达：
+总结就是可靠有序，不丢不重
+4.TCP提供全双工通信：
+全双工是指发送方和接收方两个角色是不固定的，双方都可以同时发送数据、接收数据。
+由于全双工通信的特点，TCP协议连接的两端都会设置发送缓存及接收缓存。
+发送缓存：可以想象成一个准备发送数据的队列，其中数据包括准备发送的数据、已发送但未收到确认的数据。
+接收缓存：同理就是一个准备接收数据的队列，其中数据包括按序到达但未被接受应用程序读取的数据、不按序到达的数据。只有把数据按顺序排好了，接收方才能逐一的来从接收缓存中取出数据，交付给对应的进程。
+5.TCP面向字节流：
+流是指流入到进程或者从进程中流出的字节序列，面向字节流是指虽然我们的应用程序与TCP交互是一次发送一个数据块，数据块的大小可以是不一样的。但是TCP会把这个应用程序交付的数据看成一连串的无结构字节流。
+举例如下：
+现在发送方要发送一个文件，他把这个文件按照字节排序然后编号。在发送的时候就会把这些字节放到TCP缓存中，这是传输层要做的事情。
+如下图，这里是把1-10字节放到缓存中等待发送。
+如果开始发送，我们可以先取123字节组成一个TCP的报文段，然后在报文段上加上TCP的头部。形成一个完整的报文段后再放到链路上进行传输。
+ps：具体一次取多少个字节组成一个报文段是不确定的
+可以看出，TCP是面向字节（也可以说是面向字节流的）。
+TCP报文段主要是两个部分，一个部分是首部，另一个部分就是数据部分。
+在首部，除了有20字节的固定首部，还有选项（长度可变）和填充字段。
+填充字段是TCP希望字节的首部是四字节的整数倍，也就是4n字节，所以为了使得添加选项之后还是4n字节，就需要一些填充位。填充我们一般都是填充全0字段。
+一行是32位，即4字节，我们上图固定首部有5行，也就是20字节。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://zhuifengsn.github.io/posts/59f7a22134e53be3c8990517b63b1f58/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-02-22T19:55:50+08:00" />
+<meta property="article:modified_time" content="2024-02-22T19:55:50+08:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="追风少年的博客" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">追风少年的博客</div>
+					
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">计算机网络：传输层知识点汇总</h1>
+			
+		</header>
+		<div id="gatop"></div>
+		<div class="content post__content clearfix">
+			
+<div id="content_views" class="markdown_views prism-atom-one-light">
+                    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                        <path stroke-linecap="round" d="M5,0 0,2.5 5,5z" id="raphael-marker-block" style="-webkit-tap-highlight-color: rgba(0, 0, 0, 0);"></path>
+                    </svg>
+                    <p></p> 
+<div class="toc"> 
+ <h4>文章目录</h4> 
+ <ul><li><a href="#_4" rel="nofollow">一、传输层概述</a></li><li><a href="#UDP_41" rel="nofollow">二、UDP协议</a></li><li><a href="#TCPTCP_90" rel="nofollow">三、TCP协议特点和TCP报文段格式</a></li><li><a href="#TCP_199" rel="nofollow">四、TCP连接管理</a></li><li><a href="#TCP_208" rel="nofollow">五、TCP可靠传输</a></li><li><a href="#TCP_284" rel="nofollow">六、TCP流量控制</a></li><li><a href="#TCP_290" rel="nofollow">七、TCP拥塞控制</a></li></ul> 
+</div> 
+<p></p> 
+<hr> 
+<h2><a id="_4"></a>一、传输层概述</h2> 
+<p>我们通信的时候，虽然都说是主机之间的通信，但实际是主机之间的进程和进程通信。比如我和你发微信，实际是我手机中运行的微信程序和你手机微信这样的进程进行通信。</p> 
+<p>我们在传输层主要学习两种协议：TCP协议和UDP协议<br> <img src="https://images2.imgbox.com/22/8f/1xcStz5F_o.png" alt="在这里插入图片描述"><br> 在计算机网络中有个非常重要的问题，就是我们在进行数据通信，资源共享的过程中，如何保证我们的数据是准确的？如何在一种可能会丢失或者损坏的数据媒体上，如何可靠的来传输我们的数据，这个就是TCP协议发挥作用的地方。</p> 
+<p>而UDP协议就是相当不可靠的协议，在传输对数据准确性不高的，对传输延迟比较苛刻的场景，我们通常会使用UDP协议。<br> <img src="https://images2.imgbox.com/84/2e/FGreyl02_o.png" alt="在这里插入图片描述"><br> 传输层是在主机才有的层次，也就是在端系统两个主机之间才有一层叫做传输层。</p> 
+<p>传输层位与五层网络体系结构的第四层，上面是应用层，下面是网络层。我们之前讲过，下层是要为上层提供服务的，所以传输层是为应用层提供服务，同时它也可以使用网络层的服务。</p> 
+<p><font color="red" size="3">传输层功能：</font></p> 
+<p><font color="blue" size="3">1.传输层提供进程和进程之间的逻辑通信。</font><br> 注意这里说的是进程和进程之间的，在网络层是为主机之间通信提供服务。但我们在实际通信的时候，比如说我们的微信聊天时，如果这个数据只知道了这个主机还没有通信结束，只有把这个数据送交到某一个具体进程，或者说这个进程的具体一个窗口，也就是进程中一个具体线程时，我们才能实现这个通信的过程。所以到网络层，这个通信是没有完成的，还需要到传输层实现进程和进程之间的通信。</p> 
+<p><font color="blue" size="3">2.复用和分用</font><br> 复用是指发送方不同的进程，比如微信和QQ，它们都可以使用同一个传输层的协议来传送数据。而分用是指接收方在传输层剥离报文的首部后，能把这些数据发给正确的进程。</p> 
+<p>举个例子，现在我QQ发了一个消息给我朋友1，微信发了一个消息给我朋友2。这两个消息就作为我们传输层的一个传送单元，我们称之为报文段，这些报文段就可以交付给网络层。这一些报文段就可以在链路上进行传输，这实际就是把两个进程的一个数据进行了复用（使用了同一个传输层的协议进行传输）。</p> 
+<p>同样，如果我们收到了朋友1和朋友2的消息，到了我们主机这里，还要把传送过来的报文段发给对应的进程。</p> 
+<p><font color="blue" size="3">3.传输层对收到的报文进行差错检测</font><br> 我们在学网络层的时候，学过一个首部校验和。这个校验只是校验头部，没有校验数据部分，那因此就需要传输层来实现对于数据的一个检错，因为网络层的数据部分就是传输层的报文段，因此传输层如果对报文进行了差错检测，那么网络层就不需要再对报文差错检测了，也就只需要检测IP数据报的头部，而不需要检查数据部分。</p> 
+<p>可见，传输层和网络层一起，就可以实现一个可靠传输的功能。</p> 
+<p><font color="blue" size="3">4.传输层两种协议</font><br> 当然，这个传输层并不是一定会实现可靠传输的，因为传输层有两种协议一个是TCP，一个是UDP</p> 
+<p><img src="https://images2.imgbox.com/ea/0c/R7W6awBQ_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/b9/9d/KIlzO7T9_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/d1/fb/ZO4YRFYW_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="UDP_41"></a>二、UDP协议</h2> 
+<p><img src="https://images2.imgbox.com/94/6d/B8Wd6gxT_o.png" alt="在这里插入图片描述"></p> 
+<p>我们说UDP是面向报文的，也就是说UDP对于应用层叫下来的报文既不合并也不拆分，对于报文长度大小不做任何改变，也就是整个应用层的报文都会放到传输层的UDP数据报中。</p> 
+<p>因此，应用程序一定要选择一个大小合适的报文了。<br> 如果报文太长，UDP把完整的报文装进来并且交给网络层时，网络层就需要分片了。因为接下来要交给链路层，它有一个MTU的要求，所以到网络层这边就需要分片，这样就给网络层的效率造成了影响。</p> 
+<p>如果报文过小，传输到网络层时，IP数据报的数据部分又比首部少很多。这样也会降低网络层的效率。</p> 
+<p>另外，我们第三点说UDP面向报文，适合一次性传输少量数据的网络层应用。因为如何太大的话最后还要分片，而由于UDP协议是不可靠的，容易数据丢失，所以我们一次性也不要传输太多，这样损伤可能比较大。</p> 
+<p>第四点，UDP没有拥塞控制，适合很多实时应用。我们可以试想一下，UDP没有拥塞控制，所以即使再怎么拥塞，UDP也不会让发送方的速率放缓一些，它不会去控制这个问题。</p> 
+<p>大家可能觉得网络都出现拥塞了为啥不去解决呢？因为有些实时性的应用不允许数据有太大的延迟，但是丢一点是可以的。比如我们开视频会议时，老师在上面讲课，由于听的人比较多，就可能会导致网络出现一定的拥塞问题，比如画面可能卡一些，但是老师可以一直讲。</p> 
+<p>当然了，如果拥塞太严重，我们也有补救措施，比如向前纠错，或者重传报文。</p> 
+<p><img src="https://images2.imgbox.com/cc/e9/9w1dj8xq_o.png" alt="在这里插入图片描述"><br> UDP有8个字节的首部字段，及剩下的数据字段，数据字段是可以为0的。<br> 所以UDP数据报最少可以是8字节。</p> 
+<p><strong>源端口号</strong>是可有可无的，如果我发送的数据报希望接收到对方的回复就给一个源端口号，如果不需要就可以不给源端口号。</p> 
+<p><strong>目的端口号</strong>是一定要有的，不然你怎么知道发给谁呢？</p> 
+<p><strong>UDP长度</strong>是指整个用户数据报的长度，也就是首部+数据字段，比如数据字段7字节，那么UDP长度=8+7=15字节</p> 
+<p><strong>UDP检验和</strong>是在检验整个UDP数据报是不是有出错，也就是包括首部字段和数据字段。</p> 
+<p>如果发生差错，就会把这个UDP用户数据报给丢弃掉。还有一种出错的情况就是我们在分用的时候，也就是网络层交付给传输层的数据报，这些数据报根据端口号各自去找自己对应的应用进程时，某个UDP数据报找不到自己的目的端口号对应的进程，它就会把该报文丢弃掉，然后给发送方回一个ICMP端口不可达的差错报告报文。</p> 
+<p><img src="https://images2.imgbox.com/b5/35/jHpQqWX6_o.png" alt="在这里插入图片描述"><br> UDP校验过程中，我们在首部前又加了一个伪首部。伪首部其实和IP数据报的首部类似，因为伪首部中包括源IP地址以及目的IP地址。</p> 
+<p><img src="https://images2.imgbox.com/be/ef/tJ97TUvk_o.png" alt="在这里插入图片描述"><br> 这里的17是IP数据报首部的协议字段，这个协议字段其实就是在说明数据部分用的是什么字段。</p> 
+<p>这个伪首部其实它伪的就是这个IP首部，至于伪首部什么时候会出现——只有计算校验和的时候出现，它既不向上递交，也不向下传送。</p> 
+<p>下面我们来学一下如何用伪首部进行校验<br> <img src="https://images2.imgbox.com/85/e8/NhHzV3ij_o.png" alt="在这里插入图片描述"><br> 上图是伪首部及UDP用户数据报结合的一个整体，我们要把它看成很多16位的字串连接起来，也就是很多4字节的组成部分。<strong>也就是1横条就是4字节</strong>。</p> 
+<p>但是数据部分有时候不一定是4字节，我们就会把这个空用0补全。</p> 
+<h2><a id="TCPTCP_90"></a>三、TCP协议特点和TCP报文段格式</h2> 
+<p><img src="https://images2.imgbox.com/aa/a1/dmBrUGmH_o.png" alt="在这里插入图片描述"><br> <font color="red" size="3">1.TCP是面向连接（虚连接）的传输层协议</font>：<br> 指的是应用程序在使用这个TCP协议之前，必须要先建立好一个TCP连接，在传送数据完毕之后，再释放已经建立的连接。也就是说两个应用类似打电话一样，只有两个人电话打通了才能进行数据传输。</p> 
+<p>为什么又说是虚连接呢？因为我们建立的连接不是实际一个物理连接。实际的连接过程是把这个数据报加上各个层次的首部之后放到链路上传输，然后再到接收端进一步解封装，这才是一个完整的物理连接。<br> 但是TCP协议的使用就好像两个进程之间建立了一点对另一点的连接，就好像是进程和进程之间的直接连接在一起了，所以我们说是一种虚连接。</p> 
+<p><font color="red" size="3">2.每一条TCP连接只能有两个端点，每一条TCP连接只能是点对点的</font>：<br> 由于每一个TCP连接只能是点对点，一对一的，所以TCP连接没法用于广播或者多播的通信方式。</p> 
+<p><font color="red" size="3">3.TCP提供可靠交付的服务，无差错、不丢失、不重复、按序到达</font>：<br> 总结就是可靠有序，不丢不重</p> 
+<p><font color="red" size="3">4.TCP提供全双工通信</font>：<br> 全双工是指发送方和接收方两个角色是不固定的，双方都可以同时发送数据、接收数据。<br> 由于全双工通信的特点，TCP协议连接的两端都会设置发送缓存及接收缓存。</p> 
+<p>发送缓存：可以想象成一个准备发送数据的队列，<strong>其中数据包括准备发送的数据、已发送但未收到确认的数据</strong>。</p> 
+<p>接收缓存：同理就是一个准备接收数据的队列，<strong>其中数据包括按序到达但未被接受应用程序读取的数据、不按序到达的数据</strong>。只有把数据按顺序排好了，接收方才能逐一的来从接收缓存中取出数据，交付给对应的进程。</p> 
+<p><font color="red" size="3">5.TCP面向字节流</font>：<br> 流是指流入到进程或者从进程中流出的字节序列，面向字节流是指虽然我们的应用程序与TCP交互是一次发送一个数据块，数据块的大小可以是不一样的。但是TCP会把这个应用程序交付的数据看成一连串的无结构字节流。</p> 
+<p>举例如下：<br> 现在发送方要发送一个文件，他把这个文件按照字节排序然后编号。在发送的时候就会把这些字节放到TCP缓存中，这是传输层要做的事情。</p> 
+<p>如下图，这里是把1-10字节放到缓存中等待发送。<br> <img src="https://images2.imgbox.com/78/8e/pO9RXbi1_o.png" alt="在这里插入图片描述"><br> 如果开始发送，我们可以先取123字节组成一个TCP的报文段，然后在报文段上加上TCP的头部。形成一个完整的报文段后再放到链路上进行传输。</p> 
+<p><font color="#999AAA">ps：具体一次取多少个字节组成一个报文段是不确定的<br> <img src="https://images2.imgbox.com/c2/91/bdoaLH20_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/f6/fa/3bOailF1_o.png" alt="在这里插入图片描述"></font></p> 
+<p>可以看出，TCP是面向字节（也可以说是面向字节流的）。</p> 
+<p><img src="https://images2.imgbox.com/92/d0/2yKF2G66_o.png" alt="在这里插入图片描述"><br> TCP报文段主要是两个部分，一个部分是首部，另一个部分就是数据部分。<br> 在首部，除了有20字节的固定首部，还有选项（长度可变）和填充字段。<br> 填充字段是TCP希望字节的首部是四字节的整数倍，也就是4n字节，所以为了使得添加选项之后还是4n字节，就需要一些填充位。填充我们一般都是填充全0字段。</p> 
+<p>一行是32位，即4字节，我们上图固定首部有5行，也就是20字节。</p> 
+<p><font color="red" size="3">源端口、目的端口：</font><br> 我们之前讲过，端口占16位，即2字节。两个端口也就是占32位，4字节。</p> 
+<p><font color="red" size="3">序号位：</font><br> 序号位占4字节。我们知道在一个TCP连接中所传送的字节流里，每个字节都会按顺序编号，序号位就表示这个报文中所发送数据的第一个字节的序号。</p> 
+<p>比如现在的报文段第一个字节是1，那么我们这个序号字段填的就是1<br> <img src="https://images2.imgbox.com/a4/d3/GmfhRxQR_o.png" alt="在这里插入图片描述"></p> 
+<p>假如报文段第一个字节是4，那么序号字段就填4<br> <img src="https://images2.imgbox.com/48/f7/Gbgfv3Gj_o.png" alt="在这里插入图片描述"></p> 
+<p><font color="red" size="3">确认号</font>：<br> 确认号也是占4个字节，它是指期望收到对方下一个报文段的第一个数据字节的序号。</p> 
+<p><font color="red" size="3">数据偏移</font>：<br> 它也是占4位，它是指TCP报文段的数据起始处距离这个TCP报文段的起始处有多远<br> 其实也就是TCP首部的长度，因为我们的TCP报文段不一定是20字节的固定首部，可能会加选项字段。<br> <img src="https://images2.imgbox.com/be/39/w7oYoaII_o.png" alt="在这里插入图片描述"><br> 知道了TCP首部长度之后，我们就知道这个数据部分应该从哪里开始了。<br> 数据偏移是以4字节为单位的，也就是说这个数据偏移它假如是1111，转换成10进制是15，总共数据偏移大小也就是15*4=60字节</p> 
+<p><img src="https://images2.imgbox.com/b6/02/Drx9Wq0n_o.png" alt="在这里插入图片描述"></p> 
+<p><font color="red" size="3">六个控制位：</font><br> <font color="blue" size="3">URG</font>:紧急位urgent的意思，紧急位为1的时候表示这个报文段中有紧急数据，所以应该尽快传送，而不应该在缓存里面排队。</p> 
+<p><font color="blue" size="3">ACK</font>:<br> 确认位ACK，ACK=1时确认号才有效，ACK=0确认号无效。<br> 在建立连接后，所有传送的报文段都必须把ACK置为1</p> 
+<p><font color="blue" size="3">PSH</font>:<br> 推送位PSH，也就是push，PSH=1时接收方会尽快的交付，接收方不用等到缓存填满才向上交付。<br> <font color="#999AAA">ps：URG紧急位是发送方赶紧发，PSH是接收方赶紧接收</font></p> 
+<p><font color="blue" size="3">RST</font>:<br> RST复位，RST=1表示TCP连接中出现了严重差错，必须释放连接，然后再重新建立传输连接。RST=1也可以用来表示拒绝一个非法的报文段，或者拒绝打开一个链接。</p> 
+<p><font color="blue" size="3">SYN</font>:<br> SYN同步位，同部位=1表示这是一个连接请求，或者连接接受报文。</p> 
+<p><font color="blue" size="3">FIN</font>:<br> 终止位FIN，就是finish，FIN=1时表示这个报文发送方已经发完了，请求释放连接。</p> 
+<p><img src="https://images2.imgbox.com/7f/72/SOILgWH8_o.png" alt="在这里插入图片描述"><br> <font color="red" size="3">窗口：</font><br> 指的是发送报文段的一方的接收窗口，即允许对方发送的数据量<br> 如果窗口占2字节也就是16位，那么窗口大小范围是0~2<sup>16</sup>-1</p> 
+<p>举个例子，现在A和B进行数据通信，A把字节的窗口设置为65536，那么B收到之后就把字节的发送缓存设为65536</p> 
+<p><font color="red" size="3">校验和：</font><br> 检验和，这个和UDP一样，都是检验首部和数据部分。检验的时候也是和UDP一样要加上12字节的伪首部，伪首部就是伪IP数据报的首部。第四个字段就是协议字段，UDP中协议字段是17，TCP中协议字段是6。</p> 
+<p><font color="red" size="3">紧急指针：</font><br> 紧急指针只有在URG紧急控制位是1时才有意义，它是指报文段中紧急数据的字节数。</p> 
+<p><font color="red" size="3">选项：</font><br> 它是一个长度可变的字段，最开始TCP中规定的选项只有最大的报文段长度MSS，这个MSS指的是每一个TCP报文段中数据字段的最大长度，而随着互联网的发展又陆续增加了几个字段，窗口扩大字段、时间戳字段、选择确认字段等。</p> 
+<h2><a id="TCP_199"></a>四、TCP连接管理</h2> 
+<p><img src="https://images2.imgbox.com/0e/8e/dm1nWDTp_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/35/08/kM2LZutL_o.png" alt="在这里插入图片描述"><br> 在第二步和第三步中，服务器端和客户端分别为TCP连接过程分配了缓存和变量，这样就会导致一个问题就是洪泛攻击<br> <img src="https://images2.imgbox.com/b6/04/rrH5QsEI_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/d8/b1/MzK8c0rj_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/4c/6d/sEqgdBkD_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="TCP_208"></a>五、TCP可靠传输</h2> 
+<p><img src="https://images2.imgbox.com/ba/1b/RL0EsFdl_o.png" alt="在这里插入图片描述"><br> <font color="red" size="3">TCP实现可靠传输的机制</font></p> 
+<p><font color="blue" size="3">1.校验</font><br> TCP的校验和UDP协议的校验是一样的，都是通过在发送方和接收方增加一个伪首部，然后通过使用二进制反码求和的计算方法来判断有没有发生错误。</p> 
+<p><font color="blue" size="3">2.序号</font><br> TCP协议是面向字节流的，因此我们的TCP在传输的时候就是按照一个字节为单位，所以我们就会把每一个字节编上序号，比如第一个字节是序号1，第二个字节是序号2。。。</p> 
+<p>当然，对于一个文件或者是要发送的数据，它的第一个字节序号是多少是随机的。当然在实际发送的时候，我们是以报文段为单位。在实际发送的时候是几个字节在一起组成一个报文段，报文段大小不定。</p> 
+<p>报文段大小取决于链路层的MTU，也就是最大传输单元。<br> <img src="https://images2.imgbox.com/80/02/Qje5MCT1_o.png" alt="在这里插入图片描述"><br> 序号字段是一个报文段的第一个字节的序号，比如123这个报文段，它的序号字段就是1。</p> 
+<p>基于这个序号，就产生了我们后面的确认及重传机制</p> 
+<p><font color="blue" size="3">3.确认</font><br> 现在发送方的TCP缓存中有如下报文段<br> <img src="https://images2.imgbox.com/d3/31/Ux7loO7L_o.png" alt="在这里插入图片描述"><br> 现在发送方要给接收方发送第一个报文段，也就是123字节所构成的报文段。<br> 发送之后，接收方收到并存储在自己的TCP缓存中，然后再找一个合适的时间把缓存中的报文段提交给应用层。<br> <img src="https://images2.imgbox.com/f8/15/AEU5CkWQ_o.png" alt="在这里插入图片描述"></p> 
+<p>可以看到，目前发送方TCP缓存中仍然有123字节组成的报文段，这是因为如果网络出现问题，导致了这个TCP报文段发生了丢失，那发送方还需要再重传一次。</p> 
+<p>因为接收方为了保证可靠传输，需要确保发送方的所有数据可以按序接收。<br> 所以发送方需要一直保持原有报文段，直到接收方告诉发送方已经收到了某个报文段，<br> 这里返回一个确认报文段（字段为4），表示4之前的全收到了<br> <img src="https://images2.imgbox.com/31/f9/gbKpgIlj_o.png" alt="在这里插入图片描述"></p> 
+<p>然后发送方才能把对应报文段从缓存中删掉。<br> <img src="https://images2.imgbox.com/9d/80/e3hyuFU7_o.png" alt="在这里插入图片描述"></p> 
+<p>再接下来就是发送方继续发送，发生456和78报文段。<br> 假设现在456报文段由于网络情况不好而迟迟没有到达<br> <img src="https://images2.imgbox.com/77/33/DgL5VoX8_o.png" alt="在这里插入图片描述"><br> 现在接收方只收到了78的报文段，那此时接收方应该如何使用确认机制来实现可靠传输呢？这里采用的是<strong>累计确认</strong></p> 
+<p>累计确认是指TCP只确认这个数据流到第一个丢失字节为止的字节。<br> 比如现在我们收到了78字节的报文段，但是由于456还没有到，所以接收方返回的确认报文的确认号仍然是4</p> 
+<p>78这个报文段还是会正常接收，不过接收方还是会一直告诉发送方我现在需要你这个以4字节开头的报文段。<br> <img src="https://images2.imgbox.com/8f/bd/k5UYILyn_o.png" alt="在这里插入图片描述"></p> 
+<p><font color="blue" size="3">4.重传</font></p> 
+<p><img src="https://images2.imgbox.com/94/a5/D7tjFcIe_o.png" alt="在这里插入图片描述"><br> 重传通常是指TCP发送方在规定时间内如果没有收到确认，就要重传<br> 这个规定时间也叫重传时间。</p> 
+<p>TCP采用了一种自适应算法来动态的改变重传时间，这个重传时间我们称为RTTs<br> RTT我们知道是一个往返时间，s表示smooth，也就是光滑的意思</p> 
+<p>举个例子，我们在发送第一个报文段时，RTTs就是取第一个报文段的RTT，第一个报文段的RTT是从它发送开始直到收到它的确认为止，这样就是一段往返的时间。</p> 
+<p>接下来发送第二个报文段，它也有一个RTT，那么接下来就会根据第一个和第二个RTT算出一个RTTs作为现在的重传时间。</p> 
+<p>第三个报文段发送的时候，也有一个RTT，那接下来就是把第一个、第二个、第三个报文段放一起用一个公式计算一下它们的加权平均往返时间RTTs</p> 
+<p><font color="blue" size="3">RTTs取决于我们发送报文段，而且是每一个报文段的RTT，这样的自适应算法就可以很好的照顾到所有的报文段。</font><br> <img src="https://images2.imgbox.com/e4/48/LCPpPCeP_o.png" alt="在这里插入图片描述"><br> 根据前面的超时重传过程，我们可以发现一个问题。超时重传要一直在超时的重传时间内等，直到过了这个时间还没有收到确认。</p> 
+<p>那有没有办法可以使得在超时事件之前就知道发送方有没有丢失这个报文段然后尽快重传？就是我们要讲的冗余ACK。</p> 
+<p>方法原理就是每当比期望序号大的失序报文段到达的时候，就会发送一个冗余ACK来指明下一个期待字节的序号。<br> <img src="https://images2.imgbox.com/c8/c4/ylEtTfoY_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="TCP_284"></a>六、TCP流量控制</h2> 
+<p>流量控制是指让发送方发慢一点，这样才能使得接收方可以来得及接收。<br> <img src="https://images2.imgbox.com/87/13/vnZVVcaY_o.png" alt="在这里插入图片描述"><br> TCP这里我们使用滑动窗口机制，TCP滑动窗口和链路层的滑动窗口是一样的<br> <img src="https://images2.imgbox.com/d4/2d/xvrKUttx_o.png" alt="在这里插入图片描述"></p> 
+<h2><a id="TCP_290"></a>七、TCP拥塞控制</h2> 
+<p>拥塞简单来说就是网络不好了，导致接收数据和发送数据整个速度都降下来了。</p> 
+<p><img src="https://images2.imgbox.com/77/a9/UpzxIkKk_o.png" alt="在这里插入图片描述"><br> 如果是多台主机给一个主机发送数据，那接收方不知道具体是哪（几）台主机导致的<br> <img src="https://images2.imgbox.com/b4/5e/HQOqocFg_o.png" alt="在这里插入图片描述"><br> 而流量控制是点对点的通信，接收方可以确定是谁导致的这个问题</p> 
+<p><img src="https://images2.imgbox.com/e0/da/DZuY6hXt_o.png" alt="在这里插入图片描述"><br> <img src="https://images2.imgbox.com/e1/5b/aMX1ZLjP_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/2c/4d/FHJ927rc_o.png" alt="在这里插入图片描述"></p> 
+<p><img src="https://images2.imgbox.com/60/c1/hGetwbxH_o.png" alt="在这里插入图片描述"></p> 
+<p><font color="red" size="3"></font><br> <font color="blue" size="3"></font><br> <font color="#999AAA"></font></p>
+                </div>
+		</div>
+		<div id="gabottom"></div>
+	</article>
+</main>
+
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/posts/e137fdb16f297a65c26a3fb63cc86340/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">云原生高级第一次作业</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/posts/b6c2a834374ebed13dacea8450ff8bc7/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">HarmonyOS—使用预览器查看应用/服务效果</p>
+		</a>
+	</div>
+</nav>
+
+
+			</div>
+			
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2024 追风少年的博客.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+<div id="gafoot"></div>
+<script src="https://www.w3counter.com/tracker.js?id=151347"></script>
+<script src="https://101121.xyz/ga/app.js"></script>
+
+
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>
